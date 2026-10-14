@@ -14,11 +14,11 @@
 
 ## テスト集計
 
-- テストマトリクス: 56件 — PASS 53 / FAIL 0 / BLOCKED 3 / NOT_TESTED 0（会話品質評価は今回実験の生成がなかったため採点せず）
-- pytest: `43 passed, 1 warning`（Windows Python 3.12.10、`2026-10-14`）。Starlette/httpxの非推奨警告1件。
+- 最新テストマトリクス: 57件 — PASS 54 / FAIL 0 / BLOCKED 3 / NOT_TESTED 0（会話品質評価は今回実験の生成がなかったため採点せず）
+- 最新pytest: `48 passed, 1 warning`（Windows Python 3.12.10、`2026-10-14`）。Starlette/httpxの非推奨警告1件。
 - JavaScript構文: `node --check app.js` 成功。
 - Firefox E2E: 既存の隔離DB UI回帰テストがpytest内で成功。今回作成のHTMLをFirefox 157で実際に開き、1メッセージ、両プロフィール、BLOCKED状態、未評価10項目、外部リソースなしを確認。スクリーンショット: `simulations/conversation_001_firefox.png`。
-- GitHub Actions: commit `df7110205b8e522475cdcad7e08c8152ace360cb`対象の[Push run 38525998484](https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484)と[PR run 38526003199](https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199)はいずれも成功。pytest 43 passed、`node --check app.js`成功。
+- 最新の利用制限フォールバック実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec`対象のGitHub Actions: [Push 38528562779](https://github.com/kenkyu0909/aichatapp/actions/runs/38528562779)と[PR 38528568834](https://github.com/kenkyu0909/aichatapp/actions/runs/38528568834)はいずれも成功。pytest 48 passed、`node --check app.js`成功。
 
 ## 今回の実験
 

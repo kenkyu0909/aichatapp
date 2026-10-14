@@ -9,7 +9,8 @@
 - `MRA_API_DIR`（既定はアプリフォルダの隣の`API`）から`chat1.md`/`chat2.md`を読み、値は出力しない。現在の両ファイルが単一トークンとして受理されることを長さだけで確認。ファイル内容・キー値はログやレポートに含めていない。
 - オフラインモック試験: API1 3.5とAPI2 3.5を429にし、API1 3.1で成功する順序、全4候補が制限された場合のAPI2 3.1到達、403時は1回で停止、APIファイル経由のキー選択と応答への秘密値非混入、空の`MRA_API_DIR`で既定隣接フォルダを選ぶ動作、旧`GEMINI_API_KEY`を使わない動作を確認。新規5テスト成功。全テストは空の認証ディレクトリに隔離され、実APIは呼び出していない。
 - ローカル全pytest: 48 passed、警告1件（Starlette/httpx deprecation）。`node --check app.js`成功。
-- GitHub Actionsで最新commitのPush/PR両run成功を確認した後、URLとSHAを追記する。
+- commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のPush Actions [38528562779](https://github.com/kenkyu0909/aichatapp/actions/runs/38528562779)とPR Actions [38528568834](https://github.com/kenkyu0909/aichatapp/actions/runs/38528568834)が両方成功。各runは同SHA、pytest 48 passed / warning 1、Node構文チェック成功。
+- 差分レビューでは認証ソースの隔離と優先順に問題なし。通常テストが外部APIへ出ないよう共通fixtureを空の一時認証ディレクトリに固定。PR #4はDraftのまま。
 
 ## 2026-10-14 会話シミュレーション実験（最新）
 
