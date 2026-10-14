@@ -214,5 +214,5 @@
 - ローカルテスト: `python -m pytest -q` **104 passed, 1 warning**。`node --check app.js`成功。`git diff --check`成功（改行コードに関するGit警告のみ）。
 - Google公式モデル一覧では3.5/3.1 Flash-LiteをStable掲載。公式料金表では3.5 Flash-Liteに無料ティアが掲載されるが、無料枠入力/出力はGoogle製品改善に使用される条件。個別プロジェクトの使用枠、請求状態、実費は確認していない。モデル枠はプロジェクトやティアで変動し、AI Studioで確認する仕様。課金設定は変更していない。
 - テストマトリクスは81項目: PASS 74 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。FAILはT77（本人の未知の好みを生成）で、関連プロンプトは修正したが実API再試験が残る。
-- 次: 書類・証拠をコミットしてPushし、Actionsが最新HEADで成功することを確認。PR #4本文を更新する（Draft維持）。ソース修正SHA: `d431b79`。
+- ソース修正SHA: `d431b79f159a7e7fc499a7acf06a12e13454c4b4`。レポート/証拠の検証HEAD: `cf24e2398ab428cb9e3beef2b0029f34aa73d4b4`。同HEADのPush Actions [38544684207](https://github.com/kenkyu0909/aichatapp/actions/runs/38544684207)とPR Actions [38544689940](https://github.com/kenkyu0909/aichatapp/actions/runs/38544689940)は成功。PR本文を更新しDraftを維持。
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4
