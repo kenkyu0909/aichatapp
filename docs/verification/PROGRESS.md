@@ -10,9 +10,10 @@
 - `OVERNIGHT_GOAL.md` とTEST_MATRIXへ7ゴールの判定およびT128–T141を追加。集計141項目（PASS122 / FAIL7 / FIXED1 / BLOCKED5 / NOT_TESTED6）。過去のFAILは残し、実生成品質は未達と明記。
 - コード/検証commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`をPush済み。Push [Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083) とPR [Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)は同SHAで成功し、両方 **372 passed, 1 warning**。Node構文検査、Firefox準備、Artifact保存も成功。
 - 最終報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPush済み。Push [Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484) とPR [Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)は同SHAで成功し、両方 **372 passed, 1 warning**。Node構文検査、Firefox準備、Artifact保存も成功。
-- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `ad427ef48562c02a205c376f16b78f74ffb53e2e`。マージなし。
+- 進捗とマトリクスの最終追記commit `321a43e8be6bba2722e860af63d43efb2d7355eb`もPush済み。Push [Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339) とPR [Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)は同SHAで成功し、両方 **372 passed, 1 warning**。Node構文検査、Firefox準備、Artifact保存も成功。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `321a43e8be6bba2722e860af63d43efb2d7355eb`。マージなし。
 - 未追跡のユーザー提供ファイル`docs/verification/simulations/指示.txt`は保持し、ステージ・コミットしていない。
-- 次: 2件のコミットと最新Actions URLをPR本文へ追記し、PR #4のDraft状態を再確認する。
+- PR本文へ今回の作業目的・結果・未解決事項・レポート・最新Actions URLを追記済み。PR #4のDraft状態は維持。
 
 最終更新: 2026-10-14（継続作業）
 

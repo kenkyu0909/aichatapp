@@ -6,7 +6,7 @@
 
 コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
 
-報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPushされ、[Push Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484)と[PR Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)は同SHAで成功しました。どちらも372 passed, 1 warningです。PR本文には次の最終報告追記commit後の最新Actions URLを記載します。
+報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`と、進捗・集計更新commit `321a43e8be6bba2722e860af63d43efb2d7355eb`をPushしました。後者の[Push Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)と[PR Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)は同SHAで成功し、各372 passed, 1 warningでした。最新ActionsとSHAはPR本文にも記録しています。
 
 ## 2026-10-14 返信品質・初回メッセージ・会話制御の最終報告
 
@@ -578,6 +578,6 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 
 ## テスト集計とGitHub
 
-- TEST_MATRIX: 143項目、PASS 124 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142/T143は連続したコード・報告commitのPush/PR Actions成功。
+- TEST_MATRIX: 144項目、PASS 125 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142–T144は連続したコード・報告commitのPush/PR Actions成功。
 - `OVERNIGHT_GOAL.md`に達成条件、根拠、不合格項目、次の作業を記録。
-- 今回の最新報告追記は未コミット/未Push。PR #4はOPEN/Draft、head `ad427ef48562c02a205c376f16b78f74ffb53e2e`、マージしていない。追記をPush後、最新head Actions URLをPR本文に追加する。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。最新SHA、Actions URL、レポートリンクをPR本文へ追記済み。マージしていない。
