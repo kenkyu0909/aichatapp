@@ -535,6 +535,6 @@ Googleの公式モデル一覧には`gemini-3.5-flash-lite`と`gemini-3.1-flash-
 
 ### 集計と未完了事項
 
-TEST_MATRIXは126項目（PASS 109 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。T118とT125をFAILとして実施結果に更新しました。conversation_004（T126）は未実施です。静的な日本語事実チェックには対象表現の限界があり、オフライン成功だけでは生成品質を保証しません。
+TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。T118とT125をFAILとして実施結果に更新しました。conversation_004（T126）は未実施です。静的な日本語事実チェックには対象表現の限界があり、オフライン成功だけでは生成品質を保証しません。
 
-最新コードのActions、最終SHA、PR #4の状態は、Push後に同じSHAの成功を確認して追記します。PR #4はDraftを維持し、マージしません。
+コード・品質記録commit `7ce0a6c4853cb241c621fe0988ac951960f534c8`のPush [Actions 38588182566](https://github.com/kenkyu0909/aichatapp/actions/runs/38588182566)とPR [Actions 38588189420](https://github.com/kenkyu0909/aichatapp/actions/runs/38588189420)は、同じSHAで成功しました。両方307 passed, 1 warning、Node構文検査とFirefox準備・結果Artifact保存も成功。報告書の追記commitの最新HEAD Actionsは、PR本文と最終回答に記載します。PR #4はOPEN/Draft、マージしていません。

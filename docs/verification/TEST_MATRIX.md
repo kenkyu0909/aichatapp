@@ -274,8 +274,9 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T124 | 最新コードの全pytestとFirefox UI回帰 | Windows `.venv`、pytest全件 | PASS | 最終コードで**307 passed, 1 warning, 77.98秒**。Firefox UIテストを含む。警告はStarlette/httpx TestClientの非推奨通知。Chromeは使用していない。 |
 | T125 | 実Gemini品質006の候補品質 | 隔離SQLite、既存アプリAPI、指定APIディレクトリ、架空データ | FAIL | 7論理要求/11 provider attempts、API1/`gemini-3.5-flash-lite`のみ。映画の感想/因果関係、買い方の未確認詳細、断りに対する不自然な表現、`consider_invite`と誘い候補の不一致を確認。最終改行ケースはHTTP 502 `invalid_response`。429なし、フォールバックなし。`quality_checks_006.json` / `_analysis.md`。追加API要求は行わない。 |
 | T126 | conversation_004の品質ゲート | T118/T125の保存済み出力と判定 | NOT_TESTED | T118とT125でFAILがあるため未開始。会話や生成候補を捏造していない。再開には修正後の実API品質ゲートを別許可・利用枠確認のもとで通す必要がある。 |
+| T127 | 最新コードのPush/PR GitHub Actions | GitHub Actions run詳細とpytestログ | PASS | コードSHA `7ce0a6c4853cb241c621fe0988ac951960f534c8`を対象にPush [38588182566](https://github.com/kenkyu0909/aichatapp/actions/runs/38588182566)とPR [38588189420](https://github.com/kenkyu0909/aichatapp/actions/runs/38588189420)が成功。両方307 passed, 1 warning、Firefox準備・Node構文検査・Artifact upload成功。 |
 
-最新集計: 126項目、PASS 109 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。旧FAILは履歴として保持し、T118の実施結果とT125の新しい実API評価を反映した。Actionsはコード・記録をPushした後、最新HEADの実行結果をT127として追記する。
+最新集計: 127項目、PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。旧FAILは履歴として保持し、T118の実施結果、T125の実API評価、T127のCI結果を反映した。
 
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 

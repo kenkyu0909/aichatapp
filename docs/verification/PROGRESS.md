@@ -359,8 +359,9 @@
 - 実出力では未確認の映画感想・因果、プロフィール回答より具体的な買い方、相手の不安への「安心しました」、`consider_invite`と本文の不一致を確認。詳細は`simulations/quality_checks_006_analysis.md`。品質ゲート未達のためconversation_004は開始していない。
 - 追加レビューで買い物習慣の候補検査に境界ケースを発見し、`app.py`と`tests/test_app.py`を更新。後続の質問により断定を見逃すケース、相手向けのくだけた質問、相手が明言した買い物情報への受け止め、相手の否定と矛盾する受け止めを検証した。買い物関連27テストが成功し、独立レビューでこの差分の高・中severity問題なし。
 - 最終コードの全pytestは**307 passed, 1 warning, 77.98秒**。Firefox UIテストを含む。警告はStarlette/httpx TestClient非推奨。過去の全体テストでプロフィール保存toastの待機が一度失敗したが、対象Firefoxテスト単体と後続の全体実行では成功。`node --check app.js`、`py_compile`、`git diff --check`、秘密形式スキャンは成功。最終差分の独立レビューで高・中severityの指摘なし。
-- TEST_MATRIXは126項目: PASS 109 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。T118は実施結果FAIL、T125はFAIL、T126（conversation_004）はNOT_TESTED。
-- 次: 静的・秘密情報検査、最終差分確認、進捗/最終報告更新、明示ファイルのみstage・commit・push、Actionsで最新HEADを確認しPR #4 Draft状態を維持する。
+- TEST_MATRIXは127項目: PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。T118は実施結果FAIL、T125はFAIL、T126（conversation_004）はNOT_TESTED。T127はPASS。
+- コード・品質記録commit `7ce0a6c4853cb241c621fe0988ac951960f534c8`のPush [38588182566](https://github.com/kenkyu0909/aichatapp/actions/runs/38588182566)とPR [38588189420](https://github.com/kenkyu0909/aichatapp/actions/runs/38588189420)は成功。両方の実ログで**307 passed, 1 warning**、Firefox準備、JavaScript構文チェック、結果Artifact保存を確認。後続の報告反映commitも最新HEADでActionsを再確認する。
+- 次: PR本文へ品質006とActions結果を反映し、既存PR #4がOPEN/Draftであることと最終HEAD向けActionsを確認する。
 
 ## 2026-10-14 指示ファイルの追加レビューと品質005準備
 
