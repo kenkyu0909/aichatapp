@@ -1,0 +1,23 @@
+# Local credentials and private conversation data
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite3
+*.db
+photos/
+uploads/
+logs/
+*.log
+# Python, test and editor files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+.vscode/
+.idea/
