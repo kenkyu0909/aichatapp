@@ -343,7 +343,9 @@ Google公式一覧では`gemini-3.5-flash-lite`と`gemini-3.1-flash-lite`がStab
 
 ## テスト集計
 
-既存マトリクスの前回71項目にT72〜T80を追加して80項目。現在状態はPASS 73 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77のFAILは未登録の好みを生成した実例であり、修正後実API再試験が残る。
+Git履歴69 refsとworking treeをAPIキー形式で確認し、一致はありませんでした。秘密値は表示していません。GitHub Actionsの保存期間外を含む全ログは個別に走査していません。
+
+既存マトリクスの前回71項目にT72〜T81を追加して81項目。現在状態はPASS 74 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77のFAILは未登録の好みを生成した実例であり、修正後実API再試験が残る。
 
 ## ファイル
 

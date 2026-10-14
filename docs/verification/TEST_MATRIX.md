@@ -152,10 +152,11 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | ID | テスト項目 | 方法・環境 | 結果 | 証拠・備考 |
 |---|---|---|---|---|
 | T80 | 初回プロンプト修正後の3案品質 | 実Gemini API、隔離SQLite、架空プロフィール、Windows/Python 3.12 | PASS | 1回の実通信で3案。API1/`gemini-3.5-flash-lite`、非デモ、HTTP 200、試行1。挨拶・軽い好意・マッチへの喜び・公開プロフィールの話題・質問を各案で確認し、句読点違反なし。`quality_checks_002.json`の末尾に保存。初回の失敗T79も履歴として残す。 |
+| T81 | APIキー形式の漏えいスキャン | `git grep`、全Git refsとworking tree | PASS | 69個の到達可能refとworking treeをAPI key形式で走査。一致0件。検索出力はパス以外も出さず、秘密値は表示していない。Actionsログの履歴全件は権限・保持期間の範囲外で別途確認していない。 |
 
 ### 最終集計
 
-- 合計80項目: PASS 73 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77は本人の未確認情報を生成したためFAIL。T79の初回品質不具合はT80の再確認でFIXED。
+- 合計81項目: PASS 74 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77は本人の未確認情報を生成したためFAIL。T79の初回品質不具合はT80の再確認でFIXED。
 - pytest: 104 passed, 1 warning（Starlette/httpxの非推奨警告）。Firefoxを使ったUIテストを含む。
 - `node --check app.js`、`git diff --check`成功。Firefoxの会話HTML確認は40メッセージ、展開詳細、外部ネットワーク参照なしを確認。
 - 会話002: 実API20/20成功。別の品質確認5/5成功。計25論理リクエスト。すべてAPI1/`gemini-3.5-flash-lite`、各バックエンド試行1、429・フォールバック0。API1の追加枠残量、課金状態、実請求額は確認していない。
