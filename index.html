@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>Matching Reply Assistant — UI Demo</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="global-header">
+    <div class="app-identity"><span class="brand-icon">☁</span><strong>Matching Reply Assistant</strong><span class="version">v4.0 <span class="muted-version">UI</span></span></div>
+    <nav class="global-actions" aria-label="ツール">
+      <button data-open="guide" class="top-button" type="button">🎓 学習</button>
+      <button data-open="like" class="top-button pink" type="button">👍 いいねBOT</button>
+      <button data-open="profile" class="top-button blue" type="button">📋 自分の情報</button>
+      <button data-open="settings" class="top-button" type="button">⚙ 設定</button>
+    </nav>
+  </header>
+  <div class="layout">
+    <aside class="contacts">
+      <div class="search-row"><input id="search" type="search" placeholder="相手名で検索" aria-label="相手名で検索"><button id="new-contact" type="button" title="相手を追加" aria-label="相手を追加">＋</button></div>
+      <div class="contact-scroller" id="contacts" aria-label="相手一覧"></div>
+      <div class="contacts-footer">架空のサンプルデータを表示中</div>
+    </aside>
+    <main class="chat-layout">
+      <header class="conversation-header">
+        <div class="contact-heading">
+          <span class="avatar current-avatar" id="current-avatar">あ</span>
+          <div class="contact-details">
+            <div class="person-title"><strong id="current-name">あかり</strong><button id="edit-contact" type="button" class="contact-edit" title="プロフィールを確認・編集">プロフィール ↗</button></div>
+            <div class="contact-tags"><span class="tag sky" id="messages-count">▤ 初返信から2日目</span><span class="tag mint" id="incoming-count">💬 相手から: 1通</span></div>
+            <p class="contact-bio" id="current-bio">週末はカフェ巡りが好き</p>
+          </div>
+        </div>
+        <div class="header-tools">
+          <div class="tone-toggle" aria-label="返信の文体">
+            <button data-tone="自動" class="on" type="button">自動</button>
+            <button data-tone="敬語" type="button">敬語</button>
+            <button data-tone="混合" type="button">混合</button>
+            <button data-tone="タメ口" type="button">タメ口</button>
+          </div>
+          <button id="history-button" class="utility-button" type="button">◷ 履歴</button>
+          <button id="export-button" class="utility-button" type="button">↓ エクスポート</button>
+        </div>
+      </header>
+      <section class="chat-area" id="chat-area" aria-label="会話履歴">
+        <div class="chat-inner" id="messages"></div>
+        <div id="suggestion-list" class="suggestion-list" hidden></div>
+      </section>
+      <section class="composer">
+        <label class="policy-banner"><input id="policy" type="checkbox" checked><span><strong>会うまでの会話方針も表示</strong><small>記録済みの会話だけを根拠に、続ける・確認する・誘う・待つ・止めるを提案します。返信候補とは別表示です。</small></span></label>
+        <div class="config-line"><label for="direction">返信の方向</label><select id="direction"><option value="auto">方向を指定しない</option><option value="casual">自然に会話を広げる</option><option value="question">質問を控えめに</option><option value="warm">親しみやすく返す</option><option value="invite">自然な誘いを検討</option></select><span class="helper">足りない指示は下の自由記述へ</span></div>
+        <div class="config-line compact"><label for="count">返信候補の数</label><select id="count"><option value="1">1案</option><option value="3" selected>3案（標準）</option><option value="5">5案</option></select></div>
+        <label class="small-label" for="extra">追加の自由記述（空欄でもOK）</label>
+        <div class="action-line">
+          <input id="extra" placeholder="例：映画の話に持っていきたい / 質問しないで / 少し短めに">
+          <button id="send-content" type="button" class="action-outline">◉ 送信内容</button>
+          <button id="follow-up" type="button" class="action-orange">💬 追いメッセージ</button>
+          <button id="generate" type="button" class="action-green">3案を生成</button>
+        </div>
+        <div class="message-composer">
+          <textarea id="message-input" rows="1" placeholder="メッセージを入力 (Ctrl+Enter で「相手として送信」)"></textarea>
+        </div>
+        <div class="send-row"><span>実際のマッチングアプリからコピーした文章を「相手として送信」で記録します。</span><div><button id="send-them" type="button" class="send-them">相手として送信</button><button id="send-me" type="button" class="send-me">自分として送信</button></div></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<dialog id="modal" class="modal">
+  <div class="modal-bar"><h2 id="modal-title">設定</h2><button id="close-modal" aria-label="閉じる" type="button">×</button></div>
+  <div class="modal-body" id="modal-body"></div>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
