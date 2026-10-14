@@ -230,3 +230,21 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 - Firefox 157.0.1で単体HTMLを開き、30発言、プロフィール、候補詳細16個、拒否した3候補、CSS、日本語を確認。画像は`simulations/conversation_003_firefox.png`。Chromeは使用していない。
 - 全pytest **153 passed, 1 warning**。`node --check app.js`、Python `py_compile`、`git diff --check`成功。
 - HEAD `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。両方成功: Push [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)、PR [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)。両runともHEAD `5ddcd020747eb8eb8971e991515d1004c0625114`を対象。pytest・Firefoxを含むUIテスト・Node構文検査・結果Artifactの保存が成功。
+
+### 2026-10-14 実API品質確認004の再評価とオフライン修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T101 | 購買行動の具体性と回答矛盾 | FastAPI関数テスト、確認済みプロフィールと架空回答 | PASS | `tests/test_app.py`。一般的な「買い物が好き」は「すぐ買う」行動の根拠にしない。確認回答が「調べてから」なら「すぐ買う」候補を拒否。 |
+| T102 | カレーの好み・頻度・最近の経験の分離 | 質問分類・本人確認と未確認の頻度/最近経験候補のFastAPI単体テスト | PASS | `tests/test_app.py`。具体的なカレーの好みだけで摂食頻度や最近の経験を確認済みにしない。 |
+| T103 | カフェ趣味から店の雰囲気を推測しない | FastAPI候補事実チェッカー | PASS | `tests/test_app.py`。カフェ巡りだけのプロフィールで「落ち着いた雰囲気が好き」という活用形を含む本人談を不支持として検出。 |
+| T104 | 前向きな`consider_invite`理由と候補の整合性 | Gemini SDKモック、FastAPI `/api/generate` | PASS | 会話履歴から相互質問・共有話題・関心を推定し、慎重さや過去の誘いを除外して判断。機会が揃ったconsider_inviteで候補がない場合は1回だけ修復。 |
+| T105 | 実API品質評価器の回答事実・4モデル優先順 | オフラインpytest | PASS | `tests/test_quality_checks_004.py`。自然な言い換えと引用符除去を受け入れ、モデル名とAPI別名の完全な優先順を検査。 |
+| T106 | 実Gemini生成品質004の人手再評価 | 8論理要求の保存JSONを読み、候補と根拠を照合 | FAIL | `quality_checks_004.json`と[`quality_checks_004_analysis.md`](simulations/quality_checks_004_analysis.md)。8論理要求/9 provider attempts。購買回答との矛盾、未確認のカフェ嗜好、前向きな誘い方針と候補の不一致を検出。最近の映画回答は逐語一致テストの誤判定。追加実API要求なし。 |
+| T107 | 会話004の開始条件 | T106の失敗と8要求上限を確認 | NOT_TESTED | 会話シミュレーションは開始していない。今回の実出力に事実性と方針整合性のFAILがあり、上限も使用済みのため安全に保留。 |
+
+| T108 | 買い物の否定表現と反対行動の検出 | FastAPI候補検証のpytest | PASS | 「衝動買いを避ける」「控える」「すぐ買うのは避ける」「即決購入を控える」が確認済みの否定事実として扱われ、肯定候補を拒否する。`tests/test_app.py`。 |
+| T109 | カレー根拠の項目結び付け・カフェ嗜好の極性 | FastAPI候補検証のpytest | PASS | 本に関する「よく/最近」をカレー頻度・経験の根拠にしない。「落ち着いた雰囲気よりにぎやかな店が好き」から落ち着いた店好きとは生成しない。`tests/test_app.py`。 |
+| T110 | 誘い機会の話題一貫性と拒否判定 | 会話履歴関数テスト・Gemini SDKモックpytest | PASS | 古いカフェ話題と新しい無関係質問を組み合わせず、最新2件の関連する話題のみで判断。明確な外出への消極表現と「カフェは好きですか？」だけの質問は誘い意欲と扱わない。過去の誘い・拒否は維持し、遅い返信への謝罪は拒否と誤判定しない。`tests/test_app.py`。 |
+
+最新の項目数は110: PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。旧履歴のFAILは維持。全pytestは195 passed, 1 warning。Firefox UI自動テスト、Node構文検査、Python構文検査を含む。今回の変更に対するGitHub Actions結果はコミットPush後に追記する。

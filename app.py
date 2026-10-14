@@ -210,14 +210,67 @@ class CandidateSimilarityError(ValueError):
     """Candidates are near duplicates rather than meaningfully different options."""
 
 
+class ProviderAttemptLimitError(RuntimeError):
+    """The request reached its configured hard ceiling for provider calls."""
+
+
 INVITATION_PATTERN = re.compile(
     r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行けたら|どうですか|しませんか)|"
     r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
     r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
 )
+PURCHASE_NEGATION_PATTERN = re.compile(
+    r"(?:衝動買い|即決(?:購入)?|即買い|すぐ.{0,4}買|迷わず買).{0,14}(?:避け|控え|しません|しない|しないです|買わない)|"
+    r"すぐには買わない|衝動買いはしない|即決はしない|衝動買いを避け(?:ています|ている)|衝動買いは控え(?:ています|ている)"
+)
+
+
+def invite_opportunity_ready(context: dict) -> bool:
+    """Identify a recent, coherent outing exchange without overriding refusals."""
+    history = context.get("history", [])
+    partner = [item.get("body", "") for item in history if item.get("role") == "them"]
+    self_messages = [item.get("body", "") for item in history if item.get("role") == "me"]
+    if len(partner) < 2 or len(self_messages) < 1:
+        return False
+    # A prior invitation or clear refusal remains relevant even when it is old.
+    if any(INVITATION_PATTERN.search(text) for text in self_messages):
+        return False
+    if any(re.search(
+        r"まだ会う|会うのは.{0,8}(?:難|控え|不安)|今は.{0,6}(?:難|無理)|"
+        r"これ以上.{0,8}(?:やり取り|連絡)|(?:連絡|やり取り).{0,8}控え|お断り|"
+        r"行くのは.{0,8}(?:難|不安)|ごめんなさい.{0,12}(?:会う|行く|難|控え|無理)",
+        text,
+    ) for text in partner):
+        return False
+    # Use only the latest two partner turns so a coherent exchange can span
+    # adjacent messages, while old unrelated signals cannot accumulate.
+    latest_partner_messages = partner[-2:]
+    latest_partner = latest_partner_messages[-1]
+    recent_partner_text = " ".join(latest_partner_messages)
+    if re.search(
+        r"(?:カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|スイーツ|ケーキ).{0,14}(?:苦手|興味ない|好きではない|好きじゃない|行ってない|行っていない|あまり行かない|行きたくない|気がない)|"
+        r"(?:苦手|興味ない|好きではない|好きじゃない|行ってない|行っていない|あまり行かない|行きたくない).{0,14}(?:カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|スイーツ|ケーキ)",
+        recent_partner_text,
+    ):
+        return False
+    has_outing_topic = bool(re.search(r"カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|スイーツ|ケーキ", recent_partner_text))
+    shows_interest = bool(re.search(
+        r"好き(?:です|だ)?(?=[！!？?。\n ]|$)|興味が(?:あります|ある)(?=[！!？?。\n ]|$)|"
+        r"気になります(?=[！!？?。\n ]|$)|楽しそう(?:です)?(?=[！!？?。\n ]|$)|"
+        r"行ってみたい(?:です)?(?=[！!？?。\n ]|$)|いいですね|よく行きます(?=[！!？?。\n ]|$)",
+        recent_partner_text,
+    ))
+    asks_reciprocally = bool(re.search(r"[?？]|ですか|ますか", latest_partner))
+    relates_to_outing = bool(re.search(r"カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|お店|おすすめ|どこ|一緒に行", latest_partner))
+    return has_outing_topic and shows_interest and asks_reciprocally and relates_to_outing
 
 
 PERSONAL_FACT_TOPICS = {
+    "買い物": ("買う", "買い物", "買い方", "購入", "パケ買い", "衝動買い", "買い替え"),
+    "カレー": ("カレー", "カレーライス"),
+    "カレー好み": ("カレー", "カレーライス"),
+    "カレー頻度": ("カレー",),
+    "カレー経験": ("カレー",),
     "映画": ("映画", "洋画", "邦画", "映画館", "作品"),
     "読書": ("本", "読書", "小説", "ミステリー", "漫画", "マンガ"),
     "旅行": ("旅行", "旅", "出かけ", "行ったこと"),
@@ -231,18 +284,107 @@ PERSONAL_FACT_TOPICS = {
 
 
 def _topic_for_personal_question(text: str) -> str | None:
-    if not re.search(r"[?？]|ですか|ますか|どんな|何を|どこに|いつ", text):
+    if not re.search(r"[?？]|ですか|ますか|どんな|何を|どこに|いつ|頻度|食べること", text):
         return None
+    # Specific requests take precedence over their broader subject categories.
+    if any(term in text for term in PERSONAL_FACT_TOPICS["買い物"]):
+        return "買い物"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["カレー"]):
+        if re.search(r"(?:よく|頻繁|何回|どのくらい|最近|この前|食べた|食べますか|食べること)", text):
+            return "カレー頻度" if re.search(r"よく|頻繁|何回|どのくらい|食べますか|食べること", text) else "カレー経験"
+        if re.search(r"好き|お好き", text) and not re.search(r"何が|どんな|種類|具|辛さ|何系|どのカレー", text):
+            return "カレー好み"
+        return "カレー"
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             # Do not mistake statements about the partner for a question about the user.
-            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|観|見|読|行|住|空い|予定)", text):
+            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|観|見|読|行|住|空い|予定|買|購入|タイプ|頻度|経験|何系|どんな|何が)", text):
                 return topic
+    # Japanese often omits the subject; safely ask about an otherwise unknown
+    # personal preference, habit, or experience instead of inventing one.
+    if re.search(
+        r"(?:普段|最近|これまで|経験|タイプ|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|食べた|買|観た|見た|読んだ|仕事|学校|休日|性格|予定|空い|趣味|おすすめ)",
+        text,
+    ):
+        return "本人情報"
     return None
 
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
     facts = context["my_profile"].get("facts", {})
+    if topic == "買い物":
+        keys = ("shopping_habits", "buying_habits", "purchase_habits", "買い物の傾向", "購入傾向")
+        values = [str(facts[key]) for key in keys if facts.get(key)]
+        values.extend(
+            answer.get("answer", "") for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and any(term in answer.get("question", "") for term in PERSONAL_FACT_TOPICS["買い物"])
+        )
+        if not values:
+            return False
+        requested = re.search(r"すぐ|即|衝動|パケ買い|迷わず", question_text)
+        if requested:
+            return any(
+                (
+                    re.search(r"すぐ|即|衝動|パケ買い|迷わず", value)
+                    and not PURCHASE_NEGATION_PATTERN.search(value)
+                )
+                or re.search(r"調べてから|比較してから|悩んでから|考えてから", value)
+                or PURCHASE_NEGATION_PATTERN.search(value)
+                for value in values
+            )
+        return any(re.search(r"買|購入|選ぶ|比較|調べ", value) for value in values)
+    if topic == "カレー頻度":
+        keys = ("curry_frequency", "カレーを食べる頻度")
+        if any(facts.get(key) for key in keys):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and re.search(r"よく|頻繁|週|月|回|たまに|時々|あまり|食べない", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if "カレー" in answer.get("question", "")
+        )
+    if topic == "カレー経験":
+        keys = ("recent_curry_meals", "最近食べたカレー")
+        if any(facts.get(key) for key in keys):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if "カレー" in answer.get("question", "") and re.search(r"最近|この前|昨日|先週|食べた", answer.get("answer", ""))
+        )
+    if topic == "カレー":
+        values = facts.get("favorite_foods", facts.get("food_preferences", facts.get("好きな食べ物", [])))
+        if isinstance(values, str):
+            values = [values]
+        specificity = re.compile(r"チキン|ポーク|ビーフ|辛口|甘口|中辛|スパイス|キーマ|バターチキン|野菜|スープ|具")
+        if any("カレー" in str(value) and specificity.search(str(value)) for value in values or []):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and "カレー" in answer.get("question", "")
+            and specificity.search(answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
+    if topic == "カレー好み":
+        values = facts.get("favorite_foods", facts.get("food_preferences", facts.get("好きな食べ物", [])))
+        if isinstance(values, str):
+            values = [values]
+        if any("カレー" in str(value) and re.search(r"好き|好物|苦手|嫌い", str(value)) for value in values or []):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and re.search(r"好き|好物|苦手|嫌い", answer.get("answer", ""))
+            and "カレー" in answer.get("question", "")
+            for answer in context.get("ephemeral_user_answers", [])
+        )
+    if topic == "本人情報":
+        normalized_partner_question = re.sub(r"\s+|[?？。！!]", "", question_text)
+        return bool(normalized_partner_question) and any(
+            normalized_partner_question in re.sub(r"\s+|[?？。！!]", "", answer.get("question", ""))
+            and answer.get("answer", "").strip()
+            for answer in context.get("ephemeral_user_answers", [])
+        )
     if topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", question_text):
         keys = ("recent_movies", "recent_films", "最近観た映画")
         return any(facts.get(key) for key in keys) or any(
@@ -340,7 +482,19 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     topic = _topic_for_personal_question(partner_messages[-1])
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
         return None
+    if topic == "本人情報":
+        quoted_question = partner_messages[-1].strip().replace("\n", " ")[:180]
+        return UserQuestion(
+            question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
+            purpose="相手から本人の情報について直接質問されていますが、内容を分類できないため回答を確認します",
+        )
     questions = {
+        "買い物": "新作や気になる商品を見つけたときの買い方を教えてください",
+        "カレー": "カレーの種類や具で好きなものを教えてください",
+        "カレー好み": "カレーは好きですか？",
+        "カレー頻度": "カレーを食べる頻度を教えてください",
+        "カレー経験": "最近カレーを食べたことがあれば教えてください。なければそう答えてください",
+        "本人情報": "この質問にどう答えたいか教えてください。分からない場合はスキップできます",
         "映画": "映画はお好きですか？",
         "読書": "最近どんな本を読んだか教えてください",
         "旅行": "旅行やお出かけについてどう答えたいですか？",
@@ -358,13 +512,30 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
 
 
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
+    "買い物": re.compile(
+        r"(?:自分|私|僕|俺).{0,18}(?:新作|商品|服|コスメ|本|ゲーム|買い物).{0,20}(?:買|購入|選び)|"
+        r"(?:気になったら|見つけたら).{0,12}(?:すぐ買|買っちゃ|購入)|"
+        r"(?:すぐ|即).{0,8}(?:買っちゃ|買うことが多|買います|購入し)|"
+        r"(?:パケ買い|衝動買い|即買い)|"
+        r"(?:少し|ちょっと|かなり).{0,8}(?:悩んで|考えて).{0,12}買う|"
+        r"店の前で.{0,12}(?:立ち止ま|入っちゃ|買)|"
+        r"(?:新作|気になるもの).{0,12}(?:すぐ買います|買うタイプ|よく買います)"
+    ),
+    "カレー": re.compile(
+        r"(?:自分|私|僕|俺).{0,14}(?:カレー|カレーライス).{0,18}(?:好き|辛口|甘口|チキン|ポーク|具)|"
+        r"(?:カレー|カレーライス).{0,12}(?:辛口|甘口|チキン|ポーク).{0,10}(?:好き|派です)|"
+        r"(?:自分|私|僕|俺).{0,12}カレー.{0,14}(?:よく食べ|頻繁に食べ|週に|月に|たまに食べ)"
+    ),
+    "カレー好み": re.compile(r"(?:自分|私|僕|俺).{0,12}カレー.{0,14}(?:好き|好物|苦手|嫌い)(?!ですか|ますか|[?？])|カレー.{0,8}(?:好きです(?!か)|好きだ|苦手|嫌い)(?!ですか|ますか|[?？])"),
+    "カレー頻度": re.compile(r"(?:自分|私|僕|俺).{0,12}カレー.{0,16}(?:よく食べ|頻繁に食べ|週に|月に|たまに食べ|あまり食べない)"),
+    "カレー経験": re.compile(r"(?:自分|私|僕|俺).{0,12}最近.{0,12}カレー.{0,12}(?:食べた|食べています|食べました)"),
     "映画": re.compile(
         r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
         r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
         r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)"
     ),
     "読書": re.compile(r"幅広く読む|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)"),
-    "カフェ": re.compile(r"お気に入りのお店|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)|(?:カフェ|喫茶店).{0,12}(?:好きです|好きだ|よく行きます|お気に入りがあります)"),
+    "カフェ": re.compile(r"お気に入りのお店|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)(?!ですか|ますか|[?？])|(?:カフェ|喫茶店).{0,12}(?:好きです(?!か)|好きだ|よく行きます|お気に入りがあります)|(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}(?:雰囲気|ところ|お店|カフェ).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])|(?:雰囲気|ところ|お店|カフェ).{0,12}(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])"),
     "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります)"),
     "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|在住|の近くに住)|(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡).{0,8}(?:に住んでいます|在住|のほうによく行(?:きます|く)|によく行(?:きます|く))"),
     "食事": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:好きな食べ物|好物|料理).{0,16}(?:は|が).{1,16}(?:好き|です)"),
@@ -381,14 +552,14 @@ NEGATIVE_PERSONAL_FACT_RE = re.compile(
 )
 
 
-def _trusted_fact_text(context: dict) -> str:
+def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
     parts: list[str] = []
 
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for fragment in re.split(r"[。！？!?\n,、]+", value):
                 fragment = fragment.strip()
-                if fragment and not NEGATIVE_PERSONAL_FACT_RE.search(fragment):
+                if fragment and (include_negated or not NEGATIVE_PERSONAL_FACT_RE.search(fragment)):
                     parts.append(fragment)
         elif isinstance(value, list):
             for item in value:
@@ -404,7 +575,7 @@ def _trusted_fact_text(context: dict) -> str:
 
 
 def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bool:
-    source = _trusted_fact_text(context)
+    source = _trusted_fact_text(context, include_negated=topic == "買い物")
     if not source:
         return False
     if topic == "読書":
@@ -444,9 +615,95 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
     elif topic == "カフェ":
         facts = context.get("my_profile", {}).get("facts", {})
         explicit_favorites = any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafes"))
+        atmosphere = re.findall(r"落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め", text)
+        if atmosphere and not all(re.sub(r"いた$", "く", marker) in source or marker in source for marker in atmosphere):
+            return False
+        # A source such as "落ち着いた雰囲気よりにぎやかな店が好き" mentions
+        # both descriptors but supports only the preference after より.
+        source_preference_order = re.search(
+            r"(落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}より(?:も)?.{0,14}(落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,10}(?:好き|好み)",
+            source,
+        )
+        if source_preference_order and atmosphere:
+            losing_descriptor = source_preference_order.group(1)
+            losing_forms = {losing_descriptor, re.sub(r"いた$", "く", losing_descriptor)}
+            if any(marker in losing_forms or re.sub(r"いた$", "く", marker) in losing_forms for marker in atmosphere):
+                return False
         if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
         if re.search(r"よく行|よく巡|頻繁に|毎週|通って", text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
+            return False
+    elif topic == "買い物":
+        candidate_negative = bool(PURCHASE_NEGATION_PATTERN.search(text))
+        source_negative = bool(PURCHASE_NEGATION_PATTERN.search(source))
+        if candidate_negative and not source_negative:
+            return False
+        if not candidate_negative and source_negative and re.search(r"すぐ|即|衝動|パケ買い|迷わず", text):
+            return False
+        candidate_behaviors = {
+            "即決・衝動": re.search(r"すぐ|即|衝動|パケ買い|迷わず", text),
+            "比較・検討": re.search(r"調べ|比較|悩んで|考えて|吟味", text),
+        }
+        source_behaviors = {
+            "即決・衝動": re.search(r"すぐ|即|衝動|パケ買い|迷わず", source),
+            "比較・検討": re.search(r"調べ|比較|悩んで|考えて|吟味", source),
+        }
+        if any(found and not source_behaviors[name] for name, found in candidate_behaviors.items()):
+            return False
+        if candidate_behaviors["即決・衝動"] and re.search(r"調べてから|比較してから|悩んでから|考えてから", source):
+            return False
+    elif topic == "カレー":
+        varieties = re.findall(r"チキン|ポーク|ビーフ|辛口|甘口|中辛|スパイス|キーマ|バターチキン|野菜|スープ", text)
+        if varieties and not all(marker in source for marker in varieties):
+            return False
+        if re.search(r"好き|好物", text) and re.search(r"苦手|嫌い|好きじゃない|好きではない", source):
+            return False
+    elif topic == "カレー好み":
+        candidate_positive = bool(re.search(r"好き|好物", text)) and not re.search(r"苦手|嫌い|好きじゃない|好きではない", text)
+        candidate_negative = bool(re.search(r"苦手|嫌い|好きじゃない|好きではない", text))
+        answer_polarity = None
+        for answer in context.get("ephemeral_user_answers", []):
+            if "カレー" in answer.get("question", ""):
+                answer_text = answer.get("answer", "")
+                if re.search(r"苦手|嫌い|好きじゃない|好きではない", answer_text):
+                    answer_polarity = "negative"
+                elif re.search(r"好き|好物", answer_text):
+                    answer_polarity = "positive"
+        if candidate_positive and answer_polarity == "negative":
+            return False
+        if candidate_negative and answer_polarity == "positive":
+            return False
+    elif topic == "カレー頻度":
+        frequency = re.findall(r"よく|頻繁|週に|月に|たまに|時々|あまり|食べない", text)
+        curry_sources = [
+            str(value) for key in ("curry_frequency", "カレーを食べる頻度")
+            if (value := context.get("my_profile", {}).get("facts", {}).get(key))
+        ]
+        curry_sources.extend(
+            answer.get("answer", "") for answer in context.get("ephemeral_user_answers", [])
+            if "カレー" in answer.get("question", "")
+        )
+        curry_sources.append(source)
+        if frequency and not any(
+            re.search(rf"カレー.{{0,18}}{re.escape(marker)}.{{0,10}}(?:食べ|回)|{re.escape(marker)}.{{0,10}}カレー.{{0,10}}(?:食べ|回)", value)
+            for value in curry_sources for marker in frequency
+        ):
+            return False
+    elif topic == "カレー経験":
+        recency_markers = re.findall(r"最近|この前|昨日|先週", text)
+        curry_sources = [
+            str(value) for key in ("recent_curry_meals", "最近食べたカレー")
+            if (value := context.get("my_profile", {}).get("facts", {}).get(key))
+        ]
+        curry_sources.extend(
+            answer.get("answer", "") for answer in context.get("ephemeral_user_answers", [])
+            if "カレー" in answer.get("question", "")
+        )
+        curry_sources.append(source)
+        if recency_markers and not any(
+            re.search(rf"{re.escape(marker)}.{{0,14}}カレー.{{0,12}}食べ|カレー.{{0,12}}{re.escape(marker)}.{{0,12}}食べ", value)
+            for value in curry_sources for marker in recency_markers
+        ):
             return False
     elif topic == "パン":
         if re.search(r"よく行|通って|お気に入り", text) and not re.search(r"よく行|通って|お気に入り", source):
@@ -470,7 +727,16 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         time_markers = re.findall(r"最近|昨日|先週|この前|週末|休日|休みの日", text)
         if time_markers and not all(marker in source for marker in time_markers):
             return False
-    return any(term in source for term in PERSONAL_FACT_TOPICS[topic])
+    if topic not in {"カレー頻度", "カレー経験"} and any(term in source for term in PERSONAL_FACT_TOPICS[topic]):
+        return True
+    # An ephemeral answer may supply the exact scope requested even when its
+    # text omits the category word (for example, a book title answering a
+    # recent-movie question). Reuse the same specificity check as preflight.
+    return any(
+        _topic_is_verified(topic, context, answer.get("question", ""))
+        for answer in context.get("ephemeral_user_answers", [])
+        if answer.get("answer", "").strip()
+    )
 
 
 def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict) -> list[str]:
@@ -490,6 +756,12 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
 
 def personal_fact_question(topic: str) -> UserQuestion:
     questions = {
+        "買い物": "新作や気になる商品を見つけたときの買い方を教えてください",
+        "カレー": "カレーの種類や具で好きなものを教えてください",
+        "カレー好み": "カレーは好きですか？",
+        "カレー頻度": "カレーを食べる頻度を教えてください",
+        "カレー経験": "最近カレーを食べたことがあれば教えてください。なければそう答えてください",
+        "本人情報": "この質問にどう答えたいか教えてください。分からない場合はスキップできます",
         "映画": "映画はお好きですか？最近の作品についてなら、分かる範囲で教えてください",
         "読書": "普段読む本のジャンルや最近読んだ本を教えてください",
         "カフェ": "カフェに行く頻度や好きなお店について教えてください",
@@ -507,6 +779,17 @@ def personal_fact_question(topic: str) -> UserQuestion:
 
 
 def _question_topic(text: str) -> str | None:
+    quoted_partner_question = re.search(r"相手の「(.+?)」にどう答えたい", text)
+    if quoted_partner_question:
+        return _topic_for_personal_question(quoted_partner_question.group(1)) or "本人情報"
+    if "カレー" in text and re.search(r"頻度|よく|頻繁|何回|どのくらい|食べること", text):
+        return "カレー頻度"
+    if "カレー" in text and re.search(r"最近|この前|昨日|先週|食べた経験", text):
+        return "カレー経験"
+    if "カレー" in text and re.search(r"何が|どんな|種類|具|辛さ|何系|どのカレー", text):
+        return "カレー"
+    if "カレー" in text and re.search(r"好き|好み", text):
+        return "カレー好み"
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             return topic
@@ -514,19 +797,48 @@ def _question_topic(text: str) -> str | None:
 
 
 def estimate_message_style(messages: list[dict]) -> dict:
-    """Return measured character counts and explicitly approximate sentence counts."""
+    """Return measured style signals and clearly labeled heuristic estimates."""
     partner_messages = [m["body"] for m in messages if m.get("role") == "them"]
     recent = partner_messages[-5:]
     latest = recent[-1] if recent else ""
+    recent_self = [m["body"] for m in messages if m.get("role") == "me"][-5:]
 
     def sentence_estimate(text: str) -> int:
-        # Estimate sentence chunks from common Japanese/Latin endings and line breaks.
-        marks = len(re.findall(r"[!?！？]+|\n+", text.strip()))
-        return max(1, marks) if text.strip() else 0
+        # Partner messages may omit Japanese full stops and separate clauses by spaces.
+        chunks = [
+            part for part in re.split(r"[!?！？]+|\n+|[ \t]+", text.strip())
+            if re.search(r"[ぁ-んァ-ヶ一-龠A-Za-z0-9]", part)
+        ]
+        return len(chunks)
+
+    polite_markers = re.compile(r"です|ます|でした|ました|ください|でしょう")
+    casual_markers = re.compile(r"だよ|だね|じゃん|かな|だと思う|笑|ｗ|w")
+    emoji_markers = re.compile(r"[☺😊😄😂🥲😭✨🌸❤️💕👍☕🍰🌿🎬📚]")
+    acknowledgment_patterns = {
+        "共感": re.compile(r"わかります|分かります|たしかに|確かに|ですよね"),
+        "納得": re.compile(r"そうなんですね|なるほど|そういうことなんですね"),
+        "前向き": re.compile(r"いいですね|素敵ですね|楽しそうですね"),
+        "興味": re.compile(r"気になりますね|面白そうですね|聞いてみたいです"),
+    }
+
+    polite_hits = len(polite_markers.findall(latest))
+    casual_hits = len(casual_markers.findall(latest))
+    if polite_hits and casual_hits:
+        register = "混合調（推定）"
+    elif polite_hits:
+        register = "敬語寄り（推定）"
+    elif casual_hits:
+        register = "カジュアル（推定）"
+    else:
+        register = "不明"
 
     average = round(sum(len(item) for item in recent) / len(recent), 1) if recent else 0
+    recent_self_acknowledgments = {
+        family: sum(bool(pattern.search(message)) for message in recent_self)
+        for family, pattern in acknowledgment_patterns.items()
+    }
     if len(latest) <= 20:
-        target = "原則1文、短い1〜2文"
+        target = "原則1文。普段の文量も見て短い1〜2文"
     elif sentence_estimate(latest) >= 3 or len(latest) >= 100:
         target = "同程度か少し短め。要点と質問に答える"
     else:
@@ -536,8 +848,20 @@ def estimate_message_style(messages: list[dict]) -> dict:
         "partner_sentence_estimate": sentence_estimate(latest),
         "recent_partner_average_length": average,
         "recent_partner_sample_count": len(recent),
+        "partner_register_estimate": register,
+        "partner_question_mark_count": (
+            len(re.findall(r"[?？]", latest))
+            or len(re.findall(r"ですか|ますか", latest))
+        ),
+        "partner_emoji_count": sum(
+            1 for char in latest
+            if char != "\ufe0f" and emoji_markers.fullmatch(char)
+        ),
+        "partner_laugh_marker_count": len(re.findall(r"笑|ｗ+|w+", latest)),
+        "recent_self_message_count": len(recent_self),
+        "recent_self_acknowledgment_counts": recent_self_acknowledgments,
         "target_reply_length": target,
-        "mirroring_reason": "直近の相手側メッセージの実測文字数と推定文数、および直近5件以内の平均文字数を参考にする",
+        "mirroring_reason": "文字数と記号数は実測値。文数と口調は句読点を省く日本語に合わせた推定値。直近5件以内の平均も参考にする",
     }
 
 
@@ -1086,6 +1410,11 @@ def generate(data: GenerateInput):
     quality_repair_used = False
     question_repair_used = False
     try:
+        provider_attempt_limit = int(os.getenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "12"))
+    except ValueError:
+        provider_attempt_limit = 12
+    provider_attempt_limit = max(1, min(provider_attempt_limit, 12))
+    try:
         from google import genai
         from google.genai import types
 
@@ -1100,6 +1429,8 @@ def generate(data: GenerateInput):
                     ),
                 )
                 while True:
+                    if len(attempted_models) >= provider_attempt_limit:
+                        raise ProviderAttemptLimitError("Provider attempt safety cap reached")
                     _wait_for_provider_interval(account, model)
                     attempted_models.append({"api_alias": account, "model": model})
                     response = client.models.generate_content(
@@ -1146,7 +1477,16 @@ def generate(data: GenerateInput):
                             for question in parsed.user_questions
                             if (topic := _question_topic(question.question)) is not None
                         }
-                        if answered_topics & repeated_topics:
+                        normalize_question = lambda value: re.sub(r"\s+|[?？。！!]", "", value)
+                        answered_questions = {
+                            normalize_question(answer.get("question", ""))
+                            for answer in data.user_answers
+                        }
+                        repeated_questions = {
+                            normalize_question(question.question)
+                            for question in parsed.user_questions
+                        }
+                        if answered_topics & repeated_topics or answered_questions & repeated_questions:
                             return blocked_user_info_response(
                                 "回答済みの本人情報を使っても安全な候補を作れませんでした。回答内容は繰り返し尋ねず、候補の生成を中断しました。",
                                 skipped=False,
@@ -1162,6 +1502,45 @@ def generate(data: GenerateInput):
                         [parsed.recommended, *parsed.alternatives], context
                     )
                     if unsupported_topics:
+                        partner_messages = [
+                            message["body"]
+                            for message in context.get("history", [])
+                            if message.get("role") == "them"
+                        ]
+                        direct_topic = (
+                            _topic_for_personal_question(partner_messages[-1])
+                            if partner_messages
+                            else None
+                        )
+                        if data.response_version == 2 and direct_topic in unsupported_topics:
+                            answered_topics = {
+                                topic
+                                for answer in data.user_answers
+                                if (topic := _question_topic(answer.get("question", ""))) is not None
+                            }
+                            if data.skipped_user_info:
+                                return blocked_user_info_response(
+                                    "確認がスキップされたため本人の未確認情報を含む候補を表示しませんでした。",
+                                    skipped=True,
+                                    attempted_models=attempted_models,
+                                    api_attempt_count=len(attempted_models),
+                                    api_alias=account,
+                                    model=model,
+                                )
+                            if direct_topic not in answered_topics:
+                                question = personal_fact_question(direct_topic)
+                                return {
+                                    **user_info_question_response(
+                                        question.question,
+                                        question.purpose,
+                                        "相手から本人への直接質問がありましたが、候補に確認できない本人情報が含まれていました。候補を隠して回答を確認します。",
+                                    ),
+                                    "demo": False,
+                                    "api_alias": account,
+                                    "model": model,
+                                    "api_attempt_count": len(attempted_models),
+                                    "attempted_models": attempted_models,
+                                }
                         if not quality_repair_used:
                             quality_repair_used = True
                             system_instruction += (
@@ -1223,6 +1602,25 @@ def generate(data: GenerateInput):
                             "日時や場所は本人が明言していない限り決めません。"
                         )
                         continue
+                    consider_invite_ready = (
+                        data.response_version == 2
+                        and parsed.invite_decision == "consider_invite"
+                        and invite_opportunity_ready(context)
+                    )
+                    if (
+                        data.response_version == 2
+                        and consider_invite_ready
+                        and not any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
+                    ):
+                        if quality_repair_used:
+                            raise ValueError("誘いを検討する方針と返信候補が一致していません")
+                        quality_repair_used = True
+                        system_instruction += (
+                            "\n【誘いを検討する判断と候補の不一致による1回限りの再生成】会話方針では双方の関心や自然な機会が確認できています。"
+                            "相手に圧力をかけず断りやすい軽いカフェ・食事の誘いを少なくとも1候補に含めてください。"
+                            "日時や場所を本人が確認していない場合は決めず、本人の空き時間を作らないでください。"
+                        )
+                        continue
                     prohibited_invite_decisions = {
                         "do_not_invite", "continue_conversation", "wait", "respect_no",
                         "do_not_repeat_invite", "ask_user_info", "schedule_after_acceptance", "continue_or_close",
@@ -1271,7 +1669,10 @@ def generate(data: GenerateInput):
             raise last_rate_limit
         raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
-        if _is_rate_limit_error(exc):
+        if isinstance(exc, ProviderAttemptLimitError):
+            message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
+            error_code = "request_attempt_limit"
+        elif _is_rate_limit_error(exc):
             message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
             error_code = "all_models_rate_limited"
         elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("401", "403", "api_key")):

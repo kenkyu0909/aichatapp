@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 
 ROOT = Path(__file__).resolve().parents[1]
-API_DIR = Path(r"C:\Users\poiuy\Desktop\aichatapp2\API")
+API_DIR = Path(os.environ["MRA_API_DIR"]).expanduser() if os.environ.get("MRA_API_DIR", "").strip() else None
 OUTPUT = ROOT / "docs" / "verification" / "simulations" / "quality_checks_003.json"
 MAX_PROVIDER_ATTEMPTS = 25
 MAX_ATTEMPTS_PER_LOGICAL_REQUEST = 5
@@ -134,7 +134,7 @@ def main() -> int:
         selected_cases = [case for case in CASES if case[0] == "G_invite_opportunity"]
     if OUTPUT.exists():
         raise SystemExit(f"{OUTPUT.name} already exists; refusing to overwrite it")
-    if not API_DIR.is_dir():
+    if API_DIR is None or not API_DIR.is_dir():
         raise SystemExit("The user-provided private API directory is unavailable")
     os.environ["MRA_API_DIR"] = str(API_DIR)
     os.environ["MRA_PROVIDER_MIN_INTERVAL_SECONDS"] = "4.05"

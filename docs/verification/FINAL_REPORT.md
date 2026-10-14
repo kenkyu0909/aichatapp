@@ -440,3 +440,49 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 - 作業ブランチ: `codex/full-system-verification`。PR #4は`feat/ui-local-backend-v1`宛てOPEN/Draftで、マージしていません。
 - 会話 checkpoint `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。コミット`5ddcd020747eb8eb8971e991515d1004c0625114`のPush Actions [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR Actions [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)は、いずれも同一HEADで成功しました。
 - レポート: [PROGRESS.md](PROGRESS.md)、[TEST_MATRIX.md](TEST_MATRIX.md)、[prompt_spec.md](prompt_spec.md)。会話資料: [HTML](simulations/conversation_003.html)、[JSON](simulations/conversation_003.json)、[分析](simulations/conversation_003_analysis.md)、[Firefox画像](simulations/conversation_003_firefox.png)。
+
+## 2026-10-14 実Gemini品質確認004の再評価
+
+### 判定
+
+**FAIL（生成品質）**。実APIは応答しましたが、保存済みの候補に本人の確認回答と矛盾する購買行動、プロフィールにない具体的なカフェ嗜好、前向きな誘い判断と不一致の候補が含まれました。安全に送信できる品質には達していません。実API呼び出しは追加せず、会話004は開始していません。
+
+### 実API記録
+
+- 前回の品質確認: 8論理要求、9 provider attempts。API1 / `gemini-3.5-flash-lite`のみ。429・切替なし。
+- 初回の自動評価: 7 PASS / 1 FAIL。ただし手動レビューで見逃し3件と誤判定1件が分かった。自動評価のPASS数は最終的な品質PASS数として扱わない。
+- 映画回答は引用符を省いた言い換えとして正確だった。全回答の逐語一致を求めた評価器を修正した。
+- 個別の残利用枠、料金プラン、実請求額は未確認。料金を推測しない。
+
+### 修正内容
+
+- `app.py`: 購買行動の具体性と確認回答の矛盾を照合。カレーの好み・頻度・最近の経験を分離。カフェの話題だけで雰囲気の好みを本人事実としない。会話履歴から誘い機会を判断し、相互質問・共有話題・相手の関心があり、慎重さや過去の誘いがない場合の`consider_invite`で候補が欠ければ一度だけ修復する。理由文の決まった言い回しには依存しない。
+- `prompts/common.txt`: 購買行動、カレー情報、カフェ嗜好の具体性を明記。
+- `scripts/run_quality_checks_004.py`: 回答の主要事実で意味的一致を確認し、API名とモデル名を含む4経路の優先順を厳密に照合。
+- `tests/test_app.py`, `tests/test_quality_checks_004.py`: 上記の不具合を再現・確認するオフライン回帰テストを追加。
+- `docs/verification/simulations/quality_checks_004.json`: 実行時の内容は維持し、人手による独立レビューを追記。
+- 詳細は[`quality_checks_004_analysis.md`](simulations/quality_checks_004_analysis.md)。
+
+### 検証
+
+- pytest: **195 passed, 1 warning**（Starlette/httpx非推奨通知）。Firefox UI自動テストを含む。
+- 実API再試験: 今回は0件。元の8論理要求・9 provider attemptsのみ。
+- Firefox: 今回の新規機能の追加操作は未実施。全体pytest内の既存Firefox UIテストは成功。Chromeは使用していない。
+- JavaScript構文・Python構文・差分チェック、秘密情報検査、GitHub Actions: 最終確認とPush後の結果を記録する。
+
+### 実験004
+
+**NOT_TESTED**。品質確認004でFAILが見つかり、論理要求上限も使用済みのため開始しなかった。安全と品質のゲートを満たすまで実API会話を開始しない。
+
+### 集計・GitHub
+
+- テストマトリクス: 110項目、PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。過去のFAILは履歴として保持。
+- 作業ブランチ: `codex/full-system-verification`。PR #4はDraftのまま、未マージ。
+- 最終SHA、Push結果、Actions URL: コミット・Push後に追記する。
+
+### 追加レビューで見つかった境界ケース
+
+- 「衝動買いを避けています」「すぐ買うのは避けています」「即決購入を控えています」などの否定プロフィールを、反対の買い方を支持する根拠にしない。
+- カレーの頻度・最近の経験は、プロフィール内の別趣味にある「よく」「最近」だけで裏付けない。カフェの雰囲気は「落ち着いた雰囲気よりにぎやかな店が好き」の比較極性を保持する。
+- 誘い機会は直近2件の相手発言の同一話題に限定して評価する。遅い返信への謝罪だけで拒否と判断しない一方、過去の誘いや明確な拒否は全会話から確認する。
+- 追加の回帰テスト3件を含む全pytestは**195 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。新しい実Gemini API要求は0件。最新コミットのActionsはPush後に記録する。

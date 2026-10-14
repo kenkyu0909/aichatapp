@@ -15,6 +15,15 @@ function notice(t){
   clearTimeout(timer);timer=setTimeout(()=>{$("toast").hidden=true;},4000);
 }
 function errorText(result){
+  const messages={
+    invalid_response:"生成した候補が返信ルールに合わなかったため表示できませんでした。もう一度お試しください。",
+    request_attempt_limit:"生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。",
+    all_models_rate_limited:"Geminiの利用制限に達しました。時間をおいて再度お試しください。",
+    api_permission_denied:"Geminiの認証または利用権限を確認してください。",
+    model_unavailable:"指定モデルを利用できません。モデル設定を確認してください。",
+    gemini_connection_error:"Geminiとの通信に失敗しました。接続状態を確認して再度お試しください。"
+  };
+  if(messages[result?.error_code])return messages[result.error_code];
   if(typeof result?.detail==="string")return result.detail;
   return "入力または通信に失敗しました";
 }

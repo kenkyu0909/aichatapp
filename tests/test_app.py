@@ -704,7 +704,7 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     from google import genai
 
     c, backend = client
-    assert "本人の好み・経験・予定への直接質問" in backend.read_prompt("reply")
+    assert "本人の好み・経験・行動" in backend.read_prompt("reply")
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
     captured = {}
@@ -1036,6 +1036,47 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
     assert "誘い判断と候補の不一致" in prompts[1]
 
 
+def test_positive_consider_invite_reason_requires_invitation_option(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空かな")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ巡りに興味ありますか？私は落ち着いたお店が好きです！"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": "カフェの話をもう少し聞いてみたいです！"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "中野のカフェが気になります！カフェっていいところですよね？"})
+
+    def make_response(texts):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": {"label": "自然", "text": texts[0]},
+            "alternatives": [{"label": f"別案{index}", "text": text} for index, text in enumerate(texts[1:], 1)],
+            "reason": "会話を分析", "strategy": "自然に進める", "conversation_stage": "Stage 3",
+            "invite_decision": "consider_invite",
+            "decision_reason": "会話が弾んでいて相手もカフェに関心を示しています",
+            "next_action": "自然な流れでの誘いを検討します",
+        }
+
+    replies = [
+        make_response(["中野のカフェ気になりますね！", "どんなお店ですか？", "いいですね！"]),
+        make_response(["中野のカフェいいですね！よかったら今度一緒に行きませんか？", "ケーキも気になります！", "どんな雰囲気でしたか？"]),
+    ]
+    captured_prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured_prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(replies.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    assert response.json()["recommended"], response.text
+    assert "一緒に行きませんか" in response.json()["recommended"]["text"]
+    assert len(captured_prompts) == 2
+    assert "誘いを検討する判断と候補の不一致" in captured_prompts[1]
+
+
 def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
     c, _ = client
     mid = c.post("/api/matches", json={"name": "架空あかり", "description": ""}).json()["id"]
@@ -1182,7 +1223,7 @@ def test_v2_invite_decision_from_mock_is_returned_with_actual_backend_metadata(c
                 "alternatives": candidates[1:],
                 "reason": "相手の話題に沿うため", "strategy": "会話を続けます",
                 "conversation_stage": "Stage 3", "invite_decision": decision,
-                "decision_reason": f"架空シナリオ: {scenario}", "next_action": "相手の反応を尊重する",
+            "decision_reason": "架空の文脈判断です", "next_action": "相手の反応を尊重する",
             }, ensure_ascii=False))
 
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
@@ -1391,6 +1432,28 @@ def test_mirroring_metrics_use_recent_partner_messages_and_never_me_messages_as_
     assert backend.missing_personal_fact_question(context) is not None
 
 
+def test_mirroring_records_tone_questions_emojis_and_repeated_acknowledgments(client):
+    _, backend = client
+    messages = [
+        {"role": "them", "body": "休日は友達とカフェに行きました！"},
+        {"role": "me", "body": "いいですね！"},
+        {"role": "them", "body": "新しいお店も探してます笑"},
+        {"role": "me", "body": "カフェ気になりますね！"},
+        {"role": "them", "body": "今日は仕事でした ☺️ そちらはどうでしたか？"},
+    ]
+
+    measured = backend.estimate_message_style(messages)
+
+    assert measured["partner_message_length"] == len(messages[-1]["body"])
+    assert measured["partner_sentence_estimate"] == 2
+    assert measured["partner_register_estimate"] == "敬語寄り（推定）"
+    assert measured["partner_question_mark_count"] == 1
+    assert measured["partner_emoji_count"] == 1
+    assert measured["partner_laugh_marker_count"] == 0
+    assert measured["recent_self_acknowledgment_counts"]["前向き"] == 1
+    assert measured["recent_self_acknowledgment_counts"]["興味"] == 1
+
+
 def test_temporary_user_answer_resolves_only_its_matching_personal_fact_question(client):
     c, backend = client
     mid = add_match(c, "架空あかり")
@@ -1411,6 +1474,435 @@ def test_generic_reading_hobby_does_not_confirm_recent_book_or_genre(client):
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "普段どんな本を読みますか？"})
     context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+@pytest.mark.parametrize(("profile_facts", "partner_question", "expected_topic"), [
+    ({"hobbies": ["読書", "カフェ巡り"]}, "気になる新作を見つけたらすぐ買うタイプですか？", "買い物"),
+    ({"hobbies": ["読書", "カフェ巡り"]}, "カレーだと何が好きですか？", "カレー"),
+    ({"hobbies": ["読書", "カフェ巡り"]}, "普段どんなジャンルの本を読みますか？", "読書"),
+    ({"hobbies": ["映画鑑賞", "読書"]}, "最近どんな映画を観ましたか？", "映画"),
+])
+def test_direct_personal_questions_require_specific_confirmed_information(
+    client, profile_facts, partner_question, expected_topic
+):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps(profile_facts, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+
+    question = backend.missing_personal_fact_question(context)
+
+    assert question is not None
+    assert expected_topic in question.purpose
+    assert "、" not in question.question
+    assert "。" not in question.question
+
+
+@pytest.mark.parametrize(("partner_question", "answer", "expected_topic"), [
+    ("気になる新作を見つけたらすぐ買うタイプですか？", "気になった新作は少し調べてから買うことが多いです", "買い物"),
+    ("カレーだと何が好きですか？", "辛さ控えめのチキンカレーが好きです", "カレー"),
+    ("普段どんなジャンルの本を読みますか？", "ミステリー小説をよく読みます", "読書"),
+    ("最近どんな映画を観ましたか？", "最近は架空作品の『青い灯台』を観ました", "映画"),
+])
+def test_direct_personal_question_accepts_only_matching_ephemeral_answer(
+    client, partner_question, answer, expected_topic
+):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+    request = backend.GenerateInput(
+        mode="reply", match_id=mid, response_version=2,
+        user_answers=[{"question": partner_question, "answer": answer}],
+    )
+    context = backend.build_context(request)
+
+    assert backend.missing_personal_fact_question(context) is None
+    assert answer in context["ephemeral_user_answers"][0]["answer"]
+    assert c.get("/api/profile").json()["content"] == ""
+
+
+def test_known_specific_curry_fact_does_not_trigger_user_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カレーだと何が好きですか？"}],
+        "my_profile": {"facts": {"favorite_foods": ["辛さ控えめのチキンカレー"]}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_generic_curry_hobby_is_not_specific_enough_to_answer_curry_preference(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カレーだと何が好きですか？"}],
+        "my_profile": {"facts": {"favorite_foods": ["カレー"]}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_explicit_purchase_habit_profile_avoids_unnecessary_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "気になる新作を見つけたらすぐ買うタイプですか？"}],
+        "my_profile": {"facts": {"shopping_habits": "気になった新作は少し調べてから買います"}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize(("profile_facts", "partner_question", "topic"), [
+    ({"hobbies": ["読書"]}, "気になる新作を見つけたらすぐ買うタイプですか？", "買い物"),
+    ({"hobbies": ["読書"]}, "カレーだと何が好きですか？", "カレー"),
+    ({"hobbies": ["読書"]}, "普段どんなジャンルの本を読みますか？", "読書"),
+    ({"hobbies": ["映画鑑賞"]}, "最近どんな映画を観ましたか？", "映画"),
+])
+def test_direct_unknown_question_returns_user_info_without_calling_gemini(
+    client, monkeypatch, profile_facts, partner_question, topic
+):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps(profile_facts, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [])
+    before_profile = c.get("/api/profile").json()
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+    assert topic in body["user_questions"][0]["purpose"]
+    assert c.get("/api/profile").json() == before_profile
+
+
+def test_unsafe_direct_answer_becomes_user_question_without_second_generation(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "気になる新作を見つけたらすぐ買うタイプですか？",
+    })
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "気になる新作は見つけたらすぐ買うタイプです！"},
+        "alternatives": [
+            {"label": "広げる", "text": "新作を見つけたらすぐ買っちゃいます！"},
+            {"label": "親しみ", "text": "パケ買いすることもあります！"},
+        ],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話中", "next_action": "返答する",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setattr(backend, "missing_personal_fact_question", lambda context: None)
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    before_messages = c.get(f"/api/matches/{mid}/messages").json()
+    before_profile = c.get("/api/profile").json()
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    body = response.json()
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+    assert "買い方" in body["user_questions"][0]["question"]
+    assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
+    assert c.get("/api/profile").json() == before_profile
+
+
+def test_provider_attempt_limit_stops_quality_repair_before_an_extra_call(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日はカフェに行きました！"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "カフェに行きました、楽しそうです"},
+        "alternatives": [
+            {"label": "別案", "text": "どんなお店でしたか。"},
+            {"label": "短め", "text": "いいですね、素敵です。"},
+        ],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話中", "next_action": "話題を続ける",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "1")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "request_attempt_limit"
+    assert response.json()["api_attempt_count"] == 1
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(("partner_question", "user_question", "answer", "reply"), [
+    ("気になる新作を見つけたらすぐ買うタイプですか？", "新作や気になる商品を見つけたときの買い方を教えてください", "気になった新作は少し調べてから買うことが多いです", "少し調べてから買うことが多いです！"),
+    ("カレーだと何が好きですか？", "カレーの種類や具で好きなものを教えてください", "辛さ控えめのチキンカレーが好きです", "辛さ控えめのチキンカレーが好きです！"),
+    ("普段どんなジャンルの本を読みますか？", "普段読む本のジャンルや最近読んだ本を教えてください", "ミステリー小説をよく読みます", "ミステリー小説を読むことが多いです！"),
+    ("最近どんな映画を観ましたか？", "映画はお好きですか？最近の作品についてなら、分かる範囲で教えてください", "最近は架空作品の『青い灯台』を観ました", "最近は架空作品の『青い灯台』を観ました！"),
+])
+def test_user_answer_resumes_generation_ephemerally_for_specific_question(
+    client, monkeypatch, partner_question, user_question, answer, reply
+):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": reply},
+        "alternatives": [
+            {"label": "話題を広げる", "text": f"{reply} ほかにも教えてください！"},
+            {"label": "少し親しみ", "text": f"{reply} その話面白いですね！"},
+        ],
+        "reason": "本人の回答に沿って応答", "strategy": "相手の質問に答える",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            context = json.loads(kwargs["contents"])
+            assert context["ephemeral_user_answers"] == [{"question": user_question, "answer": answer}]
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    before_profile = c.get("/api/profile").json()
+    before_messages = c.get(f"/api/matches/{mid}/messages").json()
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [{"question": user_question, "answer": answer}],
+    })
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["needs_user_info"] is False
+    assert body["recommended"]["text"] == reply
+    assert c.get("/api/profile").json() == before_profile
+    assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
+
+
+@pytest.mark.parametrize(("claim", "topic"), [
+    ("気になる新作を見つけたらすぐ買うタイプです", "買い物"),
+    ("少し悩んでから買うことが多いです", "買い物"),
+    ("お店の前で立ち止まって気になると買うことがあります", "買い物"),
+    ("パケ買いしちゃうことがあります", "買い物"),
+    ("自分は辛口のチキンカレーが好きです", "カレー"),
+])
+def test_unverified_purchase_and_curry_claims_are_detected(client, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text=claim)
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("question", "facts", "expected_topic"), [
+    ("気になる新作を見つけたらすぐ買うタイプですか？", {"shopping_habits": "買い物が好きです"}, "買い物"),
+    ("カレーをよく食べますか？", {"favorite_foods": ["辛口チキンカレー"]}, "カレー頻度"),
+    ("最近カレーを食べましたか？", {"favorite_foods": ["辛口チキンカレー"]}, "カレー経験"),
+])
+def test_topic_classifier_does_not_conflate_preference_frequency_and_experience(client, question, facts, expected_topic):
+    _, backend = client
+    context = {"mode": "reply", "history": [{"role": "them", "body": question}],
+               "my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+    assert backend._topic_for_personal_question(question) == expected_topic
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_specific_purchase_habit_requires_matching_profile_detail(client):
+    _, backend = client
+    question = "気になる新作を見つけたらすぐ買うタイプですか？"
+    generic = {"my_profile": {"facts": {"shopping_habits": "買い物が好きです"}}, "ephemeral_user_answers": []}
+    specific = {"my_profile": {"facts": {"shopping_habits": "気になる商品はすぐ買うことがあります"}}, "ephemeral_user_answers": []}
+    assert backend._topic_is_verified("買い物", generic, question) is False
+    assert backend._topic_is_verified("買い物", specific, question) is True
+    contradictory = {"my_profile": {"facts": {"shopping_habits": "少し調べてから買うことが多いです"}}, "ephemeral_user_answers": []}
+    assert "買い物" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="候補", text="すぐ買っちゃうこともありますけどね")
+    ], contradictory)
+    declines = {"my_profile": {"facts": {"shopping_habits": "衝動買いはしません"}}, "ephemeral_user_answers": []}
+    assert backend._topic_is_verified("買い物", declines, question) is True
+    assert "買い物" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="候補", text="衝動買いすることがあります")
+    ], declines)
+    for wording in (
+        "衝動買いを避けています", "衝動買いは控えています",
+        "すぐ買うのは避けています", "即決購入を控えています",
+    ):
+        avoids = {"my_profile": {"facts": {"shopping_habits": wording}}, "ephemeral_user_answers": []}
+        assert "買い物" in backend.unsupported_personal_claim_topics([
+            backend.Candidate(label="候補", text="衝動買いすることがあります")
+        ], avoids)
+
+
+def test_cafe_hobby_does_not_verify_specific_atmosphere_preference(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["カフェ巡り"]}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text="落ち着く雰囲気のところが好きです")
+    assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], context)
+    inflected = backend.Candidate(label="別候補", text="落ち着いた雰囲気のカフェが好きです")
+    assert "カフェ" in backend.unsupported_personal_claim_topics([inflected], context)
+
+
+def test_cafe_preference_polarity_is_preserved(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": ["カフェ巡り"], "favorite_places": "落ち着いた雰囲気よりにぎやかな店が好き"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="候補", text="落ち着いた雰囲気のカフェが好きです")
+    assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], context)
+    supported = backend.Candidate(label="候補", text="にぎやかなお店のほうが好きです")
+    assert "カフェ" not in backend.unsupported_personal_claim_topics([supported], context)
+
+
+def test_specific_curry_preference_does_not_verify_frequency_or_recent_experience(client):
+    _, backend = client
+    preference_only = {"my_profile": {"facts": {"favorite_foods": ["辛口チキンカレー"]}}, "ephemeral_user_answers": []}
+    frequency_claim = backend.Candidate(label="頻度", text="私はカレーを週に2回食べます")
+    recent_claim = backend.Candidate(label="経験", text="自分は最近カレーを食べました")
+    unsupported = backend.unsupported_personal_claim_topics([frequency_claim, recent_claim], preference_only)
+    assert "カレー頻度" in unsupported
+    assert "カレー経験" in unsupported
+
+
+def test_unrelated_frequency_or_recency_does_not_support_curry_claims(client):
+    _, backend = client
+    unrelated = {
+        "my_profile": {"facts": {"hobbies": ["カレー巡り"], "weekends": "休日はよく本を読みます", "recent_activity": "最近映画を観ました"}},
+        "ephemeral_user_answers": [],
+    }
+    candidates = [
+        backend.Candidate(label="頻度", text="私はカレーをよく食べます"),
+        backend.Candidate(label="経験", text="自分は最近カレーを食べました"),
+    ]
+    assert {"カレー頻度", "カレー経験"}.issubset(backend.unsupported_personal_claim_topics(candidates, unrelated))
+
+
+def test_invite_opportunity_requires_recent_coherent_outing_exchange(client):
+    _, backend = client
+    stale_signals = {
+        "history": [
+            {"role": "them", "body": "カフェが好きでよく行きます"},
+            {"role": "me", "body": "落ち着くお店が多そうですね"},
+            {"role": "them", "body": "そうなんですね！"},
+            {"role": "me", "body": "最近は本を読んでいます"},
+            {"role": "them", "body": "最近何を読んでいますか？"},
+        ]
+    }
+    coherent_exchange = {
+        "history": [
+            {"role": "them", "body": "休日はカフェ巡りが好きです"},
+            {"role": "me", "body": "どんなお店が好きですか？"},
+            {"role": "them", "body": "中野のカフェが気になります！よく行きますか？"},
+        ]
+    }
+    split_coherent_exchange = {
+        "history": [
+            {"role": "them", "body": "休日はカフェ巡りが好きです！"},
+            {"role": "me", "body": "最近行きたいお店はありますか？"},
+            {"role": "them", "body": "中野のカフェが気になります！"},
+            {"role": "me", "body": "どんなお店が好きですか？"},
+            {"role": "them", "body": "落ち着いたところが好きです！おすすめありますか？"},
+        ]
+    }
+    apology_without_refusal = {
+        "history": coherent_exchange["history"] + [
+            {"role": "them", "body": "ごめんなさい返信遅くなりました！中野のカフェ気になります！どんなお店がおすすめですか？"},
+        ]
+    }
+    negated_outing_interest = {
+        "history": [
+            {"role": "them", "body": "カフェは最近あまり行ってないです"},
+            {"role": "me", "body": "そうなんですね"},
+            {"role": "them", "body": "映画の話も好きですか？カフェは今は興味ないかもです"},
+        ]
+    }
+    question_is_not_interest = {
+        "history": [
+            {"role": "them", "body": "最近は仕事が忙しいです"},
+            {"role": "me", "body": "お疲れさまです"},
+            {"role": "them", "body": "カフェは好きですか？"},
+        ]
+    }
+    previously_invited = {
+        "history": coherent_exchange["history"] + [
+            {"role": "me", "body": "よかったら今度一緒にカフェへ行きませんか？"},
+            {"role": "them", "body": "少し考えたいです"},
+            {"role": "me", "body": "最近はどんな本を読みますか？"},
+            {"role": "them", "body": "ミステリーが好きです！"},
+            {"role": "me", "body": "読書いいですね"},
+            {"role": "them", "body": "好きな作家はいますか？"},
+        ]
+    }
+    assert backend.invite_opportunity_ready(stale_signals) is False
+    assert backend.invite_opportunity_ready(coherent_exchange) is True
+    assert backend.invite_opportunity_ready(split_coherent_exchange) is True
+    assert backend.invite_opportunity_ready(apology_without_refusal) is True
+    assert backend.invite_opportunity_ready(negated_outing_interest) is False
+    assert backend.invite_opportunity_ready(question_is_not_interest) is False
+    assert backend.invite_opportunity_ready(previously_invited) is False
+
+
+def test_yes_no_curry_preference_answer_is_not_reasked(client):
+    _, backend = client
+    question = "カレーは好きですか？"
+    context = {
+        "mode": "reply", "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "好きです"}],
+    }
+    assert backend._topic_for_personal_question(question) == "カレー好み"
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_profile_does_not_turn_ai_generated_me_message_into_verified_fact(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "気になる新作を見つけたらすぐ買うタイプですか？"},
+            {"role": "me", "body": "パッケージが気に入ったら買うことがあります"},
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
     assert backend.missing_personal_fact_question(context) is not None
 
 

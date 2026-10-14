@@ -15,7 +15,7 @@
 - オフラインテスト: 修正対象のpytestとFirefox UIの37件が成功（1件の既知Starlette/httpx非推奨警告）。直前の全体pytestは104件成功。最新の全体再実行は実API後の最終確認で行う。`node --check app.js`、`git diff --check`成功。
 - GitHubへ先に再現テストcheckpoint `ebd6fce497066c8fe04d58e203e39fa2ecef2f6c`をPush済み。今回の実装・文書更新は次の進捗commitでPushする。CI run URLはPush後に追記する。
 - 修正checkpoint `b8b37e2b0503fcc83ed15ccf43bf40f20f51ec87` Push済み。GitHub Actions [Push run 38542247374](https://github.com/kenkyu0909/aichatapp/actions/runs/38542247374) は同SHAで成功（pytest・Firefox準備・Node構文・artifact upload）。runner再開修正checkpoint `2100b917eb0e58c727fc5f323b75492e8dfa7e7c` の[Push run 38542488356](https://github.com/kenkyu0909/aichatapp/actions/runs/38542488356)と[PR run 38542495182](https://github.com/kenkyu0909/aichatapp/actions/runs/38542495182)も同SHAで成功。
-- 実API認証は指定フォルダー`C:\Users\poiuy\Desktop\aichatapp2\API`のみを参照するよう子プロセスを固定。API1/2の認証情報が読み出せることをbooleanだけで確認し、値は出力していない。初回生成の実通信は1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。429切替は発生せず。`conversation_002.json`に候補3案と実際の使用モデル/別名を保存し、APIキーは含めていない。
+- 実API認証はユーザー指定のローカルAPIフォルダーのみを参照するよう子プロセスを固定。API1/2の認証情報が読み出せることをbooleanだけで確認し、値は出力していない。初回生成の実通信は1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。429切替は発生せず。`conversation_002.json`に候補3案と実際の使用モデル/別名を保存し、APIキーは含めていない。
 - 初回3案の品質は一部FAIL: 推奨案は必須構成を満たしたが「、」「。」と不自然な詰まりがあり、2案目は好意/マッチの喜びが不足、3案目は質問がない。実験条件を崩さないため、送信前にプロンプトを変えず、この結果をT79として保存。会話終了後に修正・別リクエストで再評価する。
 - 実験002は初回候補の承認前に、再開時に開始メッセージを求めるrunner不具合を検出。候補・SQLite履歴は変更せず`needs_partner_opening`判定を修正し、モックテスト2件を再実行してPASS。修正commitは次のpushに含める。
 - 実験002状態: RUNNING、Gemini logical request 13件（成功13/失敗0、内部試行は全件1回）、アプリ送信13通、Codex相手役返信12通。全13件がAPI1 / `gemini-3.5-flash-lite`、フォールバック/制限なし。JSON/HTMLは実会話から逐次更新、APIキーパターンなし。初回候補選択後の各相手役返信は、保存済みの実送信文/履歴だけを見て作成。コード再開のrunner修正後、002を継続できた。
@@ -327,3 +327,20 @@
 ### 最終Actions確認
 
 `5ddcd020747eb8eb8971e991515d1004c0625114`を対象にPush run [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR run [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)が成功しました。GitHub Actionsではpytest、JavaScript構文検査、テスト結果Artifact保存が成功し、PR HEADも同じSHAでした。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`で、マージしていません。報告書更新commit `195ce1dd90c12ec4a56fc2f81854f66e2f73d3d9`でもPush run [38557173827](https://github.com/kenkyu0909/aichatapp/actions/runs/38557173827)とPR run [38557181001](https://github.com/kenkyu0909/aichatapp/actions/runs/38557181001)が同一HEADで成功したことを確認しました。次の進捗記録commitについてもActionsを確認します。
+
+## 2026-10-14 実Gemini品質004の再評価とオフライン修正
+
+- 開始時にリモートの最新ブランチを確認。`codex/full-system-verification`はHEAD `79bf8643a2de969183818213126f2114d63a555f`で作業ツリーに前回からの未コミット実装があり、再作業せず引き継いだ。PR #4は既存Draftのまま。ユーザー提供の`指示.txt`は読んだが、追跡・ステージしない。
+- 既存の実APIログ`quality_checks_004.json`を手動で再評価。実API呼び出しは前回分8論理要求・9 provider attemptsのみ。すべてAPI1/`gemini-3.5-flash-lite`、429・フォールバックなし。今回追加のGemini通信は0件。
+- 人手レビューで購買習慣の矛盾、確認のないカフェ雰囲気の好み、`consider_invite`と誘い候補の不一致を確認。映画作品名は自然な言い換えだったが、初回評価器が引用符を含む回答全文一致を要求して誤ってFAILにした。元の評価値は残し、`post_run_review`を追加した。
+- `app.py`で買い方の具体的な行動と回答の一致を確認し、カレーの好み・頻度・最近の経験を分類。カフェ趣味から雰囲気を推測しない候補チェックを追加。`consider_invite`の機会判定は、相互質問・共有話題・相手の関心・慎重さ・過去の誘いを会話履歴から評価し、理由文の特定語句には依存しない。機会があるのに候補がない場合は1回だけ修復する。
+- `scripts/run_quality_checks_004.py`で主要事実による意味的一致評価に変更し、API別名とモデル名を含めた4経路の優先順を厳密確認する。追加のオフラインテストは`tests/test_quality_checks_004.py`。
+- 新規回帰テストを含む全pytest **192 passed, 1 warning**。`node --check app.js`、Python `py_compile`、`git diff --check`をこれから最終実行し、GitHub Actions結果はPush後に追記する。Firefox UIテストも全pytestに含まれる。Chromeは使っていない。
+- 会話004は開始していない。実出力に品質FAILがあり、8要求の事前上限も使用済みのため、今回の開始条件を満たさない。次回は変更後の仕様を別の限定実API品質確認で評価してから開始可否を判断する。架空データだけを使い、001〜003は変更しない。
+- 対象コミットとActions: 未完了。次に構文/差分/秘密情報検査、明示パスだけをstage、レビュー後に既存PR #4へPushし、最新コミットのActionsとDraft状態を確認する。
+### 2026-10-14 レビュー指摘の追加修正
+
+- 追加レビューで購買否定表現の極性、「カレーは好きですか」のYes/No回答、「落ち着いた」の活用形、誘い判断の理由文言依存が見つかった。購買の否定を肯定の根拠に使わないようにし、Yes/Noのカレー嗜好は種類・頻度・最近の経験と別の事実として扱う。カフェ雰囲気の活用形を検出する。誘い機会はモデル理由の文字列ではなく、直近のつながった話題・相互質問・相手の関心から判定し、過去の誘い・明確な拒否は会話全体で確認する。遅い返信への「ごめんなさい」だけでは拒否とみなさず、誘いを断った表現と区別する。
+- Firefoxテストの一時的なDOM更新によるStaleElementReferenceExceptionと遅いローカル応答でのトースト待ちタイムアウトもテスト側で安定化。Firefox実操作に関する表示と実機動作を緩めず、確認方法の待ち時間だけを修正。
+- 購買行動の「避ける・控える」表現、カレーの頻度/最近の経験と無関係なプロフィール情報、比較表現で否定されるカフェ嗜好、古い話題からの誤った誘い判定を再現する回帰テストを追加。
+- 修正後の全pytest **195 passed, 1 warning**。Firefox UIテストを含む。`node --check app.js`、Python `py_compile`、`git diff --check`も成功。新規実API通信は0件。GitHub Actions結果はPush後に追記する。

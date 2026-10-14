@@ -137,7 +137,10 @@ def visible_toast(driver, text):
     def matches(browser):
         toast = browser.find_element(By.ID, "toast")
         return text in toast.text if toast.is_displayed() else False
-    return WebDriverWait(driver, 8).until(matches)
+    # Firefox can spend several seconds processing the local API while the page
+    # is loaded alongside the rest of the suite; wait for async completion rather
+    # than timing out at the toast's normal display duration.
+    return WebDriverWait(driver, 15).until(matches)
 
 
 def modal(driver):
@@ -154,7 +157,10 @@ def add_fictional_contact(driver, name="架空のあおい"):
     )
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
     WebDriverWait(driver, 8).until(
-        lambda browser: any(name in item.text for item in browser.find_elements(By.CSS_SELECTOR, ".contact-item"))
+        lambda browser: browser.execute_script(
+            "return Array.from(document.querySelectorAll('.contact-item')).some(item => item.textContent.includes(arguments[0]))",
+            name,
+        )
     )
 
 
@@ -468,5 +474,43 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     assert driver.find_element(By.ID, "generate").is_displayed()
     assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble").text == sent
     errors = record_artifact("firefox-first-message-user-info", driver, {"user_info_answers_persisted": False})
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_distinguishes_invalid_candidate_and_rate_limit_errors(local_app, firefox):
+    app = local_app
+    driver = firefox
+    driver.get(app.url)
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "")
+    add_fictional_contact(driver)
+    driver.find_element(By.ID, "message-input").send_keys("今日はカフェに行きました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.execute_script("""
+      const originalFetch = window.fetch.bind(window);
+      window.__mockErrorCode = 'invalid_response';
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const body = {error_code:window.__mockErrorCode, detail:'secret-safe detail'};
+          return new Response(JSON.stringify(body), {status:502, headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    driver.find_element(By.ID, "generate").click()
+    visible_toast(driver, "生成した候補が返信ルールに合わなかったため表示できませんでした")
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
+
+    driver.execute_script("window.__mockErrorCode='all_models_rate_limited'")
+    driver.find_element(By.ID, "generate").click()
+    visible_toast(driver, "Geminiの利用制限に達しました")
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
+
+    driver.execute_script("window.__mockErrorCode='request_attempt_limit'")
+    driver.find_element(By.ID, "generate").click()
+    visible_toast(driver, "生成の安全試行上限に達したため停止しました")
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
+    errors = record_artifact("firefox-generation-error-categories", driver)
     assert errors["runtime"] == []
     assert errors["console"] == []
