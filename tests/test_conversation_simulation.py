@@ -96,6 +96,43 @@ def test_partner_and_unselected_candidates_do_not_increment_app_counter():
     assert state["app_sent_count"] == 0
 
 
+def test_rejecting_unsafe_pending_candidates_persists_them_without_sending(tmp_path):
+    state = state_with_sent(15)
+    state["api_requests"] = [{"request_number": index, "ok": True} for index in range(1, 17)]
+    state["pending_generation"] = {
+        "account": "API1", "model": "gemini-3.5-flash-lite",
+        "data": {"conversation_stage": "Stage 2", "invite_decision": "continue_conversation"},
+        "candidates": [
+            {"label": "A", "text": "すぐ買うことが多いです！"},
+            {"label": "B", "text": "お店の前で立ち止まります！"},
+            {"label": "C", "text": '<script>alert("x")</script>'},
+        ],
+    }
+    reason = "本人未確認の購買行動を3案が断定したため送信を停止"
+
+    simulation.reject_pending_generation(state, reason)
+
+    assert state["status"] == "BLOCKED"
+    assert state["end_reason"] == reason
+    assert "pending_generation" not in state
+    assert state["app_sent_count"] == 15
+    assert len(state["messages"]) == 0
+    assert state["rejected_generations"][0]["candidates"][2]["text"].startswith("<script>")
+    target = tmp_path / "blocked.html"
+    simulation.render_html(state, target)
+    report = target.read_text(encoding="utf-8")
+    assert "送信前に拒否したGemini候補を確認" in report
+    assert "本人未確認の購買行動" in report
+    assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in report
+    assert '<script>alert("x")</script>' not in report
+
+
+def test_reject_pending_generation_requires_running_pending_state():
+    state = state_with_sent(0)
+    with pytest.raises(ValueError, match="拒否できる未送信候補がありません"):
+        simulation.reject_pending_generation(state, "安全上の理由")
+
+
 @pytest.mark.parametrize("status", ["SUCCESS", "SAFETY_STOP", "BLOCKED"])
 def test_terminal_state_prevents_app_send(status):
     state = state_with_sent(2)

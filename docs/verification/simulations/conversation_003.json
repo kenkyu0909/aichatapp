@@ -2,9 +2,9 @@
   "schema_version": 1,
   "experiment_id": "conversation_003",
   "started_at": "2026-10-14T11:15:14+00:00",
-  "updated_at": "2026-10-14T11:17:06+00:00",
-  "status": "RUNNING",
-  "end_reason": null,
+  "updated_at": "2026-10-14T11:22:07+00:00",
+  "status": "BLOCKED",
+  "end_reason": "本人未確認の購買行動を3案すべてが断定したため、送信せずに安全停止した",
   "people": {
     "app_user": {
       "name": "橘はる",
@@ -197,6 +197,154 @@
       "at": "2026-10-14T11:17:06+00:00",
       "candidate_count": 3,
       "demo": false
+    },
+    {
+      "request_number": 9,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 2,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        },
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:18:10+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 10,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:18:26+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 11,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:18:42+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 12,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:19:01+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 13,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:19:28+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 14,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:19:41+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 15,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:19:55+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 16,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [
+        {
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite"
+        }
+      ],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T11:20:11+00:00",
+      "candidate_count": 3,
+      "demo": false
     }
   ],
   "messages": [
@@ -290,6 +438,110 @@
       "speaker": "partner",
       "body": "スパイスの香りが強いものが好きです！はるさんはカレーだと何が好きですか？",
       "at": "2026-10-14T11:16:59+00:00"
+    },
+    {
+      "sequence": 15,
+      "speaker": "app",
+      "body": "本格的なカレー気になります美味しそうなお店を見つけるとワクワクしますよね",
+      "app_send_number": 8,
+      "at": "2026-10-14T11:17:59+00:00"
+    },
+    {
+      "sequence": 16,
+      "speaker": "partner",
+      "body": "お店ごとにスパイスの香りが違うのも面白いです！私は辛すぎない方が好きです",
+      "at": "2026-10-14T11:18:03+00:00"
+    },
+    {
+      "sequence": 17,
+      "speaker": "app",
+      "body": "辛すぎないスパイスカレーもいいですよね！お店によって全然違って楽しそうです",
+      "app_send_number": 9,
+      "at": "2026-10-14T11:18:19+00:00"
+    },
+    {
+      "sequence": 18,
+      "speaker": "partner",
+      "body": "そうなんです！辛さより香りや具の組み合わせを楽しめるところが好きです。カレー以外だと甘いものもよく食べます",
+      "at": "2026-10-14T11:18:23+00:00"
+    },
+    {
+      "sequence": 19,
+      "speaker": "app",
+      "body": "甘いものいいですねお気に入りのカフェやお店はあったりするんですか",
+      "app_send_number": 10,
+      "at": "2026-10-14T11:18:31+00:00"
+    },
+    {
+      "sequence": 20,
+      "speaker": "partner",
+      "body": "中野の小さな喫茶店で食べた固めプリンがおいしかったです！はるさんは甘いものだと何が好きですか？",
+      "at": "2026-10-14T11:18:39+00:00"
+    },
+    {
+      "sequence": 21,
+      "speaker": "app",
+      "body": "固めプリンのおいしい喫茶店すてきですね甘いものだと季節のフルーツを使ったタルトも気になります",
+      "app_send_number": 11,
+      "at": "2026-10-14T11:18:52+00:00"
+    },
+    {
+      "sequence": 22,
+      "speaker": "partner",
+      "body": "季節のタルトいいですね！私は栗やさつまいものケーキも好きです",
+      "at": "2026-10-14T11:18:59+00:00"
+    },
+    {
+      "sequence": 23,
+      "speaker": "app",
+      "body": "秋の味覚のスイーツはどれも気になりますね",
+      "app_send_number": 12,
+      "at": "2026-10-14T11:19:21+00:00"
+    },
+    {
+      "sequence": 24,
+      "speaker": "partner",
+      "body": "秋は季節限定のお菓子が多くて選ぶのが楽しいです！新作が出るとついチェックしちゃいます",
+      "at": "2026-10-14T11:19:25+00:00"
+    },
+    {
+      "sequence": 25,
+      "speaker": "app",
+      "body": "美味しいお菓子の情報交換ができると楽しいですね！",
+      "app_send_number": 13,
+      "at": "2026-10-14T11:19:34+00:00"
+    },
+    {
+      "sequence": 26,
+      "speaker": "partner",
+      "body": "コンビニの新作も見ますけどケーキ屋さんの季節ものも気になります",
+      "at": "2026-10-14T11:19:39+00:00"
+    },
+    {
+      "sequence": 27,
+      "speaker": "app",
+      "body": "いろんなお店の季節限定スイーツも気になりますね！",
+      "app_send_number": 14,
+      "at": "2026-10-14T11:19:48+00:00"
+    },
+    {
+      "sequence": 28,
+      "speaker": "partner",
+      "body": "新作を見るとつい迷います笑",
+      "at": "2026-10-14T11:19:52+00:00"
+    },
+    {
+      "sequence": 29,
+      "speaker": "app",
+      "body": "迷いながら選ぶ時間もいいですよね",
+      "app_send_number": 15,
+      "at": "2026-10-14T11:20:01+00:00"
+    },
+    {
+      "sequence": 30,
+      "speaker": "partner",
+      "body": "はるさんは気になる新作を見つけたらすぐ買うタイプですか？",
+      "at": "2026-10-14T11:20:08+00:00"
     }
   ],
   "turns": [
@@ -334,7 +586,7 @@
       "decision_reason": "マッチ直後のため誘わず、まずはプロフィールに触れた挨拶と自然な質問から会話を始めます",
       "next_action": "相手からの返信を待ち、趣味や休日の過ごし方について楽しくやり取りを続ける",
       "user_info_reason": "",
-      "selection_reason": "推奨候補",
+      "selection_reason": "推奨候補。初回の挨拶・マッチへの喜び・公開プロフィールの話題・質問がそろい、句読点違反がなかったため。",
       "api_request_number": 1,
       "selected_text": "はじめまして！マッチできてうれしいです☺️ パン屋さん巡りや写真がすてきですね！最近行っておいしかったパン屋さんはありますか？",
       "app_send_number": 1,
@@ -359,10 +611,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "対象外",
+        "conversation_progress": "初回として自然。会話を始める内容。",
+        "factuality": "公開プロフィールに沿う",
+        "repetition": "好意は控えめで文体は自然。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -406,7 +659,7 @@
       "decision_reason": "まだ会話が始まったばかりのため、まずはパンや散歩の話題を楽しんで距離を縮める段階",
       "next_action": "相手からの返信に合わせてパン屋さんや写真の話題を広げる",
       "user_info_reason": "",
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "パン屋の具体的な話へつなげる質問を選択。ほかの案より相手が答えやすく、本人の未確認事実も含まなかった。",
       "api_request_number": 2,
       "selected_text": "中野のクロワッサン気になります！ほかにお気に入りのパンの種類はありますか？",
       "app_send_number": 2,
@@ -431,10 +684,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "よい",
+        "conversation_progress": "パンの種類へ具体化",
+        "factuality": "問題なし",
+        "repetition": "質問が1つ。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -478,7 +732,7 @@
       "decision_reason": "まだ会話が始まったばかりで趣味のパンについてのやり取りの段階であるため、誘わずに会話を続けます。",
       "next_action": "相手の趣味であるパン屋さん巡りや写真についての話題を自然に続けて距離を縮めます。",
       "user_info_reason": "",
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "パンの話題から相手プロフィールにある写真へ自然に広げる候補を選択。",
       "api_request_number": 3,
       "selected_text": "塩パンいいですねパン屋さんを巡るときは写真も一緒に撮ったりするんですか？",
       "app_send_number": 3,
@@ -503,10 +757,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "よい",
+        "conversation_progress": "写真の話題へ移動",
+        "factuality": "問題なし",
+        "repetition": "前ターンと違う話題だが質問が連続しがち。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -550,7 +805,7 @@
       "decision_reason": "まだ挨拶と趣味の話題の往復段階であり、もう少し会話を続けるのが自然なため。",
       "next_action": "パン屋巡りや散歩の話題を続け、共通の話題や雰囲気を楽しむ。",
       "user_info_reason": "",
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "直前の「食べるのが先」という話に直接答えつつ、相手が公開プロフィールで触れた写真の話を一つ尋ねて会話を広げるため。",
       "api_request_number": 4,
       "selected_text": "それだけおいしそうだとすぐ食べたくなりますよね 最近はカメラを持って出かけたりもするんですか？",
       "app_send_number": 4,
@@ -575,10 +830,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "やや長め",
+        "conversation_progress": "写真の会話を継続",
+        "factuality": "本人の体験の主張なし",
+        "repetition": "共感表現が「ですよね」型。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -622,7 +878,7 @@
       "decision_reason": "まだお互いの趣味や日常の話題を楽しんでいる段階のため、もう少し会話を続けます。",
       "next_action": "相手の散歩や写真の話題に寄り添い、自然なやり取りを重ねます。",
       "user_info_reason": "",
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "本人の経験を作らず、相手の公開プロフィールにある中野と散歩に関する質問を選択。",
       "api_request_number": 5,
       "selected_text": "スマホだと気軽に撮れていいですよね中野のあたりでお気に入りの散歩コースはあったりしますか",
       "app_send_number": 5,
@@ -647,10 +903,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "相手長さ相当",
+        "conversation_progress": "散歩コースへ具体化",
+        "factuality": "地名は相手の公開プロフィールにある",
+        "repetition": "話題展開は適切。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -694,7 +951,7 @@
       "decision_reason": "まだお互いの趣味や好きな場所について楽しく会話を続けている段階のため。",
       "next_action": "相手の散歩の話題や雰囲気に合わせた感想を返し、自然な会話を続けます。",
       "user_info_reason": "",
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "相手の短めの発言に合わせた短い候補を選択。内容は共感中心で、会話の進展が弱い点は課題。",
       "api_request_number": 6,
       "selected_text": "小さいお店があるとついつい寄り道したくなりますよね",
       "app_send_number": 6,
@@ -719,10 +976,11 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "短く適切",
+        "conversation_progress": "新情報は少ない",
+        "factuality": "問題なし",
+        "repetition": "共感のみで停滞気味。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
     },
     {
@@ -766,7 +1024,7 @@
       "decision_reason": "まだお互いの趣味や好きなものについて楽しく会話を広げている段階のため、誘わず会話を続けます。",
       "next_action": "相手のカレーの話題を受け止めつつ、無理なく会話を継続します。",
       "user_info_reason": "",
-      "selection_reason": "推奨候補",
+      "selection_reason": "推奨候補。相手のプロフィールに記載されたカレーの好みを指し、本人の事実は追加しなかった。",
       "api_request_number": 7,
       "selected_text": "知り合いの方からの情報だと気になりますね！カレーもお好きなんですね",
       "app_send_number": 7,
@@ -791,33 +1049,24 @@
         ]
       },
       "reviewer_assessment": {
-        "mirroring": "未評価",
-        "conversation_progress": "未評価",
-        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
-        "repetition": "未評価"
+        "mirroring": "適切",
+        "conversation_progress": "カレー話題を継続",
+        "factuality": "相手の公開プロフィールで確認",
+        "repetition": "共感の定型化が始まる。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
-    }
-  ],
-  "app_sent_count": 7,
-  "partner_sent_count": 7,
-  "first_invite_app_message": null,
-  "meeting_agreement": null,
-  "assessment": {},
-  "initial_mode": "first",
-  "match_id": 1,
-  "pending_meeting_confirmation": null,
-  "pending_generation": {
-    "account": "API1",
-    "model": "gemini-3.5-flash-lite",
-    "data": {
-      "needs_user_info": false,
-      "user_questions": [],
-      "user_info_reason": "",
-      "recommended": {
-        "label": "自然な返答",
-        "text": "スパイスの香り良いですよね喫茶店のタルトが好きでカレーはあまり詳しくないのですがお店の雰囲気も気になります"
-      },
-      "alternatives": [
+    },
+    {
+      "turn_number": 8,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 2,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "自然な返答",
+          "text": "スパイスの香り良いですよね喫茶店のタルトが好きでカレーはあまり詳しくないのですがお店の雰囲気も気になります"
+        },
         {
           "label": "話題を広げる",
           "text": "スパイスカレーいいですね北口のあたりは美味しいお店が多そうです"
@@ -827,53 +1076,671 @@
           "text": "本格的なカレー気になります美味しそうなお店を見つけるとワクワクしますよね"
         }
       ],
+      "recommended": {
+        "label": "自然な返答",
+        "text": "スパイスの香り良いですよね喫茶店のタルトが好きでカレーはあまり詳しくないのですがお店の雰囲気も気になります"
+      },
       "reason": "相手からカレーの好みについて質問されているが本人のカレーの好みは不明のため、直接の好みを断定せず別の視点や雰囲気の話題として自然に返信を作成しました。",
       "strategy": "相手の質問に対して不明な自己開示を避けつつ、スパイスカレーの話題を受け止めて会話を続ける短めの返答です。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
       "conversation_stage": "Stage 2",
       "invite_decision": "continue_conversation",
       "decision_reason": "まだお互いの趣味や好みの話題を楽しんでおり、自然な会話の広がりを優先する段階です。",
       "next_action": "相手のカレーや散歩の話題に合わせつつ、無理なく会話を続けます。",
-      "demo": false,
-      "skipped_user_info": false,
-      "generation_blocked": false,
-      "api_alias": "API1",
+      "user_info_reason": "",
+      "selection_reason": "「カレーは詳しくない」「北口に店が多い」という裏付けのない候補を避け、自己情報を作らない非断定的な案を選択。ただし相手の質問に直接答えておらず応答性は低い。",
+      "api_request_number": 8,
+      "selected_text": "本格的なカレー気になります美味しそうなお店を見つけるとワクワクしますよね",
+      "app_send_number": 8,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 36,
+        "partner_latest_sentence_estimate": 2,
+        "recent_partner_average_character_count": 39.8,
+        "selected_character_count": 36,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": false,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.299,
+        "similar_to_recent_app_message_estimate": 0.2647058823529412,
+        "candidate_diversity_estimates": [
+          0.286,
+          0.202,
+          0.299
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "適切な短さ",
+        "conversation_progress": "質問への直接回答を避けて話題転換",
+        "factuality": "自己情報を断定しない",
+        "repetition": "相手の質問への回答不足。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 9,
       "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
       "api_attempt_count": 2,
-      "attempted_models": [
+      "api_status": "success",
+      "candidates": [
         {
-          "api_alias": "API1",
-          "model": "gemini-3.5-flash-lite"
+          "label": "おすすめ",
+          "text": "辛すぎないスパイスカレーもいいですよね！お店によって全然違って楽しそうです"
         },
         {
-          "api_alias": "API1",
-          "model": "gemini-3.5-flash-lite"
+          "label": "別角度の話題",
+          "text": "スパイスの香りだけでも食欲そそられますよね！辛すぎないお店だと入りやすそうです"
+        },
+        {
+          "label": "少し親しみを持たせる案",
+          "text": "辛すぎないのいいですね！おいしいお店を見つけたらぜひ行ってみたいです"
         }
-      ]
-    },
-    "candidates": [
-      {
-        "label": "自然な返答",
-        "text": "スパイスの香り良いですよね喫茶店のタルトが好きでカレーはあまり詳しくないのですがお店の雰囲気も気になります"
+      ],
+      "recommended": {
+        "label": "おすすめ",
+        "text": "辛すぎないスパイスカレーもいいですよね！お店によって全然違って楽しそうです"
       },
-      {
-        "label": "話題を広げる",
-        "text": "スパイスカレーいいですね北口のあたりは美味しいお店が多そうです"
+      "reason": "相手のカレーの好みに対する共感と感想を述べつつ句読点を一切使わずに自然な会話を継続した",
+      "strategy": "相手の辛さの好みに応じつつ句読点を入れない短文でテンポよく返す",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
       },
-      {
-        "label": "親しみを持たせる",
-        "text": "本格的なカレー気になります美味しそうなお店を見つけるとワクワクしますよね"
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "食やお店の話題が続いており自然な流れで検討できる段階に入ってきたため",
+      "next_action": "相手の反応を見つつ無理のない範囲でカフェや飲食の話題を深める",
+      "user_info_reason": "",
+      "selection_reason": "推奨候補。相手が辛さの好みを共有した直後の短い反応として選択。Stage 3だったが誘い候補はなく、誘い判断は不十分。",
+      "api_request_number": 9,
+      "selected_text": "辛すぎないスパイスカレーもいいですよね！お店によって全然違って楽しそうです",
+      "app_send_number": 9,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 36,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 40.8,
+        "selected_character_count": 37,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": true,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.464,
+        "similar_to_recent_app_message_estimate": 0.3,
+        "candidate_diversity_estimates": [
+          0.297,
+          0.464,
+          0.254
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "適切",
+        "conversation_progress": "新情報は少ない",
+        "factuality": "問題なし",
+        "repetition": "Stage 3/consider_inviteなのに誘い候補なし。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
       }
-    ],
-    "settings": {
-      "mode": "reply",
-      "match_id": 1,
-      "count": 3,
-      "tone": "自動",
-      "direction": "自然に会話を広げる",
-      "extra": "",
-      "show_policy": true,
-      "response_version": 2
     },
-    "attempt_count": 2
+    {
+      "turn_number": 10,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめ候補",
+          "text": "甘いものも美味しそうですよね季節のタルトとかもつい食べたくなります"
+        },
+        {
+          "label": "別展開の候補",
+          "text": "甘いものいいですねお気に入りのカフェやお店はあったりするんですか"
+        },
+        {
+          "label": "親しみのある候補",
+          "text": "甘いものもいいですね美味しいケーキ屋さんを見つけると嬉しくなります"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめ候補",
+        "text": "甘いものも美味しそうですよね季節のタルトとかもつい食べたくなります"
+      },
+      "reason": "相手の甘いものの話題に自然に触れつつ、プロフィールにあるタルトや喫茶店の好みに絡めた返信にしました。",
+      "strategy": "相手のメッセージにある甘いものの話題を受け止め、句読点を使わずに自然な口語で返しています。質問を控えめにして会話を広げる方向で統一しました。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 3",
+      "invite_decision": "continue_conversation",
+      "decision_reason": "まだカレーや甘いものの話題で楽しく会話が続いているため、もう少し会話を深めてから誘う時期を検討します。",
+      "next_action": "相手の甘いものの好みに合わせた話題で自然にやり取りを続けます。",
+      "user_info_reason": "",
+      "selection_reason": "甘いものの話から相手のカフェ情報へ進む候補を選択。本人の経験や好みを未確認のまま追加しない。",
+      "api_request_number": 10,
+      "selected_text": "甘いものいいですねお気に入りのカフェやお店はあったりするんですか",
+      "app_send_number": 10,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 53,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 44.6,
+        "selected_character_count": 32,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": false,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.424,
+        "similar_to_recent_app_message_estimate": 0.47368421052631576,
+        "candidate_diversity_estimates": [
+          0.277,
+          0.424,
+          0.338
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "適切",
+        "conversation_progress": "相手の店情報を聞く",
+        "factuality": "本人事実なし",
+        "repetition": "質問は自然。誘い判断はcontinue。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 11,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "素直で自然な返答",
+          "text": "固めプリンいいですね喫茶店のレトロな雰囲気が好きで私もよく行くので気になります"
+        },
+        {
+          "label": "別の話題に広げる案",
+          "text": "固めプリンのおいしい喫茶店すてきですね甘いものだと季節のフルーツを使ったタルトも気になります"
+        },
+        {
+          "label": "少し親しみを加えた案",
+          "text": "固めプリンの喫茶店気になります甘いもの巡りも楽しそうですね"
+        }
+      ],
+      "recommended": {
+        "label": "素直で自然な返答",
+        "text": "固めプリンいいですね喫茶店のレトロな雰囲気が好きで私もよく行くので気になります"
+      },
+      "reason": "相手の固めプリンの話題を受け止めつつ自身の喫茶店好きを自然に返し、句読点を使わず短くまとめた",
+      "strategy": "相手の質問には直接答えず自分のプロフィール facts にある喫茶店めぐりの話題へつなげ、質問攻めを避けて自然に会話を広げる",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "お互いの趣味や好きなものの話題が広がっており良好なやり取りが続いているため、次の段階での誘いを視野に入れつつ今回は自然な感想と共感を優先する",
+      "next_action": "相手の反応や食や喫茶店の話題の盛り上がりを見て軽いお茶の誘いを検討する",
+      "user_info_reason": "",
+      "selection_reason": "「喫茶店へよく行く」という未確認の経験を含む案を避け、プロフィールにある季節のタルトへ触れた案を選択。果物タルトという細部はプロフィールにないため、本人の明示的な好みとして扱わない。",
+      "api_request_number": 11,
+      "selected_text": "固めプリンのおいしい喫茶店すてきですね甘いものだと季節のフルーツを使ったタルトも気になります",
+      "app_send_number": 11,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 47,
+        "partner_latest_sentence_estimate": 2,
+        "recent_partner_average_character_count": 45.6,
+        "selected_character_count": 46,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": false,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.447,
+        "similar_to_recent_app_message_estimate": 0.2564102564102564,
+        "candidate_diversity_estimates": [
+          0.447,
+          0.412,
+          0.4
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "適切",
+        "conversation_progress": "プロフィールのタルトに触れる",
+        "factuality": "季節のタルトは確認済み。果物という細部は未確認",
+        "repetition": "「ですね」型が反復。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 12,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめの返信",
+          "text": "栗やさつまいものケーキも秋らしくておいしそうですね！"
+        },
+        {
+          "label": "別の話題に広げる案",
+          "text": "秋の味覚のスイーツはどれも気になりますね"
+        },
+        {
+          "label": "少し親しみを加えた案",
+          "text": "栗のケーキは食べたくなっちゃいますね"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめの返信",
+        "text": "栗やさつまいものケーキも秋らしくておいしそうですね！"
+      },
+      "reason": "相手の甘いものの話題に自然に共感し、句読点を使わずに1文で簡潔に返信しました。",
+      "strategy": "相手の好みの話題に合わせつつ、自分のプロフィールfactsにある季節のタルトや甘いものへの関心を自然に織り交ぜます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "お互いの趣味や好きな食べ物の話が自然に広がっており、良好なペースで会話が続いています。",
+      "next_action": "もう少しカフェやスイーツの話題を続けたあと、自然な流れでの誘いを検討します。",
+      "user_info_reason": "",
+      "selection_reason": "相手の秋の菓子の話へ短く返す案を選択。相手にない栗・さつまいもの好みを本人に付与する別案は選ばなかった。",
+      "api_request_number": 12,
+      "selected_text": "秋の味覚のスイーツはどれも気になりますね",
+      "app_send_number": 12,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 30,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 40.4,
+        "selected_character_count": 20,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": false,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.419,
+        "similar_to_recent_app_message_estimate": 0.34615384615384615,
+        "candidate_diversity_estimates": [
+          0.133,
+          0.419,
+          0.368
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "短く適切",
+        "conversation_progress": "内容は反復",
+        "factuality": "問題なし",
+        "repetition": "共感の言い換えのみ。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 13,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "素直な返答",
+          "text": "新作ってついついチェックしちゃいますよね！"
+        },
+        {
+          "label": "話題を広げる",
+          "text": "パッケージや限定の文字を見ると気になっちゃいます"
+        },
+        {
+          "label": "親しみを加える",
+          "text": "美味しいお菓子の情報交換ができると楽しいですね！"
+        }
+      ],
+      "recommended": {
+        "label": "素直な返答",
+        "text": "新作ってついついチェックしちゃいますよね！"
+      },
+      "reason": "相手の新作チェックについての発言に自然に共感し、句読点を使わずに短く返信を作成しました。",
+      "strategy": "相手の会話の盛り上がりに合わせて共感を示しつつ、質問攻めを避けて自然なトーンを維持します。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "お互いの好きな食べ物やカフェの話題で楽しくやり取りが続いていますが、まだ直接的な誘いのタイミングではないため会話を続けています。",
+      "next_action": "相手の反応を見つつ、カフェやスイーツの話題をもう少し深掘りします。",
+      "user_info_reason": "",
+      "selection_reason": "相手の新作菓子の話に対し、質問を重ねない短い案を選択。情報交換への言及は会話を少し進めるが、具体的な話題の展開は弱い。",
+      "api_request_number": 13,
+      "selected_text": "美味しいお菓子の情報交換ができると楽しいですね！",
+      "app_send_number": 13,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 42,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 41.6,
+        "selected_character_count": 24,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": true,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.273,
+        "similar_to_recent_app_message_estimate": 0.3050847457627119,
+        "candidate_diversity_estimates": [
+          0.273,
+          0.186,
+          0.213
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "短く適切",
+        "conversation_progress": "情報交換に言及",
+        "factuality": "現時点の意見",
+        "repetition": "交流の可能性は示すが誘いに進まない。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 14,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめの返信",
+          "text": "コンビニの新作も魅力的ですよね季節限定という言葉にどうしても惹かれてしまいます"
+        },
+        {
+          "label": "別の話題に広げる",
+          "text": "新作を見つけるとついつい買っちゃいますよね"
+        },
+        {
+          "label": "少し親しみを加える",
+          "text": "いろんなお店の季節限定スイーツも気になりますね！"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめの返信",
+        "text": "コンビニの新作も魅力的ですよね季節限定という言葉にどうしても惹かれてしまいます"
+      },
+      "reason": "相手のコンビニとケーキ屋さんの季節ものについての発言に自然に共感し、句読点を使わず短く返しました",
+      "strategy": "相手の最後の発言に対して相槌と季節のスイーツの話題で短く返し、会話のテンポを合わせます",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "お互いの趣味や好きな食べ物の話で盛り上がっているため状況を見て誘いを検討できる段階ですが今回はまだ会話を続けます",
+      "next_action": "相手の反応を見つつ美味しいお店の話題から自然な流れを探ります",
+      "user_info_reason": "",
+      "selection_reason": "短く句読点違反のない案を選択。自身が新作を買うという未確認行動を述べる候補は避けた。",
+      "api_request_number": 14,
+      "selected_text": "いろんなお店の季節限定スイーツも気になりますね！",
+      "app_send_number": 14,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 31,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 40.6,
+        "selected_character_count": 24,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": true,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.258,
+        "similar_to_recent_app_message_estimate": 0.6046511627906976,
+        "candidate_diversity_estimates": [
+          0.167,
+          0.258,
+          0.182
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "短く適切",
+        "conversation_progress": "季節限定菓子の話を継続",
+        "factuality": "現時点の興味",
+        "repetition": "似た相槌と話題の反復。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    },
+    {
+      "turn_number": 15,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめ候補",
+          "text": "コンビニの新作も色々あって楽しいですよね"
+        },
+        {
+          "label": "別の話題に繋げる候補",
+          "text": "季節の美味しいものを探すのは楽しいですね"
+        },
+        {
+          "label": "少し親しみを加えた候補",
+          "text": "迷いながら選ぶ時間もいいですよね"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめ候補",
+        "text": "コンビニの新作も色々あって楽しいですよね"
+      },
+      "reason": "相手の新作に対する共感のメッセージに対し、句読点を省いて自然に返信を構成しました。",
+      "strategy": "相手の話題を受け止めつつ、短めの文で自然に会話を繋げます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "conversation_stage": "Stage 2",
+      "invite_decision": "continue_conversation",
+      "decision_reason": "まだお互いの趣味や好みの話題を楽しんでいる段階のため、会話を継続します。",
+      "next_action": "相手の反応を見ながら、自然な話題の展開を続けます。",
+      "user_info_reason": "",
+      "selection_reason": "短く、本人の購買習慣を断定しない案を選択。後続の相手質問に対する生成では全候補が購買行動を断定したため、1案も送信せず停止した。",
+      "api_request_number": 15,
+      "selected_text": "迷いながら選ぶ時間もいいですよね",
+      "app_send_number": 15,
+      "measured": {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": 13,
+        "partner_latest_sentence_estimate": 1,
+        "recent_partner_average_character_count": 32.6,
+        "selected_character_count": 16,
+        "selected_sentence_estimate": 1,
+        "punctuation_violation": false,
+        "acknowledgment_type_estimate": "相槌なし/その他",
+        "exclamation_used": false,
+        "emoji_used": false,
+        "warai_used": false,
+        "candidate_max_similarity_estimate": 0.4,
+        "similar_to_recent_app_message_estimate": 0.3076923076923077,
+        "candidate_diversity_estimates": [
+          0.4,
+          0.333,
+          0.333
+        ]
+      },
+      "reviewer_assessment": {
+        "mirroring": "相手より少し長め",
+        "conversation_progress": "感想の言い換え",
+        "factuality": "未確認の行動主張なし",
+        "repetition": "次の生成で未確認の購買習慣が全候補に出て拒否。",
+        "review_type": "会話ログを読んだ手動レビュー。文字数・文数は既存の自動推定値も参照"
+      }
+    }
+  ],
+  "app_sent_count": 15,
+  "partner_sent_count": 15,
+  "first_invite_app_message": null,
+  "meeting_agreement": null,
+  "assessment": {
+    "summary": "本人側15通・相手側15通で安全停止。Gemini API自体は応答したが、直近の本人情報質問に対する3候補すべてが未確認の購買習慣を本人の事実として作った。候補は送信前に拒否した。",
+    "scores": {
+      "日本語の自然さ": {
+        "score": 3,
+        "reason": "個々の短文は概ね読みやすいが、共感の定型句と内容の言い換えが連続した。"
+      },
+      "句読点禁止": {
+        "score": 5,
+        "reason": "実際に送信した15通はすべて「、」「。」を含まない。最後の未送信3案も該当する違反はない。"
+      },
+      "相手の文章量への適応": {
+        "score": 3,
+        "reason": "短い相手文に短く返すターンはあったが、2文への返信がやや長い回もあり、自動文数推定にも限界がある。"
+      },
+      "相手の発言への関連性": {
+        "score": 3,
+        "reason": "大半は直近の話題に触れたが、質問への直接回答を避けたターンがあり、候補3案の一部が前の話題へ戻った。"
+      },
+      "文脈の一貫性": {
+        "score": 3,
+        "reason": "パン・写真・カレー・甘味の話題は人物設定と矛盾しないが、似た話題に長く留まった。"
+      },
+      "本人情報の事実性": {
+        "score": 2,
+        "reason": "送信済み文の大きな架空経験は確認されなかった一方、候補評価で手動選別が必要となり、最後は未確認の購買習慣を全案が断定した。"
+      },
+      "会話の前進": {
+        "score": 2,
+        "reason": "Stage 3/consider_inviteが複数回出たが、自然な誘い候補は生成されず、共感や言い換えが続いた。"
+      },
+      "候補の多様性": {
+        "score": 2,
+        "reason": "3案の役割名は異なるものの、同じ内容の共感や「ですね」型を言い換えた候補が複数回あった。"
+      },
+      "距離感": {
+        "score": 4,
+        "reason": "相手を急かす誘いはなく、慎重さを保てた。"
+      },
+      "総合実用性": {
+        "score": 2,
+        "reason": "句読点の抑制は守れたが、事実確認の不足と会話停滞により、無人で候補を送れる品質ではない。"
+      }
+    },
+    "notes": [
+      "初回メッセージは挨拶・マッチへの喜び・プロフィールへの言及・質問を含んだが、好意表現は控えめだった。",
+      "本人プロフィールにないカフェ通いの経験を含む候補は送信候補から除外して選別した。",
+      "ターン8では本人のカレーの好みが不明なため断定を避けたが、相手の直接質問に答えず会話をずらした。",
+      "Stage 3/consider_inviteが複数回出た後も候補に誘いがなかった。",
+      "送信数15通で未確認の本人購買習慣を3案とも生成したため、コードの安全拒否機能で候補を保存し停止した。",
+      "Codexが相手役と評価者を兼ねており、評価は独立ではない。"
+    ],
+    "improvements": "候補生成前の本人質問判定を直接的な行動質問に広げる。プロンプトの「本人プロフィールの好みに沿って回答」文を、未確認行動を作らない制約に置き換える。Stage 3での誘い候補・判断理由の整合を実APIで再検証する。"
+  },
+  "initial_mode": "first",
+  "match_id": 1,
+  "pending_meeting_confirmation": null,
+  "rejected_generations": [
+    {
+      "request_number": 16,
+      "at": "2026-10-14T11:22:07+00:00",
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "candidates": [
+        {
+          "label": "素直で自然な返答",
+          "text": "すごく気になりつつも少し悩んでから買うことが多いです！"
+        },
+        {
+          "label": "話題を広げる案",
+          "text": "新作を見かけるとお店の前でしばらく立ち止まってしまいます！"
+        },
+        {
+          "label": "少し親しみを加えた案",
+          "text": "パッケージや写真を見てついパケ買いしちゃうこともあります笑"
+        }
+      ],
+      "reason": "本人未確認の購買行動を3案すべてが断定したため、送信せずに安全停止した",
+      "conversation_stage": "Stage 2",
+      "invite_decision": "continue_conversation",
+      "decision_reason": "まだお互いの好きなものや話題について楽しく会話を広げている段階のため、継続を優先します。",
+      "next_action": "相手の新作に対する反応や、他の美味しいお店の話題にスムーズに繋げます。",
+      "generation_reason": "相手からの直接的な質問に対して本人のプロフィールの好みに沿って自然に答えつつ、句読点を使わずに短く返信しています。"
+    }
+  ],
+  "api_usage_summary": {
+    "experiment_logical_requests": 16,
+    "experiment_provider_attempts": 18,
+    "configured_quality_logical_requests": 16,
+    "configured_quality_provider_attempts": 22,
+    "combined_logical_requests": 32,
+    "combined_provider_attempts": 40,
+    "models_and_aliases": [
+      "API1 / gemini-3.5-flash-lite"
+    ],
+    "rate_limits_or_fallbacks": 0,
+    "note": "実験用スクリプトは25論理要求以内を目安にしていたが、品質チェック16回と会話実験16回の合計32回となり目安を7回超過した。これ以上の実API通信は行わない。課金・請求額・残枠は確認していない。"
   }
 }

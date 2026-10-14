@@ -200,6 +200,32 @@ def send_app_message(state: dict[str, Any], body: str, turn: dict[str, Any]) -> 
     return number
 
 
+def reject_pending_generation(state: dict[str, Any], reason: str) -> None:
+    """Persist unsafe unsent candidates and stop without changing conversation data."""
+    pending = state.get("pending_generation")
+    if state.get("status") != "RUNNING" or not isinstance(pending, dict):
+        raise ValueError("拒否できる未送信候補がありません")
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 1000:
+        raise ValueError("拒否理由は1〜1000文字で指定してください")
+    data = pending.get("data", {})
+    state.setdefault("rejected_generations", []).append({
+        "request_number": len(state.get("api_requests", [])),
+        "at": utc_now(),
+        "api_alias": pending.get("account"),
+        "model": pending.get("model"),
+        "candidates": pending.get("candidates", []),
+        "reason": reason.strip(),
+        "conversation_stage": data.get("conversation_stage"),
+        "invite_decision": data.get("invite_decision"),
+        "decision_reason": data.get("decision_reason"),
+        "next_action": data.get("next_action"),
+        "generation_reason": data.get("reason"),
+    })
+    state.pop("pending_generation", None)
+    state["status"] = "BLOCKED"
+    state["end_reason"] = reason.strip()
+
+
 def sentence_estimate(text: str) -> int:
     """A heuristic estimate: Japanese chunks can omit sentence-ending marks."""
     stripped = text.strip()
@@ -428,9 +454,23 @@ def render_html(state: dict[str, Any], path: Path | None = None) -> None:
     scores = state.get("assessment", {}).get("scores", {})
     score_html = "".join(f"<li><b>{e(k)}</b>：{e(v.get('score','未評価'))}{'/5' if str(v.get('score','')).isdigit() else ''} — {e(v.get('reason','根拠未記録'))}</li>" for k,v in scores.items())
     assessment = state.get("assessment", {})
+    rejected_sections = []
+    for rejected in state.get("rejected_generations", []):
+        candidate_items = "".join(
+            f"<li><b>{e(candidate.get('label'))}</b>：{e(candidate.get('text'))}</li>"
+            for candidate in rejected.get("candidates", [])
+        )
+        rejected_sections.append(
+            "<details><summary>送信前に拒否したGemini候補を確認</summary>"
+            f"<p><b>拒否理由：</b>{e(rejected.get('reason'))}</p>"
+            f"<p><b>モデル：</b>{e(rejected.get('model'))} / <b>API別名：</b>{e(rejected.get('api_alias'))}</p>"
+            f"<p><b>会話段階：</b>{e(rejected.get('conversation_stage'))} / <b>誘い判断：</b>{e(rejected.get('invite_decision'))}</p>"
+            f"<ol>{candidate_items}</ol></details>"
+        )
+    rejected_html = "".join(rejected_sections)
     doc = f'''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Matching Reply Assistant — AI会話シミュレーション</title><style>
 *{{box-sizing:border-box}}body{{margin:0;background:#f3f6fa;color:#243247;font:16px/1.65 system-ui,"Yu Gothic",Meiryo,sans-serif}}header,main,footer{{max-width:1050px;margin:auto;padding:22px}}h1{{font-size:clamp(1.4rem,4vw,2rem)}}h2{{margin-top:28px}}.overview,.profile,.chat,.result{{background:white;border:1px solid #dce4ee;border-radius:16px;padding:18px;box-shadow:0 3px 14px #2034500b}}.facts,.profiles{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}}.private{{border:1px dashed #bd9c65;background:#fffaf0}}.chat{{padding:14px;max-height:78vh;overflow:auto}}.row{{display:flex;margin:14px 0}}.right{{justify-content:flex-end}}.left{{justify-content:flex-start}}.bubble{{max-width:min(82%,700px);padding:12px 15px;border-radius:17px;overflow-wrap:anywhere}}.bubble p{{white-space:pre-wrap;margin:8px 0 0}}.app{{background:#dff3e7;border-bottom-right-radius:4px}}.partner{{background:#e8edf5;border-bottom-left-radius:4px}}small{{font-size:.8rem;color:#506078}}.badge{{color:#9b4b17}}details{{border-top:1px solid #b8cbbf;margin-top:10px;padding-top:8px}}summary{{cursor:pointer;font-weight:650}}footer{{color:#596779;font-size:.88rem}}@media(max-width:600px){{header,main,footer{{padding:14px}}.bubble{{max-width:94%}}}}
-</style></head><body><header><h1>Matching Reply Assistant — AI会話シミュレーション</h1><section class="overview"><div class="facts"><div>実験日時<br>{e(state.get('started_at'))}</div><div>実験ID<br>{e(state.get('experiment_id'))}</div><div>使用モデル<br>{e(model)}</div><div>終了状態<br>{e(labels.get(state['status'],state['status']))} ({e(state['status'])})</div><div>アプリ側<br>{e(me['name'])}</div><div>相手役<br>{e(partner['name'])}</div><div>送信数<br>アプリ {state['app_sent_count']} / 相手 {state['partner_sent_count']}</div><div>会話メッセージ数<br>{len(state['messages'])}</div><div>Geminiリクエスト<br>{len(state['api_requests'])}回</div></div><p><b>終了理由：</b>{e(state.get('end_reason') or '未記録')}</p></section></header><main><h2>プロフィール</h2><div class="profiles">{''.join(cards)}</div><h2>会話記録</h2><section class="chat">{''.join(bubbles) or '<p>会話メッセージはありません。</p>'}</section><section class="result"><h2>実験結果と品質評価</h2><p>{e(assessment.get('summary','評価未記録'))}</p><p><b>初めて誘った送信番号：</b>{e(state.get('first_invite_app_message') or 'なし')}</p><p><b>日時・場所の合意：</b>{e(json.dumps(state.get('meeting_agreement'),ensure_ascii=False) if state.get('meeting_agreement') else 'なし')}</p><ol>{score_html or '<li>評価は未実施です。</li>'}</ol><p><b>評価上の制限：</b>Codexが相手役と評価役を兼ねるため、評価にバイアスが含まれる可能性があります。</p><p><b>改善点：</b>{e(assessment.get('improvements','未記録'))}</p></section></main><footer>単体HTML。外部通信・CDN・外部スクリプト・外部画像はありません。架空データのみ。</footer></body></html>'''
+</style></head><body><header><h1>Matching Reply Assistant — AI会話シミュレーション</h1><section class="overview"><div class="facts"><div>実験日時<br>{e(state.get('started_at'))}</div><div>実験ID<br>{e(state.get('experiment_id'))}</div><div>使用モデル<br>{e(model)}</div><div>終了状態<br>{e(labels.get(state['status'],state['status']))} ({e(state['status'])})</div><div>アプリ側<br>{e(me['name'])}</div><div>相手役<br>{e(partner['name'])}</div><div>送信数<br>アプリ {state['app_sent_count']} / 相手 {state['partner_sent_count']}</div><div>会話メッセージ数<br>{len(state['messages'])}</div><div>Geminiリクエスト<br>{len(state['api_requests'])}回</div></div><p><b>終了理由：</b>{e(state.get('end_reason') or '未記録')}</p></section></header><main><h2>プロフィール</h2><div class="profiles">{''.join(cards)}</div><h2>会話記録</h2><section class="chat">{''.join(bubbles) or '<p>会話メッセージはありません。</p>'}</section><section class="result"><h2>実験結果と品質評価</h2>{rejected_html}<p>{e(assessment.get('summary','評価未記録'))}</p><p><b>初めて誘った送信番号：</b>{e(state.get('first_invite_app_message') or 'なし')}</p><p><b>日時・場所の合意：</b>{e(json.dumps(state.get('meeting_agreement'),ensure_ascii=False) if state.get('meeting_agreement') else 'なし')}</p><ol>{score_html or '<li>評価は未実施です。</li>'}</ol><p><b>評価上の制限：</b>Codexが相手役と評価役を兼ねるため、評価にバイアスが含まれる可能性があります。</p><p><b>改善点：</b>{e(assessment.get('improvements','未記録'))}</p></section></main><footer>単体HTML。外部通信・CDN・外部スクリプト・外部画像はありません。架空データのみ。</footer></body></html>'''
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(doc, encoding="utf-8")
 
@@ -691,7 +731,8 @@ def main_run(opening: str | None, resume: bool,
              direction: str, extra: str, confirm_success: bool,
              user_answers: list[str] | None = None, skip_user_info: bool = False,
              retry_uncertain_generation: bool = False,
-             experiment_id: str = "conversation_001", initial_mode: str = "reply") -> int:
+             experiment_id: str = "conversation_001", initial_mode: str = "reply",
+             reject_candidates: bool = False, rejection_reason: str | None = None) -> int:
     json_path, html_path, data_dir = experiment_paths(experiment_id)
     if initial_mode not in {"first", "reply"}:
         raise SystemExit("初回モードはfirstまたはreplyです")
@@ -747,6 +788,17 @@ def main_run(opening: str | None, resume: bool,
             raise RuntimeError("架空プロフィールの登録に失敗しました")
         state["match_id"] = created.json()["id"]
     match_id = state["match_id"]
+
+    if reject_candidates:
+        if not resume or candidate_number is not None or partner_reply is not None:
+            raise SystemExit("未送信候補の拒否には --resume を指定し、送信候補番号や相手返信を同時に指定しないでください")
+        try:
+            reject_pending_generation(state, rejection_reason or "安全性の理由で未送信候補を拒否しました")
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+        save_experiment_state(state); render_experiment(state)
+        print("BLOCKED: 未送信候補を送信せずに記録しました。会話とSQLiteの履歴は変更していません。")
+        return 0
 
     if needs_partner_opening(state, initial_mode):
         if not opening:
@@ -920,6 +972,8 @@ def main() -> int:
     parser.add_argument("--user-answer", action="append", default=[], help="回答待ちの各質問への回答（質問ごとに指定）")
     parser.add_argument("--skip-user-info", action="store_true", help="本人情報の確認をスキップし、安全な代替返信だけを試す")
     parser.add_argument("--retry-uncertain-generation", action="store_true", help="応答不明だった生成を重複する可能性を理解した上で明示的に再試行")
+    parser.add_argument("--reject-pending", action="store_true", help="保留中の候補を送信せず拒否し、候補と理由をJSON/HTMLへ記録してBLOCKEDで停止")
+    parser.add_argument("--rejection-reason", help="--reject-pendingで記録する理由")
     parser.add_argument("--confirm-success", action="store_true", help="保存済みの日時・場所と相手の明確な承諾を確認した後に成功判定")
     parser.add_argument("--direction", default="自然に会話を広げる", help="Geminiの返信方向設定")
     parser.add_argument("--extra", default="", help="追加指示。原則空欄")
@@ -929,7 +983,8 @@ def main() -> int:
     return main_run(args.opening_message, args.resume, args.candidate_number,
                     args.partner_reply, args.direction, args.extra, args.confirm_success,
                     args.user_answer, args.skip_user_info, args.retry_uncertain_generation,
-                    args.experiment_id, args.initial_mode)
+                    args.experiment_id, args.initial_mode, args.reject_pending,
+                    args.rejection_reason)
 
 
 if __name__ == "__main__":

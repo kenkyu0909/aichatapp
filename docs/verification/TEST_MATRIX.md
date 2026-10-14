@@ -197,7 +197,7 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 |---|---|---|---|---|
 | T88 | T77修正後の本人情報確認と回答後生成 | 架空データ、隔離SQLite、既存`/api/generate`、実Gemini | FAIL | 事前確認はPASSでAPI試行0。回答後はAPI1/`gemini-3.5-flash-lite`が追加情報を再質問し候補0件。質問の回答に元の質問全文を紐づけず、会話パターンも再評価が不十分だったため、回答後に1回限りの制約付き再生成を追加。初回結果は`quality_checks_003.json`に保持。 |
 | T89 | 短文/複数文/落ち着いた文/冗談/深刻な話/反復/誘い/断りの実生成 | 架空会話、隔離SQLite、実Gemini | FAIL | API1/`gemini-3.5-flash-lite`で8ケース・10プロバイダー試行。短文、落ち着いた文、冗談、深刻な話、反復、誘い候補、断り応答は構造的に3案を返した。一方、ケースBは不要な本人情報質問で候補なし、ケースCは未確認の「最近自宅で過ごした」経験、ケースGは`invite_gently`判定に対し明示的な誘い案なし。追加修正後の限定再試験T93を予定。 |
-| T90 | 会話003（初回メッセージから最大20通） | 既存アプリAPI、架空プロフィール、実Gemini、Codex相手役 | NOT_TESTED | `conversation_003.json`/`.html`/分析へ保存予定。20通目への相手返信は保存し、具体的合意・拒否・技術停止を正確に判定する。 |
+| T90 | 会話003（初回メッセージから最大20通） | Windows 11 / Python 3.12 / 空の隔離SQLite / 既存FastAPI `/api/generate` / 実Gemini / Codex相手役 | BLOCKED | 架空プロフィールで15通ずつ、全30メッセージを保存。実APIは16論理要求・18 provider attempts、API1 / `gemini-3.5-flash-lite`。最後の相手の直接質問に対し、3候補すべてが本人未確認の購買習慣を断定したため、いずれも送信せず安全停止。会う提案・合意なし。`conversation_003.json`/`.html`/`_analysis.md`、Firefox画像を参照。 |
 | T91 | 同一APIキー・異なるモデル間の15 RPM間隔制御 | オフライン関数テスト、Windows/Python 3.12 | PASS | API1の3.5から3.1へ移っても同じ認証枠として4.05秒間隔を適用。レビュー指摘を受けた修正。全pytest 136 passed, 1 warning。 |
 | T92 | 映画を観た経験と映画が好きという事実の区別 | FastAPI TestClient、架空データ | PASS | `映画を観たことがある`だけでは`映画好きです`を確認済みとしない。レビュー指摘を受けた回帰テスト。 |
 | T93 | T77回答後/短文ミラーリング/不要質問/未確認経験/誘い段階の修正後実API再確認 | 架空データ、隔離SQLite、既存`/api/generate`、実Gemini | FAIL | `quality_checks_003_followup.json`と`quality_checks_003_recheck.json`。T77は再チェックで2試行後3案を返した。A/Bは3案、句読点なし。Cは3案の一つが未確認の最近の視聴状況を述べたためFAIL。Gは方針と候補の不一致を修復後も解消できず、アプリが候補を拒否したためFAIL（外部ブロックではなく応答検証失敗）。元の失敗記録は保持。 |
@@ -214,8 +214,19 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 - 最新の実API品質確認は`quality_checks_003.json`に保存。9論理要求、確定10プロバイダー試行、API1/`gemini-3.5-flash-lite`、429なし。出力品質にFAILが残ったため、後続の限定追試をT93で記録する。
 - T93は実施してFAIL。T77回答後の再確認はT99としてPASS。会話003の本体T90は未実施。過去のT77/T88/T89の失敗履歴は維持する。
 
-現時点の項目数は99: PASS 88 / FAIL 4 / FIXED 1 / BLOCKED 3 / NOT_TESTED 3。
+現時点の項目数は100: PASS 89 / FAIL 4 / FIXED 1 / BLOCKED 4 / NOT_TESTED 2。
 
 #### 最新コードのActions
 
 - HEAD `aee118313bd8a05bbae30cb03e2cb37330e36ab0`でPush run [38554061358](https://github.com/kenkyu0909/aichatapp/actions/runs/38554061358)とPR run [38554066709](https://github.com/kenkyu0909/aichatapp/actions/runs/38554066709)がsuccess。pytest、Firefox UIテスト、Node構文チェックを含む。
+
+
+| T100 | Geminiの本人未確認候補を送信前に拒否し記録 | 会話003の実API結果を安全に停止、pytest、Firefox 157のローカルHTML表示 | PASS | 直近質問への3候補が未確認の購買習慣を一人称で断定したため、候補・拒否理由をJSON/HTMLへ保存。送信数15のまま、SQLite会話・既存送信数に変更なし。追加テスト2件で拒否とXSSエスケープを確認。Firefoxで30メッセージ、左右の話者、15/15、拒否候補の展開、スクリーンショットを確認。 |
+
+### 2026-10-14 会話003最終確認
+
+- 会話003は`BLOCKED`。アプリ15通、相手15通、30メッセージ。Geminiは16論理要求、18 provider attemptsで応答し、429・フォールバックはなし。API1 / `gemini-3.5-flash-lite`のみ。累計品質確認を含め32論理要求・40 provider attemptsとなり、事前の約30回目安を2論理要求超過した。理由と内訳は報告書に記録。以後、実API呼び出しは行わない。
+- 終了理由は外部障害ではなく送信前の安全停止。本人未確認の購買行動を3候補すべてが断定した。候補を拒否し、送信数・SQLiteの会話は変更していない。会う提案なし、約束成立なし。
+- Firefox 157.0.1で単体HTMLを開き、30発言、プロフィール、候補詳細16個、拒否した3候補、CSS、日本語を確認。画像は`simulations/conversation_003_firefox.png`。Chromeは使用していない。
+- 全pytest **153 passed, 1 warning**。`node --check app.js`、Python `py_compile`、`git diff --check`成功。
+- HEAD `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。ただし今回は拒否記録コード・最終ログ・画像を追加するため、次のHEADでもActionsを確認する。

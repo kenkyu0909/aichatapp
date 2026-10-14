@@ -384,3 +384,59 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 - `bf1b4a168ae27f754045b5e89741dd6c561e9b27`のPush/PR Actionsが成功: [Push 38555213713](https://github.com/kenkyu0909/aichatapp/actions/runs/38555213713)、[PR 38555220234](https://github.com/kenkyu0909/aichatapp/actions/runs/38555220234)。テストは151 passed, 1 warning。PR #4はDraftのまま。
 - 会話003は実APIで進行中。架空プロフィールと隔離SQLiteを使用し、アプリ7通・相手7通、論理要求8回・プロバイダー試行9回を保存。初回生成と各ターンの候補をJSON/HTMLへ逐次保存している。
 - 現時点では会話終了条件に未到達のためT90はNOT_TESTEDのまま。成功を前提にせず、相手の自然な反応を続けて最終判定する。
+
+
+## 2026-10-14 返信品質改善と会話003 最終追記
+
+### 判定
+
+**FAIL（返信AI品質の実用判定）**。ローカルアプリ、オフラインテスト、FirefoxのHTML確認は成功しましたが、実Gemini候補が本人未確認の習慣を3案とも断定したため、15通で送信前に安全停止しました。候補選別を人が行う前提でも、本人情報の正確性と会話の前進に重大な課題が残ります。PR #4はDraftのままです。
+
+### 会話003
+
+- 実験ID: `conversation_003`。本人役は橘はる、相手役は瀬戸りん。公開プロフィールと架空会話のみで、空の隔離SQLiteを使用しました。
+- 終了状態: `BLOCKED`。アプリ側15通、相手側15通、計30件。最終メッセージは相手からの質問で、アプリ側の16通目はありません。
+- 最初の初回メッセージはGemini `first`候補から1案を選択。会話中に食事・カフェへの誘いは送信せず、具体的な約束は成立していません。Stage 3/`consider_invite`が複数回出ましたが、自然な誘い候補を生成できませんでした。
+- 最後の相手質問「気になる新作を見つけたらすぐ買うタイプですか？」への候補3案は、いずれも本人の未確認習慣を断定しました。候補を選ばず、理由と全文をJSON/HTMLへ保存して安全停止。会話SQLiteと送信カウンターは変えていません。
+- 品質評価（1〜5）: 日本語の自然さ3、句読点禁止5、文章量ミラーリング3、関連性3、文脈一貫性3、本人事実性2、会話の前進2、候補多様性2、距離感4、総合実用性2。評価根拠は`conversation_003_analysis.md`にあります。Codexが相手役と評価役を兼ねるため評価バイアスがあります。
+
+### 実API品質と利用量
+
+- 使用: API1 / `gemini-3.5-flash-lite`。実験中のフォールバックなし。429は記録されていません。
+- 品質確認16論理要求・22 provider attempts、会話003 16論理要求・18 provider attempts。合計32論理要求・40 provider attempts。品質確認は再試行を含み、会話003は候補受信後に人が選ぶ運用でした。事前目安の約30論理要求を2回超えました。この逸脱を記録し、追加呼び出しはしません。
+- Gemini API応答自体の失敗数と、アプリの品質ゲートで候補を拒否した結果は別です。会話003の16論理要求はすべてprovider応答成功でした。最後の候補はモデル応答としては返りましたが、安全に送れる候補としては不合格です。
+- 個別プロジェクトの残り枠、請求設定、実費は確認していません。無料枠や費用を推測しません。
+
+### 実験002との比較
+
+| 評価項目 | 実験002 | 実験003 |
+|---|---:|---:|
+| Geminiが選択したアプリ送信数 | 20 | 15 |
+| 「、」「。」を含む送信文 | 7/20 | 0/15 |
+| 絵文字を含む送信文 | 1/20 | 1/15 |
+| 「笑」を含む送信文 | 0/20 | 0/15 |
+| 同じ話題・共感表現の反復 | 多い | 多い。甘味と季節限定の話題で言い換えが続いた |
+| 本人の未確認情報 | 送信文に未確認経験あり | 送信文に明確な虚偽事実は見つからなかったが、未送信候補3案が未確認習慣を断定 |
+| 会う提案 | なし | なし |
+| 会う約束 | なし | なし |
+
+プロフィールと会話条件が異なるため、数値だけでモデル改善の効果を断定できません。今回の主な安全性は、問題候補を送らずに止めたことです。生成品質そのものは未達です。
+
+### HTML・Firefox・オフラインテスト
+
+- `conversation_003.html`はFirefox 157.0.1で実際に開きました。30メッセージ、話者の左右、送信数15/15、詳細16件、拒否した3候補の展開、日本語表示を確認しました。画像は`simulations/conversation_003_firefox.png`。Chromeは使用していません。
+- 全pytest: **153 passed, 1 warning**（Starlette/httpxの非推奨警告）。追加2件は未送信候補の拒否状態とHTMLエスケープを確認。`node --check app.js`、`py_compile`、`git diff --check`も成功。
+- Test matrix: 100項目、PASS 89 / FAIL 4 / FIXED 1 / BLOCKED 4 / NOT_TESTED 2。T90は安全停止のためBLOCKED。T100は候補を送らず記録した安全動作としてPASS。旧FAILは履歴として保持。
+
+### 変更・証拠
+
+- `scripts/simulate_conversation.py`: 保留中の危険候補を理由付きで拒否・保存し、送信やSQLite履歴を変更せずBLOCKEDへ移行。HTMLへ候補を安全にエスケープして表示。
+- `tests/test_conversation_simulation.py`: 拒否保存、カウンター不変、HTMLエスケープを検証する2件を追加。
+- `simulations/conversation_003.json`、`conversation_003.html`、`conversation_003_analysis.md`、`profiles_003.md`、`conversation_003_firefox.png`を保存。過去001/002は変更していません。
+- `conversation_003.json`の本人・相手データはすべて架空。APIキーや認証情報は含めていません。拒否候補のHTML出力もXSSエスケープを検査しました。
+
+### GitHub
+
+- 作業ブランチ: `codex/full-system-verification`。PR #4は`feat/ui-local-backend-v1`宛てOPEN/Draftで、マージしていません。
+- 会話 checkpoint `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。この追記を含む最終HEADはPush後にActionsで再確認します。
+- レポート: [PROGRESS.md](PROGRESS.md)、[TEST_MATRIX.md](TEST_MATRIX.md)、[prompt_spec.md](prompt_spec.md)。会話資料: [HTML](simulations/conversation_003.html)、[JSON](simulations/conversation_003.json)、[分析](simulations/conversation_003_analysis.md)、[Firefox画像](simulations/conversation_003_firefox.png)。

@@ -310,3 +310,15 @@
 - 会話003を開始。本人役は橘はる、相手役は瀬戸りん。架空プロフィールと隔離一時SQLiteを使用。実Gemini `gemini-3.5-flash-lite` を既存アプリAPI経由で使用。現時点はアプリ7通・相手7通、論理生成8回・プロバイダー試行9回。JSON/HTMLの途中状態は`conversation_003.json`/`.html`に保存中。本人側送信は20通以内。
 - 初回候補3案は句読点なし。通常返信では「ですよね」型の相槌と単なる言い換えが続く兆候があり、候補の中から話題を具体化する案を選んでいる。まだ会話実験は終了しておらず、T90は完了扱いにしない。
 - 累計実API品質確認は16論理要求・22プロバイダー試行。会話003のAPI利用は別途上記カウンターへ追加する。API1/3.5のみ。429・モデル切替なし。課金状態・残り枠・実費は未確認。
+
+
+## 2026-10-14 会話003終了・最終品質確認
+
+- 最新のPR #4 HEAD `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`を確認。PRはOPEN、Draft、base `feat/ui-local-backend-v1`。既存PRのみ更新し、マージしない。
+- 指示ファイル`docs/verification/simulations/指示.txt`を確認。既存001/002を保ち、会話003の中断状態から継続した。
+- 会話003は本人15通・相手15通・計30件で停止。最終ターンの3候補に本人未確認の買い物習慣が含まれたため、候補を送信前に拒否して`BLOCKED`で終了。拒否候補と理由をJSON/HTMLに保存し、SQLite履歴と送信数は維持。原因はモデルの候補と事実ガードの対象表現が一致せず、全候補に未確認行動が残ったこと。
+- 実APIは品質確認16論理要求・22 provider attempts、会話003が16論理要求・18 provider attempts、合計32/40。API1 / `gemini-3.5-flash-lite`。429、フォールバックなし。約30回の目安を2論理要求超えたため、追加実API試験は行わない。個別の残利用枠・請求状態・費用は未確認。
+- Firefox 157.0.1の隔離headlessセッションでHTMLを開き、30メッセージ、16個の詳細、拒否3候補の展開、表示崩れのないレイアウトを確認。`simulations/conversation_003_firefox.png`を保存。Chromeには触れていない。
+- ローカルpytest **153 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。
+- `scripts/simulate_conversation.py`に未送信候補を理由付きで拒否・保存する処理を追加。追加テスト2件で状態遷移、送信数/メッセージ不変、HTMLエスケープを確認。
+- 次に実施: TEST_MATRIX/FINAL_REPORT/prompt_specを最終結果へ更新し、秘密情報検査、差分レビューを行う。明示的なファイル指定でコミット・Pushし、最新SHAのPush/PR ActionsとDraft状態を確認する。
