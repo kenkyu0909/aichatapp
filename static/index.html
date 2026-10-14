@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Message Mate | メッセージ支援</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">✦</span><div><strong>Message Mate</strong><small>PRIVATE WORKSPACE</small></div></div>
+      <div class="nav-heading">ワークスペース</div>
+      <nav class="navigation" aria-label="メインメニュー">
+        <button id="nav-chat" class="nav-button selected" type="button"><span>◉</span> 返信を作成</button>
+        <button id="nav-like" class="nav-button" type="button"><span>♡</span> メッセージ付きいいね</button>
+        <button id="nav-profile" class="nav-button" type="button"><span>⚙</span> 自分のプロフィール</button>
+      </nav>
+      <div class="sidebar-line"></div>
+      <div class="people-header"><span>マッチした相手</span><button id="add-match" class="icon-button accent-icon" type="button" title="相手を追加" aria-label="相手を追加">＋</button></div>
+      <div id="match-list" class="match-list"></div>
+      <div class="sidebar-footer"><span id="status-dot" class="dot"></span><span id="status-text">接続確認中</span><small>データはPC内に保存</small></div>
+    </aside>
+    <main class="workspace">
+      <div id="notice" class="notice" hidden role="status"></div>
+      <section id="view-chat" class="view chat-view">
+        <div class="pane conversation-pane">
+          <header class="pane-header">
+            <div class="person-heading">
+              <span id="current-avatar" class="avatar avatar-lg">?</span>
+              <div><h1 id="current-name">相手を選択</h1><p id="current-subtitle">相手ごとに会話を管理できます</p></div>
+            </div>
+            <button id="edit-match" class="ghost-button" type="button" hidden>プロフィールを編集</button>
+          </header>
+          <div id="empty-chat" class="empty-state"><div class="empty-icon">✉</div><h2>自然なやり取りを、もっと気軽に。</h2><p>左の「＋」から相手を登録するか、一覧から選んでください。</p><button id="empty-add" class="primary-button" type="button">相手を登録</button></div>
+          <div id="chat-content" class="chat-content" hidden>
+            <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+            <form id="message-form" class="message-composer">
+              <label for="message-body">会話を記録</label>
+              <textarea id="message-body" rows="3" maxlength="12000" placeholder="相手から届いた文章、または自分が送った文章を入力" required></textarea>
+              <div class="composer-bottom">
+                <div class="role-toggle" aria-label="発言者">
+                  <label><input type="radio" name="role" value="them" checked><span>相手から</span></label>
+                  <label><input type="radio" name="role" value="me"><span>自分から</span></label>
+                </div>
+                <button class="secondary-button" type="submit">履歴に追加 ↗</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <aside class="pane suggestions-pane">
+          <header class="pane-header slim"><div><div class="eyebrow">AI COMPOSER</div><h2>返信アシスタント</h2><p>会話の流れに合わせた3つの提案</p></div></header>
+          <div class="suggestions-body">
+            <div class="hint-box"><span>✧</span><p>相手の最新メッセージを履歴に追加してから生成してください。コピーだけでは送信済みになりません。</p></div>
+            <button id="generate-reply" class="primary-button full" type="button" disabled>✦ 返信候補を生成</button>
+            <div id="reply-results" class="results"></div>
+          </div>
+        </aside>
+      </section>
+      <section id="view-like" class="view single-view" hidden>
+        <div class="page-top"><div class="eyebrow">FIRST IMPRESSION</div><h1>メッセージ付きいいね</h1><p>相手の自己紹介に合わせた、自然な最初の一通を考えます。</p></div>
+        <div class="like-grid">
+          <div class="surface">
+            <form id="like-form">
+              <label for="like-name">相手の名前 <small>任意</small></label>
+              <input id="like-name" maxlength="100" placeholder="例：さき">
+              <label for="like-description">相手のプロフィール文</label>
+              <textarea id="like-description" rows="11" maxlength="12000" placeholder="ここに相手のプロフィール文を貼り付けてください" required></textarea>
+              <button class="primary-button full" type="submit">✦ メッセージ案を生成</button>
+            </form>
+          </div>
+          <div class="surface"><div class="surface-title"><h2>AIからの提案</h2><span>3パターン</span></div><div id="like-results" class="results"><p class="placeholder">プロフィールを入力すると、ここに候補が表示されます。</p></div></div>
+        </div>
+      </section>
+      <section id="view-profile" class="view single-view" hidden>
+        <div class="page-top"><div class="eyebrow">YOUR VOICE</div><h1>自分のプロフィール</h1><p>あなたらしい言葉を提案するために、AIに伝えておきたい情報を保存します。</p></div>
+        <div class="profile-surface surface">
+          <form id="profile-form">
+            <label for="profile-content">自分について</label>
+            <p class="field-help">名前・年齢・仕事・趣味・性格・恋愛観・普段の話し方など。自由に書いてください。</p>
+            <textarea id="profile-content" rows="11" maxlength="12000" placeholder="例：23歳、札幌在住。休日はカフェや旅行が好き。文章は短め、絵文字はあまり使わない…"></textarea>
+            <label for="profile-avoid">言ってほしくないこと・使わない表現</label>
+            <p class="field-help">事実と異なる話、避けたい話題、口癖や絵文字など。</p>
+            <textarea id="profile-avoid" rows="5" maxlength="4000" placeholder="例：毎回「素敵ですね」と言わない、過剰な絵文字は使わない"></textarea>
+            <button class="primary-button" type="submit">設定を保存</button>
+          </form>
+          <div class="privacy-note">🔒 写真はAIへ送信しません。文章生成時は、本人・相手のプロフィール文や対象の会話履歴がGemini APIへ送信されます。無料枠のデータ利用条件をご確認ください。</div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <dialog id="match-dialog" class="modal">
+    <form id="match-form" method="dialog">
+      <div class="modal-top"><h2 id="match-dialog-title">相手を登録</h2><button id="cancel-match" class="icon-button" type="button" aria-label="閉じる">×</button></div>
+      <label for="match-name">名前 <span class="required">必須</span></label>
+      <input id="match-name" maxlength="100" required placeholder="例：さき">
+      <label for="match-description">プロフィール・メモ</label>
+      <textarea id="match-description" rows="6" maxlength="12000" placeholder="相手の自己紹介文、知っていることなど"></textarea>
+      <label for="match-photo">識別用の写真 <small>任意・5MB以下</small></label>
+      <input id="match-photo" type="file" accept="image/jpeg,image/png,image/webp">
+      <p class="field-help">写真は表示用です。AIは画像を読み取りません。</p>
+      <div class="modal-actions"><button id="delete-match" class="danger-button" type="button" hidden>相手を削除</button><div class="spacer"></div><button id="cancel-match-bottom" class="ghost-button" type="button">キャンセル</button><button class="primary-button" type="submit">保存</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
