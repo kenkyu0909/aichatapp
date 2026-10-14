@@ -1,0 +1,20 @@
+# Private local-only data and secrets, never commit
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite3
+*.db
+photos/
+uploads/
+*.log
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
+.vscode/
+.idea/
