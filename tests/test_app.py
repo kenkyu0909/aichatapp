@@ -123,3 +123,47 @@ def test_single_candidate_and_invalid_count(client):
     assert result.json()["alternatives"] == []
     result = c.post("/api/generate", json={"mode": "like", "count": 2, "description": "映画が趣味です"})
     assert result.status_code == 422
+
+
+def test_gemini_request_mock_never_sends_photo_or_other_match(client, monkeypatch):
+    """This mocks the SDK client; no external API request occurs."""
+    import json
+    from types import SimpleNamespace
+    from google import genai
+
+    c, _ = client
+    c.put("/api/profile", json={"content": "架空の人物：学生", "avoid": "大げさなお世辞"})
+    a, b = add_match(c, "架空の相手A"), add_match(c, "架空の相手B")
+    c.post(f"/api/matches/{a}/messages", json={"role": "them", "body": "Aの架空の会話"})
+    c.post(f"/api/matches/{b}/messages", json={"role": "them", "body": "Bの架空の会話"})
+    c.put(f"/api/matches/{a}/photo", files={"file": ("test.png", b"\x89PNG\r\n\x1a\n" + b"\0"*50, "image/png")})
+
+    captures = []
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captures.append(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "recommended": {"label": "自然体", "text": "そのお話、気になります！"},
+                "alternatives": [
+                    {"label": "短め", "text": "いいですね！"},
+                    {"label": "質問", "text": "どんな感じなんですか？"},
+                ],
+                "reason": "相手の発言に自然に反応できるため。",
+                "strategy": "まずは会話を広げる。"
+            }, ensure_ascii=False))
+    monkeypatch.setenv("GEMINI_API_KEY", "testing-only-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    resp = c.post("/api/generate", json={
+        "mode": "reply", "match_id": a, "count": 3,
+        "tone": "敬語", "direction": "質問を控えめに"
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["demo"] is False
+    assert len(captures) == 1
+    payload = captures[0]["contents"]
+    assert "Aの架空の会話" in payload
+    assert "Bの架空の会話" not in payload
+    assert "photo" not in payload and "test.png" not in payload
+    assert "testing-only-placeholder-key" not in payload
+    assert "質問を控えめに" in payload
+    assert len(c.get(f"/api/matches/{a}/messages").json()) == 1
