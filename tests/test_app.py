@@ -2547,6 +2547,229 @@ def test_unanswered_personal_question_is_blocked_for_legacy_response(client, mon
     assert "確認できる情報がありません" in response.json()["detail"]
 
 
+@pytest.mark.parametrize(("topic", "claim"), [
+    ("読書", "自分は本をよく読みます"),
+    ("読書", "私も読書が好きです"),
+    ("読書", "僕は小説を幅広く読みます"),
+    ("読書", "ミステリー小説が好きです"),
+    ("読書", "最近漫画を読みました"),
+    ("映画", "自分は映画が好きです"),
+    ("映画", "私は洋画をよく観ます"),
+    ("映画", "僕も映画館によく行きます"),
+    ("映画", "最近映画を観ていません"),
+    ("映画", "映画をたまに見ます"),
+    ("カフェ", "自分はカフェが好きです"),
+    ("カフェ", "喫茶店によく行きます"),
+    ("カフェ", "お気に入りのカフェがあります"),
+    ("カフェ", "落ち着いた雰囲気のお店が好きです"),
+    ("カフェ", "静かなカフェが好みです"),
+    ("買い物", "自分は新作をすぐ買います"),
+    ("買い物", "私は衝動買いします"),
+    ("買い物", "口コミを調べてから買います"),
+    ("買い物", "少し考えてから買います"),
+    ("買い物", "パケ買いすることがあります"),
+    ("カレー", "自分はカレーが好きです"),
+    ("カレー", "私は辛口カレーが好きです"),
+    ("カレー頻度", "自分はカレーをよく食べます"),
+    ("カレー経験", "最近カレーを食べました"),
+    ("カレー", "チキンカレーが好物です"),
+    ("旅行", "自分は旅行が好きです"),
+    ("旅行", "旅行によく行きます"),
+    ("旅行", "私は旅行に行ったことがあります"),
+    ("居住地", "横浜によく行きます"),
+    ("居住地", "川崎に住んでいます"),
+    ("休日", "休日はカフェによく行きます"),
+    ("休日", "週末は映画を観ています"),
+    ("食事", "自分の好きな食べ物は寿司です"),
+    ("食事", "私の好物はカレーです"),
+    ("パン", "パン屋巡りが趣味です"),
+])
+def test_overnight_unconfirmed_personal_fact_claims_are_caught(client, topic, claim):
+    _, backend = client
+    candidate = backend.Candidate(label="架空候補", text=claim)
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("question", [
+    "最近漫画を読みましたか？",
+    "最近映画を観ていませんか？",
+    "映画をたまに見ますか？",
+    "お気に入りのカフェがありますか？",
+    "少し考えてから買いますか？",
+    "最近カレーを食べましたか？",
+    "チキンカレーが好物ですか？",
+    "パン屋巡りが趣味ですか？",
+])
+def test_overnight_partner_directed_questions_are_not_user_assertions(client, question):
+    _, backend = client
+    candidate = backend.Candidate(label="相手への質問", text=question)
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+def test_overnight_unconfirmed_fact_cases_never_return_sendable_candidates(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    claim_cases = [claim for _, claim in [
+        ("読書", "自分は本をよく読みます"),
+        ("映画", "最近映画を観ていません"),
+        ("カフェ", "お気に入りのカフェがあります"),
+        ("買い物", "少し考えてから買います"),
+        ("カレー経験", "最近カレーを食べました"),
+        ("居住地", "横浜によく行きます"),
+        ("休日", "週末は映画を観ています"),
+        ("パン", "パン屋巡りが趣味です"),
+    ]]
+    repeated_responses = []
+    for index, claim in enumerate(claim_cases, start=1):
+        candidate_payload = {
+            "needs_user_info": False,
+            "user_questions": [],
+            "user_info_reason": "",
+            "recommended": {"label": "推奨", "text": claim},
+            "alternatives": [],
+            "reason": "オフライン回帰ケース",
+            "strategy": "確認済みの情報だけを使います",
+            "conversation_stage": "Stage 2",
+            "invite_decision": "continue_conversation",
+            "decision_reason": "架空ケース",
+            "next_action": "安全に返信します",
+        }
+        repeated_responses.extend([candidate_payload, candidate_payload])
+        created = c.post("/api/matches", json={
+            "name": f"架空事実検査相手{index}", "description": "会話の練習が好きです",
+        })
+        match_id = created.json()["id"]
+        c.post(f"/api/matches/{match_id}/messages", json={
+            "role": "them", "body": "今日はいい天気ですね！",
+        })
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            payload = repeated_responses.pop(0)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    for index in range(1, len(claim_cases) + 1):
+        response = c.post("/api/generate", json={
+            "mode": "reply", "match_id": index, "count": 1, "response_version": 2,
+        })
+        body = response.json()
+        assert response.status_code == 200, f"case {index}: {body}"
+        assert body["needs_user_info"] is True, f"case {index}: {body}"
+        assert body["recommended"] is None and body["alternatives"] == []
+    assert repeated_responses == []
+
+
+OVERNIGHT_DIRECT_QUESTION_CASES = [
+    ("普段どんなジャンルの本を読みますか？", "普段はどんなジャンルの本を読みますか？"),
+    ("最近どんな本を読みましたか？", "最近読んだ本があれば作品名や内容を教えてください"),
+    ("映画は好きですか？", "映画はお好きですか？"),
+    ("最近どんな映画を観ましたか？", "最近観た映画があれば作品名を教えてください"),
+    ("どんなジャンルの映画が好きですか？", "好きな映画のジャンルを教えてください"),
+    ("新作を見つけたらすぐ買うタイプですか？", "気になる新作はすぐ買う方ですか？それとも少し考えてから買う方ですか？"),
+    ("カレーだと何が好きですか？", "好きなカレーの種類や具を教えてください"),
+    ("カレーは好きですか？", "カレーは好きですか？"),
+    ("カレーをどのくらいの頻度で食べますか？", "カレーを食べる頻度を教えてください"),
+    ("最近カレーを食べましたか？", "最近カレーを食べたことがあれば教えてください。なければそう答えてください"),
+    ("カフェにはよく行きますか？", "カフェにはどのくらいの頻度で行きますか？"),
+    ("最近どこのカフェに行きましたか？", "最近行ったカフェがあればお店の名前や場所を教えてください。行っていなければそう答えてください"),
+    ("好きなカフェはありますか？", "好きなカフェやお店の雰囲気があれば教えてください"),
+    ("映画館にはどのくらい行きますか？", "映画館にはどのくらいの頻度で行きますか？"),
+    ("旅行は好きですか？", "旅行はお好きですか？"),
+    ("最近どこか旅行しましたか？", "最近行った旅行先やお出かけ先があれば教えてください"),
+    ("どのくらい旅行に行きますか？", "旅行にはどのくらいの頻度で行きますか？"),
+    ("休日は普段何をしていますか？", "休日は普段どんなふうに過ごすか教えてください"),
+    ("週末は友達と出かけますか？", "週末は友達と出かけることが多いですか？"),
+    ("どのあたりに住んでいますか？", "相手に伝えてよい居住地域を教えてください"),
+    ("今度会うならどの地域がいいですか？", "待ち合わせに使いたい地域や駅を教えてください"),
+    ("いつ頃なら会えそうですか？", "相手に伝えてよい曜日や時間帯を教えてください"),
+    ("普段どんな仕事をしていますか？", "相手の「普段どんな仕事をしていますか？」にどう答えたいか教えてください"),
+    ("今の仕事は忙しいですか？", "相手の「今の仕事は忙しいですか？」にどう答えたいか教えてください"),
+    ("テニスは好きですか？", "相手の「テニスは好きですか？」にどう答えたいか教えてください"),
+    ("最近スポーツをしましたか？", "相手の「最近スポーツをしましたか？」にどう答えたいか教えてください"),
+    ("犬と猫ならどちらが好きですか？", "相手の「犬と猫ならどちらが好きですか？」にどう答えたいか教えてください"),
+    ("普段料理はしますか？", "普段料理や自炊はしますか？"),
+    ("最近読んだ本はありますか？", "最近読んだ本があれば作品名や内容を教えてください"),
+    ("好きな食べ物は何ですか？", "好きな食べ物や料理を教えてください"),
+]
+
+
+def test_overnight_thirty_direct_questions_are_blocked_or_asked_at_matching_granularity(client):
+    c, _ = client
+    assert len(OVERNIGHT_DIRECT_QUESTION_CASES) >= 30
+    for index, (partner_question, expected_user_question) in enumerate(OVERNIGHT_DIRECT_QUESTION_CASES, start=1):
+        match_response = c.post("/api/matches", json={
+            "name": f"架空質問テスト相手{index}",
+            "description": "旅行とカフェが好きです",
+        })
+        assert match_response.status_code == 201
+        match_id = match_response.json()["id"]
+        message_response = c.post(f"/api/matches/{match_id}/messages", json={
+            "role": "them", "body": partner_question,
+        })
+        assert message_response.status_code == 201
+        response = c.post("/api/generate", json={
+            "mode": "reply", "match_id": match_id, "response_version": 2,
+        })
+        body = response.json()
+        assert response.status_code == 200, f"case {index}: {partner_question}"
+        assert body["needs_user_info"] is True, f"case {index}: {partner_question}"
+        assert body["recommended"] is None and body["alternatives"] == []
+        assert body["user_questions"][0]["question"] == expected_user_question, f"case {index}: {partner_question}"
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "友達と行くことが多いんですか？",
+    "友達とよく出かけるんですか？",
+    "誰とカフェに行くことが多いですか？",
+    "誰と一緒にカフェに行くんですか？",
+    "カフェは好きなんですか？",
+    "カフェによく行くんですか？",
+    "休日は友達と出かけることが多いですか？",
+    "休みの日は友達と会うんですか？",
+    "週末は何をして過ごすことが多いですか？",
+    "休日は普段何をしていますか？",
+    "カフェに行く頻度ってどれくらいですか？",
+    "友達とカフェに行くんですね？",
+    "友達とカフェに行くことが多いんですか？",
+    "いつも友達とカフェに行くんですか？",
+    "カフェはどのくらい行きますか？",
+])
+def test_overnight_known_partner_cafe_and_weekend_facts_are_not_reasked(client, candidate_text):
+    _, backend = client
+    context = {"history": [
+        {"role": "them", "body": "休日は友達とカフェに行くことが多いです！"},
+        {"role": "me", "body": "それは楽しそうですね！"},
+    ]}
+    candidate = backend.Candidate(label="架空候補", text=candidate_text)
+
+    assert backend.repeated_partner_question_topics([candidate], context)
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "最近友達と行ってよかったカフェありますか？",
+    "どんな雰囲気のお店が好きですか？",
+    "最近見つけたお店で気になっているところありますか？",
+    "おすすめのケーキとかありますか？",
+    "最近行ってよかったカフェはどこですか？",
+])
+def test_overnight_deeper_partner_cafe_questions_are_not_treated_as_repeats(client, candidate_text):
+    _, backend = client
+    context = {"history": [
+        {"role": "them", "body": "休日は友達とカフェに行くことが多いです！"},
+        {"role": "me", "body": "それは楽しそうですね！"},
+    ]}
+    candidate = backend.Candidate(label="架空候補", text=candidate_text)
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+
+
 def test_legacy_response_cannot_return_unsupported_first_person_claim(client, monkeypatch):
     from google import genai
 

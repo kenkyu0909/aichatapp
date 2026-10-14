@@ -278,6 +278,27 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 
 最新集計: 127項目、PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。旧FAILは履歴として保持し、T118の実施結果、T125の実API評価、T127のCI結果を反映した。
 
+## 2026-10-15 夜間品質改善（オフライン）
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T128 | 未確認の本人事実35表現 | pytest候補検査 | PASS | 趣味、好き嫌い、頻度、最近の経験、買い物、否定、比較、予定、場所を含む35種類で根拠なしの主張を検出。`tests/test_app.py`。 |
+| T129 | 相手への疑問文と本人断定の区別 | pytest | PASS | 8種類の相手向け質問を本人の事実として誤検出しない。`tests/test_app.py`。 |
+| T130 | 生成経路での未確認事実ブロック | FastAPI + Gemini SDKモック | PASS | 架空の相手8人それぞれにunsafeな候補を2回返しても、APIは`needs_user_info`を返し送信可能な候補を返さない。実Geminiではない。 |
+| T131 | 本人への質問30ケースの粒度 | FastAPIローカルpytest、隔離テストDB | PASS | 本、映画、買い物、旅行、カフェ、休日、仕事、趣味、場所、予定など30質問で本人確認を行い、指定した質問粒度と一致。質問粒度の1件を修正後、対象テスト再実行に成功。 |
+| T132 | 相手が明言した休日/カフェ情報の聞き直し | pytest候補検査 | PASS | 15種類の言い換え質問を再質問として拒否。 |
+| T133 | 既知情報からの自然な深掘り | pytest候補検査 | PASS | 店の雰囲気、最近の店、おすすめ等5件を既知頻度の再質問とは扱わない。 |
+| T134 | 全pytest・Firefox UIを含む回帰 | Windows Python 3.12 `.venv` | PASS | 修正後の最新コードで**372 passed, 1 warning, 78.87秒**。警告はStarlette/httpx TestClient非推奨通知。 |
+| T135 | Firefox UI単独実行 | Selenium/Firefox、`tests/test_ui_firefox.py` | PASS | **5 passed, 70.32秒**。Chromeは使用していない。 |
+| T136 | Python構文 | `py_compile app.py tests/test_app.py` | PASS | 終了コード0。 |
+| T137 | JavaScript構文 | Node.js 25.9.0 `node --check app.js` | PASS | 終了コード0。 |
+| T138 | 差分空白検査 | `git diff --check` | PASS | 終了コード0。 |
+| T139 | APIキー形式の作業ツリースキャン | `AIza...`パターンのファイル名のみ出力する検索 | PASS | 一致ファイルなし。秘密値を出力していない。 |
+| T140 | Gemini実API利用可否と品質確認 | 課金・残枠の確認状態を確認 | BLOCKED | 課金状態と現在のプロジェクト利用枠を確認できない。API通信0論理要求/0 provider attempts。課金を発生させる可能性を避け、会話004は開始しない。 |
+| T141 | ミラーリング/反復/意味的多様性の新規実出力採点 | 実Geminiの連続応答が必要 | NOT_TESTED | 今回の実API応答なし。過去の会話003/品質006は失敗の参考記録として保持し、現在のコードの成功証拠に転用しない。 |
+
+本節を含む集計: 141項目、PASS 122 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。旧FAILは履歴として維持。T140/T141は実装成功や文章品質PASSを意味しない。今回の作業ブランチPush前のため、対応するGitHub Actions結果は未実施。
+
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 
 - [Push run 38569943665](https://github.com/kenkyu0909/aichatapp/actions/runs/38569943665) — success, 195 passed, 1 warning。

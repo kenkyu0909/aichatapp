@@ -286,8 +286,13 @@ PERSONAL_FACT_TOPICS = {
     "映画": ("映画", "洋画", "邦画", "映画館", "作品"),
     "読書": ("本", "読書", "小説", "ミステリー", "漫画", "マンガ"),
     "旅行": ("旅行", "旅", "出かけ", "行ったこと"),
+    "旅行最近": ("旅行", "旅"),
+    "旅行頻度": ("旅行", "旅"),
+    "カフェ好み": ("カフェ", "喫茶店"),
+    "料理習慣": ("料理", "自炊"),
     "食事": ("食べ物", "料理", "好きな食べ物", "お店", "食事"),
     "居住地": ("住んで", "住まい", "どのあたり", "最寄り", "地域"),
+    "会う場所": ("会う場所", "待ち合わせ場所", "会う地域", "待ち合わせの地域"),
     "予定": ("予定", "空いて", "都合", "曜日", "時間帯"),
     "カフェ": ("カフェ", "喫茶店", "コーヒー"),
     "カフェ最近": ("カフェ", "喫茶店"),
@@ -301,6 +306,12 @@ PERSONAL_FACT_TOPICS = {
 def _topic_for_personal_question(text: str) -> str | None:
     if not re.search(r"[?？]|ですか|ますか|どんな|何を|どこに|いつ|頻度|食べること", text):
         return None
+    if re.search(r"会う|会え|待ち合わせ", text) and re.search(r"地域|場所|どこ", text):
+        return "会う場所"
+    if re.search(r"会う|会え|待ち合わせ|日程", text) and re.search(r"いつ|何曜|曜日|時間|頃", text):
+        return "予定"
+    if re.search(r"休日|休みの日|週末", text) and re.search(r"何|どう|友達|家|過ご|出かけ", text):
+        return "休日"
     # Specific requests take precedence over their broader subject categories.
     if any(term in text for term in PERSONAL_FACT_TOPICS["買い物"]):
         return "買い物"
@@ -310,22 +321,33 @@ def _topic_for_personal_question(text: str) -> str | None:
         if re.search(r"好き|お好き", text) and not re.search(r"何が|どんな|種類|具|辛さ|何系|どのカレー", text):
             return "カレー好み"
         return "カレー"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["旅行"]):
+        if re.search(r"最近|この前|昨日|先週|どこに|どこか", text):
+            return "旅行最近"
+        if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
+            return "旅行頻度"
+        return "旅行"
     if "映画館" in text and re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
         return "映画館頻度"
     if any(term in text for term in PERSONAL_FACT_TOPICS["カフェ"]):
+        if re.search(r"好きなカフェ|お気に入り|行きつけ|どんな雰囲気", text):
+            return "カフェ好み"
         if re.search(r"最近|この前|昨日|先週", text) and re.search(r"どこ|どの店|何という|行った|行きました|訪れ", text):
             return "カフェ最近"
         if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
             return "カフェ頻度"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["料理習慣"]):
+        if re.search(r"普段|よく|自炊|作ります|料理します|頻度", text):
+            return "料理習慣"
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             # Do not mistake statements about the partner for a question about the user.
-            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|観|見|読|行|住|空い|予定|買|購入|タイプ|頻度|経験|何系|どんな|何が)", text):
+            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|観|見|読|行|住|空い|予定|買|購入|タイプ|頻度|経験|何系|どんな|何が|週末|いつ|地域|どのあたり)", text):
                 return topic
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
     if re.search(
-        r"(?:普段|最近|これまで|経験|タイプ|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|食べた|買|観た|見た|読んだ|仕事|学校|休日|性格|予定|空い|趣味|おすすめ)",
+        r"(?:普段|最近|これまで|経験|タイプ|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
         return "本人情報"
@@ -334,6 +356,33 @@ def _topic_for_personal_question(text: str) -> str | None:
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
     facts = context["my_profile"].get("facts", {})
+    if topic == "旅行最近":
+        return any(facts.get(key) for key in ("recent_trips", "recent_travel", "最近の旅行")) or any(
+            answer.get("answer", "").strip()
+            and re.search(r"最近|この前|昨日|先週|旅行|旅|行きました|行った", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if re.search(r"最近|この前|昨日|先週|どこ|旅行|旅", answer.get("question", ""))
+        )
+    if topic == "旅行頻度":
+        return any(facts.get(key) for key in ("travel_frequency", "旅行の頻度")) or any(
+            answer.get("answer", "").strip()
+            and re.search(r"よく|頻繁|週|月|回|たまに|時々|あまり", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if re.search(r"頻度|どのくらい|どれくらい|旅行|旅", answer.get("question", ""))
+        )
+    if topic == "カフェ好み":
+        return any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafe_preferences", "好きなカフェ")) or any(
+            answer.get("answer", "").strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if re.search(r"カフェ|喫茶店", answer.get("question", ""))
+            and re.search(r"好き|好み|お気に入り|行きつけ", answer.get("answer", ""))
+        )
+    if topic == "料理習慣":
+        return any(facts.get(key) for key in ("cooking_habits", "cooking_frequency", "料理習慣", "自炊頻度")) or any(
+            answer.get("answer", "").strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if re.search(r"料理|自炊", answer.get("question", ""))
+        )
     if topic == "カフェ最近":
         keys = ("recent_cafes", "recent_cafe_visits", "最近行ったカフェ")
         if any(facts.get(key) for key in keys):
@@ -516,6 +565,12 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         schedule_values = [str(facts.get(key, "")) for key in ("availability", "schedule", "available_time", "予定")]
         if any(value.strip() and not any(marker in value for marker in tentative_markers) for value in schedule_values):
             return True
+    if topic == "会う場所":
+        return any(facts.get(key) for key in ("preferred_meeting_regions", "meeting_area", "会える地域")) or any(
+            answer.get("answer", "").strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if re.search(r"会う場所|待ち合わせ|会う地域", answer.get("question", ""))
+        )
 
     for answer in context.get("ephemeral_user_answers", []):
         answer_question = answer.get("question", "")
@@ -574,7 +629,7 @@ def model_user_info_questions_are_necessary(context: dict, questions: list[UserQ
     declined_or_uncertain = bool(re.search(r"不安|ごめんなさい|難しい|できません|まだ会う|ちょっと.*(?:難|不安)|考えたい", last_partner_text))
     if not prior_invitation or not accepted or declined_or_uncertain:
         return False
-    logistics_topics = {"予定", "居住地"}
+    logistics_topics = {"予定", "居住地", "会う場所"}
     for question in questions:
         topic = _question_topic(question.question)
         if topic not in logistics_topics or _topic_is_verified(topic, context, question.question):
@@ -584,10 +639,10 @@ def model_user_info_questions_are_necessary(context: dict, questions: list[UserQ
 
 def personal_fact_question(topic: str, source_question: str = "") -> UserQuestion:
     normalized = re.sub(r"\s+", "", source_question)
-    if topic == "読書" and re.search(r"ジャンル|何系|どんな本", source_question):
-        question = "普段読む本はどんなジャンルが多いですか？"
-    elif topic == "読書" and re.search(r"最近|何を読|読んだ本", source_question):
+    if topic == "読書" and re.search(r"最近|この前|昨日|先週|何を読|読んだ本", source_question):
         question = "最近読んだ本があれば作品名や内容を教えてください"
+    elif topic == "読書" and re.search(r"ジャンル|何系|どんな本", source_question):
+        question = "普段はどんなジャンルの本を読みますか？"
     elif topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", source_question):
         question = "最近観た映画があれば作品名を教えてください"
     elif topic == "映画" and re.search(r"ジャンル|何系|どんな.*好き|好きな.*映画", source_question):
@@ -598,6 +653,26 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "カフェにはどのくらいの頻度で行きますか？"
     elif topic == "映画館頻度":
         question = "映画館にはどのくらいの頻度で行きますか？"
+    elif topic == "旅行最近":
+        question = "最近行った旅行先やお出かけ先があれば教えてください"
+    elif topic == "旅行頻度":
+        question = "旅行にはどのくらいの頻度で行きますか？"
+    elif topic == "旅行" and re.search(r"最近|この前|昨日|先週", source_question):
+        question = "最近行った旅行先やお出かけ先があれば教えてください"
+    elif topic == "旅行" and re.search(r"頻度|何回|どのくらい|どれくらい|よく行", source_question):
+        question = "旅行にはどのくらいの頻度で行きますか？"
+    elif topic == "カフェ好み":
+        question = "好きなカフェやお店の雰囲気があれば教えてください"
+    elif topic == "料理習慣" and re.search(r"しますか|作りますか", source_question):
+        question = "普段料理や自炊はしますか？"
+    elif topic == "料理習慣":
+        question = "普段どのくらい料理や自炊をしますか？"
+    elif topic == "予定":
+        question = "相手に伝えてよい曜日や時間帯を教えてください"
+    elif topic == "会う場所":
+        question = "待ち合わせに使いたい地域や駅を教えてください"
+    elif topic == "休日" and re.search(r"友達|友人", source_question) and re.search(r"出かけ|会い|遊び", source_question):
+        question = "週末は友達と出かけることが多いですか？"
     elif topic == "買い物" and re.search(r"すぐ|即|衝動|タイプ", source_question):
         question = "気になる新作はすぐ買う方ですか？それとも少し考えてから買う方ですか？"
     elif topic in {"カレー", "カレー好み"} and re.search(r"何が|どんな|種類|具|辛さ|何系", source_question):
@@ -616,8 +691,12 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         "カレー経験": "最近カレーを食べたことがあれば教えてください。なければそう答えてください",
         "本人情報": "この質問にどう答えたいか教えてください。分からない場合はスキップできます",
         "映画": "映画はお好きですか？",
-        "読書": "最近どんな本を読んだか教えてください",
-        "旅行": "旅行やお出かけについてどう答えたいですか？",
+        "読書": "普段どんな本を読みますか？",
+        "旅行": "旅行はお好きですか？",
+        "旅行最近": "最近行った旅行先やお出かけ先があれば教えてください",
+        "旅行頻度": "旅行にはどのくらいの頻度で行きますか？",
+        "カフェ好み": "好きなカフェやお店の雰囲気があれば教えてください",
+        "料理習慣": "普段どのくらい料理や自炊をしますか？",
         "食事": "好きな食べ物や料理を教えてください",
         "カフェ": "カフェに行く頻度や好きなお店について教えてください",
         "カフェ最近": "最近行ったカフェがあればお店の名前や場所を教えてください。行っていなければそう答えてください",
@@ -625,6 +704,7 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         "映画館頻度": "映画館にはどのくらいの頻度で行きますか？",
         "パン": "パン屋やパン巡りについて、実際に好きなことがあれば教えてください",
         "居住地": "相手に伝えてよい居住地域を教えてください",
+        "会う場所": "待ち合わせに使いたい地域や駅を教えてください",
         "予定": "相手に伝えてよい予定や希望時間を教えてください",
         "休日": "休日は普段どんなふうに過ごすか教えてください",
         }
@@ -661,6 +741,16 @@ def _movie_assertion_segments(text: str) -> list[str]:
     return assertions
 
 
+def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
+    """Do not treat a recipient-facing question as an assertion about the user."""
+    remainder = text[match.end():]
+    delimiter = re.search(r"[!?！？\n]", remainder)
+    if delimiter and delimiter.group(0) in "?？":
+        suffix = remainder[:delimiter.start()].strip()
+        return bool(re.fullmatch(r"(?:か|ですか|ますか|なんですか|なんです|でしょうか|のですか)?", suffix))
+    return bool(re.search(r"(?:ですか|ますか|なんですか|でしょうか)[ \t]*$", remainder))
+
+
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "買い物": re.compile(
         r"(?:自分|私|僕|俺).{0,18}(?:新作|商品|服|コスメ|本|ゲーム|買い物).{0,20}(?:買|購入|選び)|"
@@ -668,29 +758,33 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
         r"(?:すぐ|即).{0,8}(?:買っちゃ|買うことが多|買います|購入し)|"
         r"(?:パケ買い|衝動買い|即買い)|"
         r"(?:少し|ちょっと|かなり).{0,8}(?:悩んで|考えて).{0,12}買う|"
+        r"(?:考えて|調べて|比較して)から買(?:う|います|いました)|"
         r"(?:口コミ|内容|レビュー|情報).{0,12}(?:調べ|確かめ|確認).{0,12}(?:買|タイプ)|じっくり決めるタイプ|"
         r"店の前で.{0,12}(?:立ち止ま|入っちゃ|買)|"
         r"(?:新作|気になるもの).{0,12}(?:すぐ買います|買うタイプ|よく買います)"
     ),
     "カレー": re.compile(
         r"(?:自分|私|僕|俺).{0,14}(?:カレー|カレーライス).{0,18}(?:好き|辛口|甘口|チキン|ポーク|具)|"
-        r"(?:カレー|カレーライス).{0,12}(?:辛口|甘口|チキン|ポーク).{0,10}(?:好き|派です)|"
+        r"(?:カレー|カレーライス).{0,12}(?:辛口|甘口|チキン|ポーク).{0,10}(?:好き|好物|派です)|"
+        r"(?:チキン|ポーク|キーマ|バターチキン)カレー.{0,10}(?:好き|好物|派です)|"
         r"(?:自分|私|僕|俺).{0,12}カレー.{0,14}(?:よく食べ|頻繁に食べ|週に|月に|たまに食べ)"
     ),
     "カレー好み": re.compile(r"(?:自分|私|僕|俺).{0,12}カレー.{0,14}(?:好き|好物|苦手|嫌い)(?!ですか|ますか|[?？])|カレー.{0,8}(?:好きです(?!か)|好きだ|苦手|嫌い)(?!ですか|ますか|[?？])"),
     "カレー頻度": re.compile(r"(?:自分|私|僕|俺).{0,12}カレー.{0,16}(?:よく食べ|頻繁に食べ|週に|月に|たまに食べ|あまり食べない)"),
-    "カレー経験": re.compile(r"(?:自分|私|僕|俺).{0,12}最近.{0,12}カレー.{0,12}(?:食べた|食べています|食べました)"),
+    "カレー経験": re.compile(r"(?:自分|私|僕|俺).{0,12}最近.{0,12}カレー.{0,12}(?:食べた|食べています|食べました)|最近.{0,8}カレー.{0,10}(?:食べた|食べました|食べていません|食べてない)(?!か)"),
     "映画": re.compile(
         r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
         r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
-        r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)"
+        r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)|"
+        r"(?:最近)?映画.{0,10}(?:たまに|時々|ときどき).{0,8}(?:観|見)(?:ます|る)(?!か)|"
+        r"最近映画.{0,8}(?:観ていません|見ていません|観てない|見てない)(?!か)"
     ),
-    "読書": re.compile(r"幅広く読む|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)"),
-    "カフェ": re.compile(r"お気に入りのお店|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)(?!ですか|ますか|[?？])|(?:カフェ|喫茶店).{0,12}(?:好きです(?!か)|好きだ|よく行きます|お気に入りがあります)|(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}(?:雰囲気|ところ|お店|カフェ).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])|(?:雰囲気|ところ|お店|カフェ).{0,12}(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])"),
+    "読書": re.compile(r"幅広く読む|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)|最近.{0,12}(?:本|小説|漫画|マンガ).{0,12}(?:読んだ|読みました|読んでいます|読んでいません)(?!か)"),
+    "カフェ": re.compile(r"お気に入りのお店|お気に入りの(?:カフェ|喫茶店).{0,8}(?:あります|がある)|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)(?!ですか|ますか|[?？])|(?:カフェ|喫茶店).{0,12}(?:好きです(?!か)|好きだ|よく行きます|お気に入りがあります)|(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}(?:雰囲気|ところ|お店|カフェ).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])|(?:雰囲気|ところ|お店|カフェ).{0,12}(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])"),
     "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります)"),
     "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|在住|の近くに住)|(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡).{0,8}(?:に住んでいます|在住|のほうによく行(?:きます|く)|によく行(?:きます|く))"),
     "食事": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:好きな食べ物|好物|料理).{0,16}(?:は|が).{1,16}(?:好き|です)"),
-    "パン": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:パン屋|パン巡り).{0,18}(?:好き|よく行|通って|趣味)|(?:パン屋|パン巡り).{0,12}(?:好きです|よく行きます)"),
+    "パン": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:パン屋|パン巡り).{0,18}(?:好き|よく行|通って|趣味)|(?:パン屋|パン巡り).{0,12}(?:好きです|よく行きます|が趣味です)"),
     "休日": re.compile(
         r"(?:私も|自分も|僕も|俺も|私は|自分は|僕は|俺は).{0,12}(?:最近|昨日|先週|この前|週末|休日|休みの日).{0,30}(?:過ご|出かけ|行き|観|見|読ん|のんびり|していました|しました)"
         r"|(?:休日|週末|休みの日).{0,18}(?:映画館|映画|カフェ|喫茶店|読書|本|旅行|家|自宅|植物|美術館|買い物|友達).{0,18}(?:行き|観|見|読ん|過ご|してい|しました|でした)(?!ますか|ですか|？|\?)"
@@ -908,10 +1002,11 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     for candidate in candidates:
         text = candidate.text
         for topic, pattern in UNVERIFIED_PERSONAL_CLAIM_PATTERNS.items():
+            # Preserve sentence boundaries for the interrogative filter. Flattening
+            # punctuation here let a later question hide an earlier movie assertion.
             claim_text = text
-            if topic == "映画":
-                claim_text = re.sub(r"[、。!?！？\n]+", " ", text)
             matches = list(pattern.finditer(claim_text))
+            matches = [match for match in matches if not _candidate_claim_is_interrogative(claim_text, match)]
             if topic == "買い物":
                 partner_sources = [context.get("other", {}).get("description", "")]
                 partner_sources.extend(
@@ -1501,11 +1596,29 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         or re.search(r"(?:カフェ|喫茶店).{0,14}友達と.{0,14}(?:行|出かけ)", message)
         for message in partner_messages
     )
+    knows_cafe_interest = any(
+        re.search(r"(?:カフェ|喫茶店).{0,18}(?:好き|趣味|行くことが多い|よく行く)|(?:好き|趣味).{0,12}(?:カフェ|喫茶店)", message)
+        for message in partner_messages
+    )
+    knows_friend_weekend_activity = any(
+        re.search(r"(?:休日|休みの日|週末).{0,24}友達と.{0,18}(?:カフェ|喫茶店|出かけ|行く)", message)
+        for message in partner_messages
+    )
     repeat_rules: list[tuple[str, bool, re.Pattern[str]]] = [
         (
             "友達とカフェに行く頻度",
             knows_friend_cafe_frequency,
-            re.compile(r"(?:友達と.{0,14})?(?:カフェ|喫茶店).{0,18}(?:(?:よく|頻繁|何回|どのくらい|どれくらい).{0,12}(?:行|出かけ)|(?:行く|行きます|出かける).{0,10}(?:ですか|ますか|んですか|？|\?))"),
+            re.compile(r"(?:友達と.{0,14}(?:行く|行きます|出かける|出かけます).{0,14}(?:ですか|ますか|多い)|(?:誰と|どなたと).{0,10}(?:カフェ|喫茶店|行く|出かけ)|(?:カフェ|喫茶店).{0,18}(?:(?:よく|頻繁|何回|どのくらい|どれくらい).{0,12}(?:行|出かけ)|(?:行く|行きます|出かける).{0,10}(?:ですか|ますか|んですか|？|\?)))"),
+        ),
+        (
+            "カフェへの関心",
+            knows_cafe_interest,
+            re.compile(r"(?:カフェ|喫茶店).{0,12}(?:好きですか|好きなんですか|趣味ですか|よく行きますか|好きなんですね[?？])"),
+        ),
+        (
+            "休日の友人との過ごし方",
+            knows_friend_weekend_activity,
+            re.compile(r"(?:休日|休みの日|週末).{0,14}友達と.{0,14}(?:会う|出かけ|カフェに行く|過ごす).{0,10}(?:ですか|ますか|多い|んですか|？|\?)"),
         ),
         (
             "休日の過ごし方",

@@ -1,5 +1,16 @@
 # 検証進捗
 
+## 2026-10-15 夜間自律品質改善の進捗
+
+- 作業開始時に最新リモート `codex/full-system-verification` をfetchしてHEAD `71832173534edf1c52b691c5fc5e66c6134d30df`を確認。PR #4はDraftのままで継続し、main変更・マージなし。
+- 本人の未確認事実を候補から止めるケース、質問の具体度、相手が既に答えたことの再質問を中心に `app.py` を修正し、`tests/test_app.py` に回帰テストを追加。
+- 一度、確認質問のテストで粒度のずれ1件を再現。料理のYes/No質問より一般的な頻度質問が先に選ばれる分岐順を修正。該当52件が再実行で成功。
+- 最新オフライン検証: 全pytest **372 passed, 1 warning, 78.87秒**。Firefox単独 **5 passed, 70.32秒**。Python構文、Node.js 25.9のJS構文、`git diff --check`、APIキー形式スキャンも成功。警告はStarlette/httpx TestClient非推奨。
+- 実Geminiは0論理要求/0 provider attempts。課金状態・現在の残利用枠を確認できず、無断課金の可能性を排除できないため実通信を行わない。会話004は開始しない。
+- `OVERNIGHT_GOAL.md` とTEST_MATRIXへ7ゴールの判定およびT128–T141を追加。集計141項目（PASS122 / FAIL7 / FIXED1 / BLOCKED5 / NOT_TESTED6）。過去のFAILは残し、実生成品質は未達と明記。
+- 現在の変更は未コミット。未追跡のユーザー提供ファイル`docs/verification/simulations/指示.txt`は保持し、ステージ・コミットしない。
+- 次: FINAL_REPORTとprompt_specを更新し、差分・日本語文書・秘密情報を最終確認。明示パスのみcommit/pushし、最新HEADのActions、PR #4のDraft状態を確認する。
+
 最終更新: 2026-10-14（継続作業）
 
 ## 2026-10-14 最終修正・実API会話検証（継続中）
