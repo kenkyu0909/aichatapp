@@ -1,6 +1,6 @@
 # 検証進捗
 
-最終更新: 2026-10-14 13:37 JST
+最終更新: 2026-10-14 13:38 JST
 
 ## 作業開始
 
@@ -75,17 +75,19 @@
 ## GitHub・ブロッカー
 
 - push実行結果: `403 Permission to kenkyu0909/aichatapp.git denied to utyujin51`。
+- 最終再試行日時: 2026-10-14 13:38 JST。同じ403で失敗。
 - GitHub Secret一覧の参照も403。Secretの有無は未確認。
 - 作業ブランチのremote作成、Draft PR、PR更新・Draft解除はできていない。
 - 初期コミットと最終変更はローカルブランチに記録する。GitHubへの反映には書込権限を持つアカウントまたは権限付与が必要。
 
 ## 残作業
 
-1. 最終コミットをpushし、403の場合は権限ブロッカーとして確定。
-2. API1・API2キーを失効・再発行し、露出した環境変数キーの有無も確認する。
+1. API1・API2キーを失効・再発行し、露出した環境変数キーの有無も確認する。
+2. 書込権限のあるGitHubアカウントで作業ブランチをpushし、`feat/ui-local-backend-v1`宛てのDraft PRを作成する。
 
 ## GitHub
 
 - 最終実装コミットSHA: `ae042ea41b3b1439abc6c8c27c8945a1fd915682`
 - 検証報告コミットSHA: `80d2349ebfd53cbc87a6df0a10d786b7634451be`
+- 前回進捗コミットSHA: `998a84b511bb154082b6ce0e238f95adaf8a15b6`
 - Pull Request URL: 未作成（push権限なし）
