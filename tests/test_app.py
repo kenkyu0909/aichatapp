@@ -16,7 +16,10 @@ from PIL import Image
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "empty-api"))
+    monkeypatch.delenv("MRA_API_1_KEY", raising=False)
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     spec = importlib.util.spec_from_file_location("test_backend", Path(__file__).resolve().parents[1] / "app.py")
     module = importlib.util.module_from_spec(spec)
     # FastAPI/Pydantic resolve postponed annotations from sys.modules.
@@ -206,7 +209,7 @@ def test_gemini_request_mock_never_sends_photo_or_other_match(client, monkeypatc
                 "reason": "相手の発言に自然に反応できるため。",
                 "strategy": "まずは会話を広げる。"
             }, ensure_ascii=False))
-    monkeypatch.setenv("GEMINI_API_KEY", "testing-only-placeholder-key")
+    monkeypatch.setenv("MRA_API_1_KEY", "testing-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     resp = c.post("/api/generate", json={
         "mode": "reply", "match_id": a, "count": 3,
@@ -265,7 +268,7 @@ def test_malformed_or_duplicate_gemini_response_is_not_shown_as_generated(client
         def generate_content(self, **kwargs):
             return SimpleNamespace(text=response_text)
 
-    monkeypatch.setenv("GEMINI_API_KEY", "testing-only-placeholder-key")
+    monkeypatch.setenv("MRA_API_1_KEY", "testing-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "count": 3})
     assert response.status_code == 502
@@ -284,7 +287,7 @@ def test_quota_error_is_redacted_and_does_not_change_history(client, monkeypatch
         def generate_content(self, **kwargs):
             raise RuntimeError("429 synthetic private SDK detail")
 
-    monkeypatch.setenv("GEMINI_API_KEY", "testing-only-placeholder-key")
+    monkeypatch.setenv("MRA_API_1_KEY", "testing-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
     assert response.status_code == 502
@@ -293,10 +296,197 @@ def test_quota_error_is_redacted_and_does_not_change_history(client, monkeypatch
     assert len(c.get(f"/api/matches/{mid}/messages").json()) == 1
 
 
+def test_quota_falls_back_in_user_priority_order(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空の利用制限切替確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の展示についての話です。"})
+    calls = []
+    response_text = json.dumps({
+        "recommended": {"label": "自然体", "text": "その展示、どんなところが印象に残りましたか？"},
+        "alternatives": [
+            {"label": "短め", "text": "展示、よかったんですね。"},
+            {"label": "話題を広げる", "text": "美術館のあとに喫茶店へ寄るのもよさそうですね。"},
+        ],
+        "reason": "相手の話題を受けて尋ねています。",
+        "strategy": "美術館の話を続けます。",
+    }, ensure_ascii=False)
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            if len(calls) < 3:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED private detail")
+            return SimpleNamespace(text=response_text)
+
+    def fake_client(**kwargs):
+        return SimpleNamespace(models=FakeModels(kwargs["api_key"]))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(genai, "Client", fake_client)
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "count": 3})
+
+    assert response.status_code == 200
+    assert calls == [
+        ("test-api1-secret", "gemini-3.5-flash-lite"),
+        ("test-api2-secret", "gemini-3.5-flash-lite"),
+        ("test-api1-secret", "gemini-3.1-flash-lite"),
+    ]
+    assert response.json()["demo"] is False
+
+
+def test_quota_fallback_does_not_switch_on_auth_or_server_error(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空の切替条件確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            raise RuntimeError("403 permission denied private detail")
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 502
+    assert len(calls) == 1
+    assert "private detail" not in response.text
+    assert "test-api1-secret" not in response.text
+
+
+def test_all_four_rate_limited_slots_are_tried_once(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空の4候補フォールバック確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            raise RuntimeError("429 RESOURCE_EXHAUSTED private detail")
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 502
+    assert calls == [
+        ("test-api1-secret", "gemini-3.5-flash-lite"),
+        ("test-api2-secret", "gemini-3.5-flash-lite"),
+        ("test-api1-secret", "gemini-3.1-flash-lite"),
+        ("test-api2-secret", "gemini-3.1-flash-lite"),
+    ]
+    assert "制限に達しました" in response.json()["detail"]
+    assert "private detail" not in response.text
+    assert "test-api1-secret" not in response.text
+    assert "test-api2-secret" not in response.text
+
+
+def test_api_files_are_loaded_without_disclosing_values(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空のAPIファイル確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    api_dir = tmp_path / "API"
+    api_dir.mkdir()
+    (api_dir / "chat1.md").write_text("TESTKEYAPI1ABCDEFGHIJKLMNOPQRSTUVWXYZ", encoding="utf-8")
+    (api_dir / "chat2.md").write_text("TESTKEYAPI2ABCDEFGHIJKLMNOPQRSTUVWXYZ", encoding="utf-8")
+    captured = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.append(kwargs["model"])
+            if kwargs["model"] == "gemini-3.5-flash-lite":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            return SimpleNamespace(text=json.dumps({
+                "recommended": {"label": "自然体", "text": "どんな展示が好きですか？"},
+                "alternatives": [
+                    {"label": "短め", "text": "展示、いいですね。"},
+                    {"label": "広げる", "text": "美術館のあとにカフェへ行くのも楽しそうですね。"},
+                ],
+                "reason": "話題を受けています。",
+                "strategy": "美術館の話を続けます。",
+            }, ensure_ascii=False))
+
+    keys_seen = []
+    monkeypatch.setenv("MRA_API_DIR", str(api_dir))
+    monkeypatch.delenv("MRA_API_1_KEY", raising=False)
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: (keys_seen.append(kwargs["api_key"]) or SimpleNamespace(models=FakeModels())),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 200
+    assert keys_seen == [
+        "TESTKEYAPI1ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "TESTKEYAPI2ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "TESTKEYAPI1ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    ]
+    assert captured == [
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+    ]
+    assert "TESTKEYAPI1ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in response.text
+    assert "TESTKEYAPI2ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in response.text
+
+
+def test_blank_api_directory_uses_sibling_api_folder(client, monkeypatch, tmp_path):
+    _, backend = client
+    app_folder = tmp_path / "application"
+    api_folder = tmp_path / "API"
+    api_folder.mkdir()
+    (api_folder / "chat1.md").write_text("TESTKEYSIBLINGAPI1234567890123456", encoding="utf-8")
+    monkeypatch.setattr(backend, "BASE", app_folder)
+    monkeypatch.setenv("MRA_API_DIR", "")
+
+    assert backend._api_key_from_file("chat1.md") == "TESTKEYSIBLINGAPI1234567890123456"
+
+
 @pytest.mark.parametrize(("error_text", "expected"), [
     ("401 invalid API key CANARY-SECRET", "APIキーまたはモデルの利用権限"),
     ("403 permission denied CANARY-SECRET", "APIキーまたはモデルの利用権限"),
-    ("404 model not found CANARY-SECRET", "モデルが見つかりません"),
+    ("404 model not found CANARY-SECRET", "モデルが見つからないか"),
 ])
 def test_gemini_auth_and_missing_model_errors_are_redacted(client, monkeypatch, error_text, expected):
     from google import genai
@@ -309,7 +499,7 @@ def test_gemini_auth_and_missing_model_errors_are_redacted(client, monkeypatch, 
         def generate_content(self, **kwargs):
             raise RuntimeError(error_text)
 
-    monkeypatch.setenv("GEMINI_API_KEY", "test-only-canary-secret")
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-canary-secret")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
     assert response.status_code == 502
@@ -321,7 +511,9 @@ def test_gemini_auth_and_missing_model_errors_are_redacted(client, monkeypatch, 
 
 def test_missing_api_key_is_explicitly_demo_not_generated(client, monkeypatch):
     c, _ = client
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "must-not-be-used")
+    monkeypatch.delenv("MRA_API_1_KEY", raising=False)
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
     response = c.post("/api/generate", json={"mode": "like", "description": "架空のプロフィール"})
     assert response.status_code == 200
     assert response.json()["demo"] is True
@@ -346,7 +538,7 @@ def test_gemini_timeout_is_bounded_redacted_and_not_retried(client, monkeypatch)
         captured.update(kwargs)
         return SimpleNamespace(models=FakeModels())
 
-    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder-key")
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", fake_client)
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
     assert response.status_code == 502
@@ -369,7 +561,7 @@ def test_gemini_connection_error_is_redacted_and_keeps_history(client, monkeypat
         def generate_content(self, **kwargs):
             raise ConnectionError("connection reset PRIVATE-CANARY")
 
-    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder-key")
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
     assert response.status_code == 502
@@ -406,7 +598,7 @@ def test_profile_injection_text_remains_untrusted_context(client, monkeypatch):
                 "strategy": "相手が書いた話題から一つ選んで会話を広げます。",
             }, ensure_ascii=False))
 
-    monkeypatch.setenv("GEMINI_API_KEY", "test-only-canary-secret")
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-canary-secret")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     messages_before = c.get(f"/api/matches/{a}/messages").json()
     response = c.post("/api/generate", json={"mode": "reply", "match_id": a, "count": 3})

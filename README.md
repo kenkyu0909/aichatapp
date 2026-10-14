@@ -15,10 +15,11 @@
 
 APIキーがない状態でも、相手の登録・写真・会話履歴・候補表示の操作はできます。ただし生成候補は**会話を解析しない固定サンプル**です。
 
-1. [Google AI Studio](https://aistudio.google.com/apikey) でAPIキーを作ります。
-2. 初回起動時に自動作成された **.env** ファイルをメモ帳で開き、GEMINI_API_KEY= の右側にキーを記入します。
-3. start.bat を一度停止して起動し直します。
-4. 標準モデルは **gemini-3.5-flash-lite** です。変更するときは .env の GEMINI_MODEL= を編集します。
+1. Google AI Studioで発行したAPIキーを、アプリフォルダの隣にある`API/chat1.md`と`API/chat2.md`へ保存します。アプリはファイル内のGoogle APIキーだけを読み込み、内容を画面やログに表示しません。`MRA_API_DIR`で別の保存先も指定できます。
+2. 起動中のアプリを停止して起動し直します。
+3. 生成はAPI1の`gemini-3.5-flash-lite`から開始します。利用上限を示す429または`RESOURCE_EXHAUSTED`の場合のみ、API2の3.5、API1の3.1、API2の3.1の順に試します。認証・権限・モデル・接続のエラーでは別APIへ切り替えず、エラーを表示します。
+
+APIキーは指定された2つのAPIファイル、または`.env`の`MRA_API_1_KEY` / `MRA_API_2_KEY`からのみ読み込みます。既存の`GEMINI_API_KEY`設定や他の認証情報へは切り替えません。
 
 無料枠のモデル・プロジェクト・レート制限は [公式料金表](https://ai.google.dev/gemini-api/docs/pricing) と [AI Studio](https://aistudio.google.com/rate-limit) で確認してください。1日1000回は固定保証ではありません。**すでに課金が有効なプロジェクトの料金上限や請求状態を、このアプリは自動的に管理しません。** 無料運用なら、課金していないGoogleプロジェクトを使用してください。
 

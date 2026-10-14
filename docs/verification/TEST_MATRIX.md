@@ -84,3 +84,11 @@
 - GitHub Actions PR #4: https://github.com/kenkyu0909/aichatapp/actions/runs/38526386149 （最新HEAD、成功、pytest 43 passed）
 - Node構文: 同runで`node --check app.js`成功。
 - Firefox表示画像: `simulations/conversation_001_firefox.png`。
+
+## 2026-10-14 利用制限時フォールバック追加検証
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T57 | 429時にAPI/モデルを指定優先順で切替 | Windows Python 3.12、FastAPI TestClient、Gemini SDKモック。架空会話のみ。APIファイル読込も一時ディレクトリで検証 | PASS | API1/3.5→API2/3.5→API1/3.1で生成成功する順序、および全4枠が制限された場合にAPI2/3.1まで各1回試すことを確認。別試験で403はAPI1/3.5の1回のみで停止。`chat1.md`/`chat2.md`から読み取った値が応答に含まれないこと、空の`MRA_API_DIR`時に既定の隣接APIフォルダを使うこと、通常の`GEMINI_API_KEY`を使用しないことも確認。実API呼び出しなし。`tests/test_app.py`の新規5ケース。 |
+
+更新後のテストマトリクスは57項目: PASS 54 / FAIL 0 / BLOCKED 3 / NOT_TESTED 0。既存56項目の結果は維持し、T57のモック試験を追加。

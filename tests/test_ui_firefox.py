@@ -57,8 +57,10 @@ class LocalApp:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["APP_DATA_DIR"] = str(self.data_dir)
-        env["GEMINI_API_KEY"] = ""
-        env.pop("GEMINI_MODEL", None)
+        env["MRA_API_DIR"] = str(self.app_dir / "empty-api")
+        env.pop("MRA_API_1_KEY", None)
+        env.pop("MRA_API_2_KEY", None)
+        env.pop("GEMINI_API_KEY", None)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = self.log_path.open("ab")
         self.process = subprocess.Popen(

@@ -2,6 +2,15 @@
 
 最終更新: 2026-10-14（継続作業）
 
+## 2026-10-14 利用制限時の優先フォールバック追加
+
+- ユーザー指定の優先順を通常のFastAPI `/api/generate`にも実装: API1 / `gemini-3.5-flash-lite` → API2 / `gemini-3.5-flash-lite` → API1 / `gemini-3.1-flash-lite` → API2 / `gemini-3.1-flash-lite`。
+- HTTP 429または`RESOURCE_EXHAUSTED`のときだけ次の組み合わせへ進む。401/403/404、接続失敗、形式不正では切り替えず、既存の安全なエラー表示を保つ。429時に最大4回まで試し、無制限再試行はしない。
+- `MRA_API_DIR`（既定はアプリフォルダの隣の`API`）から`chat1.md`/`chat2.md`を読み、値は出力しない。現在の両ファイルが単一トークンとして受理されることを長さだけで確認。ファイル内容・キー値はログやレポートに含めていない。
+- オフラインモック試験: API1 3.5とAPI2 3.5を429にし、API1 3.1で成功する順序、全4候補が制限された場合のAPI2 3.1到達、403時は1回で停止、APIファイル経由のキー選択と応答への秘密値非混入、空の`MRA_API_DIR`で既定隣接フォルダを選ぶ動作、旧`GEMINI_API_KEY`を使わない動作を確認。新規5テスト成功。全テストは空の認証ディレクトリに隔離され、実APIは呼び出していない。
+- ローカル全pytest: 48 passed、警告1件（Starlette/httpx deprecation）。`node --check app.js`成功。
+- GitHub Actionsで最新commitのPush/PR両run成功を確認した後、URLとSHAを追記する。
+
 ## 2026-10-14 会話シミュレーション実験（最新）
 
 - 作業開始時にGitHubの`codex/full-system-verification`をfetchし、HEAD `a5fa30c100c6fffdf22b63e9d740c3157584ed7f`がローカル/remote/PR #4で一致することを確認。PR #4は`feat/ui-local-backend-v1`宛てDraft、未マージ。

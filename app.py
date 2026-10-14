@@ -25,6 +25,8 @@ DATA = Path(os.getenv("APP_DATA_DIR", str(BASE / "data"))).resolve()
 PHOTOS = DATA / "photos"
 DB = DATA / "app.sqlite3"
 PROMPTS = BASE / "prompts"
+GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
 
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
 logger = logging.getLogger(__name__)
@@ -168,9 +170,52 @@ def frontend_script():
 @app.get("/api/status")
 def status():
     return {
-        "demo": not bool(os.getenv("GEMINI_API_KEY", "").strip()),
-        "model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+        "demo": not bool(gemini_configurations()),
+        "model": GEMINI_MODEL_PRIORITY[0],
     }
+
+
+def _api_key_from_file(filename: str) -> str:
+    """Read a key from the private API directory without exposing its contents."""
+    configured_dir = os.getenv("MRA_API_DIR", "").strip()
+    api_dir = Path(configured_dir or (BASE.parent / "API")).resolve()
+    try:
+        contents = (api_dir / filename).read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ""
+    matches = GEMINI_KEY_PATTERN.findall(contents)
+    if len(matches) == 1:
+        return matches[0]
+    compact_token = contents.strip()
+    if re.fullmatch(r"[A-Za-z0-9._-]{20,256}", compact_token):
+        return compact_token
+    return ""
+
+
+def gemini_configurations() -> list[tuple[str, str, str]]:
+    """Return available API/model pairs in the user's required priority order."""
+    key1 = os.getenv("MRA_API_1_KEY", "").strip() or _api_key_from_file("chat1.md")
+    key2 = os.getenv("MRA_API_2_KEY", "").strip() or _api_key_from_file("chat2.md")
+
+    keys = {"API1": key1, "API2": key2}
+    return [
+        (account, keys[account], model)
+        for model, account_order in (
+            (GEMINI_MODEL_PRIORITY[0], ("API1", "API2")),
+            (GEMINI_MODEL_PRIORITY[1], ("API1", "API2")),
+        )
+        for account in account_order
+        if keys[account]
+    ]
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """Recognize quota/rate-limit failures without treating other errors as limits."""
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 429 or getattr(exc, "code", None) == 429:
+        return True
+    error_text = f"{type(exc).__name__} {exc}".lower()
+    return "429" in error_text or "resource_exhausted" in error_text
 
 
 @app.get("/api/profile")
@@ -460,8 +505,8 @@ def read_prompt(mode: str) -> str:
 @app.post("/api/generate")
 def generate(data: GenerateInput):
     context = build_context(data)
-    key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not key:
+    configurations = gemini_configurations()
+    if not configurations:
         return demo_suggestions(data.mode, data.count)
 
     system_instruction = read_prompt(data.mode) + (
@@ -474,35 +519,45 @@ def generate(data: GenerateInput):
         from google import genai
         from google.genai import types
 
-        client = genai.Client(
-            api_key=key,
-            http_options=types.HttpOptions(
-                timeout=30_000,
-                retry_options=types.HttpRetryOptions(attempts=1),
-            ),
-        )
-        response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
-            contents=json.dumps(context, ensure_ascii=False),
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.8,
-                response_mime_type="application/json",
-                response_schema=Suggestions,
-            ),
-        )
-        if not response.text:
-            raise ValueError("AIから応答がありません")
-        parsed = Suggestions.model_validate_json(response.text)
-        return {**check_suggestions(parsed, data.count), "demo": False}
+        last_rate_limit: Exception | None = None
+        for _account, key, model in configurations:
+            try:
+                client = genai.Client(
+                    api_key=key,
+                    http_options=types.HttpOptions(
+                        timeout=30_000,
+                        retry_options=types.HttpRetryOptions(attempts=1),
+                    ),
+                )
+                response = client.models.generate_content(
+                    model=model,
+                    contents=json.dumps(context, ensure_ascii=False),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.8,
+                        response_mime_type="application/json",
+                        response_schema=Suggestions,
+                    ),
+                )
+                if not response.text:
+                    raise ValueError("AIから応答がありません")
+                parsed = Suggestions.model_validate_json(response.text)
+                return {**check_suggestions(parsed, data.count), "demo": False}
+            except Exception as exc:
+                if _is_rate_limit_error(exc):
+                    last_rate_limit = exc
+                    continue
+                raise
+        if last_rate_limit is not None:
+            raise last_rate_limit
+        raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
-        error_text = str(exc).lower()
-        if "429" in error_text or "resource_exhausted" in error_text:
+        if _is_rate_limit_error(exc):
             message = "Geminiの無料利用枠またはレート制限に達しました。AI Studioで上限を確認してください。"
-        elif "401" in error_text or "403" in error_text or "api_key" in error_text:
+        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("401", "403", "api_key")):
             message = "Gemini APIキーまたはモデルの利用権限を確認してください。"
-        elif "404" in error_text or "not found" in error_text:
-            message = "モデルが見つかりません。.envのGEMINI_MODELを確認してください。"
+        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("404", "not found")):
+            message = "モデルが見つからないか、利用できません。APIモデルの利用状況を確認してください。"
         elif isinstance(exc, (ValueError, json.JSONDecodeError)):
             message = "AIの応答形式が不正でした。再生成してください。"
         else:
