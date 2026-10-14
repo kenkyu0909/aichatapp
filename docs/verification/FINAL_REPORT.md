@@ -1,3 +1,66 @@
+# 最終検証報告（2026-10-14 会話シミュレーション追加）
+
+## 総合判定
+
+**CONDITIONAL PASS（条件付き合格）**。既存アプリの回帰テスト・Firefox UI検証と、会話実験ハーネスのオフラインテストは成功しました。一方、今回必須のGemini会話実験はAPI1の最初の実通信がアプリHTTP 502となり、返信候補の生成前に`BLOCKED`です。会話継続・約束成立・生成品質を確認したとは扱いません。
+
+## テスト集計
+
+- テストマトリクス: 55件 — PASS 53 / FAIL 0 / BLOCKED 2 / NOT_TESTED 0（会話品質評価は今回実験の生成がなかったため採点せず）
+- pytest: `43 passed, 1 warning`（Windows Python 3.12.10、`2026-10-14`）。Starlette/httpxの非推奨警告1件。
+- JavaScript構文: `node --check app.js` 成功。
+- Firefox E2E: 既存の隔離DB UI回帰テストがpytest内で成功。今回作成のHTMLをFirefox 157で実際に開き、1メッセージ、両プロフィール、BLOCKED状態、未評価10項目、外部リソースなしを確認。スクリーンショット: `simulations/conversation_001_firefox.png`。
+- GitHub Actions: このコミットをpush後に実行し、最新SHAのPush/PR両runをここへ記録する（現在は未実行）。
+
+## 今回の実験
+
+- 架空の本人「佐倉みなと」と相手「小川あかり」を登録。相手役の内部設定はアプリ/Geminiのプロフィール欄へ送っていない。
+- API1 / `gemini-3.5-flash-lite`で実通信を1回試行。既存アプリの`/api/generate`がHTTP 502と「Gemini APIキーまたはモデルの利用権限を確認してください。」を返した。
+- 実APIリクエスト試行1、成功0、失敗1。API2と3.1モデルは未使用。429応答ではなかったため、ユーザー指定のレート制限時フォールバックは発動させていない。
+- APIキーまたはモデル権限・接続のどれが原因かは特定できない。根本原因が分からないため、認証失敗として他キーを試すこともしなかった。キー、生のSDK例外、認証ヘッダーはJSON/HTML/出力へ記録していない。
+- 生成候補0件、アプリ側送信0通、架空相手役の開始発言1通。食事の誘いなし、日時・場所の合意なし。会話品質10項目はすべて未評価。固定文やモックで結果を補っていない。
+- 会話とプロフィール: `simulations/conversation_001.json`、`simulations/profiles.md`。説明: `simulations/analysis.md`。単体HTML: `simulations/conversation_001.html`。
+
+## 8765番ポート・起動
+
+127.0.0.1:8765を既存Uvicornプロセス(PID 39504)がlistenしているのを確認しました。既存プロセスは今回の実験用と特定できず、停止・変更していません。前回の`start.bat`再確認はWinError 10048でBLOCKED。今回のGemini試験は一時SQLiteを使ったTestClient経由で実際のFastAPI `/api/generate`を呼びました。Firefoxで開いたのは今回のHTMLファイルです。新しいWindows `start.bat`起動を今回PASSとは扱いません。
+
+## 修正・追加したファイル
+
+- `scripts/simulate_conversation.py`: API優先順、15 RPM間隔を超えない4.1秒待機、実アプリ生成、生成候補の永続化、段階再開、SQLite履歴照合、20通上限、相手からの明確な返答、手動確認後のみSUCCESSを追加。
+- `scripts/render_conversation_report.py`: 保存済みJSONから単体HTMLを生成。
+- `tests/test_conversation_simulation.py`: 19/20/21通、相手発言と未送信候補の非計上、モデル順序・429時の切替、曖昧な承諾、成功確認、プロフィール分離、HTMLエスケープを検証。
+- `docs/verification/simulations/*`: 架空プロフィール、実験JSON、BLOCKEDのHTML、Firefox画像、制約を記録。
+- `PROGRESS.md`、`TEST_MATRIX.md`、本報告書: 今回の結果を追記。履歴は削除していない。
+
+## セキュリティ・プライバシー
+
+実験はアプリ本番DBから分離した一時SQLiteです。利用者のデータや実在人物は使用していません。相手内部設定は生成APIへ渡さず、HTML文字列はエスケープし、CSSをインライン化して外部通信・外部スクリプトを使いません。前回からのポート8765プロセスは触れていません。秘密値はログ・成果物に出していません。
+
+Googleの公式資料では`gemini-3.5-flash-lite`の無料枠と、無料枠の内容が製品改善に使われる扱いが掲載されています。プロジェクト固有の課金状態・残り枠はこの環境から確認できません。失敗したアプリHTTP 502は上流Google HTTPステータスを記録していないため、請求有無を断定しません。最新条件は[公式料金表](https://ai.google.dev/gemini-api/docs/pricing)と[公式課金説明](https://ai.google.dev/gemini-api/docs/billing)を確認してください。
+
+## 未解決事項・利用開始判断
+
+1. **最優先:** API1ファイルにある更新済み認証情報の有効性、プロジェクト、`gemini-3.5-flash-lite`アクセス権または接続を確認する。原因が解消した後に`--resume`で同じ隔離SQLiteの架空実験を再開できる。
+2. 今回は実会話、生成品質、候補選択、デート提案のタイミング、具体的な日時・場所の合意を検証できていない。
+3. API2/3.1へのライブ切替、プロジェクト別課金・無料枠残数、API1/2の旧キー失効は未確認。キー更新前にツール出力へ露出した履歴があるため、旧キーの失効を利用者側で確認する必要がある。
+4. 8765番の既存プロセスが動作中のため、Windows `start.bat`の新規起動は未確認。既存プロセスを止める前に所有者と用途の確認が必要。
+5. JSONとSQLite更新の間でプロセスが強制終了した場合は再開時に不一致として停止する。APIエラー後の通常再開は検証したが、強制終了の全クラッシュ地点は未試験。
+
+この状態でアプリのローカル保存・UI機能の回帰検証は良好ですが、今回依頼の**AI会話シミュレーションを含めて正式に実用可能とは判定できません**。認証・モデル権限が解消するまでは、AI返信機能の利用を保留するのが妥当です。
+
+## GitHub
+
+- リポジトリ: https://github.com/kenkyu0909/aichatapp
+- ブランチ: `codex/full-system-verification`
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft、未マージ）
+- 最終SHA / Actions: push後に記録。
+- [進捗](PROGRESS.md) / [テストマトリクス](TEST_MATRIX.md) / [会話HTML](simulations/conversation_001.html) / [会話JSON](simulations/conversation_001.json) / [分析](simulations/analysis.md)
+
+---
+
+## 以前の検証履歴
+
 # 最終検証報告
 
 ## 今回の継続検証（2026-10-14）

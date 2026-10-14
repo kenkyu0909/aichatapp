@@ -2,6 +2,20 @@
 
 最終更新: 2026-10-14（継続作業）
 
+## 2026-10-14 会話シミュレーション実験（最新）
+
+- 作業開始時にGitHubの`codex/full-system-verification`をfetchし、HEAD `a5fa30c100c6fffdf22b63e9d740c3157584ed7f`がローカル/remote/PR #4で一致することを確認。PR #4は`feat/ui-local-backend-v1`宛てDraft、未マージ。
+- 既存のPROGRESS、TEST_MATRIX、FINAL_REPORTを読み、前回51項目・PASS 50/BLOCKED 1を引き継いだ。
+- Windows/Python 3.12.10/Node.js 25.9.0/Firefox 157。Chromeには触れていない。
+- 127.0.0.1:8765の既存Uvicorn PID 39504を確認。既存プロセスは本アプリと断定できる追加操作をせず、停止・変更していない。前回のWindows `start.bat`再確認はポート衝突でBLOCKEDのまま。
+- 架空プロフィールを作成し、専用の一時SQLiteへ登録。相手役の開始メッセージ1件がSQLiteとJSONに保存されていることを再開時に照合。
+- 既存FastAPI `/api/generate`に対し、指定順の最初のAPI1 / `gemini-3.5-flash-lite`で実通信を1回実施。アプリのHTTP 502（「Gemini APIキーまたはモデルの利用権限を確認してください。」）となり、候補生成前にBLOCKED。根本原因は認証・権限・接続のどれか特定できない。レート制限応答ではなかったためAPI2へ切り替えていない。API2/3.1は今回未使用。
+- 結果: `conversation_001.json`に1回の失敗、実送信0通、相手役1通を保存。架空のGemini候補や会話継続は作っていない。HTMLとプロフィール、分析も生成。
+- `scripts/simulate_conversation.py`、`scripts/render_conversation_report.py`、`tests/test_conversation_simulation.py`を追加。候補を保存してから段階再開できるCLI、APIエラー後のJSON/一時DB照合、送信数20通の上限制御、成功条件の人による最終確認を実装。HTMLは値をエスケープし、外部依存なし。
+- pytest最終ローカル実行: 43 passed、警告1件（Starlette/httpx deprecation）。`node --check app.js`成功。FirefoxでHTMLを実際に開き、会話1件、架空プロフィール、BLOCKED状態、採点未実施の10項目、外部読込なしを確認。スクリーンショットを保存。
+- 2026-10-14現在、この更新は未コミット/未プッシュ。次はレポート、マトリクス、PR #4本文を更新してコミット・Pushし、最新HEADのActionsを確認する。
+- 今回の実験はGemini実応答がないため、会話品質10項目、候補選択、デート誘い、約束成立はNOT_TESTED相当（実験全体の結果BLOCKED）。料金・プロジェクト別割当も不明。旧APIキーの失効は確認できていない。
+
 ## 2026-10-14 継続検証の最新状況
 
 - 対象: `codex/full-system-verification`、開始時HEAD `63b972811e32996d6fdcf0cf248d49c21efc4b9b`。最新検証コードSHA: `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`。PR #4はDraft、未マージ。
