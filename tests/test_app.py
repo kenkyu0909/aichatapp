@@ -213,7 +213,7 @@ def test_gemini_request_mock_never_sends_photo_or_other_match(client, monkeypatc
         def generate_content(self, **kwargs):
             captures.append(kwargs)
             return SimpleNamespace(text=json.dumps({
-                "recommended": {"label": "自然体", "text": "そのお話、気になります！"},
+                "recommended": {"label": "自然体", "text": "そのお話気になります！"},
                 "alternatives": [
                     {"label": "短め", "text": "いいですね！"},
                     {"label": "質問", "text": "どんな感じなんですか？"},
@@ -316,10 +316,10 @@ def test_quota_falls_back_in_user_priority_order(client, monkeypatch, tmp_path):
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の展示についての話です。"})
     calls = []
     response_text = json.dumps({
-        "recommended": {"label": "自然体", "text": "その展示、どんなところが印象に残りましたか？"},
+        "recommended": {"label": "自然体", "text": "その展示のどんなところが印象に残りましたか？"},
         "alternatives": [
-            {"label": "短め", "text": "展示、よかったんですね。"},
-            {"label": "話題を広げる", "text": "美術館のあとに喫茶店へ寄るのもよさそうですね。"},
+            {"label": "短め", "text": "展示もよかったんですね"},
+            {"label": "話題を広げる", "text": "美術館のあとに喫茶店へ寄るのもよさそうですね"},
         ],
         "reason": "相手の話題を受けて尋ねています。",
         "strategy": "美術館の話を続けます。",
@@ -461,8 +461,8 @@ def test_api_files_are_loaded_without_disclosing_values(client, monkeypatch, tmp
             return SimpleNamespace(text=json.dumps({
                 "recommended": {"label": "自然体", "text": "どんな展示が好きですか？"},
                 "alternatives": [
-                    {"label": "短め", "text": "展示、いいですね。"},
-                    {"label": "広げる", "text": "美術館のあとにカフェへ行くのも楽しそうですね。"},
+                    {"label": "短め", "text": "展示いいですね"},
+                    {"label": "広げる", "text": "美術館のあとにカフェへ行くのも楽しそうですね"},
                 ],
                 "reason": "話題を受けています。",
                 "strategy": "美術館の話を続けます。",
@@ -617,7 +617,7 @@ def test_profile_injection_text_remains_untrusted_context(client, monkeypatch):
                 "recommended": {"label": "話題を拾う", "text": "旅行先ではどんなカフェに行くんですか？"},
                 "alternatives": [
                     {"label": "読書について", "text": "旅行中に本を読むこともありますか？"},
-                    {"label": "短く", "text": "落ち着くカフェ、いいですね。"},
+                    {"label": "短く", "text": "落ち着くカフェもいいですね"},
                 ],
                 "reason": "相手が書いた趣味について自然に聞けるためです。",
                 "strategy": "相手が書いた話題から一つ選んで会話を広げます。",
@@ -880,9 +880,341 @@ def test_v2_invite_decision_from_mock_is_returned_with_actual_backend_metadata(c
 def test_each_generation_mode_has_separate_prompt_with_shared_style(client, mode):
     _, backend = client
     prompt = backend.read_prompt(mode)
-    assert "読点「、」と句点「。」は原則使わない" in prompt
+    assert "読点「、」と句点「。」を一切使用しません" in prompt
     assert "敬語・混合・タメ口" in prompt
     assert "モード固有" in prompt
+
+
+def test_candidate_validation_rejects_japanese_comma_and_period(client):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": "そうなんですね。それは楽しそうです"},
+        alternatives=[], reason="自然な返信", strategy="会話を続ける",
+    )
+    with pytest.raises(ValueError, match="句読点"):
+        backend.check_suggestions(value, 1)
+
+
+def test_candidate_validation_rejects_near_duplicate_options(client):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": "カフェ好きなんですね！よく行くお店はありますか？"},
+        alternatives=[
+            {"label": "別案", "text": "カフェ好きなんですね！よく行くお店ってありますか？"},
+            {"label": "第三案", "text": "どんなお店が好きですか？"},
+        ],
+        reason="理由", strategy="方針",
+    )
+    with pytest.raises(ValueError, match="似すぎ"):
+        backend.check_suggestions(value, 3)
+
+
+@pytest.mark.parametrize("mode", ["reply", "first", "followup", "like"])
+def test_demo_candidate_bodies_obey_absolute_punctuation_rule(client, mode):
+    _, backend = client
+    result = backend.demo_suggestions(mode, 5)
+    candidates = [result["recommended"], *result["alternatives"]]
+    assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
+    assert result["demo"] is True
+
+
+def test_direct_unanswered_personal_question_is_asked_before_gemini(client, monkeypatch):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["読書", "カフェ巡り"]}, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+
+    def forbidden_client(**kwargs):
+        pytest.fail("本人への確認前にGeminiを呼び出した")
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    import google.genai
+    monkeypatch.setattr(google.genai, "Client", forbidden_client)
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert "映画" in body["user_questions"][0]["question"]
+    assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "映画好きですか？"
+
+
+def test_candidate_punctuation_triggers_at_most_one_constrained_regeneration(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ好きです！"})
+    responses = [
+        {"needs_user_info": False, "user_questions": [], "user_info_reason": "",
+         "recommended": {"label": "自然", "text": "そうなんですね。それはいいですね"},
+         "alternatives": [{"label": "別案", "text": "気になります"}, {"label": "質問", "text": "どんなお店ですか？"}],
+         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
+        {"needs_user_info": False, "user_questions": [], "user_info_reason": "",
+         "recommended": {"label": "自然", "text": "カフェ好きなんですね！よく行くお店はありますか？"},
+         "alternatives": [{"label": "別案", "text": "気になるお店ありますか？"}, {"label": "質問", "text": "落ち着いたお店が好きですか？"}],
+         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
+    ]
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["recommended"]["text"] == "カフェ好きなんですね！よく行くお店はありますか？"
+    assert body["api_attempt_count"] == 2
+    assert len(calls) == 2
+    assert "句読点違反" in calls[1]["config"].system_instruction
+    assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "カフェ好きです！"
+
+
+def test_second_candidate_punctuation_violation_fails_safely_without_third_request(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ好きです！"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "カフェ好きなんですね。"},
+        "alternatives": [{"label": "別案", "text": "気になります"}, {"label": "質問", "text": "どんなお店ですか？"}],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    before = c.get(f"/api/matches/{mid}/messages").json()
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "invalid_response"
+    assert response.json()["api_attempt_count"] == 2
+    assert len(calls) == 2
+    assert c.get(f"/api/matches/{mid}/messages").json() == before
+
+
+def test_candidate_repair_is_limited_to_one_across_rate_limit_fallback(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ好きです！"})
+    bad = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "カフェ好きなんですね。"},
+        "alternatives": [{"label": "別案", "text": "気になります"}, {"label": "質問", "text": "どんなお店ですか？"}],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }
+    calls = []
+
+    class FakeModels:
+        def __init__(self, name):
+            self.name = name
+
+        def generate_content(self, **kwargs):
+            calls.append(self.name)
+            if self.name == "first" and len([call for call in calls if call == "first"]) == 2:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            return SimpleNamespace(text=json.dumps(bad, ensure_ascii=False))
+
+    class FakeClient:
+        def __init__(self, api_key, **kwargs):
+            self.models = FakeModels("first" if api_key == "first-key" else "second")
+
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "first-key", "model-a"), ("API2", "second-key", "model-b"),
+    ])
+    monkeypatch.setattr(genai, "Client", FakeClient)
+    before = c.get(f"/api/matches/{mid}/messages").json()
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 502
+    assert len(calls) == 3  # bad response, one quota fallback, one final bad response
+    assert calls == ["first", "first", "second"]
+    assert c.get(f"/api/matches/{mid}/messages").json() == before
+
+
+def test_mirroring_metrics_use_recent_partner_messages_and_never_me_messages_as_facts(client):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["読書"]}, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    for role, body in [
+        ("them", "こんにちは！"),
+        ("me", "映画をよく観ます！"),
+        ("them", "最近映画を観ました"),
+        ("them", "映画好きですか？"),
+    ]:
+        c.post(f"/api/matches/{mid}/messages", json={"role": role, "body": body})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert context["mirroring"]["partner_message_length"] == len("映画好きですか？")
+    assert context["mirroring"]["recent_partner_sample_count"] == 3
+    assert context["history_fact_policy"].startswith("プロフィールfacts")
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_temporary_user_answer_resolves_only_its_matching_personal_fact_question(client):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    unanswered = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(unanswered) is not None
+    answered = backend.build_context(backend.GenerateInput(
+        mode="reply", match_id=mid, response_version=2,
+        user_answers=[{"question": "映画はお好きですか？", "answer": "映画が好きで洋画をよく観ます"}],
+    ))
+    assert backend.missing_personal_fact_question(answered) is None
+    assert c.get("/api/profile").json()["content"] == ""
+
+
+def test_generic_reading_hobby_does_not_confirm_recent_book_or_genre(client):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["読書", "カフェ巡り"]}, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "普段どんな本を読みますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_tentative_availability_does_not_confirm_a_specific_schedule(client):
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps({"availability": "土曜夕方が候補。まだ確定ではない"}, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今週末の夕方は空いていますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_unsupported_personal_claim_from_model_returns_user_question_not_candidate(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日はいい天気ですね！"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "映画はときどき観ますよ 最近はどんな洋画を観たんですか？"},
+        "alternatives": [
+            {"label": "別案", "text": "映画の話気になります！最近何か観ましたか？"},
+            {"label": "質問", "text": "映画館と家ならどちらで観ることが多いですか？"},
+        ],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    before_messages = c.get(f"/api/matches/{mid}/messages").json()
+    before_profile = c.get("/api/profile").json()
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+    assert "映画" in body["user_questions"][0]["question"]
+    assert body["api_attempt_count"] == 1
+    assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
+    assert c.get("/api/profile").json() == before_profile
+
+
+def test_verified_explicit_movie_fact_allows_personal_claim(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"favorite_movie_genres": ["洋画"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="自然", text="洋画を観るのが好きです！")
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+@pytest.mark.parametrize(("claim", "topic"), [
+    ("自分は幅広く読む", "読書"),
+    ("横浜のほうによく行く", "居住地"),
+    ("お気に入りのお店があります", "カフェ"),
+])
+def test_known_conversation_002_personal_claims_are_blocked(client, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text=claim)
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_yes_to_movie_preference_does_not_confirm_genre_or_watching_frequency(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画はお好きですか？", "answer": "はい"}],
+    }
+    specific = [
+        backend.Candidate(label="A", text="洋画をよく観ます！"),
+        backend.Candidate(label="B", text="映画はときどき観ますよ！"),
+    ]
+    assert backend.unsupported_personal_claim_topics(specific, context) == ["映画"]
+    generic = [backend.Candidate(label="C", text="映画好きです！")]
+    assert backend.unsupported_personal_claim_topics(generic, context) == []
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"hobbies": ["映画は好きではない"]}, "映画好きです！", "映画"),
+    ({"hobbies": ["カフェは苦手"]}, "カフェ好きです！", "カフェ"),
+])
+def test_negative_profile_fact_does_not_support_positive_claim(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text=claim)
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_unanswered_personal_question_is_blocked_for_legacy_response(client, monkeypatch):
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+    assert response.status_code == 409
+    assert "確認できる情報がありません" in response.json()["detail"]
+
+
+def test_legacy_response_cannot_return_unsupported_first_person_claim(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日はいい天気ですね！"})
+    payload = {
+        "recommended": {"label": "自然", "text": "自分は幅広く読むのでおすすめが気になります！"},
+        "alternatives": [{"label": "別案", "text": "どんな本が好きなんですか？"}, {"label": "質問", "text": "最近読んだ本はありますか？"}],
+        "reason": "自然な反応", "strategy": "話題を続ける",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "invalid_response"
 
 
 @pytest.mark.parametrize("scenario,expected_decision", [

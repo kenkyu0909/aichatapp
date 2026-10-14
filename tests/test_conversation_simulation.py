@@ -49,6 +49,45 @@ def test_conversation_002_has_isolated_paths_and_preserves_001():
     assert simulation.needs_partner_opening(state, "reply")
 
 
+def test_conversation_003_is_newly_isolated_and_has_mirroring_metrics():
+    paths = simulation.experiment_paths("conversation_003")
+    assert [path.name for path in paths[:2]] == ["conversation_003.json", "conversation_003.html"]
+    assert paths[2].name == "mra-conversation-003-sandbox"
+    assert simulation.experiment_paths("conversation_002")[:2] == (
+        simulation.SIM_DIR / "conversation_002.json", simulation.SIM_DIR / "conversation_002.html"
+    )
+    state = simulation.new_state("conversation_003")
+    assert state["people"]["app_user"]["age"] >= 20
+    assert state["people"]["partner_public"]["age"] >= 20
+    assert simulation.needs_partner_opening(state, "first") is False
+    assert simulation.sentence_estimate("カフェ好きです！") == 1
+    assert simulation.sentence_estimate("休日は友達とカフェへ行きました！\n新しいお店も探しています") >= 2
+    simulation.send_partner_message(state, "カフェ好きです！")
+    turn = {"candidates": [
+        {"label": "A", "text": "カフェ好きなんですね！"},
+        {"label": "B", "text": "どんなお店に行きますか？"},
+        {"label": "C", "text": "最近気になるお店ありますか？"},
+    ]}
+    simulation.send_app_message(state, "どんなお店に行きますか？", turn)
+    measured = turn["measured"]
+    assert measured["partner_latest_character_count"] == len("カフェ好きです！")
+    assert measured["selected_character_count"] == len("どんなお店に行きますか？")
+    assert measured["punctuation_violation"] is False
+    assert measured["acknowledgment_type_estimate"] == "相槌なし/その他"
+    assert turn["reviewer_assessment"]["mirroring"] == "未評価"
+
+
+def test_profile_export_does_not_overwrite_existing_snapshot_on_resume(tmp_path):
+    profile_path = tmp_path / "profiles_003.md"
+    simulation.export_profiles(path=profile_path, experiment_id="conversation_003")
+    initial = profile_path.read_text(encoding="utf-8")
+    assert "本人役" in initial and "相手役" in initial
+    edited = initial + "\n再開時に保持するメモ\n"
+    profile_path.write_text(edited, encoding="utf-8")
+    simulation.export_profiles(path=profile_path, experiment_id="conversation_003")
+    assert profile_path.read_text(encoding="utf-8") == edited
+
+
 def test_partner_and_unselected_candidates_do_not_increment_app_counter():
     state = simulation.new_state()
     assert simulation.can_send_app(state)

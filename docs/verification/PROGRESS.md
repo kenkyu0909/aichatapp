@@ -216,3 +216,40 @@
 - テストマトリクスは81項目: PASS 74 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。FAILはT77（本人の未知の好みを生成）で、関連プロンプトは修正したが実API再試験が残る。
 - ソース修正SHA: `d431b79f159a7e7fc499a7acf06a12e13454c4b4`。レポート/証拠の検証HEAD `cf24e2398ab428cb9e3beef2b0029f34aa73d4b4`のPush [38544684207](https://github.com/kenkyu0909/aichatapp/actions/runs/38544684207) / PR [38544689940](https://github.com/kenkyu0909/aichatapp/actions/runs/38544689940)は成功。Actions結果を記録する更新を`a40c251c62c400401c9aef3e77beeaf7ceb76079`へPushし、同SHAのPush [38544920718](https://github.com/kenkyu0909/aichatapp/actions/runs/38544920718) / PR [38544928533](https://github.com/kenkyu0909/aichatapp/actions/runs/38544928533)も成功。PR本文を最新HEADへ更新しDraft維持。
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4
+
+## 2026-10-14 会話003準備・レビュー指摘の修正
+
+### 作業状態
+
+- 対象: `codex/full-system-verification`、既存Draft PR #4（base: `feat/ui-local-backend-v1`）。開始時にGitHubの最新ブランチをfetchし、ローカルHEADは`28f1a5dfc0e08279273fea50d198ec36010b8f88`と一致していた。
+- ユーザー提供の`docs/verification/simulations/指示.txt`を確認した。これはユーザー資料として存在する未追跡ファイルであり、コミット対象へ追加しない。
+- 既存の会話001・002のJSON/HTML・分析・quality JSONを保持。003のJSON/HTML・一時DBは開始時点では存在しない。APIファイル`chat1.md`・`chat2.md`は存在することだけを確認し、値は表示していない。
+- 実環境はWindows、Python 3.12の`.venv`、Node、Firefox。Chromeは使用していない。実APIはまだ未実施。
+
+### 修正済み・オフライン確認済み
+
+- 送信候補本文の「、」「。」検査を維持し、候補品質の再生成をモデルフォールバックをまたいでも1回に制限する回帰テストを追加。
+- 候補に「映画はときどき観る」「幅広く読む」「横浜によく行く」「お気に入りの店がある」等の既知の一人称主張が含まれる場合、根拠なしに表示しない検査を追加。response v2では本人確認へ回し、旧response形式では安全に失敗する。
+- 「読書が趣味」だけでは本のジャンル・最近読んだ本を確認済みとせず、「映画好き」への肯定だけでは映画のジャンルや頻度を許可しない。未確定の予定は確定予定として扱わない。
+- 会話履歴から本人事実を推定せず、本人プロフィールと今回の一時回答だけを根拠にする。プロフィール回答を永続保存しない。
+- 会話003のresumeで`profiles_003.md`を上書きしない。
+- 新しい回帰テストを含む全体`pytest -q`: **130 passed, 1 warning**（Starlette/httpxの非推奨通知）。Firefox UIテストを含む。旧response版、否定プロフィール、確認回答の事実粒度の試験も含めた最終テスト。`node --check app.js`と`git diff --check`成功。テストは`.venv`のPython 3.12.10を使用。実Gemini通信と最新HEAD CIは未実施。
+
+### 未実施
+
+- T77の修正後Gemini実通信、文体/mirroringの実API評価A〜H、会話003の実験、HTMLのFirefox表示確認。
+- 変更後のFirefox UI E2E、pytest全体の再実行、GitHub Actions最新HEAD。
+- `conversation_003.json`/`.html`/分析/プロフィール成果物。
+- `FINAL_REPORT.md`およびPR #4本文の最終更新。
+
+### 次の作業
+
+1. レビューフィードバックを再確認し、全オフライン回帰テストを実行。
+2. T77と最小の実API品質チェックを既定のAPI1→API2、3.5→3.1順で行い、429以外は切替えない。既知の会話情報だけを使い、各リクエストを数える。
+3. 実APIが継続利用できる場合だけ会話003を開始。技術制約が出たら直ちに保存し`BLOCKED`にする。
+4. JSON/HTML/分析/進捗・マトリクスを更新してcommit/push。Draft PR #4は維持し、mergeしない。
+
+### GitHub
+
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draftのまま）
+- 今回のコード・進捗コミット、実API検証結果、最新Actions URL: 未作成。Push前に確認し追記する。

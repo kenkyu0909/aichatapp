@@ -9,6 +9,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,33 @@ PARTNER_002_INTERNAL = (
     "短文や質問を返さない返事もする。会うことには慎重だが、会話が自然なら検討する。"
     "実験の成功条件を理由に承諾しない。"
 )
+SELF_003 = {
+    "name": "橘はる", "age": 28, "region": "東京都杉並区", "occupation": "建築事務所の事務",
+    "hobbies": ["喫茶店めぐり", "植物の世話", "小さな美術館"],
+    "food": ["オムライス", "季節のタルト"],
+    "available_area": "高円寺・中野周辺", "availability": "11月の土曜午後が候補。確定ではない",
+    "profile": json.dumps({
+        "name": "橘はる", "age": 28, "region": "東京都杉並区", "occupation": "建築事務所の事務",
+        "hobbies": ["喫茶店めぐり", "植物の世話", "小さな美術館"],
+        "food": ["オムライス", "季節のタルト"],
+        "weekends": "喫茶店に行ったり植物の手入れをしたりする",
+        "personality": "落ち着いているが興味のある話はよく話す",
+        "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+        "available_area": "高円寺・中野周辺", "availability": "11月の土曜午後が候補。確定ではない",
+    }, ensure_ascii=False),
+    "avoid": "未確認の共通点、過度な褒め言葉、質問攻め、予定の断定。",
+}
+PARTNER_003_PUBLIC = {
+    "name": "瀬戸りん", "age": 27, "region": "東京都中野区", "occupation": "食品メーカーの商品企画",
+    "hobbies": ["パン屋めぐり", "写真", "日帰り散歩"], "food": ["スパイスカレー", "パン"],
+    "profile": "中野で食品メーカーの商品企画をしています。休みの日はパン屋さんを探したり写真を撮りながら散歩したりしています。スパイスカレーも好きです。話しやすい方とゆっくり仲良くなれたらうれしいです。",
+    "conversation_style": "普段は落ち着いた短文。興味があるときは具体的な話を足す。質問を返さないターンや軽い冗談もある。",
+}
+PARTNER_003_INTERNAL = (
+    "架空の相手役用設定。中野区在住で商品企画。パンや散歩の話は自然にできる。"
+    "会うことは慎重に考え、相手の話し方が自然で相互の関心が感じられれば検討するが、必ず承諾はしない。"
+    "文章量や質問頻度を固定せず、実験成功のための不自然な好意的反応はしない。"
+)
 
 
 def experiment_paths(experiment_id: str) -> tuple[Path, Path, Path]:
@@ -73,6 +101,8 @@ def people_for(experiment_id: str) -> tuple[dict[str, Any], dict[str, Any], str]
         return SELF_002, PARTNER_002_PUBLIC, PARTNER_002_INTERNAL
     if experiment_id == "conversation_001":
         return SELF, PARTNER_PUBLIC, PARTNER_INTERNAL
+    if experiment_id == "conversation_003":
+        return SELF_003, PARTNER_003_PUBLIC, PARTNER_003_INTERNAL
     raise ValueError("未定義の実験IDです")
 
 
@@ -115,6 +145,9 @@ def render_experiment(state: dict[str, Any]) -> None:
 def export_profiles(path: Path | None = None, experiment_id: str = "conversation_001") -> None:
     self_profile, partner, internal = people_for(experiment_id)
     path = path or (PROFILE_FILE if experiment_id == "conversation_001" else SIM_DIR / f"profiles_{experiment_id[-3:]}.md")
+    # Resume must not overwrite the profile snapshot or edits made after a run began.
+    if path.exists():
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"# 会話シミュレーション用の架空プロフィール\n\n実験ID: `{experiment_id}`（2026-10-14）\n\n"
@@ -156,8 +189,64 @@ def send_app_message(state: dict[str, Any], body: str, turn: dict[str, Any]) -> 
     state["messages"].append(message)
     turn["selected_text"] = body
     turn["app_send_number"] = number
+    turn["measured"] = turn_measurements(state, body, turn.get("candidates", []))
+    turn.setdefault("reviewer_assessment", {
+        "mirroring": "未評価",
+        "conversation_progress": "未評価",
+        "factuality": "未評価。本人のprofile factsと今回の回答との照合が必要",
+        "repetition": "未評価",
+    })
     state["turns"].append(turn)
     return number
+
+
+def sentence_estimate(text: str) -> int:
+    """A heuristic estimate: Japanese chunks can omit sentence-ending marks."""
+    stripped = text.strip()
+    return max(1, len(re.findall(r"[!?！？]+|\n+", stripped))) if stripped else 0
+
+
+def turn_measurements(state: dict[str, Any], selected: str, candidates: list[dict]) -> dict[str, Any]:
+    recent_partner = [m["body"] for m in state["messages"] if m["speaker"] == "partner"][-5:]
+    app_messages = [m["body"] for m in state["messages"] if m["speaker"] == "app"]
+    if app_messages and app_messages[-1] == selected:
+        app_messages.pop()
+    recent_app = app_messages[-5:]
+    latest = recent_partner[-1] if recent_partner else ""
+    normalized = lambda value: re.sub(r"[\s!?！？、。,.]+", "", value)
+    diversity = [
+        round(SequenceMatcher(None, normalized(a.get("text", "")), normalized(b.get("text", ""))).ratio(), 3)
+        for index, a in enumerate(candidates)
+        for b in candidates[index + 1:]
+    ]
+    acknowledgments = {
+        "驚き": r"^(えー|えっ|へー|そんなこと)",
+        "興味": r"^(気になります|面白そう|聞いてみたい)",
+        "共感": r"^(わかります|たしかに|それいい|そういう)",
+        "納得": r"^(なるほど|あーそういう)",
+        "冗談": r"笑",
+        "相槌なし/その他": r".*",
+    }
+    ack_type = next((label for label, pattern in acknowledgments.items() if re.search(pattern, selected)), "相槌なし/その他")
+    return {
+        "source": "スクリプトによる文字列計測・推定。会話品質の評価は別項目",
+        "partner_latest_character_count": len(latest),
+        "partner_latest_sentence_estimate": sentence_estimate(latest),
+        "recent_partner_average_character_count": round(sum(map(len, recent_partner)) / len(recent_partner), 1) if recent_partner else 0,
+        "selected_character_count": len(selected),
+        "selected_sentence_estimate": sentence_estimate(selected),
+        "punctuation_violation": "、" in selected or "。" in selected,
+        "acknowledgment_type_estimate": ack_type,
+        "exclamation_used": "!" in selected or "！" in selected,
+        "emoji_used": bool(re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", selected)),
+        "warai_used": "笑" in selected,
+        "candidate_max_similarity_estimate": max(diversity, default=0),
+        "similar_to_recent_app_message_estimate": max(
+            (SequenceMatcher(None, normalized(selected), normalized(prior)).ratio() for prior in recent_app),
+            default=0,
+        ),
+        "candidate_diversity_estimates": diversity,
+    }
 
 
 def send_partner_message(state: dict[str, Any], body: str) -> int:
@@ -173,7 +262,7 @@ def api_request_record(data: dict[str, Any], request_number: int, http_status: i
     attempted = data.get("attempted_models", [])
     attempted = [
         {"api_alias": item["api_alias"], "model": item["model"]}
-        for item in attempted[:4]
+        for item in attempted[:5]
         if isinstance(item, dict)
         and item.get("api_alias") in ("API1", "API2")
         and isinstance(item.get("model"), str)
@@ -310,10 +399,17 @@ def render_html(state: dict[str, Any], path: Path | None = None) -> None:
         details = ""
         if app_side and turn:
             items = "".join(f"<li><b>{e(c.get('label'))}</b>：{e(c.get('text'))}</li>" for c in turn.get("candidates", []))
+            measured = turn.get("measured", {})
+            review = turn.get("reviewer_assessment", {})
             details = ("<details><summary>この返信の生成結果を見る</summary>"
                        f"<p><b>理由：</b>{e(turn.get('reason'))}</p><p><b>会話方針：</b>{e(turn.get('strategy'))}</p>"
                        f"<p><b>選択理由：</b>{e(turn.get('selection_reason'))}</p><p><b>モデル：</b>{e(turn.get('model'))} / API: {e(turn.get('api_status'))}</p>"
                        f"<p><b>文体：</b>{e(turn.get('settings',{}).get('tone'))} / <b>方向：</b>{e(turn.get('settings',{}).get('direction'))} / <b>追加指示：</b>{e(turn.get('settings',{}).get('extra') or 'なし')}</p>"
+                       f"<p><b>会話段階：</b>{e(turn.get('conversation_stage', turn.get('strategy', '未記録')))} / <b>誘い判断：</b>{e(turn.get('invite_decision', '未記録'))}</p>"
+                       f"<p><b>判断理由：</b>{e(turn.get('decision_reason', '未記録'))} / <b>次の行動：</b>{e(turn.get('next_action', '未記録'))}</p>"
+                       f"<p><b>実測・推定：</b>相手 {e(measured.get('partner_latest_character_count', '未計測'))}字・推定{e(measured.get('partner_latest_sentence_estimate', '未計測'))}文 → 返信 {e(measured.get('selected_character_count', '未計測'))}字・推定{e(measured.get('selected_sentence_estimate', '未計測'))}文</p>"
+                       f"<p><b>句読点違反：</b>{e(measured.get('punctuation_violation', '未検査'))} / <b>相槌推定：</b>{e(measured.get('acknowledgment_type_estimate', '未分類'))} / <b>候補類似度推定最大：</b>{e(measured.get('candidate_max_similarity_estimate', '未計測'))}</p>"
+                       f"<p><b>評価者判断：</b>ミラーリング {e(review.get('mirroring', '未評価'))} / 反復 {e(review.get('repetition', '未評価'))} / 事実確認 {e(review.get('factuality', '未評価'))}</p>"
                        f"<ol>{items}</ol></details>")
         badges = "初めての誘い" if m.get("is_invite") else ""
         badges += " / 約束の合意" if m.get("meeting_agreement") else ""
@@ -457,10 +553,10 @@ def validate_restore_state(state: Any) -> None:
                 raise ValueError
             attempts = request.get("attempt_count")
             minimum_attempts = 0 if request.get("result_type") in ("needs_user_info", "generation_blocked") else 1
-            if attempts is not None and (not isinstance(attempts, int) or not minimum_attempts <= attempts <= 4):
+            if attempts is not None and (not isinstance(attempts, int) or not minimum_attempts <= attempts <= 5):
                 raise ValueError
             attempted_models = request.get("attempted_models", [])
-            if not isinstance(attempted_models, list) or len(attempted_models) > 4:
+            if not isinstance(attempted_models, list) or len(attempted_models) > 5:
                 raise ValueError
             for attempted in attempted_models:
                 if (not isinstance(attempted, dict) or attempted.get("api_alias") not in ("API1", "API2")
@@ -746,7 +842,7 @@ def main_run(opening: str | None, resume: bool,
             save_experiment_state(state); render_experiment(state)
             print(f"BLOCKED: {state['end_reason']}")
             return 2
-        if not isinstance(req["attempt_count"], int) or not 1 <= req["attempt_count"] <= 4:
+        if not isinstance(req["attempt_count"], int) or not 1 <= req["attempt_count"] <= 5:
             req["ok"] = False
             state["api_requests"].append(req)
             state["status"] = "BLOCKED"
@@ -801,6 +897,11 @@ def main_run(opening: str | None, resume: bool,
             "api_attempt_count": pending.get("attempt_count", 1),
             "api_status": "success", "candidates": candidates, "recommended": data["recommended"],
             "reason": data.get("reason"), "strategy": data.get("strategy"), "settings": settings,
+            "conversation_stage": data.get("conversation_stage"),
+            "invite_decision": data.get("invite_decision"),
+            "decision_reason": data.get("decision_reason"),
+            "next_action": data.get("next_action"),
+            "user_info_reason": data.get("user_info_reason"),
             "selection_reason": selection_reason, "api_request_number": len(state["api_requests"])}
     send_app_message(state, selected["text"], turn)
     state.pop("pending_generation", None)
