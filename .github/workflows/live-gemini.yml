@@ -1,8 +1,7 @@
 name: Gemini live smoke (fictional data only)
 
 on:
-  push:
-    branches: [feat/ui-local-backend-v1]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,9 +14,10 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL_TEST || 'gemini-3.5-flash-lite' }}
     steps:
-      - name: Explain when secret is missing
+      - name: Record skipped run when secret is missing
         if: env.GEMINI_API_KEY == ''
-        run: echo "SKIPPED - Add GEMINI_API_KEY_TEST as a repository secret, then request another push."
+        run: |
+          echo "SKIPPED: GEMINI_API_KEY_TEST is not configured; no real API request was made." >> "$GITHUB_STEP_SUMMARY"
       - name: Check out local application
         if: env.GEMINI_API_KEY != ''
         uses: actions/checkout@v4
