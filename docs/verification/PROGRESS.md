@@ -15,7 +15,8 @@
 - pytest最終ローカル実行: 43 passed、警告1件（Starlette/httpx deprecation）。`node --check app.js`成功。FirefoxでHTMLを実際に開き、会話1件、架空プロフィール、BLOCKED状態、採点未実施の10項目、外部読込なしを確認。スクリーンショットを保存。
 - 実験結果・レポートをcommit `df7110205b8e522475cdcad7e08c8152ace360cb`としてpush済み。Push Actions [38525998484](https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484)とPR Actions [38526003199](https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199)は同SHAを対象に成功。pytest 43 passed、Node構文チェック成功。
 - 今回の実験はGemini実応答がないため、会話品質・約束成立はT56 BLOCKEDとして追加。今回のマトリクスは56件（PASS 53 / BLOCKED 3）。料金・プロジェクト別割当も不明。旧APIキーの失効は確認できていない。
-- PR #4本文はこの後、会話HTML・JSON・分析、T52–T55、Actions URL、残課題を追記する。PRはDraft維持・未マージ。
+- 最新検証HEAD `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`（T56追加）に対するActionsも成功。Push [38526380171](https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171)、PR [38526386149](https://github.com/kenkyu0909/aichatapp/actions/runs/38526386149)、ともに43 passed。
+- PR #4本文へ会話HTML・JSON・分析、T52–T56、Actions URL、残課題を追記する。PRはDraft維持・未マージ。
 
 ## 2026-10-14 継続検証の最新状況
 

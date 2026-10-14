@@ -79,8 +79,8 @@
 
 詳細な実施条件、期待値、実結果、API/モック区分は上記各行および`simulations/analysis.md`を参照。
 
-- 実験/テストコードSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`
-- GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484 （同SHA、成功、pytest 43 passed）
-- GitHub Actions PR #4: https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199 （同SHA、成功、pytest 43 passed）
+- 実験ツールSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。T56を含む最新レポート/マトリクスHEAD: `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`。
+- GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171 （最新HEAD、成功、pytest 43 passed）
+- GitHub Actions PR #4: https://github.com/kenkyu0909/aichatapp/actions/runs/38526386149 （最新HEAD、成功、pytest 43 passed）
 - Node構文: 同runで`node --check app.js`成功。
 - Firefox表示画像: `simulations/conversation_001_firefox.png`。

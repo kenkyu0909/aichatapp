@@ -57,7 +57,10 @@ Googleの公式資料では`gemini-3.5-flash-lite`の無料枠と、無料枠の
 - 検証対象SHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。
 - Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484
 - Actions PR: https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199
-- 今回の進捗・マトリクス・最終報告とHTML/JSONがこのコミットに含まれる。
+- T56を含む最新の検証HEAD: `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`。
+- 同HEADのActions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171
+- 同HEADのActions PR: https://github.com/kenkyu0909/aichatapp/actions/runs/38526386149
+- 今回の進捗・マトリクス・最終報告とHTML/JSONが当該ブランチに含まれる。
 - [進捗](PROGRESS.md) / [テストマトリクス](TEST_MATRIX.md) / [会話HTML](simulations/conversation_001.html) / [会話JSON](simulations/conversation_001.json) / [分析](simulations/analysis.md)
 
 ---
