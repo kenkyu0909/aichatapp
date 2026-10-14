@@ -1,6 +1,6 @@
 # 検証進捗
 
-最終更新: 2026-10-14 13:50 JST
+最終更新: 2026-10-14 13:59 JST
 
 ## 作業開始
 
@@ -29,7 +29,7 @@
 - API更新後の再確認: `PASS`（API1の3.5 Flash-Liteで実API返信・いいねを確認）
 - UI実操作: `PASS`（Firefox）
 - 不具合修正後のpytest: `PASS`（15件成功、警告1件）
-- GitHub push・Draft PR: `BLOCKED`（GitHub認証ユーザー `utyujin51` に対象リポジトリへの書込権限がなく、pushがHTTP 403。PR作成・Draft解除も未実施）
+- GitHub push・Draft PR: `PASS`（再試行でpush成功。PR #4をDraftで作成）
 
 ## 完了した作業
 
@@ -69,6 +69,7 @@
 - ユーザー指定のAPIファイルは作業元フォルダーの`API/chat1.md`と`API/chat2.md`。キーは出力・リポジトリ・`.env`へ保存しない運用。
 - API更新前の指定フォルダー由来の実API試行は12回（API1 3.5が1回、API2 3.5が11回）。API1 3.5は割当上限応答後にAPI2へ切替。API2 3.5は10回応答成功し、1回は誤ったローカルキー抽出で認証/モデル権限エラー。
 - ユーザーからAPI更新の連絡後、API1 3.5で既存smoke testを実施。返信・いいね2回とも成功。更新後のAPI2キーは今回未使用。
+- GitHubへのpushに成功し、`feat/ui-local-backend-v1`をマージ先とするDraft PR #4を作成。
 - プロンプトを修正する品質再試験とUI/smoke test確認で追加実通信。API1/2の3.1は未使用。
 - APIキーを読み取った際、秘密値を伏せる処理が失敗し、この会話のツール出力に更新前の両キーが露出した。Gitには保存していない。ユーザーから更新連絡があったが、更新前キーがGoogle側で失効したかは確認できない。API2の更新後キーも実通信では未確認。
 - APIフォルダー指定前に、既存の環境変数キーで失敗リクエストを1回行った。指定後は当該キーを使っていない。環境変数キーの出所・状態は要確認。
@@ -76,20 +77,19 @@
 
 ## GitHub・ブロッカー
 
-- push実行結果: `403 Permission to kenkyu0909/aichatapp.git denied to utyujin51`。
-- 最終再試行日時: 2026-10-14 13:38 JST。同じ403で失敗。
-- GitHub Secret一覧の参照も403。Secretの有無は未確認。
-- 作業ブランチのremote作成、Draft PR、PR更新・Draft解除はできていない。
-- 初期コミットと最終変更はローカルブランチに記録する。GitHubへの反映には書込権限を持つアカウントまたは権限付与が必要。
+- 初回pushとSecret一覧参照はHTTP 403だったが、後のpushは成功。
+- 作業ブランチ`codex/full-system-verification`をGitHubへpushし、Draft PR #4を作成。
+- Secret一覧の有無は引き続き未確認。
 
 ## 残作業
 
 1. 露出した旧API1・API2キーがGoogle側で失効済みか確認し、環境変数の別キーがあれば状態を確認する。
-2. 書込権限のあるGitHubアカウントで作業ブランチをpushし、`feat/ui-local-backend-v1`宛てのDraft PRを作成する。
+2. 7件の`NOT_TESTED`項目を必要に応じて検証し、PRに結果を追記する。
 
 ## GitHub
 
 - 最終実装コミットSHA: `ae042ea41b3b1439abc6c8c27c8945a1fd915682`
 - 検証報告コミットSHA: `80d2349ebfd53cbc87a6df0a10d786b7634451be`
 - 前回進捗コミットSHA: `998a84b511bb154082b6ce0e238f95adaf8a15b6`
-- Pull Request URL: 未作成（push権限なし）
+- API更新後のsmoke testコミットSHA: `ba1a45205167ab1830982d8dc1bcb7e74822f701`
+- Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft）

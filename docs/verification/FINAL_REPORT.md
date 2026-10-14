@@ -2,15 +2,15 @@
 
 ## 判定
 
-**条件付き合格**。実API接続と主要UI・SQLite機能を確認し、15件のpytestが成功しました。GitHubへのpushとDraft PRは権限エラーで実施できず、7項目は未実施です。また、APIキーが作業会話のツール出力に露出したため、旧キーの失効を確認してください。
+**条件付き合格**。実API接続と主要UI・SQLite機能を確認し、15件のpytestが成功しました。作業ブランチをGitHubへpushし、`feat/ui-local-backend-v1`宛てのDraft PR #4を作成しました。7項目は未実施です。また、更新前のAPIキーが作業会話のツール出力に露出したため、旧キーの失効を確認してください。
 
 ## テスト集計
 
 - 総数: 49
-- PASS: 41
+- PASS: 42
 - FAIL: 0
 - FIXED: 0（修正後の再試験はPASSに計上）
-- BLOCKED: 1
+- BLOCKED: 0
 - NOT_TESTED: 7
 - pytest: `15 passed, 1 warning`
 - 詳細: [TEST_MATRIX.md](TEST_MATRIX.md)
@@ -79,7 +79,7 @@ APIキーを読み取ったとき、秘密値を伏せる処理が失敗し、�
 ## 未修正・未実施の項目
 
 - ブラウザーConsole採取、会話方針表示切替、無効キー・未使用モデル、保存先権限エラー、サーバー停止時のUI、ネットワーク切断、敵対的プロフィールの実API試験。
-- GitHub認証ユーザーに対象リポジトリの書込権限がなく、作業ブランチをpushできませんでした。Draft PR・通常PRも作成・解除できていません。既存PR #3は操作していません。
+- GitHubのSecret一覧は権限エラーで確認できませんでした。作業ブランチとDraft PR #4は作成済みです。PRは未マージで、既存PR #3も操作していません。
 - pytest依存のStarlette/httpxについて非推奨警告が1件あります。テストはすべて成功。
 
 ## Windowsでの利用手順
@@ -97,5 +97,5 @@ APIキーを読み取ったとき、秘密値を伏せる処理が失敗し、�
 - 作業開始時コミット: `78a66c9cba0e6ddb7bc1441e65e1eae75a5e304b`
 - 初期進捗コミット: `e0410c8`（ローカル）
 - 最終実装コミットSHA: `ae042ea41b3b1439abc6c8c27c8945a1fd915682`
-- 報告書コミットSHA: この報告を含むローカルGitコミット。最終HEADは最終応答にも記載。
-- Pull Request URL: 未作成（GitHub pushがHTTP 403）
+- 報告書コミットSHA: この報告を含む最終Gitコミット。最終HEADは最終応答にも記載。
+- Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft、`feat/ui-local-backend-v1`宛て）
