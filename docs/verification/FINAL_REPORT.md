@@ -6,7 +6,7 @@
 
 コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
 
-報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`と、進捗・集計更新commit `321a43e8be6bba2722e860af63d43efb2d7355eb`をPushしました。後者の[Push Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)と[PR Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)は同SHAで成功し、各372 passed, 1 warningでした。最新ActionsとSHAはPR本文にも記録しています。
+報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`と、進捗・集計更新commit `321a43e8be6bba2722e860af63d43efb2d7355eb`をPushしました。後者の[Push Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)と[PR Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)は同SHAで成功し、各372 passed, 1 warningでした。後続の報告整理commitと最新headのActionsは[PR本文](https://github.com/kenkyu0909/aichatapp/pull/4)に記録します。
 
 ## 2026-10-14 返信品質・初回メッセージ・会話制御の最終報告
 

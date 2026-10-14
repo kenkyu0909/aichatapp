@@ -56,6 +56,5 @@
 - コード/検証commit: `f12dc9751496e4bf981fb152231fcf6c052a3f71`。Push [Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083) とPR [Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功。両方372 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact保存も成功。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHAはf12dc97。マージしていない。
 - 報告commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPush済み。Push [Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484)とPR [Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)が同SHAで成功。各runで372 passed, 1 warningを確認。
-- 進捗/集計の追記commit `321a43e8be6bba2722e860af63d43efb2d7355eb`もPush済み。Push [Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)とPR [Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)が同SHAで成功。各runで372 passed, 1 warningを確認。
-- PR本文はこのHEAD・Actions URL・レポートリンクで更新済み。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。マージしていない。
-- 現在のHEAD確認とPR状態確認は最終回答前に再実施する。
+- 進捗/集計の追記commit `321a43e8be6bba2722e860af63d43efb2d7355eb`のPush [Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)とPR [Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)が同SHAで成功。各runで372 passed, 1 warningを確認。後続の報告整理commitと最新headのCIはPR本文に記録する。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。マージしない。最新headとActionsの確認には[PR本文](https://github.com/kenkyu0909/aichatapp/pull/4)を参照する。
