@@ -14,12 +14,13 @@
 - 試験準備中に、隔離環境変数の指定に失敗した初回試行でリポジトリ直下のSQLiteを参照し、profile取得がHTTP 500になった。既存`data/app.sqlite3`の更新日時は試行前のまま（2026-10-14 13:33:44）、その後は接続していない。以後、テスト用アプリをTempへ複製してから確認した。既存データを意図的に変更・初期化していない。
 - オフラインテスト: 修正対象のpytestとFirefox UIの37件が成功（1件の既知Starlette/httpx非推奨警告）。直前の全体pytestは104件成功。最新の全体再実行は実API後の最終確認で行う。`node --check app.js`、`git diff --check`成功。
 - GitHubへ先に再現テストcheckpoint `ebd6fce497066c8fe04d58e203e39fa2ecef2f6c`をPush済み。今回の実装・文書更新は次の進捗commitでPushする。CI run URLはPush後に追記する。
-- 修正checkpoint `b8b37e2b0503fcc83ed15ccf43bf40f20f51ec87` Push済み。GitHub Actions [run 38542247374](https://github.com/kenkyu0909/aichatapp/actions/runs/38542247374) は同SHAで成功（pytest・Firefox準備・Node構文・artifact upload）。
+- 修正checkpoint `b8b37e2b0503fcc83ed15ccf43bf40f20f51ec87` Push済み。GitHub Actions [Push run 38542247374](https://github.com/kenkyu0909/aichatapp/actions/runs/38542247374) は同SHAで成功（pytest・Firefox準備・Node構文・artifact upload）。runner再開修正checkpoint `2100b917eb0e58c727fc5f323b75492e8dfa7e7c` の[Push run 38542488356](https://github.com/kenkyu0909/aichatapp/actions/runs/38542488356)と[PR run 38542495182](https://github.com/kenkyu0909/aichatapp/actions/runs/38542495182)も同SHAで成功。
 - 実API認証は指定フォルダー`C:\Users\poiuy\Desktop\aichatapp2\API`のみを参照するよう子プロセスを固定。API1/2の認証情報が読み出せることをbooleanだけで確認し、値は出力していない。初回生成の実通信は1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。429切替は発生せず。`conversation_002.json`に候補3案と実際の使用モデル/別名を保存し、APIキーは含めていない。
 - 初回3案の品質は一部FAIL: 推奨案は必須構成を満たしたが「、」「。」と不自然な詰まりがあり、2案目は好意/マッチの喜びが不足、3案目は質問がない。実験条件を崩さないため、送信前にプロンプトを変えず、この結果をT79として保存。会話終了後に修正・別リクエストで再評価する。
 - 実験002は初回候補の承認前に、再開時に開始メッセージを求めるrunner不具合を検出。候補・SQLite履歴は変更せず`needs_partner_opening`判定を修正し、モックテスト2件を再実行してPASS。修正commitは次のpushに含める。
-- 実験002状態: RUNNING、アプリ送信0、相手送信0、実API logical request 1件。初回候補から推奨案を選んだ後、Codex相手役はその送信文と会話履歴だけを読んで返答する。既存001のBLOCKED記録は変更していない。
-- 次の作業: runner修正checkpointをPushしてCI確認、候補1を手動記録、相手役から自然に返信、通常返信へ進む。情報不足質問・誘い・断りを必要な会話の流れで評価し、20通上限までまたは自然な終端まで進める。HTMLをFirefoxで確認し、最終pytest/CIとレポートを更新。
+- 実験002状態: RUNNING、Gemini logical request 13件（成功13/失敗0、内部試行は全件1回）、アプリ送信13通、Codex相手役返信12通。全13件がAPI1 / `gemini-3.5-flash-lite`、フォールバック/制限なし。JSON/HTMLは実会話から逐次更新、APIキーパターンなし。初回候補選択後の各相手役返信は、保存済みの実送信文/履歴だけを見て作成。コード再開のrunner修正後、002を継続できた。
+- 会話は書籍/映画の話題を続けている。相手役は現在、映画に関心を示すが、具体的に会う意思表示はしていない。日時や場所の合意はない。現時点で誘いはまだ送っていない。会話の成否を事前に決めず続ける。
+- 次の作業: 最新JSON/HTMLと進捗をPushして途中保存。会話履歴を読み直し、Codex相手役として自然に応答を続ける。会う提案が自然と判断できた場合のみ本人情報の確認を行う。20通上限/安全停止/具体的な約束の成立条件に従って終了し、HTMLをFirefoxで確認。実API評価T77/T78を最終化し、失敗した初回生成指示は会話終了後に修正・少数回で再評価する。
 - Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4 （Draft維持、未マージ）
 
 ## 2026-10-14 返信品質・初回メッセージ・会話制御のオフライン改善
