@@ -25,8 +25,6 @@ DATA = Path(os.getenv("APP_DATA_DIR", str(BASE / "data"))).resolve()
 PHOTOS = DATA / "photos"
 DB = DATA / "app.sqlite3"
 PROMPTS = BASE / "prompts"
-DATA.mkdir(parents=True, exist_ok=True)
-PHOTOS.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
 logger = logging.getLogger(__name__)
@@ -47,10 +45,32 @@ app.add_exception_handler(sqlite3.Error, storage_error_handler)
 
 @contextmanager
 def database():
+    DB.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB)
     connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
     try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.executescript("""
+            CREATE TABLE IF NOT EXISTS profile (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                content TEXT NOT NULL DEFAULT '',
+                avoid TEXT NOT NULL DEFAULT ''
+            );
+            INSERT OR IGNORE INTO profile (id, content, avoid) VALUES (1, '', '');
+            CREATE TABLE IF NOT EXISTS matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                photo TEXT
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+                role TEXT NOT NULL CHECK (role IN ('me', 'them')),
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
         yield connection
         connection.commit()
     except Exception:
@@ -58,30 +78,6 @@ def database():
         raise
     finally:
         connection.close()
-
-
-with database() as db:
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS profile (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            content TEXT NOT NULL DEFAULT '',
-            avoid TEXT NOT NULL DEFAULT ''
-        );
-        INSERT OR IGNORE INTO profile (id, content, avoid) VALUES (1, '', '');
-        CREATE TABLE IF NOT EXISTS matches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            photo TEXT
-        );
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
-            role TEXT NOT NULL CHECK (role IN ('me', 'them')),
-            body TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-    """)
 
 
 class ProfileInput(BaseModel):
@@ -283,6 +279,7 @@ async def upload_photo(match_id: int, file: UploadFile = File(...)):
     photo_path = PHOTOS / filename
     temporary_path = PHOTOS / ("." + filename + ".tmp")
     try:
+        PHOTOS.mkdir(parents=True, exist_ok=True)
         with temporary_path.open("xb") as photo_file:
             photo_file.write(raw)
             photo_file.flush()

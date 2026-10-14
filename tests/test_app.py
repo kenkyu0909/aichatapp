@@ -425,7 +425,8 @@ def test_profile_injection_text_remains_untrusted_context(client, monkeypatch):
 
 def test_database_write_failure_has_safe_response_and_keeps_file_data(client, tmp_path):
     c, backend = client
-    broken_parent = tmp_path / "missing-parent"
+    broken_parent = tmp_path / "database-parent-is-a-file"
+    broken_parent.write_text("fictional test fixture", encoding="utf-8")
     backend.DB = broken_parent / "database.sqlite3"
     response = c.put("/api/profile", json={"content": "架空", "avoid": ""})
     assert response.status_code == 500
@@ -513,9 +514,25 @@ def test_missing_photo_directory_returns_safe_error(client, tmp_path):
         f"/api/matches/{mid}/photo",
         files={"file": ("fictional.png", png_bytes(), "image/png")},
     )
+    assert response.status_code == 200
+    assert backend.PHOTOS.is_dir()
+
+
+def test_unavailable_database_directory_does_not_prevent_server_start(tmp_path, monkeypatch):
+    blocked_data = tmp_path / "data-path-is-a-file"
+    blocked_data.write_text("fictional test fixture", encoding="utf-8")
+    monkeypatch.setenv("APP_DATA_DIR", str(blocked_data))
+    spec = importlib.util.spec_from_file_location(
+        "test_backend_unavailable_storage", Path(__file__).resolve().parents[1] / "app.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    from fastapi.testclient import TestClient
+    response = TestClient(module.app).get("/api/profile")
     assert response.status_code == 500
-    assert "保存先を確認" in response.json()["detail"]
-    assert not backend.PHOTOS.exists()
+    assert response.json()["detail"] == "ローカルの保存先を読み書きできませんでした。保存先を確認してください。"
+    assert str(tmp_path) not in response.text
 
 
 @pytest.mark.parametrize(("fmt", "mime", "extension"), [
