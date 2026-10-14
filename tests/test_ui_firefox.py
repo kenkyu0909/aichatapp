@@ -325,9 +325,9 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     driver.find_element(By.ID, "close-modal").click()
 
     driver.execute_script("document.getElementById('toast').hidden = true")
-    driver.find_element(By.ID, "generate").click()
+    driver.find_element(By.ID, "first-message").click()
     visible_toast(driver, "ローカルサーバーと通信できません")
-    assert driver.find_element(By.ID, "generate").is_enabled()
+    assert driver.find_element(By.ID, "first-message").is_enabled()
     assert not driver.find_element(By.ID, "suggestion-list").is_displayed()
     assert instrumented_errors(driver)["runtime"] == []
 
@@ -364,3 +364,106 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
     errors = record_artifact("firefox-server-stop-restart", driver, {"offline_actions": 4}, allow_console_errors=True)
     assert errors["runtime"] == []
+
+
+def test_firefox_first_message_and_temporary_profile_questions(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のあおい")
+    install_generate_mock(driver)
+    driver.execute_script("""
+      window.__generateResponses = [];
+      window.__generateResults = [];
+      window.__profileWrites = [];
+      window.__allowSkipFallback = false;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/profile' && options.method === 'PUT') window.__profileWrites.push(options.body);
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          window.__generateResponses.push(payload);
+          const result = payload.skipped_user_info && window.__allowSkipFallback ? {
+            recommended:{label:'安全な話題',text:'プロフィールのカフェ巡りが気になりました！最近行ってよかったお店はありますか？'},
+            alternatives:[{label:'短め',text:'カフェ巡りいいですね！'}, {label:'別案',text:'旅行もお好きなんですね！'}],
+            reason:'本人の未確認情報を使わず、相手のプロフィールだけに触れています'
+          } : payload.skipped_user_info ? {
+            needs_user_info:false,skipped_user_info:true,generation_blocked:true,
+            recommended:null,alternatives:[],
+            blocking_reason:'プロフィールが未登録のため初回メッセージを作れません'
+          } : !payload.user_answers?.length ? {
+            needs_user_info: true,
+            user_questions: [{question:'映画は好きですか？', purpose:'本人の好みを事実として返信へ反映するため'}],
+            user_info_reason:'本人プロフィールに映画の情報がありません'
+          } : {
+            recommended:{label:'自然体',text:'映画好きです！洋画をよく観ます☺️'},
+            alternatives:[{label:'短め',text:'洋画をよく観ます！'}, {label:'話題を広げる',text:'洋画いいですね！最近何か観ましたか？'}],
+            reason:'本人が回答した内容だけを使っています',
+            strategy:'記載情報: 相手から映画の話題。根拠: 本人が洋画好きと回答。次の行動: 好きなジャンルを尋ねる。',
+            conversation_stage:'Stage 2', invite_decision:'まだ誘わない',
+            decision_reason:'会話を始めたばかりです', next_action:'映画の話題を続ける'
+          };
+          window.__generateResults.push(result);
+          return new Response(JSON.stringify(result), {status:200, headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """)
+
+    first_button = driver.find_element(By.ID, "first-message")
+    assert first_button.is_displayed()
+    assert not driver.find_element(By.ID, "generate").is_displayed()
+    first_button.click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".user-info-question")) == 1)
+    assert "返信候補とも別に表示します" in driver.find_element(By.ID, "suggestion-list").text
+    assert "一時的に使います" in driver.find_element(By.ID, "suggestion-list").text
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
+    driver.find_element(By.ID, "skip-user-info").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".user-info-terminal")) == 1)
+    assert not driver.find_elements(By.CSS_SELECTOR, ".user-info-question")
+    assert driver.find_element(By.CSS_SELECTOR, ".suggestion-heading").text == "✦ 初回メッセージは作成できませんでした"
+    assert driver.execute_script("return window.__generateResponses.at(-1).skipped_user_info") is True
+    assert "プロフィールが未登録" in driver.find_element(By.CSS_SELECTOR, ".user-info-terminal").text
+    assert driver.execute_script("return window.__generateResults.at(-1).generation_blocked") is True
+    assert not driver.execute_script("return window.__generateResponses.at(-1).user_answers")
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".user-info-question")) == 1)
+    driver.execute_script("window.__allowSkipFallback=true")
+    driver.find_element(By.ID, "skip-user-info").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert not driver.find_elements(By.CSS_SELECTOR, ".user-info-question")
+    assert driver.find_element(By.CSS_SELECTOR, ".suggestion-heading").text == "✦ 初回メッセージ候補"
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".user-info-question")) == 1)
+    add_fictional_contact(driver, "架空のゆき")
+    assert not driver.find_elements(By.CSS_SELECTOR, ".user-info-panel")
+    next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のあおい" in item.text).click()
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".user-info-question")) == 1)
+    driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys("映画は好きで洋画をよく観る")
+    driver.find_element(By.ID, "resume-generation").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    sent = driver.find_element(By.CSS_SELECTOR, ".candidate-text").text
+    assert "洋画をよく観ます" in sent
+    assert driver.find_element(By.CSS_SELECTOR, ".suggestion-heading").text == "✦ 初回メッセージ候補"
+    assert driver.execute_script("return window.__generateResponses.at(-1).response_version") == 2
+    assert driver.execute_script("return window.__generateResponses.at(-1).user_answers[0].answer") == "映画は好きで洋画をよく観る"
+    assert driver.execute_script("return window.__generateResponses.at(-1).match_id") == driver.execute_script("return window.__generateResponses.at(-2).match_id")
+    assert driver.execute_script("return window.__profileWrites") == []
+    strategy = driver.find_element(By.CSS_SELECTOR, ".policy-suggestion").text
+    assert "Stage 2" in strategy and "まだ誘わない" in strategy and "映画の話題" in strategy
+
+    message_count = len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message"))
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:last-child").click()
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == message_count
+    if modal(driver).get_attribute("open") is not None:
+        driver.find_element(By.ID, "close-modal").click()
+    assert driver.find_element(By.ID, "first-message").is_displayed()
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1)
+    assert not driver.find_element(By.ID, "first-message").is_displayed()
+    assert driver.find_element(By.ID, "generate").is_displayed()
+    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble").text == sent
+    errors = record_artifact("firefox-first-message-user-info", driver, {"user_info_answers_persisted": False})
+    assert errors["runtime"] == []
+    assert errors["console"] == []

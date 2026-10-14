@@ -60,17 +60,27 @@ def test_report_escapes_profile_and_message_html(tmp_path):
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in document
 
 
-def test_model_priority_and_only_rate_limit_advances():
-    assert simulation.MODEL_ORDER == (
-        ("API1", "gemini-3.5-flash-lite"),
-        ("API2", "gemini-3.5-flash-lite"),
-        ("API1", "gemini-3.1-flash-lite"),
-        ("API2", "gemini-3.1-flash-lite"),
+def test_api_selection_metadata_is_returned_by_backend_without_harness_rotation():
+    assert not hasattr(simulation, "MODEL_ORDER")
+    assert not hasattr(simulation, "fallback_slot")
+    assert "GEMINI_API_KEY" not in __import__("inspect").getsource(simulation.main_run)
+    assert "GEMINI_MODEL" not in __import__("inspect").getsource(simulation.main_run)
+    record = simulation.api_request_record(
+        {
+            "api_alias": "API2", "model": "gemini-3.5-flash-lite", "api_attempt_count": 3,
+            "attempted_models": [
+                {"api_alias": "API1", "model": "gemini-3.5-flash-lite"},
+                {"api_alias": "API2", "model": "gemini-3.5-flash-lite"},
+            ],
+        }, 1, 200
     )
-    assert simulation.fallback_slot(True, 0) == 1
-    assert simulation.fallback_slot(True, 2) == 3
-    assert simulation.fallback_slot(False, 0) is None
-    assert simulation.fallback_slot(True, 3) is None
+    assert (record["api_alias"], record["model"], record["attempt_count"]) == (
+        "API2", "gemini-3.5-flash-lite", 3
+    )
+    assert record["attempted_models"] == [
+        {"api_alias": "API1", "model": "gemini-3.5-flash-lite"},
+        {"api_alias": "API2", "model": "gemini-3.5-flash-lite"},
+    ]
 
 
 def test_meeting_success_requires_concrete_proposal_and_acceptance():
@@ -104,3 +114,362 @@ def test_profile_export_keeps_counterpart_internal_separate(tmp_path):
     assert "公開プロフィール" in text
     assert "内部設定（Codexのみ" in text
     assert "アプリ/Geminiには送信しない" in text
+
+
+def test_twentieth_send_waits_for_partner_final_reply():
+    state = state_with_sent(19)
+    turn = {}
+    simulation.send_app_message(state, "20通目です", turn)
+    assert state["status"] == "RUNNING"
+    assert simulation.can_receive_partner(state)
+    simulation.send_partner_message(state, "楽しかったです！")
+    simulation.finalize_after_partner_reply(state)
+    assert state["status"] == "LIMIT_REACHED"
+    assert state["partner_sent_count"] == 1
+    assert not simulation.can_send_app(state)
+
+
+def test_partner_refusal_is_saved_before_safety_stop():
+    state = state_with_sent(2)
+    simulation.send_partner_message(state, "ごめんなさい！これ以上やり取りするのは控えたいです")
+    simulation.finalize_after_partner_reply(state)
+    assert state["messages"][-1]["body"].startswith("ごめんなさい")
+    assert state["status"] == "SAFETY_STOP"
+
+
+def test_apology_for_a_late_reply_is_not_a_safety_refusal():
+    assert not simulation.is_partner_refusal("ごめんなさい、返信遅くなりました！")
+
+
+@pytest.mark.parametrize("message", [
+    "これ以上のやり取りは控えさせてください",
+    "今後は連絡を控えさせていただきます",
+    "今後はメッセージを控えさせてください",
+    "もうやり取りしません",
+])
+def test_polite_contact_refusal_variants_are_safety_stops(message):
+    assert simulation.is_partner_refusal(message)
+
+
+def test_confirm_success_cannot_override_safety_stop_or_latest_refusal():
+    state = state_with_sent(3)
+    state["messages"] = [
+        {"speaker": "app", "body": "土曜日18時に横浜駅のカフェで会いませんか？"},
+        {"speaker": "partner", "body": "いいですね！"},
+        {"speaker": "partner", "body": "ごめんなさい！これ以上やり取りするのは控えたいです"},
+    ]
+    state["pending_meeting_confirmation"] = {"proposal": state["messages"][0]["body"], "acceptance": state["messages"][1]["body"]}
+    simulation.finalize_after_partner_reply(state)
+    assert state["status"] == "SAFETY_STOP"
+    with pytest.raises(ValueError, match="安全停止"):
+        simulation.confirm_meeting_success(state)
+    assert state["status"] == "SAFETY_STOP"
+
+
+def test_meeting_agreement_can_be_built_across_saved_turns():
+    messages = [
+        {"speaker": "app", "body": "よかったらカフェに行きませんか？"},
+        {"speaker": "partner", "body": "いいですね！"},
+        {"speaker": "app", "body": "土曜日はどうですか？"},
+        {"speaker": "partner", "body": "大丈夫です！"},
+        {"speaker": "app", "body": "では18時ごろに横浜駅近くでどうでしょう"},
+        {"speaker": "partner", "body": "大丈夫です！楽しみにしてます"},
+    ]
+    assert simulation.find_meeting_agreement(messages)
+    state = state_with_sent(3)
+    state["messages"] = messages
+    simulation.prepare_meeting_confirmation(state)
+    simulation.confirm_meeting_success(state)
+    assert state["status"] == "SUCCESS"
+    assert "土曜日" in state["meeting_agreement"]["proposal"]
+    assert "横浜駅" in state["meeting_agreement"]["proposal"]
+
+
+def test_meeting_requires_concrete_mutual_agreement():
+    assert not simulation.find_meeting_agreement([
+        {"speaker": "app", "body": "今度カフェ行きませんか？"},
+        {"speaker": "partner", "body": "いつか行きたいですね！"},
+    ])
+    assert not simulation.find_meeting_agreement([
+        {"speaker": "app", "body": "土曜日18時に横浜駅でどうですか？"},
+        {"speaker": "partner", "body": "ごめんなさい、難しいです"},
+    ])
+
+
+def test_json_restore_recreates_fictional_data_only_in_empty_database(tmp_path, monkeypatch):
+    state = simulation.new_state()
+    state["match_id"] = 1
+    state["people"]["app_user"]["profile"] = "架空本人プロフィール"
+    state["messages"] = [
+        {"sequence": 1, "speaker": "partner", "body": "架空の開始メッセージ"},
+        {"sequence": 2, "speaker": "app", "body": "未送信候補ではない送信済み文", "app_send_number": 1},
+    ]
+    state["turns"] = [{"turn_number": 1, "selected_text": "未送信候補ではない送信済み文", "candidates": [{"text": "代替候補"}]}]
+    state["app_sent_count"] = 1
+    state["partner_sent_count"] = 1
+    state["api_requests"] = [{"request_number": 1, "ok": True, "model": "fictional-model", "api_alias": "API1", "attempt_count": 2}]
+    state["pending_generation"] = {
+        "account": "API1", "model": "fictional-model", "data": {"demo": False},
+        "candidates": [{"label": "推奨", "text": "未送信候補"}], "settings": {"count": 3},
+    }
+    json_path = tmp_path / "resume.json"
+    json_path.write_text(__import__("json").dumps(state, ensure_ascii=False), encoding="utf-8")
+    data_dir = tmp_path / "empty-db"
+    client = simulation.import_app(data_dir)
+    restored = simulation.restore_state_to_empty_db(client, state)
+    assert restored["match_id"] == 1
+    assert simulation.db_matches_state(client, restored)
+    assert client.get("/api/profile").json()["content"] == "架空本人プロフィール"
+    assert restored["pending_generation"] == state["pending_generation"]
+    assert len(restored["api_requests"]) == 1
+
+    nonempty = tmp_path / "nonempty-db"
+    other = simulation.import_app(nonempty)
+    other.post("/api/matches", json={"name": "Existing", "description": "keep"})
+    with pytest.raises(RuntimeError, match="空の実験用SQLite"):
+        simulation.restore_state_to_empty_db(other, state)
+
+
+def test_restore_validates_entire_json_before_mutating_database(tmp_path):
+    state = simulation.new_state()
+    state["messages"] = [
+        {"sequence": 1, "speaker": "partner", "body": "valid first message"},
+        {"sequence": 2, "speaker": "other", "body": "invalid later message"},
+    ]
+    state["partner_sent_count"] = 1
+    client = simulation.import_app(tmp_path / "prevalidate")
+    with pytest.raises(ValueError, match="JSON"):
+        simulation.restore_state_to_empty_db(client, state)
+    assert client.get("/api/profile").json()["content"] == ""
+    assert client.get("/api/matches").json() == []
+
+
+def test_restore_rolls_back_all_rows_when_sqlite_insert_fails(tmp_path):
+    import sqlite3
+    import sys
+
+    state = simulation.new_state()
+    state["messages"] = [
+        {"sequence": 1, "speaker": "partner", "body": "valid first message"},
+        {"sequence": 2, "speaker": "app", "body": "BOOM", "app_send_number": 1},
+    ]
+    state["app_sent_count"] = 1
+    state["partner_sent_count"] = 1
+    state["turns"] = [{"candidates": [{"text": "saved text"}]}]
+    client = simulation.import_app(tmp_path / "rollback")
+    backend = sys.modules["app"]
+    client.get("/api/profile")
+    with sqlite3.connect(backend.DB) as connection:
+        connection.execute("CREATE TRIGGER reject_restore_message BEFORE INSERT ON messages WHEN NEW.body='BOOM' BEGIN SELECT RAISE(ABORT, 'fixture'); END")
+    with pytest.raises(RuntimeError, match="トランザクション"):
+        simulation.restore_state_to_empty_db(client, state)
+    assert client.get("/api/profile").json()["content"] == ""
+    assert client.get("/api/matches").json() == []
+
+
+def test_restore_rolls_back_when_transaction_integrity_check_detects_mutated_message(tmp_path):
+    import sqlite3
+    import sys
+
+    state = simulation.new_state()
+    state["messages"] = [{"sequence": 1, "speaker": "partner", "body": "original"}]
+    state["partner_sent_count"] = 1
+    client = simulation.import_app(tmp_path / "integrity-rollback")
+    backend = sys.modules["app"]
+    client.get("/api/profile")
+    with sqlite3.connect(backend.DB) as connection:
+        connection.execute(
+            "CREATE TRIGGER mutate_restored_message AFTER INSERT ON messages "
+            "WHEN NEW.body='original' BEGIN UPDATE messages SET body='mutated' WHERE id=NEW.id; END"
+        )
+    with pytest.raises(RuntimeError, match="トランザクション内の整合性"):
+        simulation.restore_state_to_empty_db(client, state)
+    assert client.get("/api/profile").json()["content"] == ""
+    assert client.get("/api/matches").json() == []
+
+
+def test_generation_metadata_is_from_single_backend_response():
+    assert simulation.api_request_record(
+        {"api_alias": "API2", "model": "gemini-3.5-flash-lite", "api_attempt_count": 3},
+        request_number=1, http_status=200,
+    ) == {
+        "request_number": 1, "ok": True, "api_alias": "API2",
+        "model": "gemini-3.5-flash-lite", "attempt_count": 3,
+        "attempted_models": [], "error_code": None, "app_http_status": 200,
+    }
+    failed = simulation.api_request_record({"detail": "レート制限"}, request_number=2, http_status=502)
+    assert failed["attempt_count"] is None
+
+
+def test_rate_limit_failure_metadata_is_persisted_without_secrets(tmp_path):
+    result = {
+        "detail": "Geminiの無料利用枠またはレート制限に達しました。",
+        "api_attempt_count": 4,
+        "attempted_models": [
+            {"api_alias": "API1", "model": "gemini-3.5-flash-lite"},
+            {"api_alias": "API2", "model": "gemini-3.5-flash-lite"},
+            {"api_alias": "API1", "model": "gemini-3.1-flash-lite"},
+            {"api_alias": "API2", "model": "gemini-3.1-flash-lite"},
+        ],
+    }
+    request = simulation.api_request_record(result, request_number=1, http_status=502)
+    state = simulation.new_state()
+    state["api_requests"].append(request)
+    path = tmp_path / "blocked.json"
+    simulation.save_state(state, path)
+    saved = __import__("json").loads(path.read_text(encoding="utf-8"))["api_requests"][0]
+    assert saved["attempt_count"] == 4
+    assert saved["attempted_models"] == result["attempted_models"]
+    assert saved["detail"] == result["detail"]
+    assert "AIza" not in __import__("json").dumps(saved)
+
+
+@pytest.mark.parametrize("failure", ["transport", "invalid_json"])
+def test_generation_transport_or_json_failure_is_saved_and_not_automatically_retried(tmp_path, failure):
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("private raw body should not be saved")
+
+    class FakeClient:
+        calls = 0
+
+        def post(self, *args, **kwargs):
+            self.calls += 1
+            if failure == "transport":
+                raise TimeoutError("private network payload")
+            return FakeResponse()
+
+    state = simulation.new_state()
+    client = FakeClient()
+    json_path, html_path = tmp_path / "blocked.json", tmp_path / "blocked.html"
+    assert simulation.call_generate_once(client, {}, state, json_path, html_path) is None
+    assert client.calls == 1
+    assert state["status"] == "BLOCKED"
+    assert state["generation_uncertain"] is True
+    assert len(state["api_requests"]) == 1
+    assert state["api_requests"][0]["ok"] is False
+    assert state["api_requests"][0]["app_http_status"] == (0 if failure == "transport" else 200)
+    saved_json = json_path.read_text(encoding="utf-8")
+    assert "private raw body" not in saved_json
+    assert "private network payload" not in saved_json
+    assert html_path.is_file()
+    assert not simulation.allow_uncertain_generation_retry(state)
+
+
+def test_needs_user_info_pauses_without_candidates_or_send_then_accepts_answers():
+    state = simulation.new_state()
+    state["match_id"] = 12
+    data = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "どんな映画が好きですか？", "purpose": "本人の好みを確認するため"}],
+        "user_info_reason": "本人の映画の好みが不明です。",
+        "recommended": None,
+        "alternatives": [],
+    }
+    settings = simulation.generation_settings(12, "自然に会話を広げる", "")
+    simulation.pause_for_user_info(state, data, settings, request_number=1)
+    assert state["status"] == "AWAITING_USER_INFO"
+    assert state["app_sent_count"] == 0
+    assert simulation.resume_user_info_settings(state, [], skip=False) is None
+    answered = simulation.resume_user_info_settings(state, ["洋画が好きです"], skip=False)
+    assert answered["user_answers"] == [{"question": "どんな映画が好きですか？", "answer": "洋画が好きです"}]
+    assert answered["response_version"] == 2
+    assert state["status"] == "RUNNING"
+    assert not state["app_sent_count"]
+    assert "洋画が好き" not in state["people"]["app_user"]["profile"]
+
+
+def test_resume_awaiting_user_info_does_not_regenerate_until_answered(tmp_path, monkeypatch):
+    class JsonResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "demo": False, "api_alias": "API1", "model": "gemini-3.5-flash-lite",
+                "api_attempt_count": 1,
+                "recommended": {"label": "推奨", "text": "映画好きです！"},
+                "alternatives": [
+                    {"label": "別案1", "text": "映画はよく観ます！"},
+                    {"label": "別案2", "text": "洋画が好きなんですね！"},
+                ],
+                "reason": "回答を反映", "strategy": "会話を続ける",
+            }
+
+    data_dir = tmp_path / "resume-data"
+    seeded = simulation.import_app(data_dir)
+    seeded.put("/api/profile", json={"content": "架空プロフィール", "avoid": ""})
+    created = seeded.post("/api/matches", json={"name": "架空の相手", "description": "映画が好き"})
+    match_id = created.json()["id"]
+    seeded.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": "映画好きですか？"})
+
+    state = simulation.new_state()
+    state["status"] = "AWAITING_USER_INFO"
+    state["match_id"] = match_id
+    state["messages"] = [{"sequence": 1, "speaker": "partner", "body": "映画好きですか？"}]
+    state["partner_sent_count"] = 1
+    state["api_requests"] = [{"request_number": 1, "ok": True, "result_type": "needs_user_info", "attempt_count": 0, "attempted_models": []}]
+    simulation.pause_for_user_info(state, {
+        "needs_user_info": True,
+        "user_questions": [{"question": "映画は好きですか？", "purpose": "本人情報の確認"}],
+        "user_info_reason": "本人の好みを確認するため",
+        "recommended": None, "alternatives": [],
+    }, simulation.generation_settings(match_id, "自然に会話を広げる", ""), 1)
+    json_path, html_path, profile_path = tmp_path / "state.json", tmp_path / "state.html", tmp_path / "profiles.md"
+    simulation.save_state(state, json_path)
+    monkeypatch.setattr(simulation, "JSON_FILE", json_path)
+    monkeypatch.setattr(simulation, "HTML_FILE", html_path)
+    monkeypatch.setattr(simulation, "PROFILE_FILE", profile_path)
+    monkeypatch.setattr(simulation, "DATA_DIR", data_dir)
+
+    class CountingClient:
+        generate_calls = 0
+
+        def get(self, path):
+            return seeded.get(path)
+
+        def post(self, path, **kwargs):
+            if path == "/api/generate":
+                self.generate_calls += 1
+                self.last_settings = kwargs["json"]
+                return JsonResponse()
+            return seeded.post(path, **kwargs)
+
+        def put(self, path, **kwargs):
+            return seeded.put(path, **kwargs)
+
+    client = CountingClient()
+    monkeypatch.setattr(simulation, "import_app", lambda _path: client)
+    assert simulation.main_run(None, True, None, None, "自然に会話を広げる", "", False) == 0
+    assert client.generate_calls == 0
+    assert __import__("json").loads(json_path.read_text(encoding="utf-8"))["status"] == "AWAITING_USER_INFO"
+
+    assert simulation.main_run(None, True, None, None, "自然に会話を広げる", "", False, ["洋画が好きです"]) == 0
+    assert client.generate_calls == 1
+    assert client.last_settings["user_answers"] == [{"question": "映画は好きですか？", "answer": "洋画が好きです"}]
+    resumed = __import__("json").loads(json_path.read_text(encoding="utf-8"))
+    assert resumed["app_sent_count"] == 0
+    assert resumed["pending_generation"]["settings"]["user_answers"] == client.last_settings["user_answers"]
+
+
+def test_simulation_requests_backend_metadata_response_version_two():
+    assert simulation.generation_settings(23, "自然に会話を広げる", "") == {
+        "mode": "reply", "match_id": 23, "count": 3, "tone": "自動",
+        "direction": "自然に会話を広げる", "extra": "", "show_policy": True,
+        "response_version": 2,
+    }
+
+
+def test_start_bat_starts_and_waits_before_opening_firefox():
+    script = (ROOT / "start.bat").read_text(encoding="utf-8")
+    assert "taskkill" not in script.lower()
+    assert "Firefox" in script
+    assert "127.0.0.1:8765" in script
+    assert script.index("uvicorn") < script.index("firefox.exe")
+    assert "Invoke-RestMethod" in script
+    assert "/api/status" in script
+    assert "matching-reply-assistant" in script
+    assert "matching-reply-assistant" in script
+    assert "/api/profile" not in script
+    assert "Start-Process" in script

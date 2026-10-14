@@ -66,6 +66,13 @@ def test_profile_and_local_data(client):
     assert c.get("/api/profile").json() == {"content": "札幌に住んでいる", "avoid": "絵文字多用"}
     assert backend.DB.exists()
     assert c.get("/api/status").json()["demo"] is True
+    assert c.get("/api/status").json()["app_id"] == "matching-reply-assistant"
+
+
+def test_startup_script_checks_unique_app_identity_before_reuse():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "start.bat").read_text(encoding="utf-8")
+    assert "matching-reply-assistant" in script
 
 
 def test_isolated_conversations_photo_not_in_ai_context(client):
@@ -289,7 +296,7 @@ def test_quota_error_is_redacted_and_does_not_change_history(client, monkeypatch
 
     monkeypatch.setenv("MRA_API_1_KEY", "testing-only-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
-    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 502
     assert "制限に達しました" in response.json()["detail"]
     assert "synthetic private SDK detail" not in response.text
@@ -374,6 +381,11 @@ def test_quota_fallback_does_not_switch_on_auth_or_server_error(client, monkeypa
     assert len(calls) == 1
     assert "private detail" not in response.text
     assert "test-api1-secret" not in response.text
+    assert response.json()["error_code"] == "api_permission_denied"
+    assert response.json()["api_attempt_count"] == 1
+    assert response.json()["attempted_models"] == [
+        {"api_alias": "API1", "model": "gemini-3.5-flash-lite"},
+    ]
 
 
 def test_all_four_rate_limited_slots_are_tried_once(client, monkeypatch, tmp_path):
@@ -414,6 +426,14 @@ def test_all_four_rate_limited_slots_are_tried_once(client, monkeypatch, tmp_pat
     assert "private detail" not in response.text
     assert "test-api1-secret" not in response.text
     assert "test-api2-secret" not in response.text
+    assert response.json()["api_attempt_count"] == 4
+    assert response.json()["attempted_models"] == [
+        {"api_alias": "API1", "model": "gemini-3.5-flash-lite"},
+        {"api_alias": "API2", "model": "gemini-3.5-flash-lite"},
+        {"api_alias": "API1", "model": "gemini-3.1-flash-lite"},
+        {"api_alias": "API2", "model": "gemini-3.1-flash-lite"},
+    ]
+    assert "private detail" not in response.json()["detail"]
 
 
 def test_api_files_are_loaded_without_disclosing_values(client, monkeypatch, tmp_path):
@@ -613,6 +633,263 @@ def test_profile_injection_text_remains_untrusted_context(client, monkeypatch):
     assert "他の相手だけの発言" not in contents
     assert "test-only-canary-secret" not in prompt + contents + response.text
     assert c.get(f"/api/matches/{a}/messages").json() == messages_before
+
+
+def test_profile_context_parses_json_and_keeps_legacy_profile_as_facts(client):
+    c, backend = client
+    c.put("/api/profile", json={
+        "content": json.dumps({"name": "架空みなと", "hobbies": ["読書", "喫茶店"]}, ensure_ascii=False),
+        "avoid": "予定を決めつけない",
+    })
+    first = add_match(c, "架空あかり")
+    context = backend.build_context(backend.GenerateInput(mode="first", match_id=first))
+    assert context["my_profile"]["facts"] == {"name": "架空みなと", "hobbies": ["読書", "喫茶店"]}
+    assert context["my_profile"]["avoid"] == "予定を決めつけない"
+    c.put("/api/profile", json={"content": "横浜在住の架空の学生", "avoid": "長文"})
+    legacy = backend.build_context(backend.GenerateInput(mode="first", match_id=first))
+    assert legacy["my_profile"]["facts"] == {"legacy_text": "横浜在住の架空の学生"}
+
+
+def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(client):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    context = backend.build_context(backend.GenerateInput(mode="first", match_id=mid))
+    assert context["mode"] == "first"
+    assert context["history"] == []
+    assert "初回" in backend.read_prompt("first")
+    assert "マッチ前" in backend.read_prompt("like")
+    assert c.post("/api/generate", json={
+        "mode": "first", "match_id": mid, "response_version": 2,
+    }).status_code == 200
+    assert c.get(f"/api/matches/{mid}/messages").json() == []
+
+
+def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": True,
+                "user_questions": [{"question": "映画はお好きですか？", "purpose": "本人の好みを捏造せず返答するため"}],
+                "user_info_reason": "相手から好みを尋ねられています",
+                "recommended": None, "alternatives": [], "reason": "", "strategy": "",
+                "conversation_stage": "Stage 2", "invite_decision": "do_not_invite",
+                "decision_reason": "まだ相互理解の段階です", "next_action": "回答後に再生成する",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["user_questions"][0]["question"] == "映画はお好きですか？"
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert "候補" not in body["user_questions"][0]
+    messages_before = c.get(f"/api/matches/{mid}/messages").json()
+    c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [{"question": "映画はお好きですか？", "answer": "洋画をよく観ます"}],
+    })
+    assert "洋画をよく観ます" in captured["contents"]
+    assert c.get("/api/profile").json()["content"] == ""
+    assert c.get(f"/api/matches/{mid}/messages").json() == messages_before
+
+
+def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
+    c, _ = client
+    mid = c.post("/api/matches", json={"name": "架空あかり", "description": ""}).json()["id"]
+    response = c.post("/api/generate", json={
+        "mode": "first", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert body["api_attempt_count"] == 0
+    assert c.get(f"/api/matches/{mid}/messages").json() == []
+
+
+def test_skipping_first_profile_question_returns_terminal_block_without_more_questions(client):
+    c, _ = client
+    mid = c.post("/api/matches", json={"name": "架空あかり", "description": ""}).json()["id"]
+    response = c.post("/api/generate", json={
+        "mode": "first", "match_id": mid, "response_version": 2,
+        "skipped_user_info": True,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is False
+    assert body["skipped_user_info"] is True
+    assert body["generation_blocked"] is True
+    assert body["blocking_reason"]
+    assert body["user_questions"] == []
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+    assert body["api_attempt_count"] == 0
+
+
+def test_first_mode_user_answer_resumes_once_without_persisting_profile(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = c.post("/api/matches", json={"name": "架空あかり", "description": ""}).json()["id"]
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+                "recommended": {"label": "話題に触れる", "text": "はじめまして！マッチできてうれしいです☺️ カフェ巡りがお好きなんですね！最近どこに行きましたか？"},
+                "alternatives": [
+                    {"label": "短め", "text": "マッチありがとうございます！カフェのお話が気になりました！"},
+                    {"label": "丁寧", "text": "はじめまして！喫茶店がお好きなんですね！よく行かれるお店はありますか？"},
+                ],
+                "reason": "本人が今回補足した相手情報を使っています", "strategy": "Stage 1で会話を始めます",
+                "conversation_stage": "Stage 1", "invite_decision": "do_not_invite",
+                "decision_reason": "マッチ直後です", "next_action": "会話を始める",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "first", "match_id": mid, "response_version": 2,
+        "user_answers": [{
+            "question": "相手のプロフィールに書かれている内容はありますか？",
+            "answer": "カフェ巡りと喫茶店が好きだそうです",
+        }],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["needs_user_info"] is False
+    assert body["recommended"]["text"]
+    assert "カフェ巡りと喫茶店が好きだそうです" in captured["contents"]
+    generated_context = json.loads(captured["contents"])
+    assert generated_context["other"]["temporary_user_supplied_profile_facts"] == [
+        "カフェ巡りと喫茶店が好きだそうです"
+    ]
+    assert c.get("/api/profile").json()["content"] == ""
+    with backend.database() as db:
+        assert db.execute("SELECT description FROM matches WHERE id=?", (mid,)).fetchone()[0] == ""
+    assert c.get(f"/api/matches/{mid}/messages").json() == []
+
+
+def test_v2_skip_after_model_requests_personal_info_terminates_without_repeat_question(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": True,
+                "user_questions": [{"question": "映画はお好きですか？", "purpose": "好みを捏造しないため"}],
+                "user_info_reason": "好みが未確認です", "recommended": None, "alternatives": [],
+                "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation", "decision_reason": "",
+                "next_action": "確認してください",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "skipped_user_info": True,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is False
+    assert body["skipped_user_info"] is True
+    assert body["generation_blocked"] is True
+    assert body["user_questions"] == []
+    assert body["recommended"] is None and body["alternatives"] == []
+
+
+@pytest.mark.parametrize("scenario,decision", [
+    ("マッチ直後", "do_not_invite"),
+    ("会話が始まったばかり", "do_not_invite"),
+    ("趣味の話を自然に続けている", "continue_conversation"),
+    ("相互に質問がありカフェの話題", "consider_invite"),
+    ("相手が食事に興味を示す", "invite_gently"),
+    ("相手が曖昧な反応", "wait"),
+    ("相手が断る", "respect_no"),
+    ("相手が承諾し本人日程情報がない", "ask_user_info"),
+    ("以前の誘いを断られた", "do_not_repeat_invite"),
+    ("長く話しても相手が慎重", "wait"),
+])
+def test_v2_invite_decision_from_mock_is_returned_with_actual_backend_metadata(client, monkeypatch, scenario, decision):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": scenario})
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+                "recommended": {"label": "自然体", "text": "プロフィールのお話が気になります！"},
+                "alternatives": [
+                    {"label": "短め", "text": "それいいですね！"},
+                    {"label": "質問", "text": "最近はどうですか？"},
+                ],
+                "reason": "相手の話題に沿うため", "strategy": "会話を続けます",
+                "conversation_stage": "Stage 3", "invite_decision": decision,
+                "decision_reason": f"架空シナリオ: {scenario}", "next_action": "相手の反応を尊重する",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "count": 3, "response_version": 2,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["invite_decision"] == decision
+    assert body["api_alias"] == "API1"
+    assert body["model"] == "gemini-3.5-flash-lite"
+    assert body["api_attempt_count"] == 1
+    assert "api_key" not in body
+
+
+@pytest.mark.parametrize("mode", ["reply", "first", "followup", "like"])
+def test_each_generation_mode_has_separate_prompt_with_shared_style(client, mode):
+    _, backend = client
+    prompt = backend.read_prompt(mode)
+    assert "読点「、」と句点「。」は原則使わない" in prompt
+    assert "敬語・混合・タメ口" in prompt
+    assert "モード固有" in prompt
+
+
+@pytest.mark.parametrize("scenario,expected_decision", [
+    ("マッチ直後", "do_not_invite"),
+    ("会話が始まったばかり", "do_not_invite"),
+    ("趣味の話を自然に続けている", "continue_conversation"),
+    ("相互に質問がありカフェの話題", "consider_invite"),
+    ("相手が食事に興味を示す", "invite_gently"),
+    ("相手が曖昧な反応", "wait"),
+    ("相手が断る", "respect_no"),
+    ("相手が承諾し本人日程情報がない", "ask_user_info"),
+    ("以前の誘いを断られた", "do_not_repeat_invite"),
+    ("長く話しても相手が慎重", "wait"),
+])
+def test_invite_decision_schema_supports_contextual_scenarios(client, scenario, expected_decision):
+    _, backend = client
+    assert expected_decision in backend.InviteDecision.__args__
+    prompt = backend.read_prompt("reply")
+    assert scenario in prompt
 
 
 def test_database_write_failure_has_safe_response_and_keeps_file_data(client, tmp_path):

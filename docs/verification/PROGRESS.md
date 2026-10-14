@@ -2,6 +2,23 @@
 
 最終更新: 2026-10-14（継続作業）
 
+## 2026-10-14 返信品質・初回メッセージ・会話制御のオフライン改善
+
+- 対象ブランチ: `codex/full-system-verification`。開始HEAD `5f52f80c33cc9af87538572479d5d60eff5284c4`。既存PR #4を継続し、Draftのまま。マージなし。
+- この作業ではGemini実API通信を行わない指定に従い、すべての生成テストをSDKモックまたは固定UIモックで実施。Chromeは起動・操作していない。実ブラウザ操作はFirefoxのみ。
+- 環境: Windows、Python 3.12（リポジトリ`.venv`）、Node.js（`node --check app.js`）、Firefox（Selenium）。
+- 実装: 共通/モード別プロンプトを分割し、プロフィール事実の構造化、不足情報の一時質問、初回メッセージ、Stage 1–6と誘い判断、短文・句読点・「！」/絵文字/「笑」の文脈ルールを追加。質問回答はプロフィールへ自動保存しない。
+- 実装: シミュレーターのAPI選択責任をバックエンドへ一本化。応答/エラーのAPI別名・モデル・試行回数を記録し、429全枠失敗も実際の順序で記録。20通目への相手の返答、拒否発言の保存、複数ターンの日時/場所合意、JSONからの隔離SQLite復元とロールバックを追加。
+- 実装: `start.bat`はポートを占有するプロセスを終了せず、固有`app_id`を持つ応答を確認してからFirefoxを開く。起動順序・識別条件はテストで静的確認。今回、バッチを実際に起動する試験は未実施。
+- 最終レビュー指摘も反映: 不正JSON/通信失敗はHTTP 200を含め成功扱いにせず、状態をBLOCKEDとして保存。明確な連絡終了表現を追加し、本人情報の確認中は回答があるまで再生成しないことを検証。
+- 今回のローカル統合テスト: `pytest -q --junitxml=test-results\pytest.xml` は **103 passed, 1 warning**。警告はStarlette/httpxの非推奨通知。`node --check app.js` 成功。`git diff --check` 成功。Firefox UIテスト3件を含む。
+- GitHub Actionsの今回の修正HEAD向け実行は、コミット/Push後に確認してここへ追記する。現時点では未実施。
+- 実施中: 最終差分レビュー、GitHub進捗/テスト報告更新、Push後のActions確認。
+- 未実施: Gemini実APIの文章品質、Windows `start.bat`の実起動/ポート競合動作。前者は今回の明示的なAPI禁止、後者は既存データ/ポートを使わない安全な隔離実機試験を用意できていないため。
+- 現在のブロッカー: なし。実API品質の判断はユーザーが後日許可するまで保留。
+- 次: レビューフィードバック反映、全テスト再実行、報告書更新、意味単位でコミット・Push、PR #4最新HEADのCI結果を記録。
+- 最終コミットSHA: 未作成。Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4
+
 ## 2026-10-14 利用制限時の優先フォールバック追加
 
 - ユーザー指定の優先順を通常のFastAPI `/api/generate`にも実装: API1 / `gemini-3.5-flash-lite` → API2 / `gemini-3.5-flash-lite` → API1 / `gemini-3.1-flash-lite` → API2 / `gemini-3.1-flash-lite`。
