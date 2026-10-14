@@ -344,3 +344,11 @@
 - Firefoxテストの一時的なDOM更新によるStaleElementReferenceExceptionと遅いローカル応答でのトースト待ちタイムアウトもテスト側で安定化。Firefox実操作に関する表示と実機動作を緩めず、確認方法の待ち時間だけを修正。
 - 購買行動の「避ける・控える」表現、カレーの頻度/最近の経験と無関係なプロフィール情報、比較表現で否定されるカフェ嗜好、古い話題からの誤った誘い判定を再現する回帰テストを追加。
 - 修正後の全pytest **195 passed, 1 warning**。Firefox UIテストを含む。`node --check app.js`、Python `py_compile`、`git diff --check`も成功。新規実API通信は0件。GitHub Actions結果はPush後に追記する。
+
+### GitHub反映と最新Actions確認
+
+- 修正commit `2e6a34410548915c79409a8388821699cb6de95c`を既存ブランチへPush。個人用の指示ファイル`docs/verification/simulations/指示.txt`は未追跡のまま保持し、コミット対象から除外。
+- 同一SHAの[Push Actions 38569943665](https://github.com/kenkyu0909/aichatapp/actions/runs/38569943665)と[PR Actions 38569953895](https://github.com/kenkyu0909/aichatapp/actions/runs/38569953895)が成功。Actionsログでもpytest **195 passed, 1 warning**、Node構文検査、artifact保存の成功を確認。
+- PR #4の本文へT108–T110、品質004の判定、今回の修正、実API追加0件、レポートリンクを追記。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHAは上記と一致し、マージしていない。
+- 秘密値形式と指定された個人PC APIパスのパターンスキャン一致なし。`scripts/run_quality_checks_003.py`に残っていた個人PCの固定パスを`MRA_API_DIR`環境変数へ置き換えた。APIキーは読み出し・表示していない。
+- 最終報告更新commitとそのActions確認はこの記録の次に行う。最終HEAD/Actionsは完了後に追記する。

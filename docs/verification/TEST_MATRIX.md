@@ -247,4 +247,10 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T109 | カレー根拠の項目結び付け・カフェ嗜好の極性 | FastAPI候補検証のpytest | PASS | 本に関する「よく/最近」をカレー頻度・経験の根拠にしない。「落ち着いた雰囲気よりにぎやかな店が好き」から落ち着いた店好きとは生成しない。`tests/test_app.py`。 |
 | T110 | 誘い機会の話題一貫性と拒否判定 | 会話履歴関数テスト・Gemini SDKモックpytest | PASS | 古いカフェ話題と新しい無関係質問を組み合わせず、最新2件の関連する話題のみで判断。明確な外出への消極表現と「カフェは好きですか？」だけの質問は誘い意欲と扱わない。過去の誘い・拒否は維持し、遅い返信への謝罪は拒否と誤判定しない。`tests/test_app.py`。 |
 
-最新の項目数は110: PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。旧履歴のFAILは維持。全pytestは195 passed, 1 warning。Firefox UI自動テスト、Node構文検査、Python構文検査を含む。今回の変更に対するGitHub Actions結果はコミットPush後に追記する。
+最新の項目数は110: PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。旧履歴のFAILは維持。全pytestは195 passed, 1 warning。Firefox UI自動テスト、Node構文検査、Python構文検査を含む。
+
+Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
+
+- [Push run 38569943665](https://github.com/kenkyu0909/aichatapp/actions/runs/38569943665) — success, 195 passed, 1 warning。
+- [PR run 38569953895](https://github.com/kenkyu0909/aichatapp/actions/runs/38569953895) — success, 195 passed, 1 warning。
+- どちらも同じ最新PR HEADを対象とし、JavaScript構文検査とテスト結果Artifact保存も成功。

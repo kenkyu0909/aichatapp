@@ -468,7 +468,7 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 - pytest: **195 passed, 1 warning**（Starlette/httpx非推奨通知）。Firefox UI自動テストを含む。
 - 実API再試験: 今回は0件。元の8論理要求・9 provider attemptsのみ。
 - Firefox: 今回の新規機能の追加操作は未実施。全体pytest内の既存Firefox UIテストは成功。Chromeは使用していない。
-- JavaScript構文・Python構文・差分チェック、秘密情報検査、GitHub Actions: 最終確認とPush後の結果を記録する。
+- JavaScript構文・Python構文・差分チェック、秘密情報パターンスキャン、GitHub Actionsはいずれも成功。最新SHAのPush/PR Actions結果は下記。
 
 ### 実験004
 
@@ -478,11 +478,13 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 
 - テストマトリクス: 110項目、PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。過去のFAILは履歴として保持。
 - 作業ブランチ: `codex/full-system-verification`。PR #4はDraftのまま、未マージ。
-- 最終SHA、Push結果、Actions URL: コミット・Push後に追記する。
+- 検証済み実装SHA `2e6a34410548915c79409a8388821699cb6de95c`を既存ブランチへPush。Actions [Push run 38569943665](https://github.com/kenkyu0909/aichatapp/actions/runs/38569943665)と[PR run 38569953895](https://github.com/kenkyu0909/aichatapp/actions/runs/38569953895)は同じSHAで成功し、両方で195 passed, 1 warning、JavaScript構文検査、テストArtifact保存を確認。後続の報告反映はドキュメントのみの変更。
+- PR #4はOPEN/Draft、`feat/ui-local-backend-v1`宛てを維持。マージしていない。PR本文へ今回の修正・テスト・リンクを追記。
+- 最終報告自体を更新するコミットのSHAとActionsは、次のPush後に追記する。
 
 ### 追加レビューで見つかった境界ケース
 
 - 「衝動買いを避けています」「すぐ買うのは避けています」「即決購入を控えています」などの否定プロフィールを、反対の買い方を支持する根拠にしない。
 - カレーの頻度・最近の経験は、プロフィール内の別趣味にある「よく」「最近」だけで裏付けない。カフェの雰囲気は「落ち着いた雰囲気よりにぎやかな店が好き」の比較極性を保持する。
-- 誘い機会は直近2件の相手発言の同一話題に限定して評価する。遅い返信への謝罪だけで拒否と判断しない一方、過去の誘いや明確な拒否は全会話から確認する。
-- 追加の回帰テスト3件を含む全pytestは**195 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。新しい実Gemini API要求は0件。最新コミットのActionsはPush後に記録する。
+- 誘い機会は直近2件の相手発言の同一話題に限定して評価する。「カフェは好きですか？」という質問だけを相手の関心と扱わず、明確な消極表現も除外する。遅い返信への謝罪だけで拒否と判断しない一方、過去の誘いや明確な拒否は全会話から確認する。
+- 追加の回帰テストを含む全pytestは**195 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。新しい実Gemini API要求は0件。今回の報告追記を含むHEADとActionsは次のPush後に記録する。
