@@ -17,6 +17,7 @@ from PIL import Image
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "empty-api"))
+    monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "0")
     monkeypatch.delenv("MRA_API_1_KEY", raising=False)
     monkeypatch.delenv("MRA_API_2_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -33,6 +34,30 @@ def add_match(client, name):
     response = client.post("/api/matches", json={"name": name, "description": name + "の趣味は読書"})
     assert response.status_code == 201
     return response.json()["id"]
+
+
+def test_provider_attempts_wait_for_configured_model_interval(client, monkeypatch):
+    _, backend = client
+    monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "4.05")
+    now = 0.0
+    sleeps = []
+
+    def monotonic():
+        return now
+
+    def sleep(seconds):
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    backend._provider_last_attempt.clear()
+    monkeypatch.setattr(backend.time, "monotonic", monotonic)
+    monkeypatch.setattr(backend.time, "sleep", sleep)
+    backend._wait_for_provider_interval("API1", "gemini-3.5-flash-lite")
+    now = 1.0
+    backend._wait_for_provider_interval("API1", "gemini-3.1-flash-lite")
+    assert sleeps == [pytest.approx(3.05)]
+    assert now == pytest.approx(4.05)
 
 
 def png_bytes(color=(40, 120, 200)):
@@ -1145,6 +1170,16 @@ def test_verified_explicit_movie_fact_allows_personal_claim(client):
     }
     candidate = backend.Candidate(label="自然", text="洋画を観るのが好きです！")
     assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+def test_movie_watching_experience_does_not_confirm_movie_preference(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"past_experience": "映画を観たことがある"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="候補", text="映画好きです！")
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
 @pytest.mark.parametrize(("claim", "topic"), [

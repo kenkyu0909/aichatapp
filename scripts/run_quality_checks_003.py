@@ -21,6 +21,8 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 API_DIR = Path(r"C:\Users\poiuy\Desktop\aichatapp2\API")
 OUTPUT = ROOT / "docs" / "verification" / "simulations" / "quality_checks_003.json"
+MAX_PROVIDER_ATTEMPTS = 25
+MAX_ATTEMPTS_PER_LOGICAL_REQUEST = 5
 PROFILE = {
     "name": "架空の橘はる",
     "age": 28,
@@ -109,6 +111,7 @@ def main() -> int:
     if not API_DIR.is_dir():
         raise SystemExit("The user-provided private API directory is unavailable")
     os.environ["MRA_API_DIR"] = str(API_DIR)
+    os.environ["MRA_PROVIDER_MIN_INTERVAL_SECONDS"] = "4.05"
     for name in ("MRA_API_1_KEY", "MRA_API_2_KEY", "GEMINI_API_KEY"):
         os.environ.pop(name, None)
     temp_data = Path(tempfile.mkdtemp(prefix="mra-quality-003-"))
@@ -129,6 +132,7 @@ def main() -> int:
         "tests": [],
         "logical_requests": 0,
         "provider_attempts": 0,
+        "provider_attempts_unknown": 0,
         "status": "RUNNING",
         "limitations": ["quality ratings require human review", "profile-claim guard uses conservative patterns and is not a complete semantic fact checker"],
     }
@@ -159,7 +163,14 @@ def main() -> int:
             "user_answers": [{"question": "映画はお好きですか？", "answer": "映画好きです！特に洋画をよく観ます"}],
         }
         next_allowed_at = 0.0
-        for case_id, latest, history in [("T77_answered", "映画好きですか？", [])] + CASES:
+        cases = [("T77_answered", "映画好きですか？", [])] + CASES
+        for case_id, latest, history in cases:
+            # Reserve the backend's worst-case attempts before starting another
+            # logical request so the overall provider-attempt cap cannot be crossed.
+            if state["provider_attempts"] + MAX_ATTEMPTS_PER_LOGICAL_REQUEST > MAX_PROVIDER_ATTEMPTS:
+                state["status"] = "BLOCKED"
+                state["blocking_reason"] = "Stopped before starting a request that could exceed the provider-attempt budget"
+                break
             if case_id != "T77_answered":
                 created = client.post("/api/matches", json={"name": f"架空_{case_id}", "description": "カフェや散歩が好きな架空人物です"})
                 match_id = created.json()["id"]
@@ -171,16 +182,18 @@ def main() -> int:
             wait_for = next_allowed_at - time.monotonic()
             if wait_for > 0:
                 time.sleep(wait_for)
+            state["logical_requests"] += 1
             try:
                 response = client.post("/api/generate", json=request)
                 summary = summarize_response(response)
             except Exception as exc:
-                summary = {"transport_error_type": type(exc).__name__}
+                summary = {"transport_error_type": type(exc).__name__, "provider_attempt_count_unknown": True}
                 state["status"] = "BLOCKED"
                 state["blocking_reason"] = "Gemini transport/API call failed; internal exception text was not recorded"
+                state["provider_attempts_unknown"] += 1
+                state["last_attempt_count_status"] = "unknown: request may have reached the provider before transport failure"
             next_allowed_at = time.monotonic() + 4.2
             attempts = summary.get("api_attempt_count", 0)
-            state["logical_requests"] += int(attempts > 0)
             state["provider_attempts"] += attempts
             text_out = " ".join(c.get("text", "") for c in summary.get("candidates", []))
             substantive_result = (
@@ -188,10 +201,17 @@ def main() -> int:
                 and summary.get("demo") is False
                 and len(summary.get("candidates", [])) == 3
                 and summary.get("punctuation_violation") is False
+                and summary.get("candidate_distinct_count") == 3
             )
             test_result = {
                 "id": case_id,
-                "input": {"partner_message": latest, "prior_messages": history, "profile_has_topic_fact": False},
+                "input": {
+                    "partner_message": latest,
+                    "prior_messages": history,
+                    "profile_has_topic_fact": False,
+                    "temporary_user_answer_supplied": case_id == "T77_answered",
+                    "temporary_user_answer": "映画好きです！特に洋画をよく観ます" if case_id == "T77_answered" else None,
+                },
                 "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
                 "result": summary,
                 "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
@@ -213,10 +233,6 @@ def main() -> int:
             if summary.get("error_code") in ("all_models_rate_limited", "api_permission_denied", "model_not_found"):
                 state["status"] = "BLOCKED"
                 state["blocking_reason"] = summary.get("safe_error") or summary["error_code"]
-                break
-            if state["provider_attempts"] >= 25:
-                state["status"] = "BLOCKED"
-                state["blocking_reason"] = "Stopped before the remaining conversation budget could be exceeded"
                 break
         else:
             state["status"] = "COMPLETED"

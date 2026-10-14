@@ -6,6 +6,8 @@ import logging
 import os
 import re
 import sqlite3
+import threading
+import time
 import uuid
 import warnings
 from difflib import SequenceMatcher
@@ -28,6 +30,29 @@ DB = DATA / "app.sqlite3"
 PROMPTS = BASE / "prompts"
 GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
 GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
+_provider_attempt_lock = threading.Lock()
+_provider_last_attempt: dict[tuple[str, str], float] = {}
+
+
+def _wait_for_provider_interval(api_alias: str, model: str) -> None:
+    """Keep calls sharing one API credential within the 15 RPM ceiling."""
+    try:
+        interval = float(os.getenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "4.05"))
+    except ValueError:
+        interval = 4.05
+    if interval <= 0:
+        return
+    # The caller's quota is per credential, so model fallback shares the same
+    # cooldown instead of receiving a fresh per-model allowance.
+    key = (api_alias, "credential")
+    with _provider_attempt_lock:
+        now = time.monotonic()
+        previous = _provider_last_attempt.get(key)
+        if previous is not None:
+            delay = interval - (now - previous)
+            if delay > 0:
+                time.sleep(delay)
+        _provider_last_attempt[key] = time.monotonic()
 
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
 logger = logging.getLogger(__name__)
@@ -357,6 +382,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if re.search(r"幅広く|いろいろなジャンル", text) and not re.search(r"幅広く|いろいろなジャンル", source):
             return False
     elif topic == "映画":
+        facts = context.get("my_profile", {}).get("facts", {})
         specific_markers = re.findall(r"洋画|邦画|アニメ映画|ドキュメンタリー", text)
         if specific_markers and not all(marker in source for marker in specific_markers):
             return False
@@ -364,9 +390,15 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if frequency and not all(marker in source for marker in frequency):
             return False
         if not specific_markers and not frequency and re.search(r"映画.{0,8}好き", text):
+            profile_preference = any(
+                facts.get(key)
+                for key in ("favorite_movie_genres", "movie_preferences", "movie_hobby")
+            ) or bool(re.search(r"映画.{0,8}(?:好き|趣味)|映画鑑賞", source))
             for answer in context.get("ephemeral_user_answers", []):
                 if "映画" in answer.get("question", "") and re.search(r"はい|好き|観ます|見ます", answer.get("answer", "")) and not re.search(r"好きではありません|好きではない|好きじゃありません|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|見ません|観ません|見ない|観ない", answer.get("answer", "")):
                     return True
+            if not profile_preference:
+                return False
     elif topic == "居住地":
         places = re.findall(r"(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|東京都|大阪府)", text)
         if places and not all(place in source for place in places):
@@ -1006,6 +1038,7 @@ def generate(data: GenerateInput):
                     ),
                 )
                 while True:
+                    _wait_for_provider_interval(account, model)
                     attempted_models.append({"api_alias": account, "model": model})
                     response = client.models.generate_content(
                         model=model,
