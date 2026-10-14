@@ -488,3 +488,26 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 - カレーの頻度・最近の経験は、プロフィール内の別趣味にある「よく」「最近」だけで裏付けない。カフェの雰囲気は「落ち着いた雰囲気よりにぎやかな店が好き」の比較極性を保持する。
 - 誘い機会は直近2件の相手発言の同一話題に限定して評価する。「カフェは好きですか？」という質問だけを相手の関心と扱わず、明確な消極表現も除外する。遅い返信への謝罪だけで拒否と判断しない一方、過去の誘いや明確な拒否は全会話から確認する。
 - 追加の回帰テストを含む全pytestは**195 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。新しい実Gemini API要求は0件。今回の報告追記を含むHEADとActionsは次のPush後に記録する。
+
+## 2026-10-14 最新指示による再検証（品質005準備時点）
+
+### 判定
+
+**CONDITIONAL PASS（実API品質評価は保留）**。前回の実API品質確認004で残った問題に対するオフライン修正とFirefoxを含む回帰テストは成功しました。新しい実Gemini品質確認005はまだ未実施であり、今回のプロンプト品質合格やconversation_004開始条件を満たしたとは判断していません。
+
+### 変更とテスト
+
+- 追加レビューで、句読点を省いた文の連結、最近の場所/頻度の確認質問の粒度違い、カフェ頻度の言い換え再質問を新たに発見。`app.py`の高確度候補チェックと質問分類を拡張し、再現テストを追加しました。
+- `scripts/run_quality_checks_005.py`と`tests/test_quality_checks_005.py`を追加。最大8論理要求、provider試行上限、許可されたAPIディレクトリのみの利用、秘密値の非表示、隔離SQLite、質問/回答、候補内容・改行・プレースホルダー・重複・誘い方針を記録します。
+- レビュー修正後の最新pytest: **257 passed, 1 warning, 76.93秒**。Firefox UIテストを含みます。警告はStarletteの`httpx` TestClient利用非推奨です。`node --check app.js`、Python `py_compile`、`git diff --check`、秘密形式/API個人パスのファイルスキャンも成功。Chromeは使用していません。
+- 今回の実Geminiリクエスト数: **0**（品質005の開始前）。設定確認では指定APIディレクトリに対応する4経路の名前/モデル順を確認しましたが、キー値は出力していません。実際の認証有効性、残クォータ、課金状態は未確認です。
+
+### 公式資料と利用条件
+
+Googleの公式モデル一覧には`gemini-3.5-flash-lite`と`gemini-3.1-flash-lite`がstableとして掲載されています。Free tierはモデル利用が限定され、実際のプロジェクト別の利用枠はAI Studioで確認する必要があります。料金ページのfree枠・paid価格は記載されていますが、このユーザーのプロジェクトの課金状態や利用料金は確認していません。[Models](https://ai.google.dev/gemini-api/docs/models) / [Pricing](https://ai.google.dev/gemini-api/docs/pricing) / [Rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)。
+
+### 現在の状態
+
+- TEST_MATRIXは121項目: PASS 106 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。履歴のFAILは削除していません。
+- `quality_checks_005`はNOT_TESTED、`conversation_004`もNOT_TESTED。集中実API品質チェックで1件でも失敗した場合、conversation_004は開始しません。
+- GitHub Actions、PR #4の更新、最終コミットSHAは今回の変更のPush後に追記します。PR #4はDraftのまま維持し、マージしません。

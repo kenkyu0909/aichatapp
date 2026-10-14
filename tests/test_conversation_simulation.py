@@ -77,6 +77,22 @@ def test_conversation_003_is_newly_isolated_and_has_mirroring_metrics():
     assert turn["reviewer_assessment"]["mirroring"] == "未評価"
 
 
+def test_simulation_json_and_html_preserve_generated_sentence_breaks(tmp_path):
+    state = simulation.new_state("conversation_003")
+    body = "えーそうなんですね！\nカフェ巡り楽しそうです😊\n最近行ったお店ありますか？"
+    turn = {"candidates": [{"label": "自然", "text": body}]}
+    simulation.send_app_message(state, body, turn)
+    simulation.save_state(state, tmp_path / "conversation_003.json")
+    json_data = (tmp_path / "conversation_003.json").read_text(encoding="utf-8")
+    assert body in __import__("json").loads(json_data)["messages"][0]["body"]
+    html_path = tmp_path / "conversation_003.html"
+    simulation.render_html(state, html_path)
+    html = html_path.read_text(encoding="utf-8")
+    assert "<p>" + body + "</p>" in html
+    assert ".bubble p{white-space:pre-wrap" in html
+    assert "<script>" not in html
+
+
 def test_profile_export_does_not_overwrite_existing_snapshot_on_resume(tmp_path):
     profile_path = tmp_path / "profiles_003.md"
     simulation.export_profiles(path=profile_path, experiment_id="conversation_003")

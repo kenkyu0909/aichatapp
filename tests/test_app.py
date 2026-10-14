@@ -370,7 +370,7 @@ def test_quota_falls_back_in_user_priority_order(client, monkeypatch, tmp_path):
 
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "count": 3})
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert calls == [
         ("test-api1-secret", "gemini-3.5-flash-lite"),
         ("test-api2-secret", "gemini-3.5-flash-lite"),
@@ -756,9 +756,9 @@ def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monk
         "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
     }, {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "新しいお店探すのいいですね！最近行ってよかったところありますか？"},
+        "recommended": {"label": "自然", "text": "新しいお店探すのいいですね！\n最近行ってよかったところありますか？"},
         "alternatives": [
-            {"label": "広げる", "text": "カフェ巡り楽しそうですね！落ち着いたお店が好きですか？"},
+            {"label": "広げる", "text": "カフェ巡り楽しそうですね！\n落ち着いたお店が好きですか？"},
             {"label": "短め", "text": "新しいお店いいですね！"},
         ],
         "reason": "相手の話題に反応", "strategy": "相手のカフェの話を続ける", "conversation_stage": "Stage 2",
@@ -832,7 +832,7 @@ def test_info_retry_and_candidate_fact_repair_have_separate_single_limits(client
             "needs_user_info": False, "user_questions": [], "user_info_reason": "",
             "recommended": {"label": "自然", "text": first_text},
             "alternatives": [
-                {"label": "別案", "text": "映画いいですね！最近の作品で印象に残ったものはありますか？"},
+                {"label": "別案", "text": "映画いいですね！\n最近の作品で印象に残ったものはありますか？"},
                 {"label": "短め", "text": "映画の話もっと聞きたいです！"},
             ],
             "reason": "相手の質問に答える", "strategy": "映画の話を続ける", "conversation_stage": "Stage 2",
@@ -903,15 +903,15 @@ def test_prohibited_invite_decision_repairs_candidates_without_invitation(client
             "needs_user_info": False, "user_questions": [], "user_info_reason": "",
             "recommended": {"label": "自然", "text": text},
             "alternatives": [
-                {"label": "別案", "text": "気持ちを話してくれてありがとうございます！無理せず話しましょう"},
-                {"label": "短め", "text": "分かりました！気持ちを大事にします"},
+                {"label": "別案", "text": "気持ちを話してくれてありがとうございます！\n無理せず話しましょう"},
+                {"label": "短め", "text": "分かりました！\n気持ちを大事にします"},
             ],
             "reason": "相手の慎重さを尊重", "strategy": "相手の反応を待つ",
             "conversation_stage": "Stage 6", "invite_decision": "respect_no",
             "decision_reason": "相手が不安を示した", "next_action": "誘わず会話を続ける",
         }
 
-    responses = [payload("よかったら今度一緒にカフェに行きませんか？"), payload("話してくれてありがとうございます！気持ちを尊重します")]
+    responses = [payload("よかったら今度一緒にカフェに行きませんか？"), payload("話してくれてありがとうございます！\n気持ちを尊重します")]
     prompts = []
 
     class FakeModels:
@@ -922,7 +922,7 @@ def test_prohibited_invite_decision_repairs_candidates_without_invitation(client
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json()["invite_decision"] == "respect_no"
     assert "一緒に" not in response.json()["recommended"]["text"]
     assert len(prompts) == 2
@@ -970,7 +970,7 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
         "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
     }, {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "おうちで映画いいですね！何を観たんですか？"},
+        "recommended": {"label": "自然", "text": "おうちで映画いいですね！\n何を観たんですか？"},
         "alternatives": [
             {"label": "広げる", "text": "映画の話気になります！"},
             {"label": "短め", "text": "映画いいですね！"},
@@ -1010,13 +1010,13 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
         }
 
     responses = [response([
-        {"label": "相槌", "text": "カフェ探し楽しそうですね！どんなお店ですか？"},
+        {"label": "相槌", "text": "カフェ探し楽しそうですね！\nどんなお店ですか？"},
         {"label": "話題", "text": "中野のカフェ気になりますね！"},
         {"label": "短め", "text": "素敵なお店なんですね！"},
     ]), response([
-        {"label": "自然な誘い", "text": "中野のカフェいいですね！よかったら今度一緒に行きませんか？"},
-        {"label": "別案", "text": "落ち着いたお店いいですね！一緒に行けたら楽しそうです"},
-        {"label": "短め", "text": "気になります！今度一緒に行きませんか？"},
+        {"label": "自然な誘い", "text": "中野のカフェいいですね！\nよかったら今度一緒に行きませんか？"},
+        {"label": "別案", "text": "落ち着いたお店いいですね！\n一緒に行けたら楽しそうです"},
+        {"label": "短め", "text": "気になります！\n今度一緒に行きませんか？"},
     ])]
     prompts = []
 
@@ -1028,7 +1028,7 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     result = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
-    assert result.status_code == 200
+    assert result.status_code == 200, result.text
     body = result.json()
     assert body["invite_decision"] == "invite_gently"
     assert "一緒に行きませんか" in body["recommended"]["text"]
@@ -1058,7 +1058,7 @@ def test_positive_consider_invite_reason_requires_invitation_option(client, monk
 
     replies = [
         make_response(["中野のカフェ気になりますね！", "どんなお店ですか？", "いいですね！"]),
-        make_response(["中野のカフェいいですね！よかったら今度一緒に行きませんか？", "ケーキも気になります！", "どんな雰囲気でしたか？"]),
+        make_response(["中野のカフェいいですね！\nよかったら今度一緒に行きませんか？", "ケーキも気になります！", "どんな雰囲気でしたか？"]),
     ]
     captured_prompts = []
 
@@ -1122,10 +1122,10 @@ def test_first_mode_user_answer_resumes_once_without_persisting_profile(client, 
             captured.update(kwargs)
             return SimpleNamespace(text=json.dumps({
                 "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-                "recommended": {"label": "話題に触れる", "text": "はじめまして！マッチできてうれしいです☺️ カフェ巡りがお好きなんですね！最近どこに行きましたか？"},
+                "recommended": {"label": "話題に触れる", "text": "はじめまして！\nマッチできてうれしいです☺️\nカフェ巡りがお好きなんですね！\n最近どこに行きましたか？"},
                 "alternatives": [
-                    {"label": "短め", "text": "マッチありがとうございます！カフェのお話が気になりました！"},
-                    {"label": "丁寧", "text": "はじめまして！喫茶店がお好きなんですね！よく行かれるお店はありますか？"},
+                    {"label": "短め", "text": "マッチありがとうございます！\nカフェのお話が気になりました！"},
+                    {"label": "丁寧", "text": "はじめまして！\n喫茶店がお好きなんですね！\nよく行かれるお店はありますか？"},
                 ],
                 "reason": "本人が今回補足した相手情報を使っています", "strategy": "Stage 1で会話を始めます",
                 "conversation_stage": "Stage 1", "invite_decision": "do_not_invite",
@@ -1247,6 +1247,9 @@ def test_each_generation_mode_has_separate_prompt_with_shared_style(client, mode
     assert "読点「、」と句点「。」を一切使用しません" in prompt
     assert "敬語・混合・タメ口" in prompt
     assert "モード固有" in prompt
+    assert "1文ごとに必ず実改行" in prompt
+    assert "未完成のテンプレート" in prompt
+    assert "会話ですでに答えたことを尋ね返しません" in prompt
 
 
 def test_candidate_validation_rejects_japanese_comma_and_period(client):
@@ -1262,15 +1265,199 @@ def test_candidate_validation_rejects_japanese_comma_and_period(client):
 def test_candidate_validation_rejects_near_duplicate_options(client):
     _, backend = client
     value = backend.Suggestions(
-        recommended={"label": "返信", "text": "カフェ好きなんですね！よく行くお店はありますか？"},
+        recommended={"label": "返信", "text": "カフェ好きなんですね！\nよく行くお店はありますか？"},
         alternatives=[
-            {"label": "別案", "text": "カフェ好きなんですね！よく行くお店ってありますか？"},
+            {"label": "別案", "text": "カフェ好きなんですね！\nよく行くお店ってありますか？"},
             {"label": "第三案", "text": "どんなお店が好きですか？"},
         ],
         reason="理由", strategy="方針",
     )
     with pytest.raises(ValueError, match="似すぎ"):
         backend.check_suggestions(value, 3)
+
+
+@pytest.mark.parametrize("text", [
+    "えーそうなんですね！カフェ巡り楽しそうです😊",
+    "最近観た映画ありますか？どんな作品でしたか？",
+    "映画も笑顔になれます！最近は何を観ますか？",
+])
+def test_candidate_validation_requires_sentence_line_breaks(client, text):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": text}, alternatives=[],
+        reason="自然な返信", strategy="会話を続ける",
+    )
+    with pytest.raises(ValueError, match="改行"):
+        backend.check_suggestions(value, 1)
+
+
+@pytest.mark.parametrize("text", [
+    "えーそうなんですね！\nカフェ巡り楽しそうです😊",
+    "最近観た映画ありますか？\nどんな作品でしたか？",
+    "それは面白すぎます笑\nまた聞きたいです！",
+    "映画も笑顔になれます",
+])
+def test_candidate_validation_accepts_one_sentence_per_line(client, text):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": text}, alternatives=[],
+        reason="自然な返信", strategy="会話を続ける",
+    )
+    assert backend.check_suggestions(value, 1)["recommended"]["text"] == text
+
+
+@pytest.mark.parametrize("text", [
+    "カフェ好きなんですね！\n〇〇さんはどんなお店が好きですか？",
+    "○○さんはどうですか？",
+    "最近の映画を教えてください [名前]",
+    "こんにちは {name} さん",
+    "相手の名前をここに入力してください",
+    "この欄はTBDです",
+])
+def test_candidate_validation_rejects_unfinished_placeholders(client, text):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": text}, alternatives=[],
+        reason="自然な返信", strategy="会話を続ける",
+    )
+    with pytest.raises(ValueError, match="未完成"):
+        backend.check_suggestions(value, 1)
+
+
+def test_candidate_validation_allows_literal_placeholder_discussion_when_quoted(client):
+    _, backend = client
+    value = backend.Suggestions(
+        recommended={"label": "返信", "text": "プロフィールに「〇〇さん」と書いてあるんですね！"},
+        alternatives=[], reason="引用への返信", strategy="会話を続ける",
+    )
+    assert backend.check_suggestions(value, 1)
+
+
+def test_sent_message_newlines_survive_sqlite_reload_and_json_round_trip(client):
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    body = "えーそうなんですね！\nカフェ巡り楽しそうです😊\n最近行ったお店ありますか？"
+    saved = c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": body})
+    assert saved.status_code == 201
+    assert saved.json()["body"] == body
+    loaded = c.get(f"/api/matches/{mid}/messages").json()
+    assert loaded[0]["body"] == body
+    assert json.loads(json.dumps(loaded, ensure_ascii=False))[0]["body"] == body
+
+
+@pytest.mark.parametrize(("partner_question", "expected"), [
+    ("普段どんなジャンルの本を読みますか？", "どんなジャンル"),
+    ("最近どんな映画を観ましたか？", "最近観た映画"),
+    ("気になる新作を見つけたらすぐ買うタイプですか？", "すぐ買う方"),
+    ("カレーだと何が好きですか？", "好きなカレーの種類や具"),
+])
+def test_missing_fact_question_matches_the_specific_information_requested(client, partner_question, expected):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_question}],
+        "my_profile": {"facts": {"hobbies": ["読書", "映画", "カレー"]}},
+        "ephemeral_user_answers": [],
+    }
+    missing = backend.missing_personal_fact_question(context)
+    assert missing is not None
+    assert expected in missing.question
+
+
+@pytest.mark.parametrize(("partner_question", "expected_topic", "expected_question"), [
+    ("最近どこのカフェに行きましたか？", "カフェ最近", "最近行ったカフェ"),
+    ("どのくらい映画館に行きますか？", "映画館頻度", "どのくらいの頻度"),
+    ("カフェは月に何回くらい行きますか？", "カフェ頻度", "どのくらいの頻度"),
+])
+def test_personal_confirmation_question_keeps_recent_place_and_frequency_specificity(
+    client, partner_question, expected_topic, expected_question
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_question}],
+        "my_profile": {"facts": {"hobbies": ["カフェ巡り", "映画鑑賞"]}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_for_personal_question(partner_question) == expected_topic
+    missing = backend.missing_personal_fact_question(context)
+    assert missing is not None
+    assert expected_question in missing.question
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "そうなんですね最近どこか行きましたか？",
+    "カフェが好きです最近よく行きます",
+    "映画館はいいですね見終わった後も楽しいです",
+    "それは嬉しいですね温泉好きです",
+    "そうなんですね東京は行ったことありますか？",
+    "カフェに行くことが多いです落ち着いた雰囲気が好きです",
+    "そうなんですね笑次は映画です",
+    "友達と遊べて楽しかったです自然の中で過ごすのが好きです",
+    "とてもおいしかったです景色もよくてまた行きたいです",
+    "そのお店は駅の近くにあるんですね雰囲気もよさそうです",
+    "映画を観てきましたそのあと友達と食事しました",
+    "楽しかったですねまた行きたいです",
+    "昨日のライブ楽しかったです帰りは友達とご飯を食べました",
+    "休日は公園で散歩しました途中で犬に会いました",
+])
+def test_sentence_break_guard_detects_unseparated_japanese_sentences(client, candidate_text):
+    _, backend = client
+    assert backend.candidate_has_missing_sentence_break(candidate_text)
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "映画が好きですか？",
+    "学生ですがカフェ巡りが好きです",
+    "今日は嬉しいですね笑",
+    "「すごく楽しかった！」って言ってました",
+    "『また行きたい！』って思えるお店いいですね",
+    "「すごく楽しかった！」と聞きました",
+    "『また行きたい！』と感じました",
+    "「楽しかった！」と教えてくれました",
+    "「とても楽しかった！」を思い出しました",
+])
+def test_sentence_break_guard_allows_sentence_endings_and_connectives(client, candidate_text):
+    _, backend = client
+    assert not backend.candidate_has_missing_sentence_break(candidate_text)
+
+
+def test_repeat_question_about_known_friend_cafe_activity_is_detected(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "休日は友達とカフェに行くことが多いです！"}],
+    }
+    duplicate = backend.Candidate(label="重複", text="友達とカフェに行くことが多いんですか？")
+    deeper = backend.Candidate(label="深掘り", text="最近友達と行ってよかったカフェありますか？")
+    assert backend.repeated_partner_question_topics([duplicate], context) == ["友達とカフェに行く頻度"]
+    assert backend.repeated_partner_question_topics([deeper], context) == []
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "カフェってよく行きますか？",
+    "喫茶店にはよく行くんですか？",
+    "カフェにはどのくらいの頻度で行きますか？",
+])
+def test_cafe_frequency_paraphrases_are_rejected_after_partner_already_shared_it(client, candidate_text):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "休日は友達とカフェに行くことが多いです！"}]}
+    candidate = backend.Candidate(label="重複", text=candidate_text)
+    assert "友達とカフェに行く頻度" in backend.repeated_partner_question_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("partner_text", "candidate_text", "topic"), [
+    ("休日は家で映画を見ることが多いです", "休日は何して過ごすことが多いですか？", "休日の過ごし方"),
+    ("映画が好きでよく観ます", "映画好きなんですか？", "趣味の好み"),
+    ("好きな食べ物はカレーです", "好きな食べ物は何ですか？", "好きな食べ物"),
+    ("先週京都に行きました", "先週どこか行きましたか？", "最近行った場所"),
+])
+def test_repeated_partner_fact_questions_are_detected_but_deeper_questions_remain_allowed(
+    client, partner_text, candidate_text, topic
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    duplicate = backend.Candidate(label="重複", text=candidate_text)
+    assert topic in backend.repeated_partner_question_topics([duplicate], context)
 
 
 @pytest.mark.parametrize("mode", ["reply", "first", "followup", "like"])
@@ -1280,6 +1467,14 @@ def test_demo_candidate_bodies_obey_absolute_punctuation_rule(client, mode):
     candidates = [result["recommended"], *result["alternatives"]]
     assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
     assert result["demo"] is True
+    value = backend.Suggestions(
+        recommended=result["recommended"], alternatives=result["alternatives"],
+        reason=result["reason"], strategy=result["strategy"],
+    )
+    backend.check_suggestions(value, 5)
+    for item in candidates:
+        assert not backend.candidate_has_missing_sentence_break(item["text"])
+        assert all(line.strip() for line in item["text"].splitlines())
 
 
 def test_direct_unanswered_personal_question_is_asked_before_gemini(client, monkeypatch):
@@ -1318,7 +1513,7 @@ def test_candidate_punctuation_triggers_at_most_one_constrained_regeneration(cli
          "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
          "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
         {"needs_user_info": False, "user_questions": [], "user_info_reason": "",
-         "recommended": {"label": "自然", "text": "カフェ好きなんですね！よく行くお店はありますか？"},
+         "recommended": {"label": "自然", "text": "カフェ好きなんですね！\nよく行くお店はありますか？"},
          "alternatives": [{"label": "別案", "text": "気になるお店ありますか？"}, {"label": "質問", "text": "落ち着いたお店が好きですか？"}],
          "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
          "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
@@ -1335,11 +1530,71 @@ def test_candidate_punctuation_triggers_at_most_one_constrained_regeneration(cli
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["recommended"]["text"] == "カフェ好きなんですね！よく行くお店はありますか？"
+    assert body["recommended"]["text"] == "カフェ好きなんですね！\nよく行くお店はありますか？"
     assert body["api_attempt_count"] == 2
     assert len(calls) == 2
     assert "句読点違反" in calls[1]["config"].system_instruction
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "カフェ好きです！"
+
+
+def test_candidate_missing_line_break_gets_one_repair_before_return(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ巡りが好きです！"})
+    def payload(first, second, third):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": {"label": "自然", "text": first},
+            "alternatives": [{"label": "別案", "text": second}, {"label": "短め", "text": third}],
+            "reason": "理由", "strategy": "会話を続ける", "conversation_stage": "Stage 2",
+            "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+        }
+    responses = [
+        payload("えーそうなんですね！カフェ巡り楽しそうです😊", "いいですね！最近のお店が気になります！", "カフェのお話も聞いてみたいです"),
+        payload("えーそうなんですね！\n最近行ってよかったお店ありますか？", "カフェ巡り楽しそうです！\n落ち着いたお店が好きですか？", "カフェのお話も聞いてみたいです"),
+    ]
+    calls = []
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    before = c.get(f"/api/matches/{mid}/messages").json()
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200, response.text
+    assert response.json()["recommended"]["text"] == "えーそうなんですね！\n最近行ってよかったお店ありますか？"
+    assert len(calls) == 2
+    assert "改行形式違反" in calls[1]["config"].system_instruction
+    assert c.get(f"/api/matches/{mid}/messages").json() == before
+
+
+def test_placeholder_candidates_are_never_returned_after_repair_limit(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェが好きです！"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "カフェ好きなんですね！\n〇〇さんはどんなお店が好きですか？"},
+        "alternatives": [{"label": "別案", "text": "カフェのお話気になります！"}, {"label": "短め", "text": "どんなお店に行きますか？"}],
+        "reason": "理由", "strategy": "会話を続ける", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }
+    calls = []
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "invalid_response"
+    assert len(calls) == 2
 
 
 def test_second_candidate_punctuation_violation_fails_safely_without_third_request(client, monkeypatch):
@@ -1626,7 +1881,7 @@ def test_unsafe_direct_answer_becomes_user_question_without_second_generation(cl
     assert body["needs_user_info"] is True
     assert body["recommended"] is None
     assert body["alternatives"] == []
-    assert "買い方" in body["user_questions"][0]["question"]
+    assert "買う方" in body["user_questions"][0]["question"]
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
 
@@ -1686,8 +1941,8 @@ def test_user_answer_resumes_generation_ephemerally_for_specific_question(
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
         "recommended": {"label": "自然", "text": reply},
         "alternatives": [
-            {"label": "話題を広げる", "text": f"{reply} ほかにも教えてください！"},
-            {"label": "少し親しみ", "text": f"{reply} その話面白いですね！"},
+            {"label": "話題を広げる", "text": f"{reply}\nほかにも教えてください！"},
+            {"label": "少し親しみ", "text": f"{reply}\nその話面白いですね！"},
         ],
         "reason": "本人の回答に沿って応答", "strategy": "相手の質問に答える",
         "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",

@@ -478,6 +478,58 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     assert errors["console"] == []
 
 
+def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のあおい")
+    message_input = driver.find_element(By.ID, "message-input")
+    message_input.send_keys("休日は友達とカフェに行くことが多いです！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+    expected = "えーそうなんですね！\nカフェ巡り楽しそうです😊\n最近行ってよかったお店ありますか？"
+    driver.execute_script("""
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/generate' || String(url) === '/api/generate') {
+          return new Response(JSON.stringify({
+            recommended:{label:'自然体',text:arguments[0]},
+            alternatives:[
+              {label:'短め',text:'カフェ巡りいいですね！'},
+              {label:'別の切り口',text:'最近行ったお店で印象に残ったところありますか？'}
+            ],reason:'相手の発言に合わせています'
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """, expected)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    first = driver.find_element(By.CSS_SELECTOR, ".candidate-text")
+    assert driver.execute_script("return arguments[0].textContent", first) == expected
+    assert driver.execute_script("return getComputedStyle(arguments[0]).whiteSpace", first) == "pre-wrap"
+    driver.execute_script("Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText: async text => {window.__copiedText=text;}}});")
+    driver.find_element(By.CSS_SELECTOR, ".candidate button").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText !== undefined"))
+    assert driver.execute_script("return window.__copiedText") == expected
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:last-child").click()
+    textarea = driver.find_element(By.CSS_SELECTOR, "#modal-body textarea")
+    assert textarea.get_attribute("value") == expected
+    driver.find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    stored = driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble")
+    assert driver.execute_script("return arguments[0].textContent", stored).strip() == expected
+    driver.refresh()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    stored_after_reload = driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble")
+    assert driver.execute_script("return arguments[0].textContent", stored_after_reload).strip() == expected
+
+
 def test_firefox_distinguishes_invalid_candidate_and_rate_limit_errors(local_app, firefox):
     app = local_app
     driver = firefox

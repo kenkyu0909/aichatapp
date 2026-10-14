@@ -210,6 +210,18 @@ class CandidateSimilarityError(ValueError):
     """Candidates are near duplicates rather than meaningfully different options."""
 
 
+class CandidateLineBreakError(ValueError):
+    """A candidate appears to contain multiple sentences on one line."""
+
+
+class CandidatePlaceholderError(ValueError):
+    """A candidate contains an unfinished name or template placeholder."""
+
+
+class CandidateRepeatedQuestionError(ValueError):
+    """A candidate asks for a partner fact that was already stated."""
+
+
 class ProviderAttemptLimitError(RuntimeError):
     """The request reached its configured hard ceiling for provider calls."""
 
@@ -278,6 +290,9 @@ PERSONAL_FACT_TOPICS = {
     "居住地": ("住んで", "住まい", "どのあたり", "最寄り", "地域"),
     "予定": ("予定", "空いて", "都合", "曜日", "時間帯"),
     "カフェ": ("カフェ", "喫茶店", "コーヒー"),
+    "カフェ最近": ("カフェ", "喫茶店"),
+    "カフェ頻度": ("カフェ", "喫茶店"),
+    "映画館頻度": ("映画館",),
     "パン": ("パン", "パン屋", "ベーカリー"),
     "休日": ("休日", "休みの日", "週末"),
 }
@@ -295,6 +310,13 @@ def _topic_for_personal_question(text: str) -> str | None:
         if re.search(r"好き|お好き", text) and not re.search(r"何が|どんな|種類|具|辛さ|何系|どのカレー", text):
             return "カレー好み"
         return "カレー"
+    if "映画館" in text and re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
+        return "映画館頻度"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["カフェ"]):
+        if re.search(r"最近|この前|昨日|先週", text) and re.search(r"どこ|どの店|何という|行った|行きました|訪れ", text):
+            return "カフェ最近"
+        if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
+            return "カフェ頻度"
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             # Do not mistake statements about the partner for a question about the user.
@@ -312,6 +334,36 @@ def _topic_for_personal_question(text: str) -> str | None:
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
     facts = context["my_profile"].get("facts", {})
+    if topic == "カフェ最近":
+        keys = ("recent_cafes", "recent_cafe_visits", "最近行ったカフェ")
+        if any(facts.get(key) for key in keys):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and any(term in answer.get("question", "") for term in ("カフェ", "喫茶店"))
+            and re.search(r"最近|この前|昨日|先週|行った|訪れ|店|場所|行っていない|行ってない", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
+    if topic == "カフェ頻度":
+        keys = ("cafe_frequency", "cafe_visit_frequency", "カフェに行く頻度")
+        if any(facts.get(key) for key in keys):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and any(term in answer.get("question", "") for term in ("カフェ", "喫茶店"))
+            and re.search(r"頻度|よく|週|月|回|たまに|時々|あまり|ほとんど", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
+    if topic == "映画館頻度":
+        keys = ("movie_theater_frequency", "cinema_visit_frequency", "映画館に行く頻度")
+        if any(facts.get(key) for key in keys):
+            return True
+        return any(
+            answer.get("answer", "").strip()
+            and "映画館" in answer.get("question", "")
+            and re.search(r"頻度|よく|週|月|回|たまに|時々|あまり|ほとんど", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
     if topic == "買い物":
         keys = ("shopping_habits", "buying_habits", "purchase_habits", "買い物の傾向", "購入傾向")
         values = [str(facts[key]) for key in keys if facts.get(key)]
@@ -389,17 +441,22 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         keys = ("recent_movies", "recent_films", "最近観た映画")
         return any(facts.get(key) for key in keys) or any(
             answer.get("answer", "").strip()
-            and re.search(r"最近|観た|見た|洋画|邦画|映画が好き|映画好き|[『「].+[』」]", answer.get("answer", ""))
+            and re.search(r"最近|この前|昨日|先週|観た|見た|作品|[『「].+[』」]", answer.get("answer", ""))
             for answer in context.get("ephemeral_user_answers", [])
             if "映画" in answer.get("question", "")
         )
     if topic == "映画" and re.search(r"ジャンル|何系|どんな.*好き|好きな.*映画", question_text):
-        return any(facts.get(key) for key in ("favorite_movie_genres", "movie_genres", "favorite_films"))
+        return any(facts.get(key) for key in ("favorite_movie_genres", "movie_genres", "favorite_films")) or any(
+            answer.get("answer", "").strip()
+            and "映画" in answer.get("question", "")
+            and re.search(r"洋画|邦画|アニメ|ドキュメンタリー|アクション|恋愛|コメディ|ミステリー", answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
     if topic == "読書" and re.search(r"最近|何を読|最近.*本|読んだ本", question_text):
         keys = ("recent_books", "最近読んだ本")
         return any(facts.get(key) for key in keys) or any(
             answer.get("answer", "").strip()
-            and re.search(r"最近|読んだ|読んでいる|[『「].+[』」]", answer.get("answer", ""))
+            and re.search(r"最近|この前|昨日|先週|読んだ|作品|[『「].+[』」]|読んでいません|読んでない|ありません", answer.get("answer", ""))
             for answer in context.get("ephemeral_user_answers", [])
             if "本" in answer.get("question", "") or "読書" in answer.get("question", "")
         )
@@ -488,7 +545,36 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
             question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
             purpose="相手から本人の情報について直接質問されていますが、内容を分類できないため回答を確認します",
         )
-    questions = {
+    return personal_fact_question(topic, partner_messages[-1])
+
+
+def personal_fact_question(topic: str, source_question: str = "") -> UserQuestion:
+    normalized = re.sub(r"\s+", "", source_question)
+    if topic == "読書" and re.search(r"ジャンル|何系|どんな本", source_question):
+        question = "普段読む本はどんなジャンルが多いですか？"
+    elif topic == "読書" and re.search(r"最近|何を読|読んだ本", source_question):
+        question = "最近読んだ本があれば作品名や内容を教えてください"
+    elif topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", source_question):
+        question = "最近観た映画があれば作品名を教えてください"
+    elif topic == "映画" and re.search(r"ジャンル|何系|どんな.*好き|好きな.*映画", source_question):
+        question = "好きな映画のジャンルを教えてください"
+    elif topic == "カフェ最近":
+        question = "最近行ったカフェがあればお店の名前や場所を教えてください。行っていなければそう答えてください"
+    elif topic == "カフェ頻度":
+        question = "カフェにはどのくらいの頻度で行きますか？"
+    elif topic == "映画館頻度":
+        question = "映画館にはどのくらいの頻度で行きますか？"
+    elif topic == "買い物" and re.search(r"すぐ|即|衝動|タイプ", source_question):
+        question = "気になる新作はすぐ買う方ですか？それとも少し考えてから買う方ですか？"
+    elif topic in {"カレー", "カレー好み"} and re.search(r"何が|どんな|種類|具|辛さ|何系", source_question):
+        question = "好きなカレーの種類や具を教えてください"
+    elif topic == "カレー好み":
+        question = "カレーは好きですか？"
+    elif topic == "本人情報" and normalized:
+        quoted_question = source_question.strip().replace("\n", " ")[:180]
+        question = f"相手の「{quoted_question}」にどう答えたいか教えてください"
+    else:
+        questions = {
         "買い物": "新作や気になる商品を見つけたときの買い方を教えてください",
         "カレー": "カレーの種類や具で好きなものを教えてください",
         "カレー好み": "カレーは好きですか？",
@@ -500,14 +586,18 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
         "旅行": "旅行やお出かけについてどう答えたいですか？",
         "食事": "好きな食べ物や料理を教えてください",
         "カフェ": "カフェに行く頻度や好きなお店について教えてください",
+        "カフェ最近": "最近行ったカフェがあればお店の名前や場所を教えてください。行っていなければそう答えてください",
+        "カフェ頻度": "カフェにはどのくらいの頻度で行きますか？",
+        "映画館頻度": "映画館にはどのくらいの頻度で行きますか？",
         "パン": "パン屋やパン巡りについて、実際に好きなことがあれば教えてください",
         "居住地": "相手に伝えてよい居住地域を教えてください",
         "予定": "相手に伝えてよい予定や希望時間を教えてください",
         "休日": "休日は普段どんなふうに過ごすか教えてください",
-    }
+        }
+        question = questions.get(topic, f"{topic}について相手に伝えてよい内容を教えてください")
     return UserQuestion(
-        question=questions[topic],
-        purpose=f"相手から本人の{topic}について直接質問されており未確認の事実を答えないため",
+        question=question,
+        purpose=f"本人が確認していない{topic}の好みや経験を相手に伝えないため",
     )
 
 
@@ -754,30 +844,6 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     return list(dict.fromkeys(found))
 
 
-def personal_fact_question(topic: str) -> UserQuestion:
-    questions = {
-        "買い物": "新作や気になる商品を見つけたときの買い方を教えてください",
-        "カレー": "カレーの種類や具で好きなものを教えてください",
-        "カレー好み": "カレーは好きですか？",
-        "カレー頻度": "カレーを食べる頻度を教えてください",
-        "カレー経験": "最近カレーを食べたことがあれば教えてください。なければそう答えてください",
-        "本人情報": "この質問にどう答えたいか教えてください。分からない場合はスキップできます",
-        "映画": "映画はお好きですか？最近の作品についてなら、分かる範囲で教えてください",
-        "読書": "普段読む本のジャンルや最近読んだ本を教えてください",
-        "カフェ": "カフェに行く頻度や好きなお店について教えてください",
-        "旅行": "旅行やお出かけについて、実際に話してよい経験を教えてください",
-        "居住地": "相手に伝えてよい居住地域を教えてください",
-        "食事": "好きな食べ物や料理を教えてください",
-        "パン": "パン屋やパン巡りについて、実際に好きなことがあれば教えてください",
-        "休日": "休日は普段どんなふうに過ごすか教えてください",
-    }
-    question = questions.get(topic, f"{topic}について相手に伝えてよい内容を教えてください")
-    return UserQuestion(
-        question=question,
-        purpose=f"生成候補に本人の未確認の{topic}の好みや経験が含まれているため、事実を作らないよう確認します",
-    )
-
-
 def _question_topic(text: str) -> str | None:
     quoted_partner_question = re.search(r"相手の「(.+?)」にどう答えたい", text)
     if quoted_partner_question:
@@ -804,12 +870,19 @@ def estimate_message_style(messages: list[dict]) -> dict:
     recent_self = [m["body"] for m in messages if m.get("role") == "me"][-5:]
 
     def sentence_estimate(text: str) -> int:
-        # Partner messages may omit Japanese full stops and separate clauses by spaces.
-        chunks = [
-            part for part in re.split(r"[!?！？]+|\n+|[ \t]+", text.strip())
-            if re.search(r"[ぁ-んァ-ヶ一-龠A-Za-z0-9]", part)
-        ]
-        return len(chunks)
+        # Newlines are the primary sentence signal. Count explicit terminal marks
+        # per line so a final mark and its newline are not counted twice.
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return 0
+        return sum(
+            max(
+                1,
+                len(re.findall(r"[!?！？]+", line)),
+                1 + len(SENTENCE_BOUNDARY_PATTERN.findall(line)),
+            )
+            for line in lines
+        )
 
     polite_markers = re.compile(r"です|ます|でした|ました|ください|でしょう")
     casual_markers = re.compile(r"だよ|だね|じゃん|かな|だと思う|笑|ｗ|w")
@@ -1207,10 +1280,115 @@ def build_context(data: GenerateInput) -> dict:
     }
 
 
-def check_suggestions(value: Suggestions | SuggestionsV2, count: int) -> dict:
+PLACEHOLDER_PATTERN = re.compile(
+    r"(?:〇{2,}|○{2,}|[xXＸｘ]{2,})\s*さん?|"
+    r"\[\s*(?:名前|name)\s*\]|"
+    r"\{\{?\s*(?:名前|name)\s*\}?\}|"
+    r"相手の名前をここに入力|(?<![A-Za-z])TBD(?![A-Za-z])",
+    re.IGNORECASE,
+)
+SENTENCE_ENDING_WITHOUT_BREAK_PATTERN = re.compile(
+    r"(?:[!?！？]+|(?:です|ます|でした|ました|ですね|ですよ|だよ|だね|面白い|最高|楽しい)笑|(?:です|ます|でした|ました|ですね|ですよ|だよ|だね)[ \t]+)"
+    r"(?![」』](?:って|と|を|が|は|も|に|の|で|へ))"
+    r"[ \t]*(?=[^\s])"
+)
+SENTENCE_ENDING_BEFORE_START_PATTERN = re.compile(
+    r"(?:でしょうか|ですか|ますか|ですね|ですよね|なんですね|なんです|でした|ました|です|ます|だよ|だね|と思います|と思う|いいですね|楽しいです|面白いです)"
+    r"(?:笑)?(?!か)(?=(?:最近|ちなみに|今日は|今日|昨日|今度|休日|週末|カフェ|喫茶店|映画|旅行|温泉|川崎|東京|横浜|それ|自分|私|僕|わたし|落ち着いた|新しい|好き|よく|行った|行く|観た|見た|見終わった|楽しそう|気になります|今は|普段|なんか|あと|自然|景色|雰囲気|そのあと|また|帰り|途中で))"
+)
+SENTENCE_BOUNDARY_PATTERN = re.compile(
+    r"(?:[!?！？]+|(?:です|ます|でした|ました|ですね|ですよ|だよ|だね|面白い|最高|楽しい)笑|😊|☺️|😄|😂|🥲|😭|✨|🌸|❤️|💕|👍|☕|🍰|🌿|🎬|📚)"
+    r"[ \t]*(?=[ぁ-んァ-ヶ一-龠])"
+)
+
+
+def candidate_has_missing_sentence_break(text: str) -> bool:
+    """Catch likely adjacent Japanese sentence boundaries without punctuation.
+
+    Japanese sentence segmentation is ambiguous when a writer omits all terminal
+    marks. This conservative check detects explicit terminal marks, common sentence
+    endings followed by another clause, and avoids rewriting or splitting the text.
+    """
+    for line in text.splitlines() or [text]:
+        if SENTENCE_ENDING_WITHOUT_BREAK_PATTERN.search(line):
+            return True
+        if SENTENCE_ENDING_BEFORE_START_PATTERN.search(line):
+            return True
+        # Common emoji can mark a sentence boundary with or without a space.
+        if re.search(r"(?:😊|☺️|😄|😂|🥲|😭|✨|🌸|❤️|💕|👍|☕|🍰|🌿|🎬|📚)[ \t]*[ぁ-んァ-ヶ一-龠]", line):
+            return True
+        if re.search(r"\n", line):  # defensive; splitlines normally removes it
+            return True
+    return False
+
+
+def candidate_has_placeholder(text: str) -> bool:
+    # A literal template token discussed as a quote is not an unresolved slot.
+    unquoted = re.sub(r"「[^」]*」|『[^』]*』|\"[^\"]*\"|'[^']*'", "", text)
+    return bool(PLACEHOLDER_PATTERN.search(unquoted))
+
+
+def repeated_partner_question_topics(candidates: list[Candidate], context: dict) -> list[str]:
+    """Catch high-confidence repeated factual questions without claiming full semantics.
+
+    Japanese paraphrase detection cannot be proven reliably with string rules, so this
+    only rejects a small set of exact fact/question patterns. The prompt handles broader
+    semantic repetition and this heuristic is recorded as a limited guard.
+    """
+    partner_messages = [
+        message.get("body", "") for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    knows_friend_cafe_frequency = any(
+        re.search(r"友達と.{0,14}(?:カフェ|喫茶店).{0,18}(?:行|出かけ)", message)
+        or re.search(r"(?:カフェ|喫茶店).{0,14}友達と.{0,14}(?:行|出かけ)", message)
+        for message in partner_messages
+    )
+    repeat_rules: list[tuple[str, bool, re.Pattern[str]]] = [
+        (
+            "友達とカフェに行く頻度",
+            knows_friend_cafe_frequency,
+            re.compile(r"(?:友達と.{0,14})?(?:カフェ|喫茶店).{0,18}(?:(?:よく|頻繁|何回|どのくらい|どれくらい).{0,12}(?:行|出かけ)|(?:行く|行きます|出かける).{0,10}(?:ですか|ますか|んですか|？|\?))"),
+        ),
+        (
+            "休日の過ごし方",
+            any(re.search(r"(?:休日|休みの日|週末).{0,22}(?:友達|家|自宅|カフェ|映画|読書|旅行|寝)", message) for message in partner_messages),
+            re.compile(r"(?:休日|休みの日|週末).{0,14}(?:何して|何をして|どう過ご|どんなふうに過ご).{0,8}(?:ですか|ますか|？|\?)"),
+        ),
+        (
+            "趣味の好み",
+            any(re.search(r"(?:映画|旅行|読書|カフェ巡り|カフェ).{0,12}(?:好き|趣味|よく行)", message) for message in partner_messages),
+            re.compile(r"(?:映画|旅行|読書|カフェ巡り|カフェ).{0,10}(?:好きですか|好きなんですか|趣味ですか|よく行きますか)"),
+        ),
+        (
+            "好きな食べ物",
+            any(re.search(r"(?:好きな食べ物|好物).{0,10}(?:カレー|ラーメン|寿司|パスタ|ケーキ)|(?:カレー|ラーメン|寿司|パスタ|ケーキ).{0,8}(?:が好き|が好物)", message) for message in partner_messages),
+            re.compile(r"(?:好きな食べ物|好物).{0,8}(?:何|なんですか|ありますか)|何が好きですか"),
+        ),
+        (
+            "最近行った場所",
+            any(re.search(r"(?:最近|この前|昨日|先週).{0,18}(?:行った|行きました|訪れた|訪れました)", message) for message in partner_messages),
+            re.compile(r"(?:最近|この前|昨日|先週).{0,10}どこか行(?:った|きました)|どこに行(?:った|きました)"),
+        ),
+    ]
+    return list(dict.fromkeys(
+        topic for topic, known, pattern in repeat_rules
+        if known and any(pattern.search(candidate.text) for candidate in candidates)
+    ))
+
+
+def check_suggestions(value: Suggestions | SuggestionsV2, count: int, context: dict | None = None) -> dict:
     candidates = [value.recommended, *value.alternatives]
     if any("、" in candidate.text or "。" in candidate.text for candidate in candidates):
         raise CandidatePunctuationError("候補本文に使用禁止の句読点が含まれています")
+    if any(candidate_has_placeholder(candidate.text) for candidate in candidates):
+        raise CandidatePlaceholderError("候補本文に未完成の名前またはテンプレート表現があります")
+    if any(candidate_has_missing_sentence_break(candidate.text) for candidate in candidates):
+        raise CandidateLineBreakError("候補本文は文ごとに改行してください")
+    if context and repeated_partner_question_topics(candidates, context):
+        raise CandidateRepeatedQuestionError("相手がすでに伝えた情報を再質問しています")
+    if any(any(not line.strip() for line in candidate.text.splitlines()) for candidate in candidates):
+        raise CandidateLineBreakError("候補本文に空行があります")
     normalized = [re.sub(r"\s+", "", c.text) for c in candidates]
     if len(candidates) != count or len(set(normalized)) != count:
         raise ValueError("候補の数または重複が不正です")
@@ -1227,33 +1405,33 @@ def demo_suggestions(mode: str, count: int) -> dict:
     """APIキーなしの場合のみ。AI生成と誤解しない固定例文です。"""
     if mode == "first":
         texts = [
-            ("プロフィールに触れる", "はじめまして！マッチできてうれしいです☺️ カフェ巡りがお好きなんですね！最近行ってよかったお店はありますか？"),
-            ("短め", "マッチありがとうございます！プロフィールの旅行のお話が気になりました！最近どこか行かれましたか？"),
-            ("自然体", "はじめまして！マッチできてうれしいです！読書がお好きなんですね どんな本を読むことが多いですか？"),
-            ("丁寧", "マッチありがとうございます！美術館がお好きなんですね！最近印象に残った展示はありますか？"),
-            ("カジュアル", "はじめまして！マッチできてうれしいです☺️ カフェ好きなんですね！どんなお店によく行きますか？"),
+            ("プロフィールに触れる", "はじめまして！\nマッチできてうれしいです☺️\nカフェ巡りがお好きなんですね！\n最近行ってよかったお店はありますか？"),
+            ("短め", "マッチありがとうございます！\nプロフィールの旅行のお話が気になりました！\n最近どこか行かれましたか？"),
+            ("自然体", "はじめまして！\nマッチできてうれしいです！\n読書がお好きなんですね\nどんな本を読むことが多いですか？"),
+            ("丁寧", "マッチありがとうございます！\n美術館がお好きなんですね！\n最近印象に残った展示はありますか？"),
+            ("カジュアル", "はじめまして！\nマッチできてうれしいです☺️\nカフェ好きなんですね！\nどんなお店によく行きますか？"),
         ]
     elif mode == "like":
         texts = [
-            ("自然体", "はじめまして！プロフィールを読んで気になりました よかったらお話ししてみたいです！"),
-            ("親しみやすく", "はじめまして！紹介文が気になっていいねしました よろしくお願いします！"),
-            ("短め", "はじめまして！よければ少しお話しできたらうれしいです"),
-            ("丁寧", "プロフィールを拝見してお話ししてみたいと思いました よろしくお願いします！"),
-            ("カジュアル", "はじめまして！お話できたらうれしいです！"),
+            ("自然体", "はじめまして！\nプロフィールを読んで気になりました\nよかったらお話ししてみたいです！"),
+            ("親しみやすく", "はじめまして！\n紹介文が気になっていいねしました\nよろしくお願いします！"),
+            ("短め", "はじめまして！\nよければ少しお話しできたらうれしいです"),
+            ("丁寧", "プロフィールを拝見してお話ししてみたいと思いました\nよろしくお願いします！"),
+            ("カジュアル", "はじめまして！\nお話できたらうれしいです！"),
         ]
     elif mode == "followup":
         texts = [
             ("自然体", "そういえば前にお話していたことが少し気になっていました！"),
             ("控えめ", "またお時間があるときにお話しできたらうれしいです"),
-            ("カジュアル", "こんにちは！最近どう過ごしてますか？"),
+            ("カジュアル", "こんにちは！\n最近どう過ごしてますか？"),
             ("一言", "またお話しできたらうれしいです！"),
             ("別の話題", "そういえば最近気になっていることってありますか？"),
         ]
     else:
         texts = [
-            ("自然体", "そうなんですね！もう少し詳しく聞いてみたいです"),
-            ("親しみやすく", "なるほど！そんな感じなんですね ちょっと気になります"),
-            ("会話を広げる", "教えてくれてありがとうございます！どんなところが好きなんですか？"),
+            ("自然体", "そうなんですね！\nもう少し詳しく聞いてみたいです"),
+            ("親しみやすく", "なるほど！\nそんな感じなんですね\nちょっと気になります"),
+            ("会話を広げる", "教えてくれてありがとうございます！\nどんなところが好きなんですか？"),
             ("短め", "それは楽しそうですね！"),
             ("気持ちに寄り添う", "話してくれてありがとうございます！"),
         ]
@@ -1528,7 +1706,10 @@ def generate(data: GenerateInput):
                                     model=model,
                                 )
                             if direct_topic not in answered_topics:
-                                question = personal_fact_question(direct_topic)
+                                question = personal_fact_question(
+                                    direct_topic,
+                                    partner_messages[-1] if partner_messages else "",
+                                )
                                 return {
                                     **user_info_question_response(
                                         question.question,
@@ -1565,7 +1746,10 @@ def generate(data: GenerateInput):
                                     api_alias=account,
                                     model=model,
                                 )
-                            question = personal_fact_question(unsupported_topics[0])
+                            question = personal_fact_question(
+                                unsupported_topics[0],
+                                partner_messages[-1] if partner_messages else "",
+                            )
                             return {
                                 **user_info_question_response(
                                     question.question,
@@ -1639,8 +1823,14 @@ def generate(data: GenerateInput):
                         )
                         continue
                     try:
-                        validated = check_suggestions(parsed, data.count)
-                    except (CandidatePunctuationError, CandidateSimilarityError) as quality_error:
+                        validated = check_suggestions(parsed, data.count, context)
+                    except (
+                        CandidatePunctuationError,
+                        CandidateSimilarityError,
+                        CandidateLineBreakError,
+                        CandidatePlaceholderError,
+                        CandidateRepeatedQuestionError,
+                    ) as quality_error:
                         if quality_repair_used:
                             raise
                         quality_repair_used = True
@@ -1650,10 +1840,25 @@ def generate(data: GenerateInput):
                                 "新しい候補を作り直し、送信候補本文にはこの2文字を一切含めないでください。"
                                 "機械的な削除ではなく自然な文へ書き直してください。メタデータは対象外です。"
                             )
-                        else:
+                        elif isinstance(quality_error, CandidateSimilarityError):
                             system_instruction += (
                                 "\n【候補の類似性による1回限りの再生成】前回の候補は互いに似すぎていました。"
                                 "語尾だけを変えず、異なる切り口や会話の進め方に分けてください。"
+                            )
+                        elif isinstance(quality_error, CandidateLineBreakError):
+                            system_instruction += (
+                                "\n【改行形式違反による1回限りの再生成】各候補本文を読み直し、文が複数ある場合は1文ごとに実改行を入れてください。"
+                                "文章の意味を保ち、機械的に分割しないでください。空行は禁止です。"
+                            )
+                        elif isinstance(quality_error, CandidatePlaceholderError):
+                            system_instruction += (
+                                "\n【未完成テンプレートによる1回限りの再生成】〇〇さん・[名前]・{name}・TBDなどを残さず、"
+                                "確実な相手名がなければ名前を省略した自然な文にしてください。"
+                            )
+                        else:
+                            system_instruction += (
+                                "\n【相手情報の再質問による1回限りの再生成】相手が会話ですでに答えた事実をそのまま尋ね返さないでください。"
+                                "既知情報を受け止めたうえで深掘りするか、別の話題へ自然につないでください。"
                             )
                         continue
                     result = {**validated, "demo": False}

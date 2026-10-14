@@ -227,9 +227,12 @@ def reject_pending_generation(state: dict[str, Any], reason: str) -> None:
 
 
 def sentence_estimate(text: str) -> int:
-    """A heuristic estimate: Japanese chunks can omit sentence-ending marks."""
+    """Estimate sentences from explicit marks per line without double-counting newlines."""
     stripped = text.strip()
-    return max(1, len(re.findall(r"[!?！？]+|\n+", stripped))) if stripped else 0
+    if not stripped:
+        return 0
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    return sum(max(1, len(re.findall(r"[!?！？]+", line))) for line in lines)
 
 
 def turn_measurements(state: dict[str, Any], selected: str, candidates: list[dict]) -> dict[str, Any]:
@@ -261,6 +264,10 @@ def turn_measurements(state: dict[str, Any], selected: str, candidates: list[dic
         "recent_partner_average_character_count": round(sum(map(len, recent_partner)) / len(recent_partner), 1) if recent_partner else 0,
         "selected_character_count": len(selected),
         "selected_sentence_estimate": sentence_estimate(selected),
+        "selected_nonempty_line_count": sum(bool(line.strip()) for line in selected.splitlines()),
+        "sentence_line_break_estimate_matches": (
+            sentence_estimate(selected) == sum(bool(line.strip()) for line in selected.splitlines())
+        ),
         "punctuation_violation": "、" in selected or "。" in selected,
         "acknowledgment_type_estimate": ack_type,
         "exclamation_used": "!" in selected or "！" in selected,
@@ -434,7 +441,8 @@ def render_html(state: dict[str, Any], path: Path | None = None) -> None:
                        f"<p><b>会話段階：</b>{e(turn.get('conversation_stage', turn.get('strategy', '未記録')))} / <b>誘い判断：</b>{e(turn.get('invite_decision', '未記録'))}</p>"
                        f"<p><b>判断理由：</b>{e(turn.get('decision_reason', '未記録'))} / <b>次の行動：</b>{e(turn.get('next_action', '未記録'))}</p>"
                        f"<p><b>実測・推定：</b>相手 {e(measured.get('partner_latest_character_count', '未計測'))}字・推定{e(measured.get('partner_latest_sentence_estimate', '未計測'))}文 → 返信 {e(measured.get('selected_character_count', '未計測'))}字・推定{e(measured.get('selected_sentence_estimate', '未計測'))}文</p>"
-                       f"<p><b>句読点違反：</b>{e(measured.get('punctuation_violation', '未検査'))} / <b>相槌推定：</b>{e(measured.get('acknowledgment_type_estimate', '未分類'))} / <b>候補類似度推定最大：</b>{e(measured.get('candidate_max_similarity_estimate', '未計測'))}</p>"
+                       f"<p><b>句読点違反：</b>{e(measured.get('punctuation_violation', '未検査'))} / <b>推定文数：</b>{e(measured.get('selected_sentence_estimate', '未計測'))} / <b>非空行数：</b>{e(measured.get('selected_nonempty_line_count', '未計測'))} / <b>文ごとの改行一致（推定）：</b>{e(measured.get('sentence_line_break_estimate_matches', '未計測'))}</p>"
+                       f"<p><b>相槌推定：</b>{e(measured.get('acknowledgment_type_estimate', '未分類'))} / <b>候補類似度推定最大：</b>{e(measured.get('candidate_max_similarity_estimate', '未計測'))}</p>"
                        f"<p><b>評価者判断：</b>ミラーリング {e(review.get('mirroring', '未評価'))} / 反復 {e(review.get('repetition', '未評価'))} / 事実確認 {e(review.get('factuality', '未評価'))}</p>"
                        f"<ol>{items}</ol></details>")
         badges = "初めての誘い" if m.get("is_invite") else ""

@@ -247,7 +247,23 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T109 | カレー根拠の項目結び付け・カフェ嗜好の極性 | FastAPI候補検証のpytest | PASS | 本に関する「よく/最近」をカレー頻度・経験の根拠にしない。「落ち着いた雰囲気よりにぎやかな店が好き」から落ち着いた店好きとは生成しない。`tests/test_app.py`。 |
 | T110 | 誘い機会の話題一貫性と拒否判定 | 会話履歴関数テスト・Gemini SDKモックpytest | PASS | 古いカフェ話題と新しい無関係質問を組み合わせず、最新2件の関連する話題のみで判断。明確な外出への消極表現と「カフェは好きですか？」だけの質問は誘い意欲と扱わない。過去の誘い・拒否は維持し、遅い返信への謝罪は拒否と誤判定しない。`tests/test_app.py`。 |
 
-最新の項目数は110: PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3。旧履歴のFAILは維持。全pytestは195 passed, 1 warning。Firefox UI自動テスト、Node構文検査、Python構文検査を含む。
+### 最新指示による句読点・質問粒度・API品質ゲート
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T111 | 句読点なしで連結された日本語文の検出と引用符の誤検出防止 | FastAPI関数のpytest | PASS | レビューで提示された「帰りは…」「途中で犬…」を含む既知の連結例を拒否。接続表現「学生ですが…」と引用内の感嘆符を含む単文を許容。静的判定のため未列挙パターンを網羅保証しない。`tests/test_app.py`。 |
+| T112 | 最近のカフェ場所・映画館頻度・カフェ頻度に対する本人確認 | FastAPI事前判定pytest | PASS | 質問粒度を「最近の店/場所」「映画館の頻度」「カフェの頻度」に保つ。プロフィールの一般的な趣味だけでは回答済みとしない。`tests/test_app.py`。 |
+| T113 | 既知のカフェ頻度への言い換え再質問 | FastAPI候補検査pytest | PASS | 「カフェってよく行きますか」「喫茶店にはよく行くんですか」「カフェにはどのくらいの頻度で」を、相手が頻度を既に話している場合に拒否。店名などの深掘りは許容。`tests/test_app.py`。 |
+| T114 | 限定Gemini品質テストの件数と検査範囲 | APIなしのpytest | PASS | `scripts/run_quality_checks_005.py`は8論理要求以内。読書ジャンル、最近の映画、購買回答、断り後の再勧誘・既知情報再質問、プレースホルダー、誘い整合、改行、共感反復を扱う。実API結果はT118。 |
+| T115 | 実API検証の認証情報ソース隔離 | APIなしのpytest | PASS | スクリプトは明示された`MRA_API_DIR`だけを選び、`app.py`のdotenv読込に既存環境値が差し込まれないようAPIキー環境変数を空にする。値は表示・記録しない。`tests/test_quality_checks_005.py`。 |
+| T116 | 許可済みAPI/モデル優先順の構成確認 | ローカル設定の存在確認。秘密値非表示 | PASS | API別名とモデルだけを出力し、API1/3.5 → API2/3.5 → API1/3.1 → API2/3.1の4経路を確認。認証有効性・現在のクォータはこの確認だけでは判定しない。 |
+| T117 | 対象モデルの公式一覧確認 | Google Gemini公式モデル/料金/レート制限資料 | PASS | `gemini-3.5-flash-lite`と`gemini-3.1-flash-lite`は安定版として一覧掲載。Free tierは一部モデル・利用枠限定で、プロジェクト別の現在枠や課金状態はAI Studioで確認が必要。参照: [Models](https://ai.google.dev/gemini-api/docs/models)、[Pricing](https://ai.google.dev/gemini-api/docs/pricing)、[Rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)。 |
+| T118 | 新しい限定Gemini品質チェック005 | 既存FastAPI `/api/generate`、隔離SQLite、架空データ、最大8論理要求 | NOT_TESTED | 実施前。API利用制限・許可情報と最新のオフラインテストを確認後、結果・候補・実際のモデル/別名を`quality_checks_005.json`へ記録する。 |
+| T119 | conversation_004の開始ゲート | T118の全候補品質判定後のみ実施 | NOT_TESTED | T118が全候補PASSし、明示された許可上限内で実施できる場合だけ開始。失敗時は架空の会話記録を作らない。 |
+| T120 | 最新変更を含む全pytest・Firefox UI回帰 | Windows `.venv`、全pytest | PASS | 2026-10-14、レビュー修正後に**257 passed, 1 warning, 76.93秒**。Firefox UI自動テストを含む。警告はStarletteからの`httpx` TestClient利用非推奨通知。Chromeは使用していない。 |
+| T121 | 断り後の再勧誘と既知情報の再質問を同時に拒否する品質ゲート | APIなしのrunner関数テスト | PASS | `respect_decline_and_no_reask`ケースで、カフェ頻度の共有→本人の誘い→相手の慎重な拒否を設定。再勧誘候補（「今度会いませんか」「カフェでもご一緒しませんか」等）と既知頻度の再質問を拒否し、「カフェの話をしませんか」のような会話提案は会う誘いと誤判定しない。`tests/test_quality_checks_005.py`。 |
+
+旧履歴は110項目（PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3）で維持。追加項目T111–T117およびT120–T121はPASS、T118–T119はNOT_TESTED。現在は121項目（PASS 106 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。
 
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 
