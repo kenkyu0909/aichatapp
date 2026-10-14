@@ -179,9 +179,14 @@ def put_profile(data: ProfileInput):
 def get_matches():
     with database() as db:
         return [
-            dict(r) for r in db.execute(
-                "SELECT * FROM matches ORDER BY id DESC"
-            ).fetchall()
+            dict(r) for r in db.execute("""
+                SELECT a.*,
+                       (SELECT COUNT(*) FROM messages m WHERE m.match_id=a.id) AS message_count,
+                       (SELECT COUNT(*) FROM messages m WHERE m.match_id=a.id AND m.role='them') AS incoming_count,
+                       (SELECT body FROM messages m WHERE m.match_id=a.id ORDER BY m.id DESC LIMIT 1) AS last_message
+                FROM matches a
+                ORDER BY a.id DESC
+            """).fetchall()
         ]
 
 
@@ -351,7 +356,7 @@ def build_context(data: GenerateInput) -> dict:
 
 def check_suggestions(value: Suggestions, count: int) -> dict:
     candidates = [value.recommended, *value.alternatives]
-    normalized = [re.sub(r"\\s+", "", c.text) for c in candidates]
+    normalized = [re.sub(r"\s+", "", c.text) for c in candidates]
     if len(candidates) != count or len(set(normalized)) != count:
         raise ValueError("候補の数または重複が不正です")
     return value.model_dump()
@@ -407,7 +412,7 @@ def generate(data: GenerateInput):
         return demo_suggestions(data.mode, data.count)
 
     system_instruction = read_prompt(data.mode) + (
-        f"\\n【今回の出力指定】候補は必ず合計{data.count}案にしてください。"
+        f"\n【今回の出力指定】候補は必ず合計{data.count}案にしてください。"
         f"recommendedが1案、alternativesが{data.count-1}案です。"
         "理由 reason は短く日本語で、会話方針 strategy は無理のない提案を1文で記述してください。"
         + ("追いメッセージを検討してください。相手に圧力をかけないでください。" if data.mode == "followup" else "")
