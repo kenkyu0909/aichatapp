@@ -359,4 +359,4 @@ Git履歴69 refsとworking treeをAPIキー形式で確認し、一致はあり�
 
 - ブランチ: `codex/full-system-verification`
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持・未マージ）
-- 検証済みHEAD: `cf24e2398ab428cb9e3beef2b0029f34aa73d4b4`。Push Actions [38544684207](https://github.com/kenkyu0909/aichatapp/actions/runs/38544684207) とPR Actions [38544689940](https://github.com/kenkyu0909/aichatapp/actions/runs/38544689940) 成功。ソース修正コミット: `d431b79f159a7e7fc499a7acf06a12e13454c4b4`。最終レポートのメタデータ更新は別コミットでPushし、当該最新HEADのActionsをPR上で再確認する。
+- 検証済みHEAD: `cf24e2398ab428cb9e3beef2b0029f34aa73d4b4`。Push Actions [38544684207](https://github.com/kenkyu0909/aichatapp/actions/runs/38544684207) とPR Actions [38544689940](https://github.com/kenkyu0909/aichatapp/actions/runs/38544689940) 成功。ソース修正コミット: `d431b79f159a7e7fc499a7acf06a12e13454c4b4`。報告書更新コミット`a40c251c62c400401c9aef3e77beeaf7ceb76079`のPush Actions [38544920718](https://github.com/kenkyu0909/aichatapp/actions/runs/38544920718) とPR Actions [38544928533](https://github.com/kenkyu0909/aichatapp/actions/runs/38544928533)も同SHAで成功。ソース修正SHAは`d431b79f159a7e7fc499a7acf06a12e13454c4b4`。
