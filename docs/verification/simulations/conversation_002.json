@@ -2,9 +2,9 @@
   "schema_version": 1,
   "experiment_id": "conversation_002",
   "started_at": "2026-10-14T09:25:59+00:00",
-  "updated_at": "2026-10-14T09:31:51+00:00",
-  "status": "RUNNING",
-  "end_reason": null,
+  "updated_at": "2026-10-14T09:35:14+00:00",
+  "status": "LIMIT_REACHED",
+  "end_reason": "20通目への相手の返信を確認しました。会う約束は成立せず、21通目は生成・送信していません。",
   "people": {
     "app_user": {
       "name": "高橋ゆう",
@@ -218,6 +218,97 @@
       "at": "2026-10-14T09:31:46+00:00",
       "candidate_count": 3,
       "demo": false
+    },
+    {
+      "request_number": 14,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:32:32+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 15,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:32:47+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 16,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:33:14+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 17,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:33:36+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 18,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:33:59+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 19,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:34:24+00:00",
+      "candidate_count": 3,
+      "demo": false
+    },
+    {
+      "request_number": 20,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:34:53+00:00",
+      "candidate_count": 3,
+      "demo": false
     }
   ],
   "messages": [
@@ -383,6 +474,103 @@
       "body": "たしかに大きなスクリーンだと臨場感があってより引き込まれそうですね！",
       "app_send_number": 13,
       "at": "2026-10-14T09:31:51+00:00"
+    },
+    {
+      "sequence": 26,
+      "speaker": "partner",
+      "body": "そうですね！映画館の音響は迫力ありますよね。ミステリーだと家で考察しながら見るのも捨てがたいです",
+      "at": "2026-10-14T09:32:30+00:00"
+    },
+    {
+      "sequence": 27,
+      "speaker": "app",
+      "body": "家でじっくり考察しながら観るのも楽しそうですね！ちなみに最近気になっている作品とかはありますか？",
+      "app_send_number": 14,
+      "at": "2026-10-14T09:32:39+00:00"
+    },
+    {
+      "sequence": 28,
+      "speaker": "partner",
+      "body": "具体的な作品はまだ決めてないんですが、今度映画館でミステリーを観てみたいです！",
+      "at": "2026-10-14T09:32:44+00:00"
+    },
+    {
+      "sequence": 29,
+      "speaker": "app",
+      "body": "映画館で観るとより世界観に引き込まれそうで気になりますね！",
+      "app_send_number": 15,
+      "at": "2026-10-14T09:33:03+00:00"
+    },
+    {
+      "sequence": 30,
+      "speaker": "partner",
+      "body": "そうなんですよね！映画館だといつもより集中できそうで楽しみです",
+      "at": "2026-10-14T09:33:11+00:00"
+    },
+    {
+      "sequence": 31,
+      "speaker": "app",
+      "body": "映画館だとまわりに遮るものがない分より作品の世界に浸れそうですよね！",
+      "app_send_number": 16,
+      "at": "2026-10-14T09:33:24+00:00"
+    },
+    {
+      "sequence": 32,
+      "speaker": "partner",
+      "body": "そうなんです！映画館だと集中できるのが好きです☺️ 最近は家で観ることが多いんですけどね",
+      "at": "2026-10-14T09:33:33+00:00"
+    },
+    {
+      "sequence": 33,
+      "speaker": "app",
+      "body": "家だとリラックスして観られる良さもありますもんね！たまには映画館でゆっくり作品に浸る休日も素敵ですね。",
+      "app_send_number": 17,
+      "at": "2026-10-14T09:33:47+00:00"
+    },
+    {
+      "sequence": 34,
+      "speaker": "partner",
+      "body": "そうなんです！家で観るのも自分のペースで楽しめるのがいいですよね",
+      "at": "2026-10-14T09:33:56+00:00"
+    },
+    {
+      "sequence": 35,
+      "speaker": "app",
+      "body": "たしかにマイペースに観られるのは家ならではの良さですね！そういえばカフェも好きって書かれてましたけどお気に入りのエリアとかあるんですか？",
+      "app_send_number": 18,
+      "at": "2026-10-14T09:34:12+00:00"
+    },
+    {
+      "sequence": 36,
+      "speaker": "partner",
+      "body": "川崎駅の近くが多いです！落ち着いた雰囲気のお店が好きなのでよく探してます",
+      "at": "2026-10-14T09:34:20+00:00"
+    },
+    {
+      "sequence": 37,
+      "speaker": "app",
+      "body": "川崎周辺は素敵なお店がたくさんありそうですね！自分は横浜のほうによく行くのですが、川崎の落ち着いたお店も気になります。",
+      "app_send_number": 19,
+      "at": "2026-10-14T09:34:35+00:00"
+    },
+    {
+      "sequence": 38,
+      "speaker": "partner",
+      "body": "横浜も素敵なお店多そうですよね！川崎駅近くにも落ち着いたカフェがいくつかありますよ",
+      "at": "2026-10-14T09:34:50+00:00"
+    },
+    {
+      "sequence": 39,
+      "speaker": "app",
+      "body": "横浜も本屋や喫茶店巡りをするお気に入りのお店があったりします。川崎も落ち着いた雰囲気のカフェが多そうで気になりますね！",
+      "app_send_number": 20,
+      "at": "2026-10-14T09:35:04+00:00"
+    },
+    {
+      "sequence": 40,
+      "speaker": "partner",
+      "body": "横浜のカフェも気になります！川崎駅近くにも落ち着けるお店がいくつかありますよ☺️",
+      "at": "2026-10-14T09:35:14+00:00"
     }
   ],
   "turns": [
@@ -750,7 +938,7 @@
         "show_policy": true,
         "response_version": 2
       },
-      "selection_reason": "選択した代替候補。選択理由は会話分析に記録する。",
+      "selection_reason": "候補2を選択。相手の「違う見方を聞くのも楽しい」という直前の話題に短く共感し、すでに続いていた映画館/スクリーンの説明を繰り返さないため。",
       "api_request_number": 9,
       "selected_text": "それぞれの視点を知れるのが映画の醍醐味ですよね！",
       "app_send_number": 9
@@ -918,14 +1106,359 @@
       "api_request_number": 13,
       "selected_text": "たしかに大きなスクリーンだと臨場感があってより引き込まれそうですね！",
       "app_send_number": 13
+    },
+    {
+      "turn_number": 14,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめ候補",
+          "text": "家でじっくり考察しながら観るのも楽しそうですね！ちなみに最近気になっている作品とかはありますか？"
+        },
+        {
+          "label": "候補2",
+          "text": "たしかに家で一時停止しながら考察するのも面白そうですね！"
+        },
+        {
+          "label": "候補3",
+          "text": "映像のこだわりがありそうな作品だと映画館も良さそうですね！"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめ候補",
+        "text": "家でじっくり考察しながら観るのも楽しそうですね！ちなみに最近気になっている作品とかはありますか？"
+      },
+      "reason": "相手のミステリー映画の楽しみ方に対する発言に共感し、自然に会話を広げました。",
+      "strategy": "相手の「家で考察しながら見るのも捨てがたい」という意見を受け止め、共感しつつ会話を繋ぎます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "推奨候補",
+      "api_request_number": 14,
+      "selected_text": "家でじっくり考察しながら観るのも楽しそうですね！ちなみに最近気になっている作品とかはありますか？",
+      "app_send_number": 14
+    },
+    {
+      "turn_number": 15,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "映画館での鑑賞に触れる",
+          "text": "映画館のスクリーンで観るミステリーは臨場感があっていいですよね！"
+        },
+        {
+          "label": "家と映画館の両方に共感する",
+          "text": "家でじっくり考察するのもいいし映画館の雰囲気も捨てがたいですよね！"
+        },
+        {
+          "label": "公開予定の作品に話題を向ける",
+          "text": "映画館で観るとより世界観に引き込まれそうで気になりますね！"
+        }
+      ],
+      "recommended": {
+        "label": "映画館での鑑賞に触れる",
+        "text": "映画館のスクリーンで観るミステリーは臨場感があっていいですよね！"
+      },
+      "reason": "相手が映画館でミステリーを観てみたいと話しているため、その話題に自然に共感しつつ会話を広げます。",
+      "strategy": "相手の映画の話題に共感し、映画館での鑑賞に焦点を当てて楽しくやり取りを続ける。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "代替候補3を選択。おすすめ案の「スクリーン/臨場感」は直前の数ターンと重なっていたため、同じ誘いを足さず「世界観」という別の切り口で共感する案を選んだ。",
+      "api_request_number": 15,
+      "selected_text": "映画館で観るとより世界観に引き込まれそうで気になりますね！",
+      "app_send_number": 15
+    },
+    {
+      "turn_number": 16,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "映画館の楽しみ方に共感する",
+          "text": "映画館だとまわりに遮るものがない分より作品の世界に浸れそうですよね！"
+        },
+        {
+          "label": "大きなスクリーンを話題にする",
+          "text": "大きな画面と音響で観るミステリーはきっとハラハラして楽しそうですね！"
+        },
+        {
+          "label": "楽しみな気持ちに寄り添う",
+          "text": "いつもより集中して観られる環境って特別感があってワクワクしますよね！"
+        }
+      ],
+      "recommended": {
+        "label": "映画館の楽しみ方に共感する",
+        "text": "映画館だとまわりに遮るものがない分より作品の世界に浸れそうですよね！"
+      },
+      "reason": "相手が映画館でのミステリー鑑賞を楽しみにしている様子なので、そのワクワク感に共感して自然に会話を続けています。",
+      "strategy": "相手の映画館での鑑賞への期待感を受け止め、質問攻めにならず心地よいペースで会話をつなげます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "推奨候補",
+      "api_request_number": 16,
+      "selected_text": "映画館だとまわりに遮るものがない分より作品の世界に浸れそうですよね！",
+      "app_send_number": 16
+    },
+    {
+      "turn_number": 17,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "おすすめ",
+          "text": "家だとリラックスして観られる良さもありますもんね！たまには映画館でゆっくり作品に浸る休日も素敵ですね。"
+        },
+        {
+          "label": "選択肢2",
+          "text": "たしかに家だとリラックスできる良さがありますよね。映画館も家もそれぞれの良さがあって選ぶ時間も楽しそうです。"
+        },
+        {
+          "label": "選択肢3",
+          "text": "家でのんびり観るのもリフレッシュになっていいですよね！"
+        }
+      ],
+      "recommended": {
+        "label": "おすすめ",
+        "text": "家だとリラックスして観られる良さもありますもんね！たまには映画館でゆっくり作品に浸る休日も素敵ですね。"
+      },
+      "reason": "相手が映画館と家のそれぞれの良さについて触れているため、共感しつつ自然に会話を続けています。",
+      "strategy": "お互いの映画の楽しみ方について共感し合いながら、リラックスしたトーンで会話を広げます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "推奨候補",
+      "api_request_number": 17,
+      "selected_text": "家だとリラックスして観られる良さもありますもんね！たまには映画館でゆっくり作品に浸る休日も素敵ですね。",
+      "app_send_number": 17
+    },
+    {
+      "turn_number": 18,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "共感してカフェの話題を振る",
+          "text": "たしかにマイペースに観られるのは家ならではの良さですね！そういえばカフェも好きって書かれてましたけどお気に入りのエリアとかあるんですか？"
+        },
+        {
+          "label": "自分のペースで楽しむ点に触れる",
+          "text": "自分のペースでくつろげるのは家ならではですよね！"
+        },
+        {
+          "label": "読書と映画の共通点に触れる",
+          "text": "家でのんびり好きな作品に浸る休日って一番リラックスできますよね！"
+        }
+      ],
+      "recommended": {
+        "label": "共感してカフェの話題を振る",
+        "text": "たしかにマイペースに観られるのは家ならではの良さですね！そういえばカフェも好きって書かれてましたけどお気に入りのエリアとかあるんですか？"
+      },
+      "reason": "相手が家での映画鑑賞について話しているので、そのリラックスできる点を自然に受け止めつつ、プロフィールにあるカフェや休日の話題へ広げる返信です。",
+      "strategy": "相手の映画の話題に対する共感を返しつつ、会話のマンネリを防ぐためにプロフィール関連の話題へ自然につなげます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "推奨候補",
+      "api_request_number": 18,
+      "selected_text": "たしかにマイペースに観られるのは家ならではの良さですね！そういえばカフェも好きって書かれてましたけどお気に入りのエリアとかあるんですか？",
+      "app_send_number": 18
+    },
+    {
+      "turn_number": 19,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "候補1（共感と質問）",
+          "text": "川崎の落ち着いた雰囲気のカフェ素敵ですね！お気に入りのスポットとか開拓できたりしましたか？"
+        },
+        {
+          "label": "候補2（自分の話題に少し触れて広げる）",
+          "text": "川崎周辺は素敵なお店がたくさんありそうですね！自分は横浜のほうによく行くのですが、川崎の落ち着いたお店も気になります。"
+        },
+        {
+          "label": "候補3（シンプルに受け止める）",
+          "text": "川崎駅近くに落ち着いたカフェが多いのいいですね！静かにのんびり過ごす時間にぴったりですね。"
+        }
+      ],
+      "recommended": {
+        "label": "候補1（共感と質問）",
+        "text": "川崎の落ち着いた雰囲気のカフェ素敵ですね！お気に入りのスポットとか開拓できたりしましたか？"
+      },
+      "reason": "相手がカフェのエリアについて教えてくれたので、その話題に共感しつつ自然に会話を広げるためです。",
+      "strategy": "相手の挙げたエリア（川崎駅近く）を受け止め、無理のない範囲で質問や感想を返して会話を続ける。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "代替候補2を選択。相手の川崎カフェの話題に対し、本人プロフィールで確定している横浜在住という事実を共有して相互の地域の話題にした。横浜に「よく行く」という表現は居住地からの推測を含むため、記録上の品質注意として残す。",
+      "api_request_number": 19,
+      "selected_text": "川崎周辺は素敵なお店がたくさんありそうですね！自分は横浜のほうによく行くのですが、川崎の落ち着いたお店も気になります。",
+      "app_send_number": 19
+    },
+    {
+      "turn_number": 20,
+      "model": "gemini-3.5-flash-lite",
+      "account_alias": "API1",
+      "api_attempt_count": 1,
+      "api_status": "success",
+      "candidates": [
+        {
+          "label": "候補1（共感と質問）",
+          "text": "横浜は色々なお店がありますよ！川崎の落ち着いたカフェも素敵ですね、静かに過ごせるお気に入りのお店とかあるんですか？"
+        },
+        {
+          "label": "候補2（横浜の話題を少し広げる）",
+          "text": "横浜も本屋や喫茶店巡りをするお気に入りのお店があったりします。川崎も落ち着いた雰囲気のカフェが多そうで気になりますね！"
+        },
+        {
+          "label": "候補3（短めの返答）",
+          "text": "川崎駅近くの落ち着いたカフェは雰囲気が良さそうですね！ゆっくり過ごせるお店ってつい長居してしまいますよね。"
+        }
+      ],
+      "recommended": {
+        "label": "候補1（共感と質問）",
+        "text": "横浜は色々なお店がありますよ！川崎の落ち着いたカフェも素敵ですね、静かに過ごせるお気に入りのお店とかあるんですか？"
+      },
+      "reason": "相手が川崎駅近くの落ち着いたカフェの話題を出してくれたため、横浜と比べつつ自然にカフェの話題を広げる返信にしました。",
+      "strategy": "お互いの好きなカフェの話題について自然に会話を続け、共通の話題や雰囲気を楽しみます。",
+      "settings": {
+        "mode": "reply",
+        "match_id": 1,
+        "count": 3,
+        "tone": "自動",
+        "direction": "自然に会話を広げる",
+        "extra": "",
+        "show_policy": true,
+        "response_version": 2
+      },
+      "selection_reason": "候補2を選択。候補1は相手がすでに答えた「カフェの場所」を再質問し、候補3は会話で確認していない「長居する」という一般化を含むため、地域の話題を広げる案を選んだ。ただし「お気に入りのお店がある」という本人情報も明確には確認できず、送信候補としてなお改善が必要。",
+      "api_request_number": 20,
+      "selected_text": "横浜も本屋や喫茶店巡りをするお気に入りのお店があったりします。川崎も落ち着いた雰囲気のカフェが多そうで気になりますね！",
+      "app_send_number": 20
     }
   ],
-  "app_sent_count": 13,
-  "partner_sent_count": 12,
+  "app_sent_count": 20,
+  "partner_sent_count": 20,
   "first_invite_app_message": null,
   "meeting_agreement": null,
-  "assessment": {},
+  "assessment": {
+    "summary": "LIMIT_REACHED。Geminiは20通を生成し、相手役の最終返信を保存した。具体的な誘いと会う約束は成立していない。会話の後半は映画の似た話題が長く続き、自然な誘いにつながる相互の意向は確認できなかった。",
+    "scores": {
+      "日本語の自然さ": {
+        "score": 3,
+        "reason": "短く自然な返答も多いが、初回候補に句点と語句の詰まりがあり、会話後半は同じ内容を言い換えるターンが続いた。"
+      },
+      "「！」の自然さ": {
+        "score": 3,
+        "reason": "中盤以降は多くの候補で自然に使えたが、初回の最初の実生成では句読点ルール違反があった。"
+      },
+      "絵文字の適切さ": {
+        "score": 4,
+        "reason": "相手役の絵文字に合わせる程度で、アプリ側が連続して絵文字を使うことはなかった。"
+      },
+      "「笑」の適切さ": {
+        "score": 4,
+        "reason": "相手が冗談を交えた本の話をした場面で相手役は笑を使ったが、Geminiは深刻でない会話でも過剰に笑を足さなかった。"
+      },
+      "プロフィールの活用": {
+        "score": 3,
+        "reason": "読書、映画、カフェの相手プロフィールを拾った。一方で本人の読書ジャンルや経験、横浜でよく行く店など未確認情報を含む候補があった。"
+      },
+      "会話の一貫性": {
+        "score": 3,
+        "reason": "読書から映画、カフェへ移る流れは保たれたが、映画館の臨場感や感想の話題が長く反復した。"
+      },
+      "相手の発言への反応": {
+        "score": 4,
+        "reason": "多くの返信が直近の発言を受けていた。短い共感だけの候補が連続し、相手からの質問が少ない場面で話を前進させにくかった。"
+      },
+      "食事への誘いのタイミング": {
+        "score": 3,
+        "reason": "相手役は会う意向を示しておらず、誘わない判断は尊重的だった。一方で会話が反復したまま具体的な誘いの検討に移らなかった。"
+      },
+      "返信候補の多様性": {
+        "score": 2,
+        "reason": "候補の形式は異なるが、複数ターンで共感・言い換えが重なり、話題展開の幅が小さかった。"
+      },
+      "全体の実用性": {
+        "score": 3,
+        "reason": "失礼さや圧力は少なく日常の短文候補として使える場面はあるが、未確認の本人事実を除く選別と会話の反復抑制が必要。"
+      }
+    },
+    "improvements": "初回候補ごとの要件と句読点を再確認する。本人への直接質問に対する未知の好みを一人称で作らず、必要なら確認質問へ切り替える。本人の未確認の経験・店を候補から排除する。直近数ターンで扱った話題の反復を減らし、相手の関心が確かめられた場合だけ誘いを検討する。"
+  },
   "initial_mode": "first",
   "match_id": 1,
-  "pending_meeting_confirmation": null
+  "pending_meeting_confirmation": null,
+  "quality_checks_reference": "quality_checks_002.json（本会話とは分離した一時SQLiteで5回の追加実API品質確認）",
+  "api_summary": {
+    "conversation_logical_requests": 20,
+    "successes": 20,
+    "failures": 0,
+    "all_api_aliases": [
+      "API1"
+    ],
+    "all_models": [
+      "gemini-3.5-flash-lite"
+    ],
+    "fallback_attempts": 0
+  }
 }

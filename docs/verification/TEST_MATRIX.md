@@ -93,11 +93,11 @@
 
 | ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
 |---|---|---|---|---|
-| T77 | 実Gemini初回メッセージ・通常返信・情報確認・誘い・断り | 既存アプリの実API、架空プロフィールのみ | NOT_TESTED | APIキー確認は秘密値を出力しない方法で行い、最初は1リクエストから開始する。結果を受けて更新する。 |
-| T78 | 会話シミュレーション002とHTML評価 | 既存`/api/generate`を使用、Codexが架空相手役、最大20通 | NOT_TESTED | `conversation_001`を保持し、新規002へ保存する。実APIが制限/認証等で失敗した場合は中断状態を保存し、会話を捏造しない。 |
-| T79 | 実Gemini初回メッセージ3案の品質評価 | Windows/Python 3.12、既存FastAPI `/api/generate`実通信、架空プロフィール | FAIL | 1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。HTTP/JSON/3候補は成功。推奨案に挨拶・好意・喜び・相手プロフィールの話題・質問1件あり。ただし句読点ルール違反と不自然な区切りあり。別案2は軽い好意/マッチの喜びが不足し、別案3は質問なし。プロンプト修正は会話002完了後に行い、修正後の別リクエストで再評価する。全候補は架空データのみで`conversation_002.json`に保存。 |
+| T77 | 実Gemini初回メッセージ・通常返信・情報確認・誘い・断り | 既存アプリの実API、架空プロフィールのみ | FAIL | 品質確認5回。全件HTTP 200・非デモ・API1/`gemini-3.5-flash-lite`、各1試行。未知の映画の好みを尋ねられた場面で「映画はときどき観ます」と未確認事実を生成したためFAIL。相互のカフェ会話はStage 3/consider_inviteだが即時の誘い候補はなく、誘い確認が未完。断りには謝罪し再誘いなし。回答を渡した後の再生成は実API未実施。詳細は`quality_checks_002.json`と分析。 |
+| T78 | 会話シミュレーション002とHTML評価 | Windows、隔離SQLite、既存`/api/generate`実API、Firefox | PASS | 初回`first`と以後`reply`でGemini実生成20回成功。アプリ20通・相手20通、計40発言をJSON/HTMLへ保存。20通目への相手返事の後LIMIT_REACHED、21通目なし。FirefoxでHTML40件、折りたたみ詳細、CSS、日本語、外部読込なしを確認しPNG保存。具体的な約束は不成立。 |
+| T79 | 実Gemini初回メッセージ3案の初回品質評価 | Windows/Python 3.12、既存FastAPI `/api/generate`実通信、架空プロフィール | FIXED | 初回3候補で句読点違反や必須要素の欠落が発生した履歴は維持。候補ごとの要件を`prompts/first.txt`で明確化し、別の実API再確認T80で改善を確認。 |
 
-現時点の項目数は79件: PASS 71 / FAIL 1 / BLOCKED 3 / NOT_TESTED 4。T01–T71は前回の報告値を保持。T79は実API品質上の指示未達をそのまま記録し、実験条件を保つためプロンプト修正は会話002終了後に行う。
+前回集計: 現時点の項目数は79件: PASS 71 / FAIL 1 / BLOCKED 3 / NOT_TESTED 4。T01–T71は前回の報告値を保持。T79は実API品質上の指示未達をそのまま記録し、実験条件を保つためプロンプト修正は会話002終了後に行う。
 
 - 実験ツールSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。T56を含む最新レポート/マトリクスHEAD: `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`。
 - GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171 （最新HEAD、成功、pytest 43 passed）
@@ -145,3 +145,20 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 - 実装コミット`5954b06c418158a48c60aa57b55e17f47a52c54a`のActions: [Push run 38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397) / [PR run 38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)。両方成功。Ubuntu/Python 3.11、Firefoxセットアップ、pytest、`node --check app.js`、artifact uploadを確認。
 - 報告コミット`baa9b89b2a28e9ce35a05f9f9e25a7c15fbeee6f`の[Push 38536510987](https://github.com/kenkyu0909/aichatapp/actions/runs/38536510987) / [PR 38536517187](https://github.com/kenkyu0909/aichatapp/actions/runs/38536517187)も成功し、両方同じHEADを確認。
 - 最新の完了済みPR HEAD `ef5f232a1ec6b10d07396f2a704dd419923549f2`: [Push 38536709582](https://github.com/kenkyu0909/aichatapp/actions/runs/38536709582) / [PR 38536717824](https://github.com/kenkyu0909/aichatapp/actions/runs/38536717824)が成功。最終の進捗記録はドキュメントのみで、branch workflow list [Actions](https://github.com/kenkyu0909/aichatapp/actions/workflows/test.yml?query=branch%3Acodex%2Ffull-system-verification)にそのPush/PR検査が追加される。
+
+
+## 2026-10-14 最終検証（会話002）
+
+| ID | テスト項目 | 方法・環境 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T80 | 初回プロンプト修正後の3案品質 | 実Gemini API、隔離SQLite、架空プロフィール、Windows/Python 3.12 | PASS | 1回の実通信で3案。API1/`gemini-3.5-flash-lite`、非デモ、HTTP 200、試行1。挨拶・軽い好意・マッチへの喜び・公開プロフィールの話題・質問を各案で確認し、句読点違反なし。`quality_checks_002.json`の末尾に保存。初回の失敗T79も履歴として残す。 |
+
+### 最終集計
+
+- 合計80項目: PASS 73 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77は本人の未確認情報を生成したためFAIL。T79の初回品質不具合はT80の再確認でFIXED。
+- pytest: 104 passed, 1 warning（Starlette/httpxの非推奨警告）。Firefoxを使ったUIテストを含む。
+- `node --check app.js`、`git diff --check`成功。Firefoxの会話HTML確認は40メッセージ、展開詳細、外部ネットワーク参照なしを確認。
+- 会話002: 実API20/20成功。別の品質確認5/5成功。計25論理リクエスト。すべてAPI1/`gemini-3.5-flash-lite`、各バックエンド試行1、429・フォールバック0。API1の追加枠残量、課金状態、実請求額は確認していない。
+- T77の未知の本人情報への質問結果はFAIL。該当プロンプトは明確化したが、実APIでの変更後再試験は今回の25回上限に達したためNOT_TESTEDとして残す。
+- 会話終端はLIMIT_REACHED。アプリ20通、相手20通。誘いなし、具体的な日時・場所合意なし。失敗を隠すための相手役操作は行っていない。
+- 実験データ: [`conversation_002.json`](simulations/conversation_002.json)、[`conversation_002.html`](simulations/conversation_002.html)、[`conversation_002_analysis.md`](simulations/conversation_002_analysis.md)、別検証[`quality_checks_002.json`](simulations/quality_checks_002.json)。

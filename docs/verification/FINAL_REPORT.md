@@ -309,3 +309,52 @@ APIキーを読み取ったとき、秘密値を伏せる処理が失敗し、�
 - 最終実装コミットSHA: `ae042ea41b3b1439abc6c8c27c8945a1fd915682`
 - 報告書コミットSHA: `3fcedae1e67e867c41be4692265145bb2498fa05`（この報告書の最新内容を含むコミット）
 - Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft、`feat/ui-local-backend-v1`宛て）
+
+
+# 2026-10-14 最終検証追加報告（会話002）
+
+## 判定: CONDITIONAL PASS
+
+主要な起動、SQLite隔離、生成、20通上限、会話復元可能なJSON、Firefox HTML表示、CI向けオフラインテストは確認できた。ただし、実Geminiが本人の未登録の好みを一人称で作った実例がある。プロンプトは修正したが、変更後の実API確認は今回の25論理リクエストに達したため残っている。通常利用前に、本人の直接質問への確認動作を実APIで再評価する必要がある。
+
+## 今回の結果
+
+- 会話002: `LIMIT_REACHED`、アプリ側20通、架空相手20通、合計40メッセージ。会う提案なし、約束成立なし。20通目の後に相手の返信を保存し、21通目を生成・送信していない。
+- 実Gemini: 合計25論理リクエスト（会話20、別品質確認5）。25成功、0 API失敗、API1 / `gemini-3.5-flash-lite`のみ、各バックエンド試行1回。429/フォールバックなし。API2/3.1は未使用。内訳は`conversation_002.json`、`quality_checks_002.json`。
+- 出力品質: 初回メッセージは初回生成で句読点と候補構成に問題があった。`first.txt`を強化した後の再確認では3案の構成と句読点が改善（T79 FIXED/T80 PASS）。通常返信は相手の話題を拾う一方、映画話題の反復と本人の未確認情報が候補に含まれた。未知の好みを問う別実APIテストでは未確認の映画趣味を生成しT77 FAIL。共通プロンプトに本人への確認ルールを追加し、モックテストは成功したが、変更後の実APIテストは未実施。カフェ会話ではStage 3/consider_invite、断りケースでは謝罪・再誘いなしを確認。
+- SQLite: 会話002と品質試験は本番DBと分離した一時SQLiteを使用。会話002のJSONは40件、送信数20/20。HTML内容はJSONから生成。ユーザーの実データを初期化していない。
+- Firefox: 実際にHTMLを開き、40メッセージ、左右の話者、送信番号、20個の生成詳細、詳細の展開、CSS、日本語、外部リソースなしを確認。スクリーンショット [`conversation_002_firefox.png`](simulations/conversation_002_firefox.png)。Chromeは使用していない。
+- Windows起動: 8765番は既存プロセスが使用中のため終了・再起動はしなかった。隔離コピーと一時DBでPython 3.12、別ポート18768の起動、Firefox表示、二重起動、Ctrl+C終了、ポート解放と再起動、18769番の独立listenerを停止しない競合案内を確認。
+- pytest: 104 passed, 1 warning（Starlette/httpxの非推奨警告）。`node --check app.js`成功。Firefox UIテストを含む。最新HEADのGitHub ActionsはPush後に確認する。実行履歴: https://github.com/kenkyu0909/aichatapp/actions/workflows/test.yml?query=branch%3Acodex%2Ffull-system-verification
+
+## プロンプト修正
+
+- `prompts/first.txt`: 3案それぞれに挨拶、軽い好意、マッチへの喜び、プロフィール話題、質問を含める自己点検を追加。句読点も案ごとに確認。変更後の実API3案をT80で確認。
+- `prompts/common.txt`: 本人の趣味・経験・予定への直接質問に登録情報がない場合、曖昧な一人称回答を作らず本人への確認質問のみ返す指示を追加。T77の実生成問題を受けた修正。静的・モック確認は成功。変更後の実API再確認は未実施。
+- `tests/test_app.py`: 初回プロンプト必須要件と、本人への直接質問ルールが共通プロンプトにあることを確認するアサーションを追加。
+
+## APIモデル・利用制限・料金
+
+Google公式一覧では`gemini-3.5-flash-lite`と`gemini-3.1-flash-lite`がStableとして掲載される。公式料金表では標準の3.5 Flash-Liteに無料ティアが表示され、無料ティアの入出力はGoogleの製品改善に使用される条件。RPM/TPM/RPDや利用可能枠はプロジェクト・ティアで異なり、AI Studio上で確認する必要がある。今回の個別プロジェクト残量・ティア・請求状態・実費は確認しておらず、課金設定は変更していない。
+
+- [Google Gemini API モデル一覧](https://ai.google.dev/gemini-api/docs/models.md)
+- [Google Gemini API レート制限](https://ai.google.dev/gemini-api/docs/rate-limits)
+- [Google Gemini API 料金表](https://ai.google.dev/gemini-api/docs/pricing.md)
+
+## テスト集計
+
+既存マトリクスの前回71項目にT72〜T80を追加して80項目。現在状態はPASS 73 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。T77のFAILは未登録の好みを生成した実例であり、修正後実API再試験が残る。
+
+## ファイル
+
+- [`conversation_002.json`](simulations/conversation_002.json): 全40発言、3案、選択、モデル・API別名、送信数、終了状態
+- [`conversation_002.html`](simulations/conversation_002.html): 全会話と折りたたみ候補の単体HTML
+- [`conversation_002_analysis.md`](simulations/conversation_002_analysis.md): 10観点の品質評価と会話分析
+- [`quality_checks_002.json`](simulations/quality_checks_002.json): 会話本体とは分離した実API品質確認5回
+- [`conversation_002_firefox.png`](simulations/conversation_002_firefox.png): Firefox表示確認画像
+
+## GitHub状態
+
+- ブランチ: `codex/full-system-verification`
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持・未マージ）
+- 最終コミットSHA、最新Actions URLは、最終Push確認後にこの報告書へ追記する。

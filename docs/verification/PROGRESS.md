@@ -199,3 +199,19 @@
 - Windows再起動: `start.bat`の今回再試行は既存の`127.0.0.1:8765` listenerとの競合で完了せず。既存プロセスに手を触れず、成功扱いにしていない。
 - 今回の検証コードSHA: `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`。これ以降の更新があれば、PR checksページで最新HEADの実行を確認する。
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4。Draftのままレビュー待ち。マージしていない。
+
+
+## 2026-10-14 最終検証結果（完了）
+
+- 最新開始状態はブランチ`codex/full-system-verification`、HEAD `4cb01c4e72de745295ed163c01802c60deda2273`。PR #4は`feat/ui-local-backend-v1`宛てのDraftで継続し、マージしていない。前進中の会話チェックポイント`b0845b3a21cc9803e14821e4097a462771e065c8`は既にPush済み。
+- Windows 11系環境、Python 3.12.10、Node 25.9、Firefoxを使用。Chromeには触れていない。8765番の既存プロセスは維持。別の一時ポートで`start.bat`、二重起動、Ctrl+C、ポート解放、再起動、競合案内をFirefoxと一時SQLiteで確認。Windowsの実データディレクトリは使っていない。
+- 実API: 会話002の20論理リクエストと別環境の品質確認5回、計25回がすべて成功。モデルは`gemini-3.5-flash-lite`、API別名API1、各試行1回。HTTP 200/非デモ/3候補を確認。429、フォールバック、失敗リクエストなし。API2および3.1系は使用していない。キー文字列は出力・記録していない。
+- 会話002は架空プロフィールと一時SQLiteのみを使用。アプリ20通、相手20通、合計40件。最後の相手返信を保存し、`LIMIT_REACHED`。誘いなし、日時・場所の合意なし、21通目なし。JSON/HTML/分析ファイルに保存。会話001は維持。
+- 別の品質確認で、本人が映画好きか直接問われた際に、未登録なのに「映画はときどき観ます」とする実生成を検出。`prompts/common.txt`へ直接質問に対する必須の本人確認ルールを追加し、SDKモックの質問/回答分離テストはPASS。実APIの変更後再確認は25リクエストで止めたため未実施。T77をFAILのまま記録。
+- 初回メッセージの初回出力不具合後、`prompts/first.txt`で候補ごとの自己点検を追加。別実API呼び出しで3案の構成・句読点が改善したためT79をFIXED、T80をPASS。実生成結果は別ファイルへ保存。
+- Firefoxで`conversation_002.html`を開き、40メッセージ、左右20件ずつ、詳細20件、詳細展開、終了状態、CSS、日本語、外部通信なしを確認。スクリーンショットは`simulations/conversation_002_firefox.png`。
+- ローカルテスト: `python -m pytest -q` **104 passed, 1 warning**。`node --check app.js`成功。`git diff --check`成功（改行コードに関するGit警告のみ）。
+- Google公式モデル一覧では3.5/3.1 Flash-LiteをStable掲載。公式料金表では3.5 Flash-Liteに無料ティアが掲載されるが、無料枠入力/出力はGoogle製品改善に使用される条件。個別プロジェクトの使用枠、請求状態、実費は確認していない。モデル枠はプロジェクトやティアで変動し、AI Studioで確認する仕様。課金設定は変更していない。
+- テストマトリクスは80項目: PASS 73 / FAIL 1 / FIXED 1 / BLOCKED 3 / NOT_TESTED 2。FAILはT77（本人の未知の好みを生成）で、関連プロンプトは修正したが実API再試験が残る。
+- 次: 書類・証拠をコミットしてPushし、Actionsが最新HEADで成功することを確認。PR #4本文を更新する（Draft維持）。ソース修正SHA: `d431b79`。
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4
