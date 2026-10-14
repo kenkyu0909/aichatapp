@@ -9,9 +9,10 @@
 - 実Geminiは0論理要求/0 provider attempts。課金状態・現在の残利用枠を確認できず、無断課金の可能性を排除できないため実通信を行わない。会話004は開始しない。
 - `OVERNIGHT_GOAL.md` とTEST_MATRIXへ7ゴールの判定およびT128–T141を追加。集計141項目（PASS122 / FAIL7 / FIXED1 / BLOCKED5 / NOT_TESTED6）。過去のFAILは残し、実生成品質は未達と明記。
 - コード/検証commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`をPush済み。Push [Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083) とPR [Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)は同SHAで成功し、両方 **372 passed, 1 warning**。Node構文検査、Firefox準備、Artifact保存も成功。
-- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `f12dc9751496e4bf981fb152231fcf6c052a3f71`。マージなし。
+- 最終報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPush済み。Push [Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484) とPR [Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)は同SHAで成功し、両方 **372 passed, 1 warning**。Node構文検査、Firefox準備、Artifact保存も成功。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `ad427ef48562c02a205c376f16b78f74ffb53e2e`。マージなし。
 - 未追跡のユーザー提供ファイル`docs/verification/simulations/指示.txt`は保持し、ステージ・コミットしていない。
-- 次: このActions結果とPR状態をFINAL_REPORT/TEST_MATRIXへ記録して報告commitをPush。その後、報告commitを対象にした最新HEAD Actionsを確認し、PR本文を更新する。
+- 次: 2件のコミットと最新Actions URLをPR本文へ追記し、PR #4のDraft状態を再確認する。
 
 最終更新: 2026-10-14（継続作業）
 

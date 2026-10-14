@@ -6,6 +6,8 @@
 
 コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
 
+報告追記commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPushされ、[Push Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484)と[PR Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)は同SHAで成功しました。どちらも372 passed, 1 warningです。PR本文には次の最終報告追記commit後の最新Actions URLを記載します。
+
 ## 2026-10-14 返信品質・初回メッセージ・会話制御の最終報告
 
 ### 総合判定
@@ -576,6 +578,6 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 
 ## テスト集計とGitHub
 
-- TEST_MATRIX: 142項目、PASS 123 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142はコード/検証commitのPush/PR Actions成功。
+- TEST_MATRIX: 143項目、PASS 124 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142/T143は連続したコード・報告commitのPush/PR Actions成功。
 - `OVERNIGHT_GOAL.md`に達成条件、根拠、不合格項目、次の作業を記録。
-- 今回の結果記録の追記はまだ未コミット/未Push。PR #4はOPEN/Draft、head `f12dc9751496e4bf981fb152231fcf6c052a3f71`、マージしていない。結果追記をPushした後、最新head ActionsとPR本文を確認する。
+- 今回の最新報告追記は未コミット/未Push。PR #4はOPEN/Draft、head `ad427ef48562c02a205c376f16b78f74ffb53e2e`、マージしていない。追記をPush後、最新head Actions URLをPR本文に追加する。
