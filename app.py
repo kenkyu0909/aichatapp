@@ -325,7 +325,7 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
 
 def _trusted_fact_text(context: dict) -> str:
     parts: list[str] = []
-    negative_fact = re.compile(r"好きではない|好きじゃない|苦手|嫌い|興味(?:が)?ない|観ない|見ない|読まない|行かない|経験がない|行ったことがない|未経験")
+    negative_fact = re.compile(r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行かない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験")
 
     def collect(value: Any) -> None:
         if isinstance(value, str):
@@ -365,7 +365,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
         if not specific_markers and not frequency and re.search(r"映画.{0,8}好き", text):
             for answer in context.get("ephemeral_user_answers", []):
-                if "映画" in answer.get("question", "") and re.search(r"はい|好き|観ます|見ます", answer.get("answer", "")) and not re.search(r"苦手|好きではない|見ません|観ません", answer.get("answer", "")):
+                if "映画" in answer.get("question", "") and re.search(r"はい|好き|観ます|見ます", answer.get("answer", "")) and not re.search(r"好きではありません|好きではない|好きじゃありません|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|見ません|観ません|見ない|観ない", answer.get("answer", "")):
                     return True
     elif topic == "居住地":
         places = re.findall(r"(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|東京都|大阪府)", text)

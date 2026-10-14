@@ -253,3 +253,9 @@
 
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draftのまま）
 - 今回のコード・進捗コミット、実API検証結果、最新Actions URL: 未作成。Push前に確認し追記する。
+
+### 否定情報の根拠判定に関する追加修正
+
+- 再レビューで、`好きではありません`などの丁寧な否定文が肯定主張の根拠に誤用される可能性を検出。プロフィールと一時回答の双方で、否定表現を肯定候補の根拠から除外し、映画・カフェの肯定候補を止めるテストを追加した。
+- 対象pytest6件: PASS。変更後の全`pytest -q`: **134 passed, 1 warning**（Firefox UIテスト含む）。`node --check app.js`、`git diff --check`: PASS。
+- この修正はまだ未コミット・未Push。実APIへはまだ通信していない。

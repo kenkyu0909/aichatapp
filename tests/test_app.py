@@ -1176,6 +1176,7 @@ def test_yes_to_movie_preference_does_not_confirm_genre_or_watching_frequency(cl
 
 @pytest.mark.parametrize(("facts", "claim", "topic"), [
     ({"hobbies": ["映画は好きではない"]}, "映画好きです！", "映画"),
+    ({"hobbies": ["映画は好きではありません"]}, "映画好きです！", "映画"),
     ({"hobbies": ["カフェは苦手"]}, "カフェ好きです！", "カフェ"),
 ])
 def test_negative_profile_fact_does_not_support_positive_claim(client, facts, claim, topic):
@@ -1183,6 +1184,17 @@ def test_negative_profile_fact_does_not_support_positive_claim(client, facts, cl
     context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
     candidate = backend.Candidate(label="候補", text=claim)
     assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("answer", ["映画は好きではありません", "映画は好きじゃありません", "映画には興味がありません"])
+def test_negative_ephemeral_answer_does_not_support_positive_movie_claim(client, answer):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画はお好きですか？", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="候補", text="映画好きです！")
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
 def test_unanswered_personal_question_is_blocked_for_legacy_response(client, monkeypatch):
