@@ -814,6 +814,81 @@ def test_answered_topic_is_not_asked_again_after_one_model_repair(client, monkey
     assert body["api_attempt_count"] == 2
 
 
+def test_model_user_info_question_is_blocked_without_direct_need(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空の映画館会話")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画館の大きなスクリーンって迫力がありますよね！"})
+    question_only = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "映画はよく観に行かれますか？", "purpose": "本人の好みを確認するため"}],
+        "user_info_reason": "本人情報の確認", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "ask_user_info", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(question_only, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    body = response.json()
+    assert response.status_code == 200
+    assert body["generation_blocked"] is True
+    assert body["needs_user_info"] is False
+    assert body["user_questions"] == []
+    assert body["recommended"] is None
+    assert body["api_attempt_count"] == 2
+
+
+def test_model_user_info_question_allows_unconfirmed_logistics_after_acceptance(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "よかったら今度一緒にカフェに行きませんか？"},
+            {"role": "them", "body": "いいですね！ぜひ行きたいです"},
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="いつ頃が都合いいですか？", purpose="日程を決めるため")],
+    )
+    assert not backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="映画のジャンルは何が好きですか？", purpose="好みを確認")],
+    )
+
+
+def test_model_user_info_question_must_match_missing_fact_and_cannot_add_unrelated_questions(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    expected = backend.missing_personal_fact_question(context)
+    assert expected is not None
+    assert backend.model_user_info_questions_are_necessary(context, [expected])
+    assert not backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="映画はお好きですか？", purpose="好みを確認")],
+    )
+    assert not backend.model_user_info_questions_are_necessary(
+        context,
+        [
+            expected,
+            backend.UserQuestion(question="どの地域にお住まいですか？", purpose="地域確認"),
+        ],
+    )
+
+
 def test_info_retry_and_candidate_fact_repair_have_separate_single_limits(client, monkeypatch):
     from google import genai
 
@@ -1322,6 +1397,12 @@ def test_candidate_validation_rejects_unfinished_placeholders(client, text):
     )
     with pytest.raises(ValueError, match="未完成"):
         backend.check_suggestions(value, 1)
+
+
+def test_candidate_validation_rejects_wave_dash_name_placeholder(client):
+    _, backend = client
+    candidate = backend.Candidate(label="返信", text="〜さんは最近どんな本を読みましたか？")
+    assert backend.candidate_has_placeholder(candidate.text)
 
 
 def test_candidate_validation_allows_literal_placeholder_discussion_when_quoted(client):
@@ -2116,6 +2197,15 @@ def test_invite_opportunity_requires_recent_coherent_outing_exchange(client):
             {"role": "them", "body": "カフェは好きですか？"},
         ]
     }
+    latest_turn_omits_question_but_recent_exchange_is_reciprocal = {
+        "history": [
+            {"role": "them", "body": "休日は友達とカフェに行くことが多いです！"},
+            {"role": "me", "body": "落ち着いたお店もよさそうですね"},
+            {"role": "them", "body": "そうなんです！けいさんはカフェで何を頼むことが多いですか？"},
+            {"role": "me", "body": "季節のタルトを選ぶことが多いです"},
+            {"role": "them", "body": "中野に落ち着いたカフェがあるんですね！ケーキも気になります"},
+        ]
+    }
     previously_invited = {
         "history": coherent_exchange["history"] + [
             {"role": "me", "body": "よかったら今度一緒にカフェへ行きませんか？"},
@@ -2132,6 +2222,7 @@ def test_invite_opportunity_requires_recent_coherent_outing_exchange(client):
     assert backend.invite_opportunity_ready(apology_without_refusal) is True
     assert backend.invite_opportunity_ready(negated_outing_interest) is False
     assert backend.invite_opportunity_ready(question_is_not_interest) is False
+    assert backend.invite_opportunity_ready(latest_turn_omits_question_but_recent_exchange_is_reciprocal) is True
     assert backend.invite_opportunity_ready(previously_invited) is False
 
 
@@ -2178,9 +2269,9 @@ def test_unsupported_personal_claim_from_model_returns_user_question_not_candida
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日はいい天気ですね！"})
     payload = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "映画はときどき観ますよ 最近はどんな洋画を観たんですか？"},
+        "recommended": {"label": "自然", "text": "映画はときどき観ますよ\n最近はどんな洋画を観たんですか？"},
         "alternatives": [
-            {"label": "別案", "text": "映画の話気になります！最近何か観ましたか？"},
+            {"label": "別案", "text": "映画の話気になります！\n最近何か観ましたか？"},
             {"label": "質問", "text": "映画館と家ならどちらで観ることが多いですか？"},
         ],
         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
@@ -2237,6 +2328,54 @@ def test_unconfirmed_recent_movie_absence_is_not_invented(client):
     assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
+@pytest.mark.parametrize("text", [
+    "最近は青い灯台を観ましたが映像がきれいでした",
+    "青い灯台という映画を観てすごく良かったです",
+    "青い灯台を観ました！映像がきれいでした！最近何を観ましたか？",
+    "青い灯台を観ました 映像がきれいでした 最近何を観ますか？",
+    "青い灯台を観ました 映像がきれいでした どんな映画を観ますか？",
+    "青い灯台を観ました 映像がきれいでした 映画館よく行きますか？",
+    "青い灯台を観てから読書の時間も楽しんでいます",
+    "青い灯台が印象に残っています",
+    "青い灯台は映像がきれいでしたからまた観たいです",
+    "青い灯台は映像がきれいでしたのでまた観たいです",
+])
+def test_movie_title_answer_does_not_confirm_unstated_review_or_opinion(client, text):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近どんな映画を観ましたか？", "answer": "最近は青い灯台を観ました"}],
+    }
+    candidate = backend.Candidate(label="感想を付加", text=text)
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("text", [
+    "映像がきれいな映画が好きですか？",
+    "最近どんな映画を観ましたか？",
+    "最近観た映画の映像がきれいでしたか？",
+    "映像がきれいだった？",
+    "映像がきれいだったの？",
+    "映像がきれいだったら観ますか？",
+    "映像がきれいなら好きですか？",
+])
+def test_partner_directed_movie_questions_are_not_personal_opinion_claims(client, text):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="相手への質問", text=text)
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+def test_confirmed_movie_opinion_can_be_used(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近どんな映画を観ましたか？", "answer": "最近は青い灯台を観ました 映像がきれいでした"}],
+    }
+    candidate = backend.Candidate(label="確認済み", text="青い灯台は映像がきれいでした")
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
 @pytest.mark.parametrize(("claim", "topic"), [
     ("自分は幅広く読む", "読書"),
     ("横浜のほうによく行く", "居住地"),
@@ -2269,6 +2408,111 @@ def test_yes_to_movie_preference_does_not_confirm_genre_or_watching_frequency(cl
     assert backend.unsupported_personal_claim_topics(specific, context) == ["映画"]
     generic = [backend.Candidate(label="C", text="映画好きです！")]
     assert backend.unsupported_personal_claim_topics(generic, context) == []
+
+
+def test_movie_title_does_not_confirm_opinion_or_causal_change(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": ["読書"]}},
+        "ephemeral_user_answers": [{"question": "最近どんな映画を観ましたか？", "answer": "最近は青い灯台を観ました"}],
+    }
+    candidates = [
+        backend.Candidate(label="印象", text="青い灯台が印象に残っています"),
+        backend.Candidate(label="因果", text="青い灯台を観てから読書の時間も楽しんでいます"),
+    ]
+    assert backend.unsupported_personal_claim_topics(candidates, context) == ["映画"]
+
+
+def test_purchase_answer_does_not_confirm_unstated_research_details_or_personality(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "新作を見つけたらすぐ買うタイプですか？", "answer": "少し調べてから買うことが多いです"}],
+    }
+    candidates = [
+        backend.Candidate(label="媒体を追加", text="口コミや内容を少し調べてから買うことが多いです"),
+        backend.Candidate(label="性格を追加", text="じっくり決めるタイプです"),
+        backend.Candidate(label="安全な言い換え", text="少し調べてから買うことが多いです"),
+    ]
+    assert "買い物" in backend.unsupported_personal_claim_topics(candidates, context)
+    assert backend.unsupported_personal_claim_topics([candidates[2]], context) == []
+
+
+def test_partner_shopping_detail_can_be_acknowledged_without_becoming_user_fact(client):
+    _, backend = client
+    context = {
+        "other": {"description": "買う前に口コミを見てから決めます"},
+        "history": [{"role": "them", "body": "買う前に口コミを見てから買うことが多いです"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="相手への反応", text="口コミを調べて買うタイプなんですね！")
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+@pytest.mark.parametrize("partner_message", [
+    "口コミは見ずに買うことが多いです",
+    "口コミを見て買うことはありません",
+    "口コミを見て買うことはないです",
+    "口コミを見て買うわけではないです",
+])
+def test_partner_negative_shopping_detail_does_not_ground_opposite_attribution(client, partner_message):
+    _, backend = client
+    context = {
+        "other": {"description": ""},
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="矛盾", text="口コミを調べて買うタイプなんですね！")
+    assert "買い物" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "新作はじっくり決めないです",
+    "新作をじっくり決めるわけではないです",
+])
+def test_partner_negative_decision_style_does_not_ground_opposite_attribution(client, partner_message):
+    _, backend = client
+    context = {
+        "other": {"description": ""},
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="矛盾", text="じっくり決めるタイプなんですね！")
+    assert "買い物" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("question", [
+    "買う前に口コミを調べるタイプですか？",
+    "新作はじっくり決めるタイプですか？",
+    "買う前に口コミを調べるタイプ？",
+    "新作はじっくり決めるタイプかな？",
+    "衝動買いするタイプ？",
+    "口コミを調べるタイプなの？",
+    "じっくり決めるタイプなんですか？",
+    "衝動買いすることありますか？",
+    "衝動買いしたことある？",
+    "衝動買いとかしますか？",
+    "衝動買いってしますか？",
+])
+def test_partner_directed_shopping_questions_are_not_user_claims(client, question):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="相手への質問", text=question)
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "じっくり決めるタイプです！新作はじっくり決めるタイプですか？",
+    "口コミを調べてから買います！買う前に口コミを調べるタイプですか？",
+])
+def test_later_partner_shopping_question_does_not_hide_earlier_user_claim(client, candidate_text):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="混在", text=candidate_text)
+    assert "買い物" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
 @pytest.mark.parametrize(("facts", "claim", "topic"), [

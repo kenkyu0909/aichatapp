@@ -258,12 +258,24 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T115 | 実API検証の認証情報ソース隔離 | APIなしのpytest | PASS | スクリプトは明示された`MRA_API_DIR`だけを選び、`app.py`のdotenv読込に既存環境値が差し込まれないようAPIキー環境変数を空にする。値は表示・記録しない。`tests/test_quality_checks_005.py`。 |
 | T116 | 許可済みAPI/モデル優先順の構成確認 | ローカル設定の存在確認。秘密値非表示 | PASS | API別名とモデルだけを出力し、API1/3.5 → API2/3.5 → API1/3.1 → API2/3.1の4経路を確認。認証有効性・現在のクォータはこの確認だけでは判定しない。 |
 | T117 | 対象モデルの公式一覧確認 | Google Gemini公式モデル/料金/レート制限資料 | PASS | `gemini-3.5-flash-lite`と`gemini-3.1-flash-lite`は安定版として一覧掲載。Free tierは一部モデル・利用枠限定で、プロジェクト別の現在枠や課金状態はAI Studioで確認が必要。参照: [Models](https://ai.google.dev/gemini-api/docs/models)、[Pricing](https://ai.google.dev/gemini-api/docs/pricing)、[Rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)。 |
-| T118 | 新しい限定Gemini品質チェック005 | 既存FastAPI `/api/generate`、隔離SQLite、架空データ、最大8論理要求 | NOT_TESTED | 実施前。API利用制限・許可情報と最新のオフラインテストを確認後、結果・候補・実際のモデル/別名を`quality_checks_005.json`へ記録する。 |
+| T118 | 新しい限定Gemini品質チェック005 | 既存FastAPI `/api/generate`、隔離SQLite、架空データ、最大8論理要求 | FAIL | 実施済み。8論理要求/13 provider attempts、API1/`gemini-3.5-flash-lite`。未確認の感想・買い方、候補と誘い方針の不一致、未完成プレースホルダーを確認。断りケースは構造化応答を得られず。詳細は`quality_checks_005_analysis.md`。会話004は開始せず。 |
 | T119 | conversation_004の開始ゲート | T118の全候補品質判定後のみ実施 | NOT_TESTED | T118が全候補PASSし、明示された許可上限内で実施できる場合だけ開始。失敗時は架空の会話記録を作らない。 |
-| T120 | 最新変更を含む全pytest・Firefox UI回帰 | Windows `.venv`、全pytest | PASS | 2026-10-14、レビュー修正後に**257 passed, 1 warning, 76.93秒**。Firefox UI自動テストを含む。警告はStarletteからの`httpx` TestClient利用非推奨通知。Chromeは使用していない。 |
+| T120 | 最新変更を含む全pytest・Firefox UI回帰 | Windows `.venv`、全pytestとPush Actions | PASS | 2026-10-14、ローカル**257 passed, 1 warning, 76.93秒**、Actions**257 passed, 1 warning, 62.58秒**。Firefox UI自動テストを含む。警告はStarletteからの`httpx` TestClient利用非推奨通知。Chromeは使用していない。Actionsは`c69e92f2ce6731083785322463e028f53fbdcd8d`。 |
 | T121 | 断り後の再勧誘と既知情報の再質問を同時に拒否する品質ゲート | APIなしのrunner関数テスト | PASS | `respect_decline_and_no_reask`ケースで、カフェ頻度の共有→本人の誘い→相手の慎重な拒否を設定。再勧誘候補（「今度会いませんか」「カフェでもご一緒しませんか」等）と既知頻度の再質問を拒否し、「カフェの話をしませんか」のような会話提案は会う誘いと誤判定しない。`tests/test_quality_checks_005.py`。 |
+| T122 | GitHub Actionsが最新Pushコミットで成功 | `gh run view`と実ログ確認 | PASS | [Actions 38579919967](https://github.com/kenkyu0909/aichatapp/actions/runs/38579919967)、SHA `c69e92f2ce6731083785322463e028f53fbdcd8d`、`257 passed, 1 warning`、Firefox準備・JavaScript構文チェック・Artifact uploadも成功。 |
 
-旧履歴は110項目（PASS 97 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 3）で維持。追加項目T111–T117およびT120–T121はPASS、T118–T119はNOT_TESTED。現在は121項目（PASS 106 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。
+この節の当時点は122項目（PASS 107 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。T118の実施結果は後段でFAILへ更新し、変更前の記録は履歴として保持する。
+
+### 2026-10-15 実API品質006の評価と事実検査回帰修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T123 | 買い物の本人事実・質問・相手情報の区別 | FastAPI候補検査pytest、架空プロフィール/会話 | PASS | 断定後の質問を見逃さないこと、くだけた質問を許容すること、相手の肯定済み習慣を受け止めること、否定・「わけではない」と矛盾する受け止めを拒否することを確認。関連テスト27件がPASS。`tests/test_app.py`。 |
+| T124 | 最新コードの全pytestとFirefox UI回帰 | Windows `.venv`、pytest全件 | PASS | 最終コードで**307 passed, 1 warning, 77.98秒**。Firefox UIテストを含む。警告はStarlette/httpx TestClientの非推奨通知。Chromeは使用していない。 |
+| T125 | 実Gemini品質006の候補品質 | 隔離SQLite、既存アプリAPI、指定APIディレクトリ、架空データ | FAIL | 7論理要求/11 provider attempts、API1/`gemini-3.5-flash-lite`のみ。映画の感想/因果関係、買い方の未確認詳細、断りに対する不自然な表現、`consider_invite`と誘い候補の不一致を確認。最終改行ケースはHTTP 502 `invalid_response`。429なし、フォールバックなし。`quality_checks_006.json` / `_analysis.md`。追加API要求は行わない。 |
+| T126 | conversation_004の品質ゲート | T118/T125の保存済み出力と判定 | NOT_TESTED | T118とT125でFAILがあるため未開始。会話や生成候補を捏造していない。再開には修正後の実API品質ゲートを別許可・利用枠確認のもとで通す必要がある。 |
+
+最新集計: 126項目、PASS 109 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。旧FAILは履歴として保持し、T118の実施結果とT125の新しい実API評価を反映した。Actionsはコード・記録をPushした後、最新HEADの実行結果をT127として追記する。
 
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 

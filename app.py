@@ -270,10 +270,10 @@ def invite_opportunity_ready(context: dict) -> bool:
         r"好き(?:です|だ)?(?=[！!？?。\n ]|$)|興味が(?:あります|ある)(?=[！!？?。\n ]|$)|"
         r"気になります(?=[！!？?。\n ]|$)|楽しそう(?:です)?(?=[！!？?。\n ]|$)|"
         r"行ってみたい(?:です)?(?=[！!？?。\n ]|$)|いいですね|よく行きます(?=[！!？?。\n ]|$)",
-        recent_partner_text,
+        latest_partner,
     ))
-    asks_reciprocally = bool(re.search(r"[?？]|ですか|ますか", latest_partner))
-    relates_to_outing = bool(re.search(r"カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|お店|おすすめ|どこ|一緒に行", latest_partner))
+    asks_reciprocally = bool(re.search(r"[?？]|ですか|ますか", recent_partner_text))
+    relates_to_outing = bool(re.search(r"カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|お店|おすすめ|どこ|一緒に行", recent_partner_text))
     return has_outing_topic and shows_interest and asks_reciprocally and relates_to_outing
 
 
@@ -548,6 +548,40 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     return personal_fact_question(topic, partner_messages[-1])
 
 
+def model_user_info_questions_are_necessary(context: dict, questions: list[UserQuestion]) -> bool:
+    """Allow model-originated questions only for explicit asks or accepted-date logistics."""
+    preflight_question = missing_personal_fact_question(context)
+    if preflight_question is not None:
+        if len(questions) != 1:
+            return False
+        normalize = lambda value: re.sub(r"\s+|[?？。！!]", "", value)
+        return normalize(questions[0].question) == normalize(preflight_question.question)
+    if not questions:
+        return False
+    history = context.get("history", [])
+    last_partner_index = max(
+        (index for index, item in enumerate(history) if item.get("role") == "them"),
+        default=-1,
+    )
+    if last_partner_index < 0:
+        return False
+    last_partner_text = history[last_partner_index].get("body", "")
+    prior_invitation = any(
+        item.get("role") == "me" and INVITATION_PATTERN.search(item.get("body", ""))
+        for item in history[:last_partner_index]
+    )
+    accepted = bool(re.search(r"ぜひ|いいですね|行きたい|楽しみ|大丈夫|もちろん|行きましょう|お願いします", last_partner_text))
+    declined_or_uncertain = bool(re.search(r"不安|ごめんなさい|難しい|できません|まだ会う|ちょっと.*(?:難|不安)|考えたい", last_partner_text))
+    if not prior_invitation or not accepted or declined_or_uncertain:
+        return False
+    logistics_topics = {"予定", "居住地"}
+    for question in questions:
+        topic = _question_topic(question.question)
+        if topic not in logistics_topics or _topic_is_verified(topic, context, question.question):
+            return False
+    return True
+
+
 def personal_fact_question(topic: str, source_question: str = "") -> UserQuestion:
     normalized = re.sub(r"\s+", "", source_question)
     if topic == "読書" and re.search(r"ジャンル|何系|どんな本", source_question):
@@ -601,6 +635,32 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
     )
 
 
+MOVIE_OPINION_CLAIM_PATTERN = re.compile(
+    r"(?:映像|景色|音楽|ストーリー|展開|演技|内容).{0,6}(?:きれい|綺麗|美しい|素晴らしい|よかった|良かった|面白|印象的)(?:でした|です|だった|で|くて|と思|と感じ)|"
+    r"(?:すごく|とても|かなり|本当に).{0,8}(?:良かった|面白かった|楽しめました|感動しました)(?:です|！|!|$)|"
+    r"(?:映画|作品|青い灯台).{0,14}(?:印象に残って(?:います|いる|いました|いた)|印象的(?:でした|です))|"
+    r"(?:観てから|見てから).{0,24}(?:読書|本を読む|趣味).{0,16}(?:楽しんでいます|楽しんでいる|好きです|好き|始めました|始めています)"
+)
+
+
+def _movie_assertion_segments(text: str) -> list[str]:
+    """Keep opinion claims unless their own ending is an interrogative."""
+    assertions: list[str] = []
+    for match in MOVIE_OPINION_CLAIM_PATTERN.finditer(text):
+        suffix = text[match.end():].lstrip()
+        if re.match(
+            r"(?:か(?:どうか)?(?:[?？]|$)|の(?:ですか|でしょうか|[?？]|$)|"
+            r"んですか(?:[?？]|$)|んでしょうか(?:[?？]|$)|"
+            r"(?:ら|なら|としたら)[^!?！？\n]*(?:ですか|ますか|でしょうか|[?？])$)",
+            suffix,
+        ):
+            continue
+        if suffix.startswith(("?", "？")):
+            continue
+        assertions.append(match.group(0))
+    return assertions
+
+
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "買い物": re.compile(
         r"(?:自分|私|僕|俺).{0,18}(?:新作|商品|服|コスメ|本|ゲーム|買い物).{0,20}(?:買|購入|選び)|"
@@ -608,6 +668,7 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
         r"(?:すぐ|即).{0,8}(?:買っちゃ|買うことが多|買います|購入し)|"
         r"(?:パケ買い|衝動買い|即買い)|"
         r"(?:少し|ちょっと|かなり).{0,8}(?:悩んで|考えて).{0,12}買う|"
+        r"(?:口コミ|内容|レビュー|情報).{0,12}(?:調べ|確かめ|確認).{0,12}(?:買|タイプ)|じっくり決めるタイプ|"
         r"店の前で.{0,12}(?:立ち止ま|入っちゃ|買)|"
         r"(?:新作|気になるもの).{0,12}(?:すぐ買います|買うタイプ|よく買います)"
     ),
@@ -676,6 +737,9 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
     elif topic == "映画":
         facts = context.get("my_profile", {}).get("facts", {})
+        opinion_claims = _movie_assertion_segments(text)
+        if any(claim not in source for claim in opinion_claims):
+            return False
         specific_markers = re.findall(r"洋画|邦画|アニメ映画|ドキュメンタリー", text)
         if specific_markers and not all(marker in source for marker in specific_markers):
             return False
@@ -739,6 +803,11 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             "比較・検討": re.search(r"調べ|比較|悩んで|考えて|吟味", source),
         }
         if any(found and not source_behaviors[name] for name, found in candidate_behaviors.items()):
+            return False
+        method_details = re.findall(r"口コミ|内容|レビュー|情報|確かめ|確認", text)
+        if any(detail not in source for detail in method_details):
+            return False
+        if "じっくり決めるタイプ" in text and "じっくり決めるタイプ" not in source:
             return False
         if candidate_behaviors["即決・衝動"] and re.search(r"調べてから|比較してから|悩んでから|考えてから", source):
             return False
@@ -839,8 +908,95 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     for candidate in candidates:
         text = candidate.text
         for topic, pattern in UNVERIFIED_PERSONAL_CLAIM_PATTERNS.items():
-            if pattern.search(text) and not _claim_supported_by_trusted_fact(topic, text, context):
+            claim_text = text
+            if topic == "映画":
+                claim_text = re.sub(r"[、。!?！？\n]+", " ", text)
+            matches = list(pattern.finditer(claim_text))
+            if topic == "買い物":
+                partner_sources = [context.get("other", {}).get("description", "")]
+                partner_sources.extend(
+                    message.get("body", "")
+                    for message in context.get("history", [])
+                    if message.get("role") == "them"
+                )
+                question_continuation = re.compile(
+                    r"(?:(?:って|とか|は|を|が)?(?:する|します|した|しちゃう|買う|買った|調べる|調べた|決める)"
+                    r"(?:こと|タイプ|方|ほう)?(?:が|は)?"
+                    r"(?:あります|ある|多い|です|ます|なの|なんですか|なん|かな)?(?:か)?"
+                    r"|(?:です|ます|でしょう)(?:か)?|(?:なの|なんですか|なん|かな))?"
+                )
+                filtered_matches = []
+                for match in matches:
+                    # Only inspect the same clause as this match. A later
+                    # question after an exclamation/newline must not hide an
+                    # earlier first-person assertion.
+                    remainder = text[match.end():]
+                    delimiter = re.search(r"[!?！？\n]", remainder)
+                    is_question = False
+                    if delimiter and delimiter.group(0) in "?？":
+                        clause_tail = remainder[:delimiter.start()].strip()
+                        is_question = bool(question_continuation.fullmatch(clause_tail))
+                    is_grounded_partner_attribution = False
+                    if delimiter and delimiter.group(0) in "!！?？":
+                        clause_tail = remainder[:delimiter.start()].strip()
+                        is_attribution = bool(re.search(
+                            r"(?:なんですね|んですね|なんだね|のですね|ですよね)$",
+                            clause_tail,
+                        ))
+                        if is_attribution and any(partner_sources):
+                            match_text = match.group(0)
+                            method_details = re.findall(r"口コミ|内容|レビュー|情報|確かめ|確認", match_text)
+                            def partner_detail_is_affirmed(detail: str) -> bool:
+                                sources = [source for source in partner_sources if detail in source]
+                                if not sources:
+                                    return False
+                                latest = sources[-1]
+                                index = latest.rfind(detail)
+                                window = latest[max(0, index - 12):index + len(detail) + 28]
+                                if re.search(
+                                    r"(?:見ず|見ない|見ません|調べず|調べない|調べません|"
+                                    r"確認せず|確認しない|確認しません|参考にせず|参考にしない|"
+                                    r"使わず|使わない|気にせず|"
+                                    r"こと(?:は|が)?(?:ありません|ないです|ない|なかったです|なかった)|"
+                                    r"のは(?:ありません|ないです|ない|なかったです|なかった)|"
+                                    r"わけでは(?:ありません|ないです|ない)|わけでも(?:ありません|ないです|ない))",
+                                    window,
+                                ):
+                                    return False
+                                return bool(re.search(
+                                    r"(?:調べ|見|確認|参考|チェック|比較).{0,14}(?:買|購入|決め|選)|"
+                                    r"(?:買|購入|決め|選).{0,14}(?:調べ|見|確認|参考|チェック|比較)",
+                                    window,
+                                ))
+
+                            details_are_grounded = bool(method_details) and all(
+                                partner_detail_is_affirmed(detail) for detail in method_details
+                            )
+                            patient_decision_is_grounded = False
+                            if "じっくり" in match_text:
+                                decision_sources = [source for source in partner_sources if "じっくり" in source]
+                                if decision_sources:
+                                    latest_decision = decision_sources[-1]
+                                    decision_index = latest_decision.rfind("じっくり")
+                                    decision_window = latest_decision[decision_index:decision_index + 40]
+                                    decision_is_negated = bool(re.search(
+                                        r"(?:決め|選び|考え).{0,14}(?:ず|ない|ません|なかった|ないです)|"
+                                        r"わけでは(?:ない|ありません|ないです)|ことは(?:ない|ありません|ないです)",
+                                        decision_window,
+                                    ))
+                                    patient_decision_is_grounded = (
+                                        not decision_is_negated
+                                        and bool(re.search(r"じっくり.{0,12}(?:決め|選|考)", decision_window))
+                                    )
+                            if details_are_grounded or patient_decision_is_grounded:
+                                is_grounded_partner_attribution = True
+                    if not is_question and not is_grounded_partner_attribution:
+                        filtered_matches.append(match)
+                matches = filtered_matches
+            if matches and not _claim_supported_by_trusted_fact(topic, text, context):
                 found.append(topic)
+        if _movie_assertion_segments(text) and not _claim_supported_by_trusted_fact("映画", text, context):
+            found.append("映画")
     return list(dict.fromkeys(found))
 
 
@@ -1282,6 +1438,7 @@ def build_context(data: GenerateInput) -> dict:
 
 PLACEHOLDER_PATTERN = re.compile(
     r"(?:〇{2,}|○{2,}|[xXＸｘ]{2,})\s*さん?|"
+    r"[〜～]\s*さん|"
     r"\[\s*(?:名前|name)\s*\]|"
     r"\{\{?\s*(?:名前|name)\s*\}?\}|"
     r"相手の名前をここに入力|(?<![A-Za-z])TBD(?![A-Za-z])",
@@ -1667,6 +1824,15 @@ def generate(data: GenerateInput):
                         if answered_topics & repeated_topics or answered_questions & repeated_questions:
                             return blocked_user_info_response(
                                 "回答済みの本人情報を使っても安全な候補を作れませんでした。回答内容は繰り返し尋ねず、候補の生成を中断しました。",
+                                skipped=False,
+                                attempted_models=attempted_models,
+                                api_attempt_count=len(attempted_models),
+                                api_alias=account,
+                                model=model,
+                            )
+                        if not model_user_info_questions_are_necessary(context, parsed.user_questions):
+                            return blocked_user_info_response(
+                                "会話から本人への追加確認が必要だと判断できませんでした。相手の発言だけで安全に返信できるよう、候補生成を中断しました。",
                                 skipped=False,
                                 attempted_models=attempted_models,
                                 api_attempt_count=len(attempted_models),

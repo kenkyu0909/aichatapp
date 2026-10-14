@@ -508,6 +508,33 @@ Googleの公式モデル一覧には`gemini-3.5-flash-lite`と`gemini-3.1-flash-
 
 ### 現在の状態
 
-- TEST_MATRIXは121項目: PASS 106 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。履歴のFAILは削除していません。
+- TEST_MATRIXは122項目: PASS 107 / FAIL 5 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5。履歴のFAILは削除していません。
+- Push Actions [38579919967](https://github.com/kenkyu0909/aichatapp/actions/runs/38579919967) は最新HEAD `c69e92f2ce6731083785322463e028f53fbdcd8d`でsuccess。実ログのpytestは**257 passed, 1 warning, 62.58秒**。Firefox準備、JavaScript構文チェック、artifact uploadも成功。PR #4はOPEN/Draft。
 - `quality_checks_005`はNOT_TESTED、`conversation_004`もNOT_TESTED。集中実API品質チェックで1件でも失敗した場合、conversation_004は開始しません。
 - GitHub Actions、PR #4の更新、最終コミットSHAは今回の変更のPush後に追記します。PR #4はDraftのまま維持し、マージしません。
+
+## 2026-10-15 品質006の実出力評価と最終オフライン再検証
+
+### 判定
+
+**FAIL（実生成品質）**。品質006は実Geminiに接続して候補を確認できましたが、未確認の映画感想・行動、回答内容より具体的な買い方、相手の不安への不自然な返答、誘い判断と候補本文の不一致が残りました。最後の改行品質要求はHTTP 502 `invalid_response`で完了しませんでした。品質ゲートを満たさないためconversation_004は開始していません。
+
+### 実API
+
+- 実Gemini: 7論理要求、11 provider attempts。本人情報確認2件はローカル処理でGemini呼び出し0回。
+- API1 / `gemini-3.5-flash-lite`のみ。429なし、フォールバックなし。最終要求はHTTP 502 `invalid_response`。料金、プロジェクトの請求状態、残り利用枠は確認していません。
+- APIキー・認証情報はレポートやテストJSONに保存していません。品質006以降の実API呼び出しは0件。
+- 詳細: [`quality_checks_006.json`](simulations/quality_checks_006.json)、[`quality_checks_006_analysis.md`](simulations/quality_checks_006_analysis.md)。
+
+### オフライン修正と確認
+
+- `app.py`: 買い物行動の本人断定と相手への質問を同一節内で区別。後続質問が先行する断定を隠さない。相手への受け止めは、相手の最新発言に同じ具体的行動が肯定形である場合だけ許容し、否定・矛盾する行動は根拠にしない。
+- `tests/test_app.py`: くだけた質問、断定と後続質問の混在、相手の肯定情報への受け止め、否定形および「わけではない」と矛盾する受け止めを追加。
+- 買い物関連テスト **27 passed**。独立コードレビューでこの差分の高・中severity問題は残っていません。
+- 最終コード全pytest **307 passed, 1 warning, 77.98秒**。Firefox UI自動テストを含みます。警告はStarlette/httpx TestClient利用の非推奨通知。過去の中間全体実行でプロフィール保存toast待機が一度タイムアウトしましたが、対象Firefoxテスト単体および後続の全体実行は成功しました。
+
+### 集計と未完了事項
+
+TEST_MATRIXは126項目（PASS 109 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5）。T118とT125をFAILとして実施結果に更新しました。conversation_004（T126）は未実施です。静的な日本語事実チェックには対象表現の限界があり、オフライン成功だけでは生成品質を保証しません。
+
+最新コードのActions、最終SHA、PR #4の状態は、Push後に同じSHAの成功を確認して追記します。PR #4はDraftを維持し、マージしません。
