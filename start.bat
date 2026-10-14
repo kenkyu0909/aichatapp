@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal
 cd /d "%~dp0"
 echo.
 echo ============================================
@@ -7,18 +7,18 @@ echo  Matching Reply Assistant (LOCAL PC)
 echo ============================================
 echo.
 
-rem Reuse a healthy instance, but never terminate an existing process.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $s=Invoke-RestMethod -TimeoutSec 2 http://127.0.0.1:8765/api/status; if ($s.app_id -eq 'matching-reply-assistant' -and $s.demo -is [bool] -and $s.model -is [string] -and $s.model.StartsWith('gemini-')) { exit 0 } else { exit 1 } } catch { exit 1 }"
-if not errorlevel 1 goto :existing_app
-powershell -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $c.Connect('127.0.0.1',8765); exit 0 } catch { exit 1 } finally { $c.Dispose() }"
-if not errorlevel 1 goto :port_in_use
+if "%MRA_PORT%"=="" set "MRA_PORT=8765"
 
 if not exist ".venv\Scripts\python.exe" (
-  echo Creating Python 3.11+ virtual environment...
+  echo Checking for Python 3.11 or newer...
   where py >nul 2>nul
   if not errorlevel 1 (
-    py -3.11 -m venv .venv
+    py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)"
+    if errorlevel 1 goto :python_error
+    py -3 -m venv .venv
   ) else (
+    python -c "import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)"
+    if errorlevel 1 goto :python_error
     python -m venv .venv
   )
   if errorlevel 1 goto :python_error
@@ -35,53 +35,22 @@ if errorlevel 1 (
 )
 
 if not exist ".env" if exist ".env.example" copy ".env.example" ".env" >nul
-echo Starting local server...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Start-Process -FilePath (Join-Path (Get-Location) '.venv\Scripts\python.exe') -ArgumentList @('-m','uvicorn','app:app','--host','127.0.0.1','--port','8765') -WorkingDirectory (Get-Location) -WindowStyle Hidden -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 goto :server_start_error
-
-set "READY=0"
-for /L %%I in (1,1,30) do (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $s=Invoke-RestMethod -TimeoutSec 1 http://127.0.0.1:8765/api/status; if ($s.app_id -eq 'matching-reply-assistant' -and $s.demo -is [bool] -and $s.model -is [string] -and $s.model.StartsWith('gemini-')) { exit 0 } else { exit 1 } } catch { exit 1 }"
-  if not errorlevel 1 set "READY=1"
-  if "!READY!"=="1" goto :open_firefox
-  timeout /t 1 /nobreak >nul
+echo Starting the local server. Firefox opens after the server is ready.
+echo Press Ctrl+C in this window to stop it.
+".venv\Scripts\python.exe" scripts\start_server.py
+set "SERVER_RESULT=%ERRORLEVEL%"
+if not "%SERVER_RESULT%"=="0" (
+  echo The app stopped with an error. Review the message above.
+  pause
 )
-echo The local server did not become ready. Check Python dependencies and port 8765.
-pause
-exit /b 1
-
-:existing_app
-echo A Matching Reply Assistant server is already responding at 127.0.0.1:8765.
-goto :open_firefox
-
-:port_in_use
-echo Port 8765 is occupied by a server that did not identify as this app.
-echo It was left running. Close it yourself or configure the other application before retrying.
-pause
-exit /b 1
-
-:open_firefox
-set "FIREFOX_EXE=%ProgramFiles%\Mozilla Firefox\firefox.exe"
-if not exist "%FIREFOX_EXE%" set "FIREFOX_EXE=%ProgramFiles(x86)%\Mozilla Firefox\firefox.exe"
-if exist "%FIREFOX_EXE%" (
-  start "" "%FIREFOX_EXE%" "http://127.0.0.1:8765/"
-) else (
-  echo Firefox was not found. Open http://127.0.0.1:8765/ in Firefox.
-)
-echo App is ready at http://127.0.0.1:8765/
-exit /b 0
+exit /b %SERVER_RESULT%
 
 :python_error
-echo Python 3.11 or newer is required.
+echo Python 3.11 or newer is required. Install Python 3 and retry.
 pause
 exit /b 1
 
 :dependency_error
 echo Required packages could not be installed.
-pause
-exit /b 1
-
-:server_start_error
-echo The local server process could not be started.
 pause
 exit /b 1

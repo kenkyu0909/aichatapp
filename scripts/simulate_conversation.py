@@ -36,17 +36,56 @@ PARTNER_INTERNAL = (
     "会話の反応に応じて少しずつ親しくなる。短文や質問を返さない返事も使う。急な誘いや押しの強さには慎重。"
     "会話から安心感と関心が生まれた場合は誘いに応じる可能性があるが、成功条件を理由に結果を操作しない。"
 )
+SELF_002 = {
+    "name": "高橋ゆう", "age": 27, "region": "神奈川県横浜市", "occupation": "出版社の営業",
+    "hobbies": ["読書", "喫茶店", "散歩"], "food": ["カレー", "パスタ"],
+    "available_area": "横浜駅・みなとみらい周辺", "availability": "10月下旬の土曜午後",
+    "profile": "横浜で出版社の営業をしています。休日は本屋や喫茶店をのんびり巡ることが多いです。カレーとパスタが好きです。まずは自然にお話しできたらうれしいです。",
+    "avoid": "根拠のない共通点、大げさな褒め言葉、質問攻め、返信の催促。",
+}
+PARTNER_002_PUBLIC = {
+    "name": "森さやか", "age": 26, "region": "神奈川県川崎市", "occupation": "図書館司書",
+    "hobbies": ["カフェ", "映画", "街歩き"], "food": ["焼き菓子", "オムライス"],
+    "profile": "川崎で図書館司書をしています。休日は気になるカフェで本を読んだり、映画を観たりしています。焼き菓子とオムライスが好きです。ゆっくり話せる方だとうれしいです。",
+    "conversation_style": "落ち着いていて自然な会話。質問攻めや急な誘いには慎重。",
+}
+PARTNER_002_INTERNAL = (
+    "Codexだけが見る架空の人物設定。相手の発言と公開プロフィールに沿って自然に返す。"
+    "短文や質問を返さない返事もする。会うことには慎重だが、会話が自然なら検討する。"
+    "実験の成功条件を理由に承諾しない。"
+)
+
+
+def experiment_paths(experiment_id: str) -> tuple[Path, Path, Path]:
+    if not re.fullmatch(r"conversation_[0-9]{3}", experiment_id):
+        raise ValueError("実験IDはconversation_と3桁の数字で指定してください")
+    if experiment_id == "conversation_001":
+        return JSON_FILE, HTML_FILE, DATA_DIR
+    return (
+        SIM_DIR / f"{experiment_id}.json",
+        SIM_DIR / f"{experiment_id}.html",
+        Path(tempfile.gettempdir()) / f"mra-{experiment_id.replace('_', '-')}-sandbox",
+    )
+
+
+def people_for(experiment_id: str) -> tuple[dict[str, Any], dict[str, Any], str]:
+    if experiment_id == "conversation_002":
+        return SELF_002, PARTNER_002_PUBLIC, PARTNER_002_INTERNAL
+    if experiment_id == "conversation_001":
+        return SELF, PARTNER_PUBLIC, PARTNER_INTERNAL
+    raise ValueError("未定義の実験IDです")
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def new_state() -> dict[str, Any]:
+def new_state(experiment_id: str = "conversation_001") -> dict[str, Any]:
+    self_profile, partner_public, partner_internal = people_for(experiment_id)
     return {
-        "schema_version": 1, "experiment_id": "conversation_001", "started_at": utc_now(),
+        "schema_version": 1, "experiment_id": experiment_id, "started_at": utc_now(),
         "updated_at": utc_now(), "status": "RUNNING", "end_reason": None,
-        "people": {"app_user": SELF, "partner_public": PARTNER_PUBLIC, "partner_internal": PARTNER_INTERNAL},
+        "people": {"app_user": self_profile, "partner_public": partner_public, "partner_internal": partner_internal},
         "environment": {"os": "Windows", "browser_for_report": "Firefox", "database": "架空データ専用の一時SQLite"},
         "api_requests": [], "messages": [], "turns": [], "app_sent_count": 0,
         "partner_sent_count": 0, "first_invite_app_message": None, "meeting_agreement": None,
@@ -63,21 +102,32 @@ def save_state(state: dict[str, Any], path: Path | None = None) -> None:
     temp.replace(path)
 
 
-def export_profiles(path: Path | None = None) -> None:
-    path = path or PROFILE_FILE
+def save_experiment_state(state: dict[str, Any]) -> None:
+    json_path, _, _ = experiment_paths(state.get("experiment_id", "conversation_001"))
+    save_state(state, json_path)
+
+
+def render_experiment(state: dict[str, Any]) -> None:
+    _, html_path, _ = experiment_paths(state.get("experiment_id", "conversation_001"))
+    render_html(state, html_path)
+
+
+def export_profiles(path: Path | None = None, experiment_id: str = "conversation_001") -> None:
+    self_profile, partner, internal = people_for(experiment_id)
+    path = path or (PROFILE_FILE if experiment_id == "conversation_001" else SIM_DIR / f"profiles_{experiment_id[-3:]}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "# 会話シミュレーション用の架空プロフィール\n\n実験ID: `conversation_001`（2026-10-14）\n\n"
+        f"# 会話シミュレーション用の架空プロフィール\n\n実験ID: `{experiment_id}`（2026-10-14）\n\n"
         "## アプリ側（本人役）\n\n"
-        f"- 名前・年齢: {SELF['name']}、{SELF['age']}歳\n- 居住地・仕事: {SELF['region']}、{SELF['occupation']}\n"
-        f"- 趣味: {', '.join(SELF['hobbies'])}\n- 公開プロフィール: {SELF['profile']}\n- 避けたい表現: {SELF['avoid']}\n\n"
+        f"- 名前・年齢: {self_profile['name']}、{self_profile['age']}歳\n- 居住地・仕事: {self_profile['region']}、{self_profile['occupation']}\n"
+        f"- 趣味: {', '.join(self_profile['hobbies'])}\n- 公開プロフィール: {self_profile['profile']}\n- 避けたい表現: {self_profile['avoid']}\n\n"
         "## 相手役の公開プロフィール（アプリ/Geminiに渡す情報）\n\n"
-        f"- 名前・年齢: {PARTNER_PUBLIC['name']}、{PARTNER_PUBLIC['age']}歳\n"
-        f"- 居住地・仕事: {PARTNER_PUBLIC['region']}、{PARTNER_PUBLIC['occupation']}\n"
-        f"- 趣味: {', '.join(PARTNER_PUBLIC['hobbies'])}\n- 公開プロフィール: {PARTNER_PUBLIC['profile']}\n"
-        f"- 会話スタイル: {PARTNER_PUBLIC['conversation_style']}\n\n"
+        f"- 名前・年齢: {partner['name']}、{partner['age']}歳\n"
+        f"- 居住地・仕事: {partner['region']}、{partner['occupation']}\n"
+        f"- 趣味: {', '.join(partner['hobbies'])}\n- 公開プロフィール: {partner['profile']}\n"
+        f"- 会話スタイル: {partner['conversation_style']}\n\n"
         "## 相手役の内部設定（Codexのみ。アプリ/Geminiには送信しない）\n\n"
-        f"{PARTNER_INTERNAL}\n", encoding="utf-8",
+        f"{internal}\n", encoding="utf-8",
     )
 
 
@@ -357,8 +407,9 @@ def restore_state_to_empty_db(client: Any, state: dict[str, Any]) -> dict[str, A
 def validate_restore_state(state: Any) -> None:
     """Validate every restored profile/message before making any database change."""
     try:
-        if not isinstance(state, dict) or state.get("experiment_id") != "conversation_001":
+        if not isinstance(state, dict) or not re.fullmatch(r"conversation_[0-9]{3}", str(state.get("experiment_id", ""))):
             raise ValueError
+        people_for(state["experiment_id"])
         people = state["people"]
         user, partner = people["app_user"], people["partner_public"]
         if not isinstance(user, dict) or not isinstance(partner, dict):
@@ -435,14 +486,19 @@ def validate_restore_state(state: Any) -> None:
         raise ValueError("復元用JSON全体の形式または値が不正です。DBは変更していません") from None
 
 
-def generation_settings(match_id: int, direction: str, extra: str) -> dict[str, Any]:
-    return {"mode": "reply", "match_id": match_id, "count": 3, "tone": "自動",
+def generation_settings(match_id: int, direction: str, extra: str, mode: str = "reply") -> dict[str, Any]:
+    if mode not in {"first", "reply", "followup"}:
+        raise ValueError("実験で使用できない生成モードです")
+    return {"mode": mode, "match_id": match_id, "count": 3, "tone": "自動",
             "direction": direction, "extra": extra, "show_policy": True, "response_version": 2}
 
 
 def call_generate_once(client: Any, settings: dict[str, Any], state: dict[str, Any],
-                       json_path: Path = JSON_FILE, html_path: Path = HTML_FILE) -> tuple[Any, dict[str, Any], dict[str, Any]] | None:
+                       json_path: Path | None = None, html_path: Path | None = None) -> tuple[Any, dict[str, Any], dict[str, Any]] | None:
     """Call once; ambiguous transport/JSON failures are persisted and never auto-replayed."""
+    default_json, default_html, _ = experiment_paths(state.get("experiment_id", "conversation_001"))
+    json_path = json_path or default_json
+    html_path = html_path or default_html
     request_number = len(state["api_requests"]) + 1
     response = None
     status_code = 0
@@ -534,27 +590,36 @@ def main_run(opening: str | None, resume: bool,
              candidate_number: int | None, partner_reply: str | None,
              direction: str, extra: str, confirm_success: bool,
              user_answers: list[str] | None = None, skip_user_info: bool = False,
-             retry_uncertain_generation: bool = False) -> int:
-    if JSON_FILE.exists() and not resume:
+             retry_uncertain_generation: bool = False,
+             experiment_id: str = "conversation_001", initial_mode: str = "reply") -> int:
+    json_path, html_path, data_dir = experiment_paths(experiment_id)
+    if initial_mode not in {"first", "reply"}:
+        raise SystemExit("初回モードはfirstまたはreplyです")
+    self_profile, partner_public, _ = people_for(experiment_id)
+    if json_path.exists() and not resume:
         raise SystemExit("会話JSONが既にあります。既存結果を上書きしないため --resume を使ってください")
-    if resume and not JSON_FILE.is_file():
+    if resume and not json_path.is_file():
         raise SystemExit("再開用のJSONログがありません")
-    export_profiles()
-    state = json.loads(JSON_FILE.read_text(encoding="utf-8")) if resume else new_state()
-    if not resume and DATA_DIR.exists():
+    export_profiles(experiment_id=experiment_id)
+    state = json.loads(json_path.read_text(encoding="utf-8")) if resume else new_state(experiment_id)
+    if not resume:
+        state["initial_mode"] = initial_mode
+    else:
+        initial_mode = state.get("initial_mode", initial_mode)
+    if not resume and data_dir.exists():
         raise SystemExit("専用SQLite保存先が存在します。内容を削除せず停止しました")
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    client = import_app(DATA_DIR)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    client = import_app(data_dir)
     resumed_user_settings = None
     if resume:
-        if state.get("status") not in ("RUNNING", "BLOCKED", "AWAITING_USER_INFO") or state.get("experiment_id") != "conversation_001":
+        if state.get("status") not in ("RUNNING", "BLOCKED", "AWAITING_USER_INFO") or state.get("experiment_id") != experiment_id:
             raise SystemExit("実験状態が再開可能な状態ではありません")
         if not db_matches_state(client, state):
             state = restore_state_to_empty_db(client, state)
         if state.get("generation_uncertain"):
             if not allow_uncertain_generation_retry(state, retry_uncertain_generation):
                 print("前回のGeminiリクエストは応答を確認できていません。重複生成を避けるため停止中です。状態を確認し、明示的に再試行する場合だけ --retry-uncertain-generation を指定してください。")
-                save_state(state); render_html(state); return 2
+                save_experiment_state(state); render_experiment(state); return 2
             resumed_user_settings = state.pop("uncertain_generation_settings", None)
             state.pop("generation_uncertain", None)
         elif retry_uncertain_generation:
@@ -567,7 +632,7 @@ def main_run(opening: str | None, resume: bool,
                 print("本人情報の回答待ちです。保存済み質問に --user-answer を指定してください。スキップする場合は --skip-user-info を指定できます。")
                 for question in state["pending_user_info"]["questions"]:
                     print(f"- {question['question']}（{question.get('purpose', '')}）")
-                save_state(state); render_html(state); return 0
+                save_experiment_state(state); render_experiment(state); return 0
         elif state.get("status") == "AWAITING_USER_INFO":
             raise SystemExit("回答待ち状態ですが質問情報がありません。JSONを変更せず停止しました")
         elif user_answers or skip_user_info:
@@ -576,22 +641,22 @@ def main_run(opening: str | None, resume: bool,
     elif retry_uncertain_generation or user_answers or skip_user_info:
         raise SystemExit("回答・不確実な生成の再試行には --resume が必要です")
     else:
-        client.put("/api/profile", json={"content": SELF["profile"], "avoid": SELF["avoid"]})
-        created = client.post("/api/matches", json={"name": PARTNER_PUBLIC["name"], "description": PARTNER_PUBLIC["profile"]})
+        client.put("/api/profile", json={"content": self_profile["profile"], "avoid": self_profile["avoid"]})
+        created = client.post("/api/matches", json={"name": partner_public["name"], "description": partner_public["profile"]})
         if created.status_code != 201:
             raise RuntimeError("架空プロフィールの登録に失敗しました")
         state["match_id"] = created.json()["id"]
     match_id = state["match_id"]
 
-    if not state["messages"]:
+    if not state["messages"] and not (not resume and initial_mode == "first"):
         if not opening:
             print("架空の相手役の開始メッセージを --opening-message で渡してください")
             state["end_reason"] = "開始メッセージ入力待ちです。"
-            save_state(state); render_html(state); return 0
+            save_experiment_state(state); render_experiment(state); return 0
         result = client.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": opening})
         if result.status_code != 201:
             raise RuntimeError("開始メッセージをSQLiteへ保存できませんでした")
-        send_partner_message(state, opening); save_state(state)
+        send_partner_message(state, opening); save_experiment_state(state)
 
     if can_receive_partner(state) and partner_reply:
         result = client.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": partner_reply})
@@ -599,7 +664,7 @@ def main_run(opening: str | None, resume: bool,
             raise RuntimeError("相手役の返答をSQLiteへ保存できませんでした")
         send_partner_message(state, partner_reply)
         finalize_after_partner_reply(state)
-        save_state(state)
+        save_experiment_state(state)
     elif partner_reply:
         raise SystemExit("相手の返信は、直前にアプリ側が送信した後にのみ登録できます")
 
@@ -608,31 +673,32 @@ def main_run(opening: str | None, resume: bool,
             confirm_meeting_success(state)
         except (ValueError, KeyError) as exc:
             raise SystemExit(str(exc))
-        save_state(state); render_html(state)
+        save_experiment_state(state); render_experiment(state)
         print("SUCCESS: 保存済みの日時・場所提案と相手の承諾を確認しました。")
         return 0
     if state.get("pending_meeting_confirmation"):
         print("具体的な約束の候補を検出しました。発言を人が確認し、明確な合意なら --resume --confirm-success を指定してください。")
-        save_state(state); render_html(state); return 0
+        save_experiment_state(state); render_experiment(state); return 0
 
     if state["status"] in ("SAFETY_STOP", "LIMIT_REACHED"):
-        save_state(state); render_html(state)
+        save_experiment_state(state); render_experiment(state)
         print(f"{state['status']}: {state.get('end_reason')}")
         return 0
 
     if state["messages"] and state["messages"][-1]["speaker"] == "app":
         print("直前のアプリ側送信に対する相手役の返答待ちです。再生成は行いません。")
-        save_state(state); render_html(state); return 0
+        save_experiment_state(state); render_experiment(state); return 0
 
     if not can_send_app(state):
         state["status"] = "LIMIT_REACHED"; state["end_reason"] = "アプリ側の送信上限20通に達しました。21通目は生成していません。"
-        save_state(state); render_html(state); return 0
+        save_experiment_state(state); render_experiment(state); return 0
 
     if state.get("pending_generation"):
         pending = state["pending_generation"]
     else:
-        settings = resumed_user_settings or generation_settings(match_id, direction, extra)
-        result = call_generate_once(client, settings, state)
+        mode = "first" if not state["messages"] and initial_mode == "first" else "reply"
+        settings = resumed_user_settings or generation_settings(match_id, direction, extra, mode)
+        result = call_generate_once(client, settings, state, json_path, html_path)
         if result is None:
             print("BLOCKED: Geminiの応答を安全に確認できず、JSONとHTMLに状態を保存しました。自動再試行していません。")
             return 2
@@ -641,10 +707,10 @@ def main_run(opening: str | None, resume: bool,
         if response.status_code != 200:
             detail = req.get("detail") or "AI生成に失敗しました。"
             req["error_type"] = "rate_limit" if "レート制限" in detail or "利用枠" in detail else "generation_error"
-            state["api_requests"].append(req); save_state(state)
+            state["api_requests"].append(req); save_experiment_state(state)
             state["status"] = "BLOCKED"
             state["end_reason"] = f"/api/generate がHTTP {response.status_code}で失敗しました。アプリの安全な説明: {detail}"
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             print(f"BLOCKED: app endpoint HTTP {response.status_code}; APIキーや内部例外の詳細は記録していません。")
             return 2
         if response_data.get("needs_user_info"):
@@ -652,17 +718,17 @@ def main_run(opening: str | None, resume: bool,
             req["result_type"] = "needs_user_info"
             if req["attempt_count"] == 0:
                 req["ok"] = True
-            save_state(state)
+            save_experiment_state(state)
             try:
                 pause_for_user_info(state, response_data, settings, req["request_number"])
             except ValueError as exc:
                 state["status"] = "BLOCKED"
                 state["end_reason"] = "本人情報確認応答の形式を検証できませんでした。"
-                save_state(state); render_html(state)
+                save_experiment_state(state); render_experiment(state)
                 print(f"BLOCKED: {exc}")
                 return 2
             state.pop("uncertain_generation_settings", None)
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             print(f"本人情報の回答待ちです。質問数: {len(state['pending_user_info']['questions'])}。送信数は増えていません。")
             for question in state["pending_user_info"]["questions"]:
                 print(f"- {question['question']}（{question.get('purpose', '')}）")
@@ -673,7 +739,7 @@ def main_run(opening: str | None, resume: bool,
             state["status"] = "BLOCKED"
             state["end_reason"] = response_data.get("blocking_reason") or "本人情報が不足しており、安全な候補を生成できませんでした。"
             state.pop("uncertain_generation_settings", None)
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             print(f"BLOCKED: {state['end_reason']}")
             return 2
         if not isinstance(req["attempt_count"], int) or not 1 <= req["attempt_count"] <= 4:
@@ -681,14 +747,14 @@ def main_run(opening: str | None, resume: bool,
             state["api_requests"].append(req)
             state["status"] = "BLOCKED"
             state["end_reason"] = "バックエンドのAPI試行回数が許容上限1〜4回の範囲外でした。"
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             return 2
         if not req.get("api_alias") or not req.get("model"):
             req["ok"] = False
             state["api_requests"].append(req)
             state["status"] = "BLOCKED"
             state["end_reason"] = "/api/generate が実際に使用したAPI別名またはモデル名を返しませんでした。"
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             return 2
         data = response_data
         try:
@@ -697,19 +763,19 @@ def main_run(opening: str | None, resume: bool,
             state["api_requests"].append(req)
             state["status"] = "BLOCKED"
             state["end_reason"] = "Gemini応答に返信候補がなく、送信を停止しました。"
-            save_state(state); render_html(state)
+            save_experiment_state(state); render_experiment(state)
             print(f"BLOCKED: 応答形式エラー ({type(exc).__name__})")
             return 2
         req["candidate_count"] = len(candidates); req["demo"] = data.get("demo")
-        state["api_requests"].append(req); save_state(state)
+        state["api_requests"].append(req); save_experiment_state(state)
         if data.get("demo") is not False or len(candidates) != 3:
             state["status"] = "BLOCKED"; state["end_reason"] = "デモ応答または候補数不一致を検出しました。"
-            save_state(state); render_html(state); return 2
+            save_experiment_state(state); render_experiment(state); return 2
         pending = {"account": req["api_alias"], "model": req["model"], "data": data,
                    "candidates": candidates, "settings": settings, "attempt_count": req["attempt_count"]}
         state["pending_generation"] = pending
         state.pop("uncertain_generation_settings", None)
-        save_state(state)
+        save_experiment_state(state)
     account, model = pending["account"], pending["model"]
     data, candidates, settings = pending["data"], pending["candidates"], pending["settings"]
     print(f"Gemini実応答: {model} / 候補3案")
@@ -718,7 +784,7 @@ def main_run(opening: str | None, resume: bool,
     print(f"理由: {data.get('reason')} / 会話方針: {data.get('strategy','')}")
     if candidate_number is None:
         print("生成結果をJSONにも保存しました。次に --resume --candidate-number 1|2|3 で候補を選びます。")
-        save_state(state); render_html(state); return 0
+        save_experiment_state(state); render_experiment(state); return 0
     if candidate_number not in (1,2,3):
         raise SystemExit("候補番号は1・2・3です")
     selected = candidates[candidate_number-1]
@@ -726,7 +792,7 @@ def main_run(opening: str | None, resume: bool,
     result = client.post(f"/api/matches/{match_id}/messages", json={"role": "me", "body": selected["text"]})
     if result.status_code != 201:
         state["status"] = "BLOCKED"; state["end_reason"] = "選択候補をSQLiteへ保存できませんでした。"
-        save_state(state); render_html(state); return 2
+        save_experiment_state(state); render_experiment(state); return 2
     turn = {"turn_number": len(state["turns"])+1, "model": model, "account_alias": account,
             "api_attempt_count": pending.get("attempt_count", 1),
             "api_status": "success", "candidates": candidates, "recommended": data["recommended"],
@@ -734,7 +800,7 @@ def main_run(opening: str | None, resume: bool,
             "selection_reason": selection_reason, "api_request_number": len(state["api_requests"])}
     send_app_message(state, selected["text"], turn)
     state.pop("pending_generation", None)
-    save_state(state); render_html(state)
+    save_experiment_state(state); render_experiment(state)
     print(f"選択した候補をSQLiteへ保存: アプリ側{state['app_sent_count']}通目")
     print("相手役の返答を作成後、--resume --partner-reply に渡してください。")
     return 0
@@ -752,10 +818,13 @@ def main() -> int:
     parser.add_argument("--confirm-success", action="store_true", help="保存済みの日時・場所と相手の明確な承諾を確認した後に成功判定")
     parser.add_argument("--direction", default="自然に会話を広げる", help="Geminiの返信方向設定")
     parser.add_argument("--extra", default="", help="追加指示。原則空欄")
+    parser.add_argument("--experiment-id", default="conversation_001", help="保存先を分離する実験ID（例: conversation_002）")
+    parser.add_argument("--initial-mode", choices=("first", "reply"), default="reply", help="空の履歴から始める場合の生成モード")
     args = parser.parse_args()
     return main_run(args.opening_message, args.resume, args.candidate_number,
                     args.partner_reply, args.direction, args.extra, args.confirm_success,
-                    args.user_answer, args.skip_user_info, args.retry_uncertain_generation)
+                    args.user_answer, args.skip_user_info, args.retry_uncertain_generation,
+                    args.experiment_id, args.initial_mode)
 
 
 if __name__ == "__main__":

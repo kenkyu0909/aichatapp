@@ -72,7 +72,9 @@ def test_profile_and_local_data(client):
 def test_startup_script_checks_unique_app_identity_before_reuse():
     root = Path(__file__).resolve().parents[1]
     script = (root / "start.bat").read_text(encoding="utf-8")
-    assert "matching-reply-assistant" in script
+    runner = (root / "scripts" / "start_server.py").read_text(encoding="utf-8")
+    assert "start_server.py" in script
+    assert "matching-reply-assistant" in runner
     assert "Start-Process" not in script
     assert "MRA_PORT" in script
     assert "3,11" in script or "3.11" in script
@@ -662,7 +664,7 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert "初回" in backend.read_prompt("first")
     assert "軽い好意" in backend.read_prompt("first")
     assert "マッチできた喜び" in backend.read_prompt("first")
-    assert "候補それぞれ" in backend.read_prompt("first")
+    assert "3候補では" in backend.read_prompt("first")
     assert "マッチ前" in backend.read_prompt("like")
     assert c.post("/api/generate", json={
         "mode": "first", "match_id": mid, "response_version": 2,

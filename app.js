@@ -240,10 +240,34 @@ function renderCards(container,payload,allowSave,matchId){
 }
 function renderStrategy(container,payload){
   if(!payload.strategy&&!payload.conversation_stage&&!payload.invite_decision&&!payload.decision_reason&&!payload.next_action)return;
+  const stageLabels={
+    "Stage 1":"マッチ直後・挨拶と会話開始",
+    "Stage 2":"趣味や休日の話題を広げる段階",
+    "Stage 3":"食事などへの誘いを検討する段階",
+    "Stage 4":"自然な誘いを提案する段階",
+    "Stage 5":"日時や場所を相談する段階",
+    "Stage 6":"合意・継続・待機・終了を判断する段階"
+  };
+  const inviteLabels={
+    do_not_invite:"まだ誘わない",
+    continue_conversation:"自然に会話を続ける",
+    consider_invite:"食事などへの誘いを検討",
+    invite_gently:"自然に誘ってみる",
+    wait:"相手の反応を待つ",
+    respect_no:"相手の断りを尊重する",
+    ask_user_info:"本人に情報を確認する",
+    do_not_repeat_invite:"同じ誘いを繰り返さない",
+    schedule_after_acceptance:"日時や場所を相談する",
+    continue_or_close:"会話の継続・終了を判断する"
+  };
+  const rawStage=String(payload.conversation_stage||"");
+  const stageMatch=rawStage.match(/^Stage\s*([1-6])(?:\b|$)/i);
+  const stage=stageMatch?`Stage ${stageMatch[1]} — ${stageLabels[`Stage ${stageMatch[1]}`]}`:rawStage;
+  const invite=inviteLabels[payload.invite_decision]||payload.invite_decision;
   const panel=node("section","policy-suggestion");
   panel.append(node("strong","strategy-heading","会話方針"));
-  if(payload.conversation_stage)panel.append(node("div","strategy-row","現在の段階："+payload.conversation_stage));
-  if(payload.invite_decision)panel.append(node("div","strategy-row","誘いの判断："+payload.invite_decision));
+  if(stage)panel.append(node("div","strategy-row","現在の段階："+stage));
+  if(invite)panel.append(node("div","strategy-row","誘いの判断："+invite));
   if(payload.decision_reason)panel.append(node("div","strategy-row","判断の根拠："+payload.decision_reason));
   if(payload.next_action)panel.append(node("div","strategy-row","次の行動："+payload.next_action));
   if(payload.strategy)panel.append(node("div","strategy-row",typeof payload.strategy==="string"?payload.strategy:JSON.stringify(payload.strategy)));

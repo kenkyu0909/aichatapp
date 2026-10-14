@@ -79,6 +79,25 @@
 
 詳細な実施条件、期待値、実結果、API/モック区分は上記各行および`simulations/analysis.md`を参照。
 
+## 2026-10-14 最終修正・Windows起動ライフサイクル
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T72 | 初回メッセージの好意・喜び・候補差 | プロンプト確認、FastAPI/SDKモック | PASS | `prompts/first.txt`に軽い好意とマッチできた喜びを原則各候補へ含める指示を追加。候補間で表現を変える指示も追加。実Geminiの品質確認はT77以降に分ける。 |
+| T73 | 会話方針内部値の日本語表示 | Firefox/Selenium、架空の固定API応答 | PASS | `Stage 3`と`consider_invite`を返し、Firefox上で「Stage 3 — 食事などへの誘いを検討する段階」「食事などへの誘いを検討」と表示。内部コードは画面に表示されない。API値は変更なし。 |
+| T74 | `conversation_002`の隔離と初回モード | pytest、架空データ | PASS | `conversation_001`のパスを維持し、002用JSON/HTML/SQLiteを別パスに分離。初回モードは`first`、次ターン既定は`reply`。実験IDのパストラバーサルを拒否。 |
+| T75 | Windows起動・二重起動・終了・再起動・ポート競合 | Windows、`%TEMP%`へソースを隔離コピー、Firefox、18768/18769番ポート | PASS | 起動後にFirefoxがHTTP 200で表示。2回目の起動は既存アプリを識別して再利用。Ctrl+CでUvicornを終了し18768番が接続を受けなくなった後、再起動を確認。18769番を占有した独立のテスト用HTTP serverは終了せず、競合案内を表示。8765番は既存プロセスがあるため停止・再起動を行っていない。 |
+| T76 | Python 3.11+検出と起動スクリプトの構文 | Windows環境、`start.bat`/`start_server.py`確認 | PASS | Python 3.12.10の仮想環境を使用して隔離コピーを起動。仮想環境がない場合にPython Launcherの`py -3`または`python`で3.11以上を確認して作成する。 |
+
+## 2026-10-14 実API品質試験（進行中）
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T77 | 実Gemini初回メッセージ・通常返信・情報確認・誘い・断り | 既存アプリの実API、架空プロフィールのみ | NOT_TESTED | APIキー確認は秘密値を出力しない方法で行い、最初は1リクエストから開始する。結果を受けて更新する。 |
+| T78 | 会話シミュレーション002とHTML評価 | 既存`/api/generate`を使用、Codexが架空相手役、最大20通 | NOT_TESTED | `conversation_001`を保持し、新規002へ保存する。実APIが制限/認証等で失敗した場合は中断状態を保存し、会話を捏造しない。 |
+
+現時点の項目数は78件: PASS 71 / FAIL 0 / BLOCKED 3 / NOT_TESTED 4。T01–T71は前回の報告値を保持。T77–T78は今回の実API実験結果後に更新する。
+
 - 実験ツールSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。T56を含む最新レポート/マトリクスHEAD: `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`。
 - GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171 （最新HEAD、成功、pytest 43 passed）
 - GitHub Actions PR #4: https://github.com/kenkyu0909/aichatapp/actions/runs/38526386149 （最新HEAD、成功、pytest 43 passed）

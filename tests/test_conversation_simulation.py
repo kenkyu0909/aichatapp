@@ -39,6 +39,12 @@ def test_conversation_002_has_isolated_paths_and_preserves_001():
     )
     with pytest.raises(ValueError):
         simulation.experiment_paths("../../conversation_001")
+    state = simulation.new_state("conversation_002")
+    assert state["people"]["app_user"]["age"] >= 20
+    assert state["people"]["partner_public"]["age"] >= 20
+    assert "Codexだけ" in state["people"]["partner_internal"]
+    assert simulation.generation_settings(7, "自然に会話を広げる", "", "first")["mode"] == "first"
+    assert simulation.generation_settings(7, "自然に会話を広げる", "")["mode"] == "reply"
 
 
 def test_partner_and_unselected_candidates_do_not_increment_app_counter():
@@ -475,13 +481,15 @@ def test_simulation_requests_backend_metadata_response_version_two():
 
 def test_start_bat_starts_and_waits_before_opening_firefox():
     script = (ROOT / "start.bat").read_text(encoding="utf-8")
+    runner = (ROOT / "scripts" / "start_server.py").read_text(encoding="utf-8")
     assert "taskkill" not in script.lower()
     assert "Firefox" in script
-    assert "127.0.0.1:8765" in script
-    assert script.index("uvicorn") < script.index("firefox.exe")
-    assert "Invoke-RestMethod" in script
-    assert "/api/status" in script
-    assert "matching-reply-assistant" in script
-    assert "matching-reply-assistant" in script
+    assert "MRA_PORT" in script
+    assert "start_server.py" in script
+    assert "uvicorn.Config" in runner
+    assert runner.index("if server.started and local_app_ready(port)") < runner.index("print(f\"Ready at {url}") < runner.rindex("subprocess.Popen([firefox, url])")
+    assert "/api/status" in runner
+    assert "matching-reply-assistant" in runner
     assert "/api/profile" not in script
-    assert "Start-Process" in script
+    assert "Start-Process" not in script
+    assert "Ctrl+C" in script

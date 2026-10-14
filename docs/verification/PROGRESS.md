@@ -2,6 +2,23 @@
 
 最終更新: 2026-10-14（継続作業）
 
+## 2026-10-14 最終修正・実API会話検証（継続中）
+
+- 開始時にリモートをfetchし、`codex/full-system-verification`のHEADが`4cb01c4e72de745295ed163c01802c60deda2273`であることを確認。PR #4は`feat/ui-local-backend-v1`宛てDraftで、マージなし。既存PROGRESS/TEST_MATRIX/FINAL_REPORT/prompt_specと共通・各モードのプロンプトを確認。Chromeは起動・操作していない。
+- 環境: Windows 11系環境、Python 3.12.10 (`.venv`)、Node.js 25.9、Firefox。8765番は既存のPythonプロセスが使用中のため停止・変更せず。Firefoxは`start.bat`隔離テストで開いた。
+- 修正: `start.bat`をPython 3.11+検出、前面起動の管理スクリプトへ変更。`scripts/start_server.py`は127.0.0.1のみで起動し、API応答確認後にFirefoxを開き、Ctrl+Cで自プロセスのUvicornだけを停止する。別プロセスがポートを占有すると終了させず案内する。Python 3.12で確認。
+- 修正: `prompts/first.txt`に、初回候補ごとの軽い好意とマッチ成立の喜び、3案の表現差、容姿・趣味捏造防止を明示。`like`プロンプトは変更せず分離を維持。
+- 修正: `app.js`の会話方針表示でStage 1–6と`invite_decision`内部値を日本語ラベルへ変換。APIの構造化値は保持。
+- 修正: `scripts/simulate_conversation.py`に実験IDごとのJSON/HTML/一時SQLite分離、架空成人プロフィール002、初回`first`モードと以降`reply`を追加。既存001のパスとファイルは維持。
+- Windows起動試験: 一時コピーと一時SQLiteで18768番を起動、Firefox表示とprofile API 200を確認。二重起動は同一アプリとして識別。Ctrl+C停止でポートが接続を受けなくなり、再起動も成功。18769番の一時HTTP listenerとの競合ではエラー案内を出し、listenerを動作状態のまま残した。8765番は既存プロセスのため未試験。
+- 試験準備中に、隔離環境変数の指定に失敗した初回試行でリポジトリ直下のSQLiteを参照し、profile取得がHTTP 500になった。既存`data/app.sqlite3`の更新日時は試行前のまま（2026-10-14 13:33:44）、その後は接続していない。以後、テスト用アプリをTempへ複製してから確認した。既存データを意図的に変更・初期化していない。
+- オフラインテスト: 修正対象のpytestとFirefox UIの37件が成功（1件の既知Starlette/httpx非推奨警告）。直前の全体pytestは104件成功。最新の全体再実行は実API後の最終確認で行う。`node --check app.js`、`git diff --check`成功。
+- GitHubへ先に再現テストcheckpoint `ebd6fce497066c8fe04d58e203e39fa2ecef2f6c`をPush済み。今回の実装・文書更新は次の進捗commitでPushする。CI run URLはPush後に追記する。
+- 実API状態: まだ呼び出していない。指定APIフォルダーの認証情報存在確認を秘密値を出さない方法で行い、利用できる場合は既存バックエンドの優先順で1リクエストから試す。実際の応答/制限を確認後に本項目とマトリクスを更新する。
+- 実験002状態: 未開始。既存001のBLOCKED記録は変更していない。APIが利用可能なら初回生成から開始し、送信・相手返信の各段階を保存する。20通で強制終了し、技術障害時はBLOCKEDで保存。
+- 次の作業: 3修正の実装checkpointをPush、GitHub Actions確認、許可済みAPIファイルからキーの存在のみ確認、Gemini実通信の初回3案を評価、会話002、HTMLをFirefoxで表示確認、最終pytest/CI、レポート更新。
+- Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4 （Draft維持、未マージ）
+
 ## 2026-10-14 返信品質・初回メッセージ・会話制御のオフライン改善
 
 - 対象ブランチ: `codex/full-system-verification`。開始HEAD `5f52f80c33cc9af87538572479d5d60eff5284c4`。既存PR #4を継続し、Draftのまま。マージなし。
