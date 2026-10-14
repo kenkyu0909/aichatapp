@@ -22,7 +22,13 @@ if errorlevel 1 goto :error
 if not exist ".env" copy ".env.example" ".env" >nul
 echo [3/3] Starting local server. Open http://127.0.0.1:8765
 echo To stop the app, press Ctrl+C.
-start "" "http://127.0.0.1:8765"
+set "FIREFOX_EXE=%ProgramFiles%\Mozilla Firefox\firefox.exe"
+if not exist "%FIREFOX_EXE%" set "FIREFOX_EXE=%ProgramFiles(x86)%\Mozilla Firefox\firefox.exe"
+if exist "%FIREFOX_EXE%" (
+  start "" "%FIREFOX_EXE%" "http://127.0.0.1:8765/"
+) else (
+  echo Firefox was not found. Open http://127.0.0.1:8765/ in Firefox after startup.
+)
 ".venv\Scripts\python.exe" -m uvicorn app:app --host 127.0.0.1 --port 8765
 echo App stopped.
 pause

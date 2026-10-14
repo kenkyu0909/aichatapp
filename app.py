@@ -6,13 +6,16 @@ import os
 import re
 import sqlite3
 import uuid
+import warnings
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, field_validator
 
 BASE = Path(__file__).resolve().parent
@@ -223,12 +226,28 @@ def delete_match(match_id: int):
 
 def image_extension(data: bytes) -> str | None:
     if data.startswith(b"\xff\xd8\xff"):
-        return ".jpg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return ".png"
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return ".webp"
-    return None
+        ext = ".jpg"
+    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+        ext = ".png"
+    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        ext = ".webp"
+    else:
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data)) as image:
+                if image.format not in {"JPEG", "PNG", "WEBP"}:
+                    return None
+                if image.width * image.height > 16_000_000:
+                    return None
+                image.verify()
+            with Image.open(BytesIO(data)) as image:
+                image.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning,
+            UnidentifiedImageError, OSError, ValueError):
+        return None
+    return ext
 
 
 @app.put("/api/matches/{match_id}/photo")

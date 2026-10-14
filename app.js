@@ -382,7 +382,7 @@ function attach(){
     state.tone=b.dataset.tone;
     document.querySelectorAll("[data-tone]").forEach(x=>x.classList.toggle("on",x===b));
   });
-  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=({
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>({
     guide:guideModal,like:likeModal,profile:profileModal,settings:settingsModal
   })[b.dataset.open]?.());
 }

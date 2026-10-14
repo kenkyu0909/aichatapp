@@ -4,7 +4,12 @@ Requires GEMINI_API_KEY from GitHub Actions secret. Makes at most two
 generate requests, does not print inputs, outputs, or credentials.
 """
 import os
+import sys
 import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from fastapi.testclient import TestClient
 
 assert os.getenv("GEMINI_API_KEY"), "Gemini test key is not configured."
