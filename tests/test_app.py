@@ -742,6 +742,256 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     assert c.get(f"/api/matches/{mid}/messages").json() == messages_before
 
 
+def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "休日は友達とカフェに行くことが多いです！"})
+    responses = [{
+        "needs_user_info": True,
+        "user_questions": [{"question": "カフェに行く頻度は？", "purpose": "確認"}],
+        "user_info_reason": "自己開示を考えるため", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }, {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "新しいお店探すのいいですね！最近行ってよかったところありますか？"},
+        "alternatives": [
+            {"label": "広げる", "text": "カフェ巡り楽しそうですね！落ち着いたお店が好きですか？"},
+            {"label": "短め", "text": "新しいお店いいですね！"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "相手のカフェの話を続ける", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    assert response.json()["needs_user_info"] is False
+    assert response.json()["recommended"]["text"].startswith("新しいお店探すのいいですね")
+    assert len(prompts) == 2
+    assert "任意の追加情報を本人へ求めない" in prompts[1]
+
+
+def test_answered_topic_is_not_asked_again_after_one_model_repair(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    repeated_question = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "映画はお好きですか？", "purpose": "本人情報確認"}],
+        "user_info_reason": "確認", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "ask_user_info", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(repeated_question, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [{"question": "映画はお好きですか？", "answer": "映画好きです！洋画をよく観ます"}],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is True
+    assert body["needs_user_info"] is False
+    assert body["user_questions"] == []
+    assert body["recommended"] is None
+    assert body["api_attempt_count"] == 2
+
+
+def test_weekend_direct_question_gets_user_info_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply", "history": [{"role": "them", "body": "休日は普段何をしていますか？"}],
+        "my_profile": {"facts": {}}, "ephemeral_user_answers": [],
+    }
+    question = backend.missing_personal_fact_question(context)
+    assert question is not None
+    assert "休日" in question.question
+
+
+def test_weekend_activity_claim_requires_matching_confirmed_activity(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"weekends": "休日は友達とカフェに行くことが多い"}},
+        "ephemeral_user_answers": [],
+    }
+    unsupported = backend.Candidate(label="候補", text="休日は映画館に行きました！")
+    supported = backend.Candidate(label="候補", text="休日は友達とカフェに行くことが多いです！")
+    assert "休日" in backend.unsupported_personal_claim_topics([unsupported], context)
+    assert backend.unsupported_personal_claim_topics([supported], context) == []
+
+
+def test_weekend_movie_watching_does_not_confirm_cinema_visit(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"weekends": "休日は家で映画を観る"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="候補", text="休日は映画館に行きました！")
+    assert "休日" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_prohibited_invite_decision_repairs_candidates_without_invitation(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "まだ会うのは不安です"})
+
+    def payload(text):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": {"label": "自然", "text": text},
+            "alternatives": [
+                {"label": "別案", "text": "気持ちを話してくれてありがとうございます！無理せず話しましょう"},
+                {"label": "短め", "text": "分かりました！気持ちを大事にします"},
+            ],
+            "reason": "相手の慎重さを尊重", "strategy": "相手の反応を待つ",
+            "conversation_stage": "Stage 6", "invite_decision": "respect_no",
+            "decision_reason": "相手が不安を示した", "next_action": "誘わず会話を続ける",
+        }
+
+    responses = [payload("よかったら今度一緒にカフェに行きませんか？"), payload("話してくれてありがとうございます！気持ちを尊重します")]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    assert response.json()["invite_decision"] == "respect_no"
+    assert "一緒に" not in response.json()["recommended"]["text"]
+    assert len(prompts) == 2
+    assert "現在のinvite_decisionは誘いを控える判断" in prompts[1]
+
+
+@pytest.mark.parametrize("invite", [
+    "ご飯行きませんか？",
+    "今度ご飯でもどうですか？",
+    "よかったらカフェでお茶しませんか？",
+])
+def test_invitation_matcher_catches_common_food_and_cafe_phrases(client, invite):
+    _, backend = client
+    assert backend.INVITATION_PATTERN.search(invite)
+
+
+def test_negative_movie_field_does_not_support_positive_preference_claim(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {
+            "favorite_movie_genres": "映画は苦手",
+            "past_experience": "映画を観たことがある",
+        }},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="候補", text="映画好きです！")
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_unverified_recent_personal_activity_is_repaired_before_questioning_user(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    c.put("/api/profile", json={"content": json.dumps({"facts": {"weekends": "喫茶店に行ったり植物の手入れをする"}}, ensure_ascii=False)})
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "昨日は映画を観ていました"})
+    responses = [{
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "不適切", "text": "私も最近おうち時間でのんびりしていました！"},
+        "alternatives": [
+            {"label": "別案", "text": "家で過ごす休日はいいですね"},
+            {"label": "質問", "text": "何を観たんですか？"},
+        ],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }, {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "おうちで映画いいですね！何を観たんですか？"},
+        "alternatives": [
+            {"label": "広げる", "text": "映画の話気になります！"},
+            {"label": "短め", "text": "映画いいですね！"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "映画の話を続ける", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "作品を尋ねる",
+    }]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    assert response.json()["needs_user_info"] is False
+    assert response.json()["recommended"]["label"] == "自然"
+    assert len(prompts) == 2
+    assert "不明な詳細は無理に本人へ質問せず" in prompts[1]
+
+
+def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "中野のカフェに行ってみたいです！"})
+    def response(candidates):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": candidates[0], "alternatives": candidates[1:],
+            "reason": "理由", "strategy": "自然にカフェへ誘います", "conversation_stage": "Stage 4",
+            "invite_decision": "invite_gently", "decision_reason": "話題が出て相手が前向きです", "next_action": "軽く誘う",
+        }
+
+    responses = [response([
+        {"label": "相槌", "text": "カフェ探し楽しそうですね！どんなお店ですか？"},
+        {"label": "話題", "text": "中野のカフェ気になりますね！"},
+        {"label": "短め", "text": "素敵なお店なんですね！"},
+    ]), response([
+        {"label": "自然な誘い", "text": "中野のカフェいいですね！よかったら今度一緒に行きませんか？"},
+        {"label": "別案", "text": "落ち着いたお店いいですね！一緒に行けたら楽しそうです"},
+        {"label": "短め", "text": "気になります！今度一緒に行きませんか？"},
+    ])]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    result = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert result.status_code == 200
+    body = result.json()
+    assert body["invite_decision"] == "invite_gently"
+    assert "一緒に行きませんか" in body["recommended"]["text"]
+    assert len(prompts) == 2
+    assert "誘い判断と候補の不一致" in prompts[1]
+
+
 def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
     c, _ = client
     mid = c.post("/api/matches", json={"name": "架空あかり", "description": ""}).json()["id"]
@@ -875,13 +1125,17 @@ def test_v2_invite_decision_from_mock_is_returned_with_actual_backend_metadata(c
 
     class FakeModels:
         def generate_content(self, **kwargs):
+            candidates = [
+                {"label": "自然体", "text": "プロフィールのお話が気になります！"},
+                {"label": "短め", "text": "それいいですね！"},
+                {"label": "質問", "text": "最近はどうですか？"},
+            ]
+            if decision == "invite_gently":
+                candidates[0]["text"] = "よかったら今度一緒に行きませんか？"
             return SimpleNamespace(text=json.dumps({
                 "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-                "recommended": {"label": "自然体", "text": "プロフィールのお話が気になります！"},
-                "alternatives": [
-                    {"label": "短め", "text": "それいいですね！"},
-                    {"label": "質問", "text": "最近はどうですか？"},
-                ],
+                "recommended": candidates[0],
+                "alternatives": candidates[1:],
                 "reason": "相手の話題に沿うため", "strategy": "会話を続けます",
                 "conversation_stage": "Stage 3", "invite_decision": decision,
                 "decision_reason": f"架空シナリオ: {scenario}", "next_action": "相手の反応を尊重する",
@@ -1157,7 +1411,7 @@ def test_unsupported_personal_claim_from_model_returns_user_question_not_candida
     assert body["recommended"] is None
     assert body["alternatives"] == []
     assert "映画" in body["user_questions"][0]["question"]
-    assert body["api_attempt_count"] == 1
+    assert body["api_attempt_count"] == 2
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
 
@@ -1192,6 +1446,13 @@ def test_known_conversation_002_personal_claims_are_blocked(client, claim, topic
     context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
     candidate = backend.Candidate(label="候補", text=claim)
     assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_cafe_hobby_does_not_confirm_frequent_visits(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["喫茶店めぐり"]}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text="私も喫茶店が好きでよく巡っています！")
+    assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
 def test_yes_to_movie_preference_does_not_confirm_genre_or_watching_frequency(client):

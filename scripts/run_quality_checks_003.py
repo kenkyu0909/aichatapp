@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -102,12 +103,32 @@ def summarize_response(response: Any) -> dict[str, Any]:
         "invite_decision": data.get("invite_decision"),
         "decision_reason": data.get("decision_reason"),
         "next_action": data.get("next_action"),
+        "user_info_reason": data.get("user_info_reason"),
+        "profile_fact_topics": data.get("profile_fact_topics", []),
     }
 
 
+def has_gentle_invitation(candidates: list[dict[str, Any]]) -> bool:
+    invitation = re.compile(
+        r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行けたら|どうですか|しませんか)|"
+        r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
+        r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
+    )
+    return any(invitation.search(candidate.get("text", "")) for candidate in candidates)
+
+
 def main() -> int:
+    global OUTPUT
+    followup = "--followup" in sys.argv[1:]
+    if followup:
+        OUTPUT = OUTPUT.with_name("quality_checks_003_followup.json")
+    selected_cases = CASES
+    if followup:
+        selected_cases = [case for case in CASES if case[0] in {
+            "A_short", "B_two_or_three_sentences", "C_calm", "G_invite_opportunity",
+        }]
     if OUTPUT.exists():
-        raise SystemExit("quality_checks_003.json already exists; refusing to overwrite it")
+        raise SystemExit(f"{OUTPUT.name} already exists; refusing to overwrite it")
     if not API_DIR.is_dir():
         raise SystemExit("The user-provided private API directory is unavailable")
     os.environ["MRA_API_DIR"] = str(API_DIR)
@@ -157,13 +178,21 @@ def main() -> int:
         }
         state["tests"].append(preflight_test)
         atomic_save(state)
+        if preflight_test["evaluation"] != "PASS":
+            state["status"] = "BLOCKED"
+            state["blocking_reason"] = "Local T77 preflight did not request the missing fact before any live call"
+            state["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            atomic_save(state)
+            print(f"saved={OUTPUT.relative_to(ROOT)} status={state['status']} logical_requests=0 provider_attempts=0")
+            return 2
 
+        exact_question = preflight_summary["user_questions"][0]["question"]
         answer_payload = {
             "mode": "reply", "match_id": match_id, "response_version": 2,
-            "user_answers": [{"question": "映画はお好きですか？", "answer": "映画好きです！特に洋画をよく観ます"}],
+            "user_answers": [{"question": exact_question, "answer": "映画好きです！特に洋画をよく観ます"}],
         }
         next_allowed_at = 0.0
-        cases = [("T77_answered", "映画好きですか？", [])] + CASES
+        cases = [("T77_answered", "映画好きですか？", [])] + selected_cases
         for case_id, latest, history in cases:
             # Reserve the backend's worst-case attempts before starting another
             # logical request so the overall provider-attempt cap cannot be crossed.
@@ -202,6 +231,7 @@ def main() -> int:
                 and len(summary.get("candidates", [])) == 3
                 and summary.get("punctuation_violation") is False
                 and summary.get("candidate_distinct_count") == 3
+                and (summary.get("invite_decision") != "invite_gently" or has_gentle_invitation(summary.get("candidates", [])))
             )
             test_result = {
                 "id": case_id,

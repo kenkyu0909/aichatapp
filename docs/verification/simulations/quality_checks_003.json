@@ -1,0 +1,723 @@
+{
+  "schema_version": 1,
+  "run_at": "2026-10-14T10:48:38+00:00",
+  "environment": {
+    "os": "Windows",
+    "python": "3.12.10",
+    "browser": "Firefox (separate UI verification)",
+    "database": "isolated temporary SQLite"
+  },
+  "credential_source": "user-authorized API directory; credential values excluded",
+  "configured_pairs": [
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.1-flash-lite"
+    }
+  ],
+  "profile": {
+    "name": "架空の橘はる",
+    "age": 28,
+    "region": "東京都杉並区",
+    "occupation": "建築事務所の事務",
+    "hobbies": [
+      "喫茶店めぐり",
+      "植物の世話",
+      "小さな美術館"
+    ],
+    "food": [
+      "オムライス",
+      "季節のタルト"
+    ],
+    "weekends": "喫茶店に行ったり植物の手入れをしたりする",
+    "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+    "avoid": "未確認の共通点、過度な褒め言葉、質問攻め、予定の断定。"
+  },
+  "tests": [
+    {
+      "id": "T77_preflight",
+      "input": {
+        "partner_message": "映画好きですか？",
+        "profile_has_movie_fact": false
+      },
+      "expected": "asks user and returns no recipient candidate before any Gemini call",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": true,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": null,
+        "model": null,
+        "api_attempt_count": 0,
+        "attempted_models": [],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [
+          {
+            "question": "映画はお好きですか？",
+            "purpose": "相手から本人の映画について直接質問されており未確認の事実を答えないため"
+          }
+        ],
+        "candidates": [],
+        "candidate_character_counts": [],
+        "candidate_sentence_estimates": [],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 0,
+        "strategy": "Stage 1。必要なプロフィール情報を確認してから初回メッセージを作ります。",
+        "conversation_stage": "Stage 1",
+        "invite_decision": "do_not_invite",
+        "decision_reason": "会話開始前です",
+        "next_action": "プロフィールの話題を確認してください"
+      },
+      "evaluation": "PASS",
+      "method": "local application preflight; no external API request"
+    },
+    {
+      "id": "T77_answered",
+      "input": {
+        "partner_message": "映画好きですか？",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": true,
+        "temporary_user_answer": "映画好きです！特に洋画をよく観ます"
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": true,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [
+          {
+            "question": "映画はお好きですか？最近の作品についてなら、分かる範囲で教えてください",
+            "purpose": "生成候補に本人の未確認の映画の好みや経験が含まれているため、事実を作らないよう確認します"
+          }
+        ],
+        "candidates": [],
+        "candidate_character_counts": [],
+        "candidate_sentence_estimates": [],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 0,
+        "strategy": "Stage 1。必要なプロフィール情報を確認してから初回メッセージを作ります。",
+        "conversation_stage": "Stage 1",
+        "invite_decision": "do_not_invite",
+        "decision_reason": "会話開始前です",
+        "next_action": "プロフィールの話題を確認してください"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "FAIL",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": false,
+        "all_candidates_distinct": false,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "A_short",
+      "input": {
+        "partner_message": "カフェ好きです！",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直な返答",
+            "text": "私も喫茶店が好きでよく巡っています！"
+          },
+          {
+            "label": "植物の話題",
+            "text": "植物も好きで家でいろいろ育てています！"
+          },
+          {
+            "label": "美術館の話題",
+            "text": "小さな美術館に行くのも好きなんです"
+          }
+        ],
+        "candidate_character_counts": [
+          18,
+          19,
+          17
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手の好きなものを受け止めつつプロフィールの事実を用いて自然に会話を広げます",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりのためカフェや趣味の話題を続けます",
+        "next_action": "共通の話題について話を広げる"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "B_two_or_three_sentences",
+      "input": {
+        "partner_message": "休日は友達とカフェに行くことが多いです！最近は新しいお店も探してます笑",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": true,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [
+          {
+            "question": "カフェに行く頻度や好きなお店について教えてください",
+            "purpose": "生成候補に本人の未確認のカフェの好みや経験が含まれているため、事実を作らないよう確認します"
+          }
+        ],
+        "candidates": [],
+        "candidate_character_counts": [],
+        "candidate_sentence_estimates": [],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 0,
+        "strategy": "Stage 1。必要なプロフィール情報を確認してから初回メッセージを作ります。",
+        "conversation_stage": "Stage 1",
+        "invite_decision": "do_not_invite",
+        "decision_reason": "会話開始前です",
+        "next_action": "プロフィールの話題を確認してください"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "FAIL",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": false,
+        "all_candidates_distinct": false,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "C_calm",
+      "input": {
+        "partner_message": "昨日は家で映画を観ていました",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直な返答",
+            "text": "おうちで映画いいですね何を観たんですか？"
+          },
+          {
+            "label": "会話を広げる",
+            "text": "まったり過ごす休日はいいですよね"
+          },
+          {
+            "label": "少し親しみを加える",
+            "text": "私も最近おうち時間でのんびりしていました！"
+          }
+        ],
+        "candidate_character_counts": [
+          20,
+          16,
+          21
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手のメッセージの短さに合わせて負担にならない文字数にし、句読点を使わず自然な口語で返信します。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりのため、お互いの趣味や休日の過ごし方を自然に共有する段階です。",
+        "next_action": "相手の返答に合わせて休日の過ごし方や映画の話題を続けます。"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "D_joke",
+      "input": {
+        "partner_message": "休みの日ほとんど寝てました笑",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "おすすめ",
+            "text": "休日はゆっくり体を休めるのも大事ですよね"
+          },
+          {
+            "label": "話題を広げる",
+            "text": "たくさん寝るとすっきりしますよね"
+          },
+          {
+            "label": "趣味に触れる",
+            "text": "たまにはおうちでまったり過ごす時間もいいですよね"
+          }
+        ],
+        "candidate_character_counts": [
+          20,
+          16,
+          24
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手の短いメッセージに合わせて句読点を使わず、自然な共感と相槌を返します。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりのため、まずは趣味や休日の話題で自然なやり取りを続けます。",
+        "next_action": "相手の返信に合わせて、お互いの休日の過ごし方について軽く会話を広げます。"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "E_serious",
+      "input": {
+        "partner_message": "最近仕事が忙しくて疲れています",
+        "prior_messages": [],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "体調への配慮",
+            "text": "お仕事お疲れ様です忙しいと大変ですよね無理なさらないでくださいね"
+          },
+          {
+            "label": "休息への共感",
+            "text": "お仕事お疲れ様ですゆっくり休める時間があるといいですね"
+          },
+          {
+            "label": "短めの労い",
+            "text": "お仕事本当にお疲れ様です"
+          }
+        ],
+        "candidate_character_counts": [
+          32,
+          27,
+          12
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手のメッセージが短いため、長文にならず優しく労う返信を作成しました。句読点を含めず、自然な口語にしています。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "相手が疲れているため、まずは労って会話を続ける段階です。",
+        "next_action": "相手の体調や仕事の状況に配慮しつつ、無理のないペースで会話を続けます。"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "F_repeated_topic",
+      "input": {
+        "partner_message": "映画館の音響って迫力ありますよね！",
+        "prior_messages": [
+          [
+            "them",
+            "映画館の大きなスクリーンが好きです"
+          ],
+          [
+            "me",
+            "大きなスクリーンは迫力がありますよね！"
+          ],
+          [
+            "them",
+            "音響もすごくいいですよね！"
+          ],
+          [
+            "me",
+            "音響の迫力も映画館の魅力ですよね！"
+          ]
+        ],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直で自然な返答",
+            "text": "あの臨場感は何度体験してもワクワクしますね"
+          },
+          {
+            "label": "別の切り口で会話を広げる",
+            "text": "最近はどんな作品をご覧になりましたか？"
+          },
+          {
+            "label": "少し親しみを加えた案",
+            "text": "ポップコーンを食べながら観るのも楽しいですよね"
+          }
+        ],
+        "candidate_character_counts": [
+          21,
+          19,
+          23
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "過去のやり取りの重複を避けつつ、相手の映画の話題に共感しつつさりげなく話を続ける構成にしています。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ趣味や映画についての一般的な会話を続ける段階であり、誘う時期ではないため。",
+        "next_action": "相手からの映画の感想や質問に対して自然に返答し、会話を広げる。"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "G_invite_opportunity",
+      "input": {
+        "partner_message": "中野に落ち着いたカフェを見つけました！行ってみたいです",
+        "prior_messages": [
+          [
+            "them",
+            "喫茶店を探すのが好きなんです"
+          ],
+          [
+            "me",
+            "どんな雰囲気のお店が好きですか？"
+          ],
+          [
+            "them",
+            "静かでケーキがおいしいところが好きです！はるさんはどんなお店が好きですか？"
+          ],
+          [
+            "me",
+            "喫茶店で季節のタルトを食べるのが好きです！"
+          ]
+        ],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "おすすめ",
+            "text": "中野のカフェ気になりますね！どんな雰囲気のお店なんですか？"
+          },
+          {
+            "label": "別の話題",
+            "text": "中野のお店素敵ですね！静かなところがいいですよね"
+          },
+          {
+            "label": "親しみのある案",
+            "text": "中野のカフェ行ってみたいですね！どんなケーキがあるんですか？"
+          }
+        ],
+        "candidate_character_counts": [
+          29,
+          24,
+          30
+        ],
+        "candidate_sentence_estimates": [
+          2,
+          1,
+          2
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手の具体的な提案を受け止めつつ、相手が話しやすいようにカフェの雰囲気やケーキについて聞いて会話を広げます。",
+        "conversation_stage": "Stage 4",
+        "invite_decision": "invite_gently",
+        "decision_reason": "相手がカフェに行ってみたいと明確に興味を示しているため、自然な形で会話を続けつつ誘いに繋げやすい状態です。",
+        "next_action": "相手の返答を見て具体的な日時や場所の調整へ進むかを判断する"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    },
+    {
+      "id": "H_decline",
+      "input": {
+        "partner_message": "ごめんなさい！まだ会うのはちょっと不安です",
+        "prior_messages": [
+          [
+            "them",
+            "カフェの話楽しいですね"
+          ],
+          [
+            "me",
+            "よかったら今度一緒に行きませんか？"
+          ]
+        ],
+        "profile_has_topic_fact": false,
+        "temporary_user_answer_supplied": false,
+        "temporary_user_answer": null
+      },
+      "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
+      "result": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "demo": false,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "安心感を重視する",
+            "text": "そうですよね不安な気持ちにさせてしまってすみません！マイペースにメッセージでお話しできたら嬉しいです"
+          },
+          {
+            "label": "負担をかけない距離感",
+            "text": "そうですよね焦らずここで楽しくお話しできたらと思います！"
+          },
+          {
+            "label": "話題を戻して続ける",
+            "text": "安心しました！最近はどんなカフェに行かれているんですか？"
+          }
+        ],
+        "candidate_character_counts": [
+          50,
+          28,
+          28
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          2
+        ],
+        "punctuation_violation": false,
+        "candidate_distinct_count": 3,
+        "strategy": "相手の断りや不安を受け止め、プレッシャーを与えない形で会話を継続します。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "respect_no",
+        "decision_reason": "相手が明確に会うことへの不安を伝えたため、尊重して誘いを終わらせるため",
+        "next_action": "プレッシャーを与えない返信で会話を続ける"
+      },
+      "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
+      "evaluation": "PASS",
+      "human_quality_review": "PENDING",
+      "heuristic_assessment": {
+        "nonempty_candidate_text": true,
+        "all_candidates_distinct": true,
+        "candidate_style_review_required": true
+      }
+    }
+  ],
+  "logical_requests": 9,
+  "provider_attempts": 10,
+  "provider_attempts_unknown": 0,
+  "status": "COMPLETED",
+  "limitations": [
+    "quality ratings require human review",
+    "profile-claim guard uses conservative patterns and is not a complete semantic fact checker"
+  ],
+  "finished_at": "2026-10-14T10:49:35+00:00"
+}

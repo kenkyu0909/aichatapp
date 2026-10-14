@@ -210,6 +210,13 @@ class CandidateSimilarityError(ValueError):
     """Candidates are near duplicates rather than meaningfully different options."""
 
 
+INVITATION_PATTERN = re.compile(
+    r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行けたら|どうですか|しませんか)|"
+    r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
+    r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
+)
+
+
 PERSONAL_FACT_TOPICS = {
     "映画": ("映画", "洋画", "邦画", "映画館", "作品"),
     "読書": ("本", "読書", "小説", "ミステリー", "漫画", "マンガ"),
@@ -219,6 +226,7 @@ PERSONAL_FACT_TOPICS = {
     "予定": ("予定", "空いて", "都合", "曜日", "時間帯"),
     "カフェ": ("カフェ", "喫茶店", "コーヒー"),
     "パン": ("パン", "パン屋", "ベーカリー"),
+    "休日": ("休日", "休みの日", "週末"),
 }
 
 
@@ -272,6 +280,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         "予定": ("confirmed_availability", "confirmed_schedule", "確定した予定"),
         "カフェ": ("hobbies", "interests", "favorite_cafes", "favorite_places", "cafes", "カフェ"),
         "パン": ("hobbies", "interests", "パン", "パン屋"),
+        "休日": ("weekends", "weekend_activity", "休日", "休みの日", "週末"),
     }
     explicit_field_keys = {
         "食事": ("favorite_foods", "food_preferences", "好きな食べ物", "料理"),
@@ -289,6 +298,16 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         elif value:
             values.append(str(value))
     topic_terms = PERSONAL_FACT_TOPICS[topic]
+    if topic == "休日":
+        # A bare mention of weekends is not evidence for a specific activity.
+        weekend_values = [str(facts.get(key, "")) for key in topic_keys[topic]]
+        weekend_values.extend(
+            answer.get("answer", "")
+            for answer in context.get("ephemeral_user_answers", [])
+            if any(term in answer.get("question", "") for term in topic_terms)
+        )
+        activity_terms = ("カフェ", "喫茶店", "映画", "映画館", "読書", "本", "旅行", "出かけ", "家", "自宅", "寝", "植物", "美術館", "買い物", "友達")
+        return any(any(term in value for term in activity_terms) for value in weekend_values)
     if any(term in value for value in values for term in topic_terms):
         return True
 
@@ -330,6 +349,7 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
         "パン": "パン屋やパン巡りについて、実際に好きなことがあれば教えてください",
         "居住地": "相手に伝えてよい居住地域を教えてください",
         "予定": "相手に伝えてよい予定や希望時間を教えてください",
+        "休日": "休日は普段どんなふうに過ごすか教えてください",
     }
     return UserQuestion(
         question=questions[topic],
@@ -345,18 +365,26 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|在住|の近くに住)|(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡).{0,8}(?:に住んでいます|在住|のほうによく行(?:きます|く)|によく行(?:きます|く))"),
     "食事": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:好きな食べ物|好物|料理).{0,16}(?:は|が).{1,16}(?:好き|です)"),
     "パン": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:パン屋|パン巡り).{0,18}(?:好き|よく行|通って|趣味)|(?:パン屋|パン巡り).{0,12}(?:好きです|よく行きます)"),
+    "休日": re.compile(
+        r"(?:私も|自分も|僕も|俺も|私は|自分は|僕は|俺は).{0,12}(?:最近|昨日|先週|この前|週末|休日|休みの日).{0,30}(?:過ご|出かけ|行き|観|見|読ん|のんびり|していました|しました)"
+        r"|(?:休日|週末|休みの日).{0,18}(?:映画館|映画|カフェ|喫茶店|読書|本|旅行|家|自宅|植物|美術館|買い物|友達).{0,18}(?:行き|観|見|読ん|過ご|してい|しました|でした)(?!ますか|ですか|？|\?)"
+    ),
 }
+
+
+NEGATIVE_PERSONAL_FACT_RE = re.compile(
+    r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行かない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
+)
 
 
 def _trusted_fact_text(context: dict) -> str:
     parts: list[str] = []
-    negative_fact = re.compile(r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行かない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験")
 
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for fragment in re.split(r"[。！？!?\n,、]+", value):
                 fragment = fragment.strip()
-                if fragment and not negative_fact.search(fragment):
+                if fragment and not NEGATIVE_PERSONAL_FACT_RE.search(fragment):
                     parts.append(fragment)
         elif isinstance(value, list):
             for item in value:
@@ -390,10 +418,12 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if frequency and not all(marker in source for marker in frequency):
             return False
         if not specific_markers and not frequency and re.search(r"映画.{0,8}好き", text):
-            profile_preference = any(
-                facts.get(key)
-                for key in ("favorite_movie_genres", "movie_preferences", "movie_hobby")
-            ) or bool(re.search(r"映画.{0,8}(?:好き|趣味)|映画鑑賞", source))
+            preference_values = [facts.get(key) for key in ("favorite_movie_genres", "movie_preferences", "movie_hobby")]
+            positive_preference_field = any(
+                value and not NEGATIVE_PERSONAL_FACT_RE.search(str(value))
+                for value in preference_values
+            )
+            profile_preference = positive_preference_field or bool(re.search(r"映画.{0,8}(?:好き|趣味)|映画鑑賞", source))
             for answer in context.get("ephemeral_user_answers", []):
                 if "映画" in answer.get("question", "") and re.search(r"はい|好き|観ます|見ます", answer.get("answer", "")) and not re.search(r"好きではありません|好きではない|好きじゃありません|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|見ません|観ません|見ない|観ない", answer.get("answer", "")):
                     return True
@@ -412,10 +442,29 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         explicit_favorites = any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafes"))
         if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
-        if re.search(r"よく行|通って", text) and not re.search(r"よく行|通って", source):
+        if re.search(r"よく行|よく巡|頻繁に|毎週|通って", text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
             return False
     elif topic == "パン":
         if re.search(r"よく行|通って|お気に入り", text) and not re.search(r"よく行|通って|お気に入り", source):
+            return False
+    elif topic == "休日":
+        activity_groups = {
+            "カフェ": ("カフェ", "喫茶店"), "映画館": ("映画館",), "映画": ("映画",), "読書": ("読書", "本"),
+            "旅行": ("旅行", "旅"), "自宅": ("家", "自宅"), "植物": ("植物",),
+            "美術館": ("美術館",), "買い物": ("買い物",), "友達": ("友達",),
+        }
+        def activity_mentions(value: str) -> set[str]:
+            mentions = {name for name, terms in activity_groups.items() if any(term in value for term in terms)}
+            if "映画館" in value:
+                mentions.discard("映画")
+            return mentions
+
+        mentioned = activity_mentions(text)
+        supported = activity_mentions(source)
+        if not mentioned or any(name not in supported for name in mentioned):
+            return False
+        time_markers = re.findall(r"最近|昨日|先週|この前|週末|休日|休みの日", text)
+        if time_markers and not all(marker in source for marker in time_markers):
             return False
     return any(term in source for term in PERSONAL_FACT_TOPICS[topic])
 
@@ -444,12 +493,20 @@ def personal_fact_question(topic: str) -> UserQuestion:
         "居住地": "相手に伝えてよい居住地域を教えてください",
         "食事": "好きな食べ物や料理を教えてください",
         "パン": "パン屋やパン巡りについて、実際に好きなことがあれば教えてください",
+        "休日": "休日は普段どんなふうに過ごすか教えてください",
     }
     question = questions.get(topic, f"{topic}について相手に伝えてよい内容を教えてください")
     return UserQuestion(
         question=question,
         purpose=f"生成候補に本人の未確認の{topic}の好みや経験が含まれているため、事実を作らないよう確認します",
     )
+
+
+def _question_topic(text: str) -> str | None:
+    for topic, terms in PERSONAL_FACT_TOPICS.items():
+        if any(term in text for term in terms):
+            return topic
+    return None
 
 
 def estimate_message_style(messages: list[dict]) -> dict:
@@ -1063,8 +1120,36 @@ def generate(data: GenerateInput):
                                 api_alias=account,
                                 model=model,
                             )
+                        if not quality_repair_used:
+                            quality_repair_used = True
+                            system_instruction += (
+                                "\n【不足質問の再評価：1回限り】今回のuser_answersに回答があれば、その回答範囲で返信を作ります。"
+                                "回答済みの質問を繰り返さず、最近の作品名など任意の追加情報を本人へ求めないでください。"
+                                "相手から本人への直接質問がない場合は、プロフィールにない自己開示を省き、相手の話への感想や質問で返してください。"
+                                "安全で自然な候補を作れない場合に限り、再度needs_user_info=trueを返してください。"
+                            )
+                            continue
                         if not parsed.user_questions or parsed.recommended is not None or parsed.alternatives:
                             raise ValueError("不足情報応答に候補が含まれています")
+                        answered_topics = {
+                            topic
+                            for answer in data.user_answers
+                            if (topic := _question_topic(answer.get("question", ""))) is not None
+                        }
+                        repeated_topics = {
+                            topic
+                            for question in parsed.user_questions
+                            if (topic := _question_topic(question.question)) is not None
+                        }
+                        if answered_topics & repeated_topics:
+                            return blocked_user_info_response(
+                                "回答済みの本人情報を使っても安全な候補を作れませんでした。回答内容は繰り返し尋ねず、候補の生成を中断しました。",
+                                skipped=False,
+                                attempted_models=attempted_models,
+                                api_attempt_count=len(attempted_models),
+                                api_alias=account,
+                                model=model,
+                            )
                         return {**parsed.model_dump(), "demo": False, "skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models}
                     if data.response_version == 2 and (len(parsed.user_questions) > 0 or parsed.recommended is None):
                         raise ValueError("生成結果の形式が不正です")
@@ -1072,6 +1157,15 @@ def generate(data: GenerateInput):
                         [parsed.recommended, *parsed.alternatives], context
                     )
                     if unsupported_topics:
+                        if not quality_repair_used:
+                            quality_repair_used = True
+                            system_instruction += (
+                                "\n【未確認の本人事実による1回限りの修正】前回の候補に確認できない本人の趣味・経験・予定が含まれていました。"
+                                "本人のプロフィールfactsとuser_answersに明記された情報だけを一人称で述べてください。"
+                                "不明な詳細は無理に本人へ質問せず、自己開示を省いて相手の発言への感想や質問を作ってください。"
+                                "回答に必要な本人の直接質問があり、事前確認でも解決できない場合のみneeds_user_info=trueにしてください。"
+                            )
+                            continue
                         if data.response_version == 2 and not data.skipped_user_info:
                             question = personal_fact_question(unsupported_topics[0])
                             return {
@@ -1096,6 +1190,37 @@ def generate(data: GenerateInput):
                                 model=model,
                             )
                         raise ValueError("生成候補に本人の未確認の好みや経験が含まれていました")
+                    if (
+                        data.response_version == 2
+                        and parsed.invite_decision == "invite_gently"
+                        and not any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
+                    ):
+                        if quality_repair_used:
+                            raise ValueError("会話方針と返信候補が一致していません")
+                        quality_repair_used = True
+                        system_instruction += (
+                            "\n【誘い判断と候補の不一致による1回限りの再生成】invite_decision=invite_gentlyの場合は、"
+                            "候補のうち少なくとも1案に、相手が断りやすい具体的で軽い食事・カフェの誘いを含めてください。"
+                            "日時や場所は本人が明言していない限り決めません。"
+                        )
+                        continue
+                    prohibited_invite_decisions = {
+                        "do_not_invite", "continue_conversation", "wait", "respect_no",
+                        "do_not_repeat_invite", "ask_user_info", "schedule_after_acceptance", "continue_or_close",
+                    }
+                    if (
+                        data.response_version == 2
+                        and parsed.invite_decision in prohibited_invite_decisions
+                        and any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
+                    ):
+                        if quality_repair_used:
+                            raise ValueError("会話方針に反する誘い候補が含まれています")
+                        quality_repair_used = True
+                        system_instruction += (
+                            "\n【誘い判断と候補の不一致による1回限りの再生成】現在のinvite_decisionは誘いを控える判断です。"
+                            "候補に食事や対面の誘いを含めず、特に相手の断り・慎重さを尊重してください。"
+                        )
+                        continue
                     try:
                         validated = check_suggestions(parsed, data.count)
                     except (CandidatePunctuationError, CandidateSimilarityError) as quality_error:

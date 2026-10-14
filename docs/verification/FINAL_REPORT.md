@@ -360,3 +360,9 @@ Git履歴69 refsとworking treeをAPIキー形式で確認し、一致はあり�
 - ブランチ: `codex/full-system-verification`
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持・未マージ）
 - 検証済みHEAD: `cf24e2398ab428cb9e3beef2b0029f34aa73d4b4`。Push Actions [38544684207](https://github.com/kenkyu0909/aichatapp/actions/runs/38544684207) とPR Actions [38544689940](https://github.com/kenkyu0909/aichatapp/actions/runs/38544689940) 成功。ソース修正コミット: `d431b79f159a7e7fc499a7acf06a12e13454c4b4`。報告書更新コミット`a40c251c62c400401c9aef3e77beeaf7ceb76079`のPush Actions [38544920718](https://github.com/kenkyu0909/aichatapp/actions/runs/38544920718) とPR Actions [38544928533](https://github.com/kenkyu0909/aichatapp/actions/runs/38544928533)も同SHAで成功。ソース修正SHAは`d431b79f159a7e7fc499a7acf06a12e13454c4b4`。
+
+## 2026-10-14 実API品質確認003と修正（途中報告）
+
+初回実API品質確認は隔離SQLiteと架空人物を使って9論理要求を実行し、API1の`gemini-3.5-flash-lite`へ合計10回到達した。T77の回答後にGeminiが同じ趣旨を再質問したケース、候補なしになったケース、本人が登録していない休日の体験談、誘い方針と候補が一致しないケースを確認した。初回JSONの記録は残し、成功扱いにはしていない。
+
+事実確認と方針整合性を見直し、休日の具体的な活動・場所の照合、否定的な映画情報の扱い、回答済み情報の再質問抑止、一般的な誘い文句の判定を追加した。オフライン全体テストは149件成功し、警告が1件ある。実API追試T93と会話003、HTMLのFirefox表示確認はまだ実施していないため、総合判定は保留する。
