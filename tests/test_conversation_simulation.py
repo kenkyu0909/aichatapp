@@ -45,6 +45,8 @@ def test_conversation_002_has_isolated_paths_and_preserves_001():
     assert "Codexだけ" in state["people"]["partner_internal"]
     assert simulation.generation_settings(7, "自然に会話を広げる", "", "first")["mode"] == "first"
     assert simulation.generation_settings(7, "自然に会話を広げる", "")["mode"] == "reply"
+    assert not simulation.needs_partner_opening(state, "first")
+    assert simulation.needs_partner_opening(state, "reply")
 
 
 def test_partner_and_unselected_candidates_do_not_increment_app_counter():

@@ -139,6 +139,10 @@ def can_receive_partner(state: dict[str, Any]) -> bool:
     return state["status"] == "RUNNING" and bool(state.get("messages")) and state["messages"][-1]["speaker"] == "app"
 
 
+def needs_partner_opening(state: dict[str, Any], initial_mode: str) -> bool:
+    return not state["messages"] and initial_mode != "first"
+
+
 def send_app_message(state: dict[str, Any], body: str, turn: dict[str, Any]) -> int:
     if not can_send_app(state):
         raise RuntimeError("実験終了またはアプリ側の送信上限20通に達しています")
@@ -648,7 +652,7 @@ def main_run(opening: str | None, resume: bool,
         state["match_id"] = created.json()["id"]
     match_id = state["match_id"]
 
-    if not state["messages"] and not (not resume and initial_mode == "first"):
+    if needs_partner_opening(state, initial_mode):
         if not opening:
             print("架空の相手役の開始メッセージを --opening-message で渡してください")
             state["end_reason"] = "開始メッセージ入力待ちです。"

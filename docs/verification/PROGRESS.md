@@ -14,9 +14,12 @@
 - 試験準備中に、隔離環境変数の指定に失敗した初回試行でリポジトリ直下のSQLiteを参照し、profile取得がHTTP 500になった。既存`data/app.sqlite3`の更新日時は試行前のまま（2026-10-14 13:33:44）、その後は接続していない。以後、テスト用アプリをTempへ複製してから確認した。既存データを意図的に変更・初期化していない。
 - オフラインテスト: 修正対象のpytestとFirefox UIの37件が成功（1件の既知Starlette/httpx非推奨警告）。直前の全体pytestは104件成功。最新の全体再実行は実API後の最終確認で行う。`node --check app.js`、`git diff --check`成功。
 - GitHubへ先に再現テストcheckpoint `ebd6fce497066c8fe04d58e203e39fa2ecef2f6c`をPush済み。今回の実装・文書更新は次の進捗commitでPushする。CI run URLはPush後に追記する。
-- 実API状態: まだ呼び出していない。指定APIフォルダーの認証情報存在確認を秘密値を出さない方法で行い、利用できる場合は既存バックエンドの優先順で1リクエストから試す。実際の応答/制限を確認後に本項目とマトリクスを更新する。
-- 実験002状態: 未開始。既存001のBLOCKED記録は変更していない。APIが利用可能なら初回生成から開始し、送信・相手返信の各段階を保存する。20通で強制終了し、技術障害時はBLOCKEDで保存。
-- 次の作業: 3修正の実装checkpointをPush、GitHub Actions確認、許可済みAPIファイルからキーの存在のみ確認、Gemini実通信の初回3案を評価、会話002、HTMLをFirefoxで表示確認、最終pytest/CI、レポート更新。
+- 修正checkpoint `b8b37e2b0503fcc83ed15ccf43bf40f20f51ec87` Push済み。GitHub Actions [run 38542247374](https://github.com/kenkyu0909/aichatapp/actions/runs/38542247374) は同SHAで成功（pytest・Firefox準備・Node構文・artifact upload）。
+- 実API認証は指定フォルダー`C:\Users\poiuy\Desktop\aichatapp2\API`のみを参照するよう子プロセスを固定。API1/2の認証情報が読み出せることをbooleanだけで確認し、値は出力していない。初回生成の実通信は1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。429切替は発生せず。`conversation_002.json`に候補3案と実際の使用モデル/別名を保存し、APIキーは含めていない。
+- 初回3案の品質は一部FAIL: 推奨案は必須構成を満たしたが「、」「。」と不自然な詰まりがあり、2案目は好意/マッチの喜びが不足、3案目は質問がない。実験条件を崩さないため、送信前にプロンプトを変えず、この結果をT79として保存。会話終了後に修正・別リクエストで再評価する。
+- 実験002は初回候補の承認前に、再開時に開始メッセージを求めるrunner不具合を検出。候補・SQLite履歴は変更せず`needs_partner_opening`判定を修正し、モックテスト2件を再実行してPASS。修正commitは次のpushに含める。
+- 実験002状態: RUNNING、アプリ送信0、相手送信0、実API logical request 1件。初回候補から推奨案を選んだ後、Codex相手役はその送信文と会話履歴だけを読んで返答する。既存001のBLOCKED記録は変更していない。
+- 次の作業: runner修正checkpointをPushしてCI確認、候補1を手動記録、相手役から自然に返信、通常返信へ進む。情報不足質問・誘い・断りを必要な会話の流れで評価し、20通上限までまたは自然な終端まで進める。HTMLをFirefoxで確認し、最終pytest/CIとレポートを更新。
 - Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4 （Draft維持、未マージ）
 
 ## 2026-10-14 返信品質・初回メッセージ・会話制御のオフライン改善

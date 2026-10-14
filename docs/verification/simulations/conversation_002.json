@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "experiment_id": "conversation_002",
+  "started_at": "2026-10-14T09:25:59+00:00",
+  "updated_at": "2026-10-14T09:26:24+00:00",
+  "status": "RUNNING",
+  "end_reason": "開始メッセージ入力待ちです。",
+  "people": {
+    "app_user": {
+      "name": "高橋ゆう",
+      "age": 27,
+      "region": "神奈川県横浜市",
+      "occupation": "出版社の営業",
+      "hobbies": [
+        "読書",
+        "喫茶店",
+        "散歩"
+      ],
+      "food": [
+        "カレー",
+        "パスタ"
+      ],
+      "available_area": "横浜駅・みなとみらい周辺",
+      "availability": "10月下旬の土曜午後",
+      "profile": "横浜で出版社の営業をしています。休日は本屋や喫茶店をのんびり巡ることが多いです。カレーとパスタが好きです。まずは自然にお話しできたらうれしいです。",
+      "avoid": "根拠のない共通点、大げさな褒め言葉、質問攻め、返信の催促。"
+    },
+    "partner_public": {
+      "name": "森さやか",
+      "age": 26,
+      "region": "神奈川県川崎市",
+      "occupation": "図書館司書",
+      "hobbies": [
+        "カフェ",
+        "映画",
+        "街歩き"
+      ],
+      "food": [
+        "焼き菓子",
+        "オムライス"
+      ],
+      "profile": "川崎で図書館司書をしています。休日は気になるカフェで本を読んだり、映画を観たりしています。焼き菓子とオムライスが好きです。ゆっくり話せる方だとうれしいです。",
+      "conversation_style": "落ち着いていて自然な会話。質問攻めや急な誘いには慎重。"
+    },
+    "partner_internal": "Codexだけが見る架空の人物設定。相手の発言と公開プロフィールに沿って自然に返す。短文や質問を返さない返事もする。会うことには慎重だが、会話が自然なら検討する。実験の成功条件を理由に承諾しない。"
+  },
+  "environment": {
+    "os": "Windows",
+    "browser_for_report": "Firefox",
+    "database": "架空データ専用の一時SQLite"
+  },
+  "api_requests": [
+    {
+      "request_number": 1,
+      "ok": true,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "attempt_count": 1,
+      "attempted_models": [],
+      "error_code": null,
+      "app_http_status": 200,
+      "at": "2026-10-14T09:26:03+00:00",
+      "candidate_count": 3,
+      "demo": false
+    }
+  ],
+  "messages": [],
+  "turns": [],
+  "app_sent_count": 0,
+  "partner_sent_count": 0,
+  "first_invite_app_message": null,
+  "meeting_agreement": null,
+  "assessment": {},
+  "initial_mode": "first",
+  "match_id": 1,
+  "pending_generation": {
+    "account": "API1",
+    "model": "gemini-3.5-flash-lite",
+    "data": {
+      "needs_user_info": false,
+      "user_questions": [],
+      "user_info_reason": "",
+      "recommended": {
+        "label": "おすすめ",
+        "text": "はじめまして！マッチできて嬉しいです。プロフィールを見て雰囲気が素敵だなと思っていました。休日はカフェで本を読まれるんですねおすすめの本とかありますか？"
+      },
+      "alternatives": [
+        {
+          "label": "カフェと映画の話題",
+          "text": "はじめまして！お話しできるのを楽しみにしていました。映画やカフェ巡りがお好きなんですね最近はどんな作品を観ましたか？"
+        },
+        {
+          "label": "おだやかなトーン",
+          "text": "はじめまして！マッチありがとうございます。図書館司書をされているんですね落ち着いたお仕事で素敵だなと思いましたよろしくお願いします！"
+        }
+      ],
+      "reason": "マッチ直後の最初のメッセージとして、相手のプロフィールにあるカフェや映画の話題を取り上げ、答えやすい質問を1つ添えて自然に会話を始められるように作成しました。",
+      "strategy": "相手のプロフィールから共通の関心になりやすい読書やカフェの話題を拾い、丁寧で親しみやすい挨拶から自然な会話の広がりに繋げます。",
+      "conversation_stage": "Stage 1",
+      "invite_decision": "do_not_invite",
+      "decision_reason": "マッチ直後の初回メッセージのため、まだ誘わずにお互いの趣味や好きなことについて会話を楽しむ段階です。",
+      "next_action": "挨拶と相手のプロフィールに関する質問に対する返信を受け取り、会話を広げる。",
+      "demo": false,
+      "skipped_user_info": false,
+      "generation_blocked": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1
+    },
+    "candidates": [
+      {
+        "label": "おすすめ",
+        "text": "はじめまして！マッチできて嬉しいです。プロフィールを見て雰囲気が素敵だなと思っていました。休日はカフェで本を読まれるんですねおすすめの本とかありますか？"
+      },
+      {
+        "label": "カフェと映画の話題",
+        "text": "はじめまして！お話しできるのを楽しみにしていました。映画やカフェ巡りがお好きなんですね最近はどんな作品を観ましたか？"
+      },
+      {
+        "label": "おだやかなトーン",
+        "text": "はじめまして！マッチありがとうございます。図書館司書をされているんですね落ち着いたお仕事で素敵だなと思いましたよろしくお願いします！"
+      }
+    ],
+    "settings": {
+      "mode": "first",
+      "match_id": 1,
+      "count": 3,
+      "tone": "自動",
+      "direction": "自然に会話を広げる",
+      "extra": "",
+      "show_policy": true,
+      "response_version": 2
+    },
+    "attempt_count": 1
+  }
+}

@@ -95,8 +95,9 @@
 |---|---|---|---|---|
 | T77 | 実Gemini初回メッセージ・通常返信・情報確認・誘い・断り | 既存アプリの実API、架空プロフィールのみ | NOT_TESTED | APIキー確認は秘密値を出力しない方法で行い、最初は1リクエストから開始する。結果を受けて更新する。 |
 | T78 | 会話シミュレーション002とHTML評価 | 既存`/api/generate`を使用、Codexが架空相手役、最大20通 | NOT_TESTED | `conversation_001`を保持し、新規002へ保存する。実APIが制限/認証等で失敗した場合は中断状態を保存し、会話を捏造しない。 |
+| T79 | 実Gemini初回メッセージ3案の品質評価 | Windows/Python 3.12、既存FastAPI `/api/generate`実通信、架空プロフィール | FAIL | 1 logical request成功、API1 / `gemini-3.5-flash-lite` / backend attempt 1。HTTP/JSON/3候補は成功。推奨案に挨拶・好意・喜び・相手プロフィールの話題・質問1件あり。ただし句読点ルール違反と不自然な区切りあり。別案2は軽い好意/マッチの喜びが不足し、別案3は質問なし。プロンプト修正は会話002完了後に行い、修正後の別リクエストで再評価する。全候補は架空データのみで`conversation_002.json`に保存。 |
 
-現時点の項目数は78件: PASS 71 / FAIL 0 / BLOCKED 3 / NOT_TESTED 4。T01–T71は前回の報告値を保持。T77–T78は今回の実API実験結果後に更新する。
+現時点の項目数は79件: PASS 71 / FAIL 1 / BLOCKED 3 / NOT_TESTED 4。T01–T71は前回の報告値を保持。T79は実API品質上の指示未達をそのまま記録し、実験条件を保つためプロンプト修正は会話002終了後に行う。
 
 - 実験ツールSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。T56を含む最新レポート/マトリクスHEAD: `8a0097c1ad648692e6e93714b2e98e47b5e6cc43`。
 - GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38526380171 （最新HEAD、成功、pytest 43 passed）
