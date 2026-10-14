@@ -14,11 +14,11 @@
 - 今回のローカル統合テスト: `pytest -q --junitxml=test-results\pytest.xml` は **103 passed, 1 warning**。警告はStarlette/httpxの非推奨通知。`node --check app.js` 成功。`git diff --check` 成功。Firefox UIテスト3件を含む。
 - GitHub Actions: 実装コミット`5954b06c418158a48c60aa57b55e17f47a52c54a`のPush run [38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397)とPR run [38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。Firefoxセットアップ、pytest、JavaScript構文チェック、artifact保存が完了。
 - 報告コミット`baa9b89b2a28e9ce35a05f9f9e25a7c15fbeee6f`もPush [38536510987](https://github.com/kenkyu0909/aichatapp/actions/runs/38536510987) / PR [38536517187](https://github.com/kenkyu0909/aichatapp/actions/runs/38536517187)とも成功。両runの対象HEADは同じSHA。
-- 実施中: このCI結果を記録する最終ドキュメントコミットをPush。ソース変更はなく、最新HEAD用CIを再実行する。PR #4本文も更新する。
+- 完了: PR #4本文を更新。PRはDraft維持・未マージ。直近HEAD `ef5f232a1ec6b10d07396f2a704dd419923549f2`のPush [38536709582](https://github.com/kenkyu0909/aichatapp/actions/runs/38536709582) / PR [38536717824](https://github.com/kenkyu0909/aichatapp/actions/runs/38536717824)は成功。今回の残りはこの進捗記録のみで、push後に同じオフラインCIが自動起動する。
 - 未実施: Gemini実APIの文章品質、Windows `start.bat`の実起動/ポート競合動作。前者は今回の明示的なAPI禁止、後者は既存データ/ポートを使わない安全な隔離実機試験を用意できていないため。
 - 現在のブロッカー: なし。実API品質の判断はユーザーが後日許可するまで保留。
 - 次: レビューフィードバック反映、全テスト再実行、報告書更新、意味単位でコミット・Push、PR #4最新HEADのCI結果を記録。
-- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`。直近のActions成功コミットSHA: `baa9b89b2a28e9ce35a05f9f9e25a7c15fbeee6f`。この記録を含む最終ドキュメントSHAは作成中。Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4
+- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`。最終記録の親コミットSHA: `ef5f232a1ec6b10d07396f2a704dd419923549f2`（Push/PR Actions成功）。本進捗更新はドキュメントのみ。Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4
 
 ## 2026-10-14 利用制限時の優先フォールバック追加
 

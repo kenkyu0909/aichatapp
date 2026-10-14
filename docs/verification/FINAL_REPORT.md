@@ -13,7 +13,7 @@
 - Firefox UI: 3件成功。質問、回答、スキップ、初回候補、会話方針、コピー、手動送信記録を架空データと固定APIモックで確認。
 - JavaScript構文: `node --check app.js` 成功。
 - 差分整合: `git diff --check` 成功。
-- GitHub Actions: 実装HEAD `5954b06c418158a48c60aa57b55e17f47a52c54a`のPush [run 38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397)とPR [run 38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。続く報告HEAD `baa9b89b2a28e9ce35a05f9f9e25a7c15fbeee6f`もPush [run 38536510987](https://github.com/kenkyu0909/aichatapp/actions/runs/38536510987) / PR [run 38536517187](https://github.com/kenkyu0909/aichatapp/actions/runs/38536517187)で成功。最後のドキュメント追記もpush後に再実行する。
+- GitHub Actions: 実装HEAD `5954b06c418158a48c60aa57b55e17f47a52c54a`のPush [run 38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397)とPR [run 38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。最新の完了済みPR HEAD `ef5f232a1ec6b10d07396f2a704dd419923549f2`もPush [run 38536709582](https://github.com/kenkyu0909/aichatapp/actions/runs/38536709582) / PR [run 38536717824](https://github.com/kenkyu0909/aichatapp/actions/runs/38536717824)で成功。最終の進捗記録はドキュメントのみ。最新ブランチのrun一覧は[Actions](https://github.com/kenkyu0909/aichatapp/actions/workflows/test.yml?query=branch%3Acodex%2Ffull-system-verification)。
 - 実Gemini API: 0回（ユーザー指示による未実施）。品質評価結果は今回なし。
 
 ### 実装内容・変更ファイル
@@ -55,9 +55,9 @@
 ### GitHub
 
 - ブランチ: `codex/full-system-verification`
-- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`。直近成功コミットSHA: `baa9b89b2a28e9ce35a05f9f9e25a7c15fbeee6f`。最終報告記録SHA: 作成中。
+- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`。直近CI成功コミットSHA: `ef5f232a1ec6b10d07396f2a704dd419923549f2`。以降の最終記録更新はドキュメントのみ。
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持、未マージ）
-- 今回のGitHub Actions: 報告HEADのPush [38536510987](https://github.com/kenkyu0909/aichatapp/actions/runs/38536510987) / PR [38536517187](https://github.com/kenkyu0909/aichatapp/actions/runs/38536517187)が成功。最終の記録更新後に最新HEADを再実行する。
+- 今回のGitHub Actions: 最終記録更新直前のHEADについてPush [38536709582](https://github.com/kenkyu0909/aichatapp/actions/runs/38536709582) / PR [38536717824](https://github.com/kenkyu0909/aichatapp/actions/runs/38536717824)が成功。最終記録のみのコミット後はbranch workflow [一覧](https://github.com/kenkyu0909/aichatapp/actions/workflows/test.yml?query=branch%3Acodex%2Ffull-system-verification)で最新runを確認。
 - `prompt_spec.md`: `docs/verification/prompt_spec.md`
 
 ---
