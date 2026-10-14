@@ -1,5 +1,6 @@
 """Offline behavior and privacy checks; never contact Gemini."""
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
     spec = importlib.util.spec_from_file_location("test_backend", Path(__file__).resolve().parents[1] / "app.py")
     module = importlib.util.module_from_spec(spec)
+    # FastAPI/Pydantic resolve postponed annotations from sys.modules.
+    monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     with TestClient(module.app) as test_client:
         yield test_client, module
