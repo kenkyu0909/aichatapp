@@ -438,5 +438,5 @@ APIはAPI1の`gemini-3.5-flash-lite`。初回・限定追試・再確認の合�
 ### GitHub
 
 - 作業ブランチ: `codex/full-system-verification`。PR #4は`feat/ui-local-backend-v1`宛てOPEN/Draftで、マージしていません。
-- 会話 checkpoint `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。この追記を含む最終HEADはPush後にActionsで再確認します。
+- 会話 checkpoint `c740141cf2b7b9f7b9143cf6750dc26add8c86d5`のPush Actions [38555557284](https://github.com/kenkyu0909/aichatapp/actions/runs/38555557284)とPR Actions [38555564007](https://github.com/kenkyu0909/aichatapp/actions/runs/38555564007)は成功。コミット`5ddcd020747eb8eb8971e991515d1004c0625114`のPush Actions [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR Actions [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)は、いずれも同一HEADで成功しました。
 - レポート: [PROGRESS.md](PROGRESS.md)、[TEST_MATRIX.md](TEST_MATRIX.md)、[prompt_spec.md](prompt_spec.md)。会話資料: [HTML](simulations/conversation_003.html)、[JSON](simulations/conversation_003.json)、[分析](simulations/conversation_003_analysis.md)、[Firefox画像](simulations/conversation_003_firefox.png)。

@@ -322,3 +322,8 @@
 - ローカルpytest **153 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。
 - `scripts/simulate_conversation.py`に未送信候補を理由付きで拒否・保存する処理を追加。追加テスト2件で状態遷移、送信数/メッセージ不変、HTMLエスケープを確認。
 - 次に実施: TEST_MATRIX/FINAL_REPORT/prompt_specを最終結果へ更新し、秘密情報検査、差分レビューを行う。明示的なファイル指定でコミット・Pushし、最新SHAのPush/PR ActionsとDraft状態を確認する。
+
+
+### 最終Actions確認
+
+`5ddcd020747eb8eb8971e991515d1004c0625114`を対象にPush run [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR run [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)が成功しました。GitHub Actionsではpytest、JavaScript構文検査、テスト結果Artifact保存が成功し、PR HEADも同じSHAでした。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`で、マージしていません。文書最終更新commit後にもActionsを再確認します。
