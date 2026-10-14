@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matching Reply AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-left">
+                <h1><span class="icon">💌</span> マッチング reply AI</h1>
+                <p>自然な会話を支援するマッチングアプリ向け返信支援アプリ</p>
+            </div>
+            <div class="header-right">
+                <button id="apiStatusBtn" class="api-status-btn">API: 未設定</button>
+                <button id="logoutBtn" class="btn-secondary">終了</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section id="profileTab" class="tab-panel">
+                <div class="section-header">
+                    <h2><span class="icon">👤</span> 自分のプロフィール</h2>
+                </div>
+                <div class="profile-form">
+                    <div class="form-group">
+                        <label for="profileName">名前</label>
+                        <input type="text" id="profileName" class="form-input" placeholder="名前を入力">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileAge">年齢</label>
+                        <input type="number" id="profileAge" class="form-input" placeholder="例: 28">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileArea">住んでいるエリア</label>
+                        <input type="text" id="profileArea" class="form-input" placeholder="例: 東京都">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileJob">仕事/学校</label>
+                        <input type="text" id="profileJob" class="form-input" placeholder="例: 会社員・大学生">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileHobby">趣味</label>
+                        <input type="text" id="profileHobby" class="form-input" placeholder="例: 読書、旅行、料理">
+                    </div>
+                    <div class="form-group">
+                        <label for="profilePersonality">性格</label>
+                        <input type="text" id="profilePersonality" class="form-input" placeholder="例: 真面目、ユーモアセンスがある">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileTalkStyle">話し方の好み</label>
+                        <input type="text" id="profileTalkStyle" class="form-input" placeholder="例: やや丁寧め、リラックスした口調">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileDontWant">AIに絶対に言ってほしくないこと</label>
+                        <textarea id="profileDontWant" class="form-textarea" rows="3" placeholder="例: 下ネタ、過度な自己誇張など"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileGoal">恋愛での希望</label>
+                        <textarea id="profileGoal" class="form-textarea" rows="3" placeholder="例: 真剣な出会い、共趣味からの交流など"></textarea>
+                    </div>
+                    <button id="saveProfileBtn" class="btn-primary">プロフィールを保存</button>
+                </div>
+            </section>
+
+            <section id="matchesTab" class="tab-panel">
+                <div class="section-header">
+                    <h2><span class="icon">👥</span> マッチ済み相手</h2>
+                </div>
+                <div class="add-match-section">
+                    <button id="addMatchBtn" class="btn-add-match">新しい相手を追加</button>
+                </div>
+                <div id="matchesList" class="matches-list">
+                    <p class="empty-state">相手がいません。上記ボタンから追加してください。</p>
+                </div>
+            </section>
+
+            <section id="chatTab" class="tab-panel active">
+                <div class="section-header">
+                    <h2><span class="icon">💬</span> 会話・返信生成</h2>
+                </div>
+                <div class="match-selector">
+                    <select id="matchSelect" class="form-select">
+                        <option value="">相手を選択してください</option>
+                    </select>
+                </div>
+                <div class="conversation-history">
+                    <div class="history-header">
+                        <span>会話履歴</span>
+                        <button id="refreshHistoryBtn" class="btn-history">更新</button>
+                    </div>
+                    <div id="messagesList" class="messages-list">
+                        <p class="empty-state">メッセージがありません。「メッセージを追加」から入力してください。</p>
+                    </div>
+                </div>
+                <div class="message-input-section">
+                    <input type="text" id="newMessageInput" class="form-input small-input" placeholder="新しいメッセージを入力...">
+                    <button id="addMessageBtn" class="btn-primary small-btn">追加</button>
+                </div>
+                <div class="generate-section">
+                    <button id="generateReplyBtn" class="btn-primary full-width">
+                        <span class="icon">🤖</span> 返信を生成
+                    </button>
+                    <div id="apiError" class="api-error" style="display: none;">
+                        Gemini APIが設定されていません。.envファイルでGEMINI_API_KEYを設定してください。
+                    </div>
+                </div>
+                <div id="replyCandidates" class="reply-candidates">
+                    <p class="empty-state">候補が表示されます</p>
+                </div>
+            </section>
+
+            <section id="likeTab" class="tab-panel">
+                <div class="section-header">
+                    <h2><span class="icon">✉️</span> マッチ前「メッセージ付きいいね」生成</h2>
+                </div>
+                <div class="like-instructions">
+                    <p>相手のプロフィールを貼り付けて、最初のメッセージを生成します。</p>
+                </div>
+                <div class="like-form-section">
+                    <div class="form-group">
+                        <label for="likePartnerName">相手の名前（任意）</label>
+                        <input type="text" id="likePartnerName" class="form-input" placeholder="例: 陽介">
+                    </div>
+                    <div class="form-group">
+                        <label for="likePartnerProfile">相手のプロフィール（貼り付け）</label>
+                        <textarea id="likePartnerProfile" class="form-textarea" rows="5" placeholder="相手のプロフィール文をここに貼り付けてください..."></textarea>
+                    </div>
+                    <button id="generateLikeBtn" class="btn-primary full-width">
+                        <span class="icon">✉️</span> メッセージ付きいいねを生成
+                    </button>
+                    <div id="likeApiError" class="api-error" style="display: none;">
+                        Gemini APIが設定されていません。
+                    </div>
+                </div>
+                <div id="likeCandidates" class="like-candidates">
+                    <p class="empty-state">候補が表示されます</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer class="app-footer">
+        <p>Matching Reply AI Assistant v0.1 | ローカルアプリ | データはPCに保存されます</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
