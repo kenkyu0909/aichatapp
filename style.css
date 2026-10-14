@@ -129,3 +129,14 @@ button:disabled{opacity:.48;cursor:not-allowed}
 .toast[hidden]{display:none}
 @media(max-width:1120px){.layout{grid-template-columns:226px minmax(0,1fr)}.conversation-header{flex-wrap:wrap;padding:8px 12px}.header-tools{margin-left:45px}.composer{gap:7px}.contact-preview{max-width:140px}.config-line .helper{display:none}.action-line{flex-wrap:wrap}.action-line input{flex-basis:100%}.action-line button{flex:1}}
 @media(max-width:740px){.global-header{height:auto;padding:10px;align-items:flex-start;flex-wrap:wrap}.global-actions{width:100%;overflow:auto}.layout{grid-template-columns:75px minmax(0,1fr)}.search-row{padding:8px 5px;flex-direction:column;height:auto;gap:4px}.search-row input{width:65px;font-size:9px;padding:6px 4px}.search-row button{width:31px;height:31px}.contact-item{padding:8px;justify-content:center}.contact-item-details,.contacts-footer{display:none}.conversation-header{min-height:75px}.header-tools{margin-left:0;gap:4px}.tone-toggle button{font-size:9px;padding:4px}.utility-button{padding:5px;font-size:9px}.contact-bio{max-width:160px}.composer{padding:9px}.policy-banner small{display:none}.config-line{flex-wrap:wrap}.send-row>span{display:none}}
+
+
+/* Connected-backend controls added on top of the approved UI */
+.history-actions{display:flex;gap:7px;margin-top:3px;opacity:.15;transition:opacity .15s}
+.chat-message:hover .history-actions,.chat-message:focus-within .history-actions{opacity:1}
+.history-actions button{background:transparent;border:0;color:#8495ad;padding:2px 4px;font-size:10px}
+.history-actions button:hover{color:#2d5d91}
+.demo-warning{flex-basis:100%;background:#fff9eb;border:1px solid #efdcae;color:#8b6934;border-radius:10px;padding:11px 13px;margin:0;font-size:11px;line-height:1.6}
+.result-reason{flex-basis:100%;color:#66758e;background:#fff;border:1px solid #e4e8f0;border-radius:10px;padding:11px 12px;font-size:11px;line-height:1.7}
+.modal-body .modal-result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.candidate-actions button:hover{background:#eaf8f2;color:#008f6b}
