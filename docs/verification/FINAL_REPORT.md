@@ -4,7 +4,7 @@
 
 ### 総合判定
 
-**CONDITIONAL PASS（条件付き合格）**。前回の報告から未実施7項目を検証し、CI・Firefox E2E・SQLite保存障害処理を追加しました。コード検証SHA `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb` はGitHub ActionsのPushとPR両方で成功しました。利用開始は可能ですが、旧APIキーの失効確認が必要であり、今回の`start.bat`再実行は使用中の8765ポートによりBLOCKEDでした。
+**CONDITIONAL PASS（条件付き合格）**。前回の報告から未実施7項目を検証し、CI・Firefox E2E・SQLite保存障害処理を追加しました。検証コードSHA `dcf5dbd6838117b1fd28dde99efcc8e2227538b8` はGitHub ActionsのPushとPR両方で成功しました。利用開始は可能ですが、旧APIキーの失効確認が必要であり、今回の`start.bat`再実行は使用中の8765ポートによりBLOCKEDでした。
 
 ### テスト集計
 
@@ -14,7 +14,7 @@
 - BLOCKED: 1（T02。127.0.0.1:8765を既存Pythonプロセスが使用中。プロセスは停止・変更していない）
 - NOT_TESTED: 0
 - ローカルpytest: **33 passed, 1 warning**。Python 3.12.10、Windows。警告はStarlette/httpxの非推奨通知。
-- GitHub Actions: **33 passed**、Firefox 157、Ubuntu、Python 3.11。`node --check app.js`成功。Push [run 38518047903](https://github.com/kenkyu0909/aichatapp/actions/runs/38518047903)、PR [run 38518053494](https://github.com/kenkyu0909/aichatapp/actions/runs/38518053494)。両方ともSHA `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb`。
+- GitHub Actions: **33 passed**、Firefox 157、Ubuntu、Python 3.11。`node --check app.js`成功。Push [run 38518482078](https://github.com/kenkyu0909/aichatapp/actions/runs/38518482078)、PR [run 38518486199](https://github.com/kenkyu0909/aichatapp/actions/runs/38518486199)。両方ともSHA `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`。
 - E2E: Firefoxで2テスト成功。画面操作、メッセージ追加/編集/削除、返信3案、コピーと送信記録の分離、方針ON/OFF/ON、いいね、設定、再読込、サーバー停止中4操作、再起動後の保持を確認。
 - JavaScript構文: `node --check app.js`成功。Firefox内の例外と`console.error`監視も空。ブラウザー開発者ツール自体のConsole出力を直接採取したわけではない。
 
@@ -38,7 +38,7 @@
 - `app.py`: Geminiリクエストを30秒で打ち切り、SDKの自動再試行を無効化。保存エラー詳細を一般化。DB・写真ディレクトリ初期化を遅延し、import中の書込失敗でサーバーが起動前に終了する問題を修正。写真を一時ファイル経由で保存し、DB/ファイル失敗時の後始末を追加。
 - `tests/test_app.py`, `tests/test_ui_firefox.py`, `requirements-test.txt`: API異常系、実ファイル障害、Firefox UI、T19/T36、プロンプトインジェクション、timeoutを追加。UI試験は空の一時DBと架空データのみ。
 - `scripts/live_gemini_smoke.py`: 敵対的プロフィールの実API試験モードを追加。秘密値・生成本文をログに出さない。
-- コード修正SHA: `f73c1649efa614f51d88547dc1fdb33ca92cefbb`、保存先初期化修正SHA: `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb`。
+- コード修正SHA: `f73c1649efa614f51d88547dc1fdb33ca92cefbb`、保存先初期化修正SHA: `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb`、Firefox会話削除UIと検証記録SHA: `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`。
 
 ### Gemini実API
 
@@ -67,6 +67,7 @@ Python 3.11以降を用意し、既に同じアプリが8765番ポートで起�
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持、未マージ）
 - [PROGRESS.md](PROGRESS.md) / [TEST_MATRIX.md](TEST_MATRIX.md)
 - GitHub Actions: [Push run 38518047903](https://github.com/kenkyu0909/aichatapp/actions/runs/38518047903)、[PR run 38518053494](https://github.com/kenkyu0909/aichatapp/actions/runs/38518053494)
+- 最新のPR HEADチェックは[PR #4 Checks](https://github.com/kenkyu0909/aichatapp/pull/4/checks)で確認。
 
 ## 前回報告（以下は履歴として維持）
 
