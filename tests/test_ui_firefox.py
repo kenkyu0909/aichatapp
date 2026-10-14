@@ -239,6 +239,18 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     visible_toast(driver, "履歴を更新しました")
     assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.them .bubble").text == "週末は友達と落ち着いたカフェに行きました！"
 
+    message_input.send_keys("削除確認用の架空メッセージ")
+    driver.find_element(By.ID, "send-me").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    driver.find_element(By.CSS_SELECTOR, "article.chat-message.me button:last-child").click()
+    driver.switch_to.alert.accept()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+    )
+    visible_toast(driver, "メッセージを削除しました")
+
     policy = driver.find_element(By.ID, "policy")
     assert policy.is_selected()
     driver.find_element(By.ID, "generate").click()
@@ -280,7 +292,7 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
     assert driver.find_element(By.ID, "current-name").text == "架空のあおい"
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
-    errors = record_artifact("firefox-core-ui", driver, {"strategy_states": [True, False, True], "candidate_count": 3})
+    errors = record_artifact("firefox-core-ui", driver, {"strategy_states": [True, False, True], "candidate_count": 3, "message_delete": True})
     assert errors["runtime"] == []
     assert errors["console"] == []
 

@@ -2,7 +2,19 @@
 
 最終更新: 2026-10-14（継続作業）
 
-## 今回の継続作業
+## 2026-10-14 継続検証の最新状況
+
+- 対象: `codex/full-system-verification`、開始時HEAD `63b972811e32996d6fdcf0cf248d49c21efc4b9b`。最新検証コードSHA: `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb`。PR #4はDraft、未マージ。
+- CI修正: `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`でPush/PR両トリガーを実行。`4647f2b`のPush run [#38518047903](https://github.com/kenkyu0909/aichatapp/actions/runs/38518047903)とPR run [#38518053494](https://github.com/kenkyu0909/aichatapp/actions/runs/38518053494)が成功。Ubuntu/Python 3.11/Firefox 157で33 passed、`node --check app.js`成功。結果とスクリーンショットはActions artifactに保存。
+- Windowsローカル: Python 3.12.10、Node.js 25.9.0、Mozilla Firefox/Selenium。SHA `4647f2b`で33 passed、1件のStarlette/httpx非推奨警告。Firefoxのruntime/console.error監視はいずれも空。テスト証跡JSONはSHA `4647f2b`とclean worktreeを記録。
+- T05、T19、T30、T35、T36、T47、T48を実施し、TEST_MATRIXへ方法・制限を記録。T51（保存先をimport時点から使えない場合）も追加。
+- T02の今回再確認は`BLOCKED`: 127.0.0.1:8765を既存の`python3.12`がlistenしていたため`start.bat`内のUvicornがWinError 10048。既存プロセスは停止・変更していない。前回の起動成功記録は履歴として維持。
+- 実API追加試験は2リクエスト。API1の3.5 Flash-Liteは429相当で失敗し、指定順にAPI2の3.5 Flash-Liteへ切替。敵対的な架空プロフィール試験は成功。API1/2の3.1は未使用。秘密情報や生成本文をログへ出していない。
+- 修正: Gemini SDK下限を`>=1.74`へ引き上げtimeout/retry設定との互換性を確保。SQLite/写真保存先の初期化を遅延し、保存障害を安全なHTTPエラーへ変換。写真保存失敗時の一時ファイル掃除、Gemini timeoutと無制限再試行防止、Firefoxテストの起動失敗時後始末を追加。
+- TEST_MATRIXは51項目、PASS 50 / BLOCKED 1 / FAIL 0 / NOT_TESTED 0。未解決の注意: 旧APIキーの失効状態は確認できず、ユーザー側で失効確認が必要。
+- 最終ドキュメントをpushした後、Actionsを再実行し、PR #4最新HEADのSHAと成功結果を確認する。
+
+## 継続作業の開始記録（履歴）
 
 - 開始時のローカル・GitHub HEAD: `63b972811e32996d6fdcf0cf248d49c21efc4b9b`（一致を確認）
 - 既存PR #4: Open、Draft。ベースは`feat/ui-local-backend-v1`。
@@ -93,16 +105,16 @@
 - 作業ブランチ`codex/full-system-verification`をGitHubへpushし、Draft PR #4を作成。
 - Secret一覧の有無は引き続き未確認。
 
-## 継続作業の進捗
+## 初期再検証時の進捗（履歴）
 
 - CI初回修正・Actions確認: `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`。Push/PRの両runが成功。最終HEADの再実行は後続修正push後。
 - T05、T19、T30、T35、T36、T47、T48: 今回の再検証を開始。結果はTEST_MATRIX.mdに証拠とともに追記する。
 - UI検証はFirefoxのみ。Chromeは使用しない。
 
-## 残作業
+## 開始時点の残作業（今回の結果で更新）
 
 1. 露出した旧API1・API2キーがGoogle側で失効済みか確認し、環境変数の別キーがあれば状態を確認する。
-2. 7件の`NOT_TESTED`項目を必要に応じて検証し、PRに結果を追記する。
+2. 7件の`NOT_TESTED`項目は今回検証済み。T02のWindows `start.bat`再実行のみ、既存の8765 listenerによりBLOCKED。
 
 ## GitHub
 
@@ -112,3 +124,13 @@
 - API更新後のsmoke testコミットSHA: `ba1a45205167ab1830982d8dc1bcb7e74822f701`
 - 最終検証内容のGitHub公開確認SHA: `3fcedae1e67e867c41be4692265145bb2498fa05`（PROGRESSのSHA記録を追加する直前に確認）
 - Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft）
+
+## 今回の最終状態
+
+- 完了: CI修正、未実施7項目、主要回帰テスト、SQLite/写真障害処理、Firefox UI E2E、PR #4本文更新。各修正・報告を作業ブランチへpush済み。
+- 今回の状態: TEST_MATRIX 51項目、PASS 50 / BLOCKED 1 / FAIL 0 / NOT_TESTED 0。テスト実行: 33 passed（WindowsローカルとUbuntu Actions）、Node構文チェックPASS。
+- 実API: 追加2リクエスト。API1 3.5は429相当、API2 3.5の敵対的架空プロフィール生成は成功。3.1は未使用。秘密文字列・生成本文はログに保存していない。
+- セキュリティスキャン: Git履歴と直近12件のActionsログでGoogle API key形式`AIza...`は見つからなかった。過去の会話出力への露出は残るため旧キー失効の確認が必要。GitHub Secrets一覧は権限がなく確認できていない。
+- Windows再起動: `start.bat`の今回再試行は既存の`127.0.0.1:8765` listenerとの競合で完了せず。既存プロセスに手を触れず、成功扱いにしていない。
+- 今回のコード最終SHA: `4647f2ba8ec432ca3d79bccc24bb03fb73f528eb`。報告書とFirefox削除確認を含む後続コミットはこのブランチの末尾に追加し、PR本文にもSHA/最新Actions実行URLを記載。
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4。Draftのままレビュー待ち。マージしていない。
