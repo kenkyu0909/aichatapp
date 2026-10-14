@@ -326,4 +326,4 @@
 
 ### 最終Actions確認
 
-`5ddcd020747eb8eb8971e991515d1004c0625114`を対象にPush run [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR run [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)が成功しました。GitHub Actionsではpytest、JavaScript構文検査、テスト結果Artifact保存が成功し、PR HEADも同じSHAでした。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`で、マージしていません。文書最終更新commit後にもActionsを再確認します。
+`5ddcd020747eb8eb8971e991515d1004c0625114`を対象にPush run [38556958055](https://github.com/kenkyu0909/aichatapp/actions/runs/38556958055)とPR run [38556965533](https://github.com/kenkyu0909/aichatapp/actions/runs/38556965533)が成功しました。GitHub Actionsではpytest、JavaScript構文検査、テスト結果Artifact保存が成功し、PR HEADも同じSHAでした。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`で、マージしていません。報告書更新commit `195ce1dd90c12ec4a56fc2f81854f66e2f73d3d9`でもPush run [38557173827](https://github.com/kenkyu0909/aichatapp/actions/runs/38557173827)とPR run [38557181001](https://github.com/kenkyu0909/aichatapp/actions/runs/38557181001)が同一HEADで成功したことを確認しました。次の進捗記録commitについてもActionsを確認します。
