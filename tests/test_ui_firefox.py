@@ -399,7 +399,7 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
             alternatives:[{label:'短め',text:'洋画をよく観ます！'}, {label:'話題を広げる',text:'洋画いいですね！最近何か観ましたか？'}],
             reason:'本人が回答した内容だけを使っています',
             strategy:'記載情報: 相手から映画の話題。根拠: 本人が洋画好きと回答。次の行動: 好きなジャンルを尋ねる。',
-            conversation_stage:'Stage 2', invite_decision:'まだ誘わない',
+            conversation_stage:'Stage 3', invite_decision:'consider_invite',
             decision_reason:'会話を始めたばかりです', next_action:'映画の話題を続ける'
           };
           window.__generateResults.push(result);
@@ -450,7 +450,10 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     assert driver.execute_script("return window.__generateResponses.at(-1).match_id") == driver.execute_script("return window.__generateResponses.at(-2).match_id")
     assert driver.execute_script("return window.__profileWrites") == []
     strategy = driver.find_element(By.CSS_SELECTOR, ".policy-suggestion").text
-    assert "Stage 2" in strategy and "まだ誘わない" in strategy and "映画の話題" in strategy
+    assert "Stage 3 — 食事などへの誘いを検討する段階" in strategy
+    assert "食事などへの誘いを検討" in strategy
+    assert "consider_invite" not in strategy
+    assert "映画の話題" in strategy
 
     message_count = len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message"))
     driver.find_element(By.CSS_SELECTOR, ".candidate button:last-child").click()

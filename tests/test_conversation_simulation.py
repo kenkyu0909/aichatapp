@@ -29,6 +29,18 @@ def test_app_message_limit_counts_only_sent_messages():
         simulation.send_app_message(state, "21通目", {})
 
 
+def test_conversation_002_has_isolated_paths_and_preserves_001():
+    json_path, html_path, data_dir = simulation.experiment_paths("conversation_002")
+    assert json_path.name == "conversation_002.json"
+    assert html_path.name == "conversation_002.html"
+    assert data_dir.name == "mra-conversation-002-sandbox"
+    assert simulation.experiment_paths("conversation_001") == (
+        simulation.JSON_FILE, simulation.HTML_FILE, simulation.DATA_DIR
+    )
+    with pytest.raises(ValueError):
+        simulation.experiment_paths("../../conversation_001")
+
+
 def test_partner_and_unselected_candidates_do_not_increment_app_counter():
     state = simulation.new_state()
     assert simulation.can_send_app(state)
