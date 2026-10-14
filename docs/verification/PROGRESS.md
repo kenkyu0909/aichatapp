@@ -293,3 +293,12 @@
 - 全pytest **149 passed, 1 warning**。Firefox UIテストを含む。`node --check app.js`、対象Pythonファイルの`py_compile`、`git diff --check`も成功。
 - `quality_checks_003.json`の初回実API結果は混在で、T77回答後・ケースB・ケースC・ケースGをFAILとして保持している。限定追試T93と会話003は未実施。今回のコード・テスト・ログ・報告書更新はPush前。
 - 次はこの修正をコミット・Pushし、最新HEADのGitHub Actionsを確認する。その後に限定追試を1回だけ実施し、安全性が確保できれば会話003へ進む。
+- 修正コミット`aee118313bd8a05bbae30cb03e2cb37330e36ab0`をPush済み。GitHub Actions Push [38554061358](https://github.com/kenkyu0909/aichatapp/actions/runs/38554061358)とPR [38554066709](https://github.com/kenkyu0909/aichatapp/actions/runs/38554066709)は、どちらも同一HEADでsuccess。pytest・Firefoxテスト・JavaScript構文検査を含む。
+
+### 2026-10-14 実API追試と品質判定
+
+- T93の限定追試は5論理要求・8プロバイダー試行で実施。T77回答後に候補なしとなり、Bでは余分な本人確認質問、Cではプロフィールにない最近の視聴状況、Gでは誘い方針と候補本文の不一致があった。初回JSONの結果は変更していない。
+- 別ファイル`quality_checks_003_recheck.json`でT77回答後とGを再確認。2論理要求・4プロバイダー試行。T77は2試行後3候補が返りPASS。Gは再度アプリの方針整合性検査によりHTTP 502 `invalid_response`となりFAIL。これはAPIのクォータやネットワーク障害ではない。
+- 3回の品質確認は合計16論理要求・22プロバイダー試行。API1/`gemini-3.5-flash-lite`だけを使用し、429・別モデル切替はなし。個別課金状態、残り利用枠、実費は確認していない。
+- Cの実出力にあった「最近は全然観れてない」という未確認の本人談を候補検査へ追加。モックテストで検出を確認。Bに含まれた未確認のカフェ嗜好も評価資料へ記録した。
+- GitHubへ`quality_checks_003_analysis.md`、追試と再確認のJSONを保存する準備をした。会話003本体はまだ未開始。全pytestは**151 passed, 1 warning**。

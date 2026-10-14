@@ -358,7 +358,11 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
 
 
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
-    "映画": re.compile(r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)"),
+    "映画": re.compile(
+        r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
+        r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
+        r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)"
+    ),
     "読書": re.compile(r"幅広く読む|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)"),
     "カフェ": re.compile(r"お気に入りのお店|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)|(?:カフェ|喫茶店).{0,12}(?:好きです|好きだ|よく行きます|お気に入りがあります)"),
     "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります)"),
@@ -1080,6 +1084,7 @@ def generate(data: GenerateInput):
     )
     attempted_models: list[dict[str, str]] = []
     quality_repair_used = False
+    question_repair_used = False
     try:
         from google import genai
         from google.genai import types
@@ -1120,8 +1125,8 @@ def generate(data: GenerateInput):
                                 api_alias=account,
                                 model=model,
                             )
-                        if not quality_repair_used:
-                            quality_repair_used = True
+                        if not question_repair_used:
+                            question_repair_used = True
                             system_instruction += (
                                 "\n【不足質問の再評価：1回限り】今回のuser_answersに回答があれば、その回答範囲で返信を作ります。"
                                 "回答済みの質問を繰り返さず、最近の作品名など任意の追加情報を本人へ求めないでください。"
@@ -1167,6 +1172,20 @@ def generate(data: GenerateInput):
                             )
                             continue
                         if data.response_version == 2 and not data.skipped_user_info:
+                            answered_topics = {
+                                topic
+                                for answer in data.user_answers
+                                if (topic := _question_topic(answer.get("question", ""))) is not None
+                            }
+                            if unsupported_topics[0] in answered_topics:
+                                return blocked_user_info_response(
+                                    "回答済みの本人情報を使っても安全な候補を作れませんでした。回答内容を繰り返し尋ねず、候補の生成を中断しました。",
+                                    skipped=False,
+                                    attempted_models=attempted_models,
+                                    api_attempt_count=len(attempted_models),
+                                    api_alias=account,
+                                    model=model,
+                                )
                             question = personal_fact_question(unsupported_topics[0])
                             return {
                                 **user_info_question_response(

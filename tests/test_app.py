@@ -814,6 +814,50 @@ def test_answered_topic_is_not_asked_again_after_one_model_repair(client, monkey
     assert body["api_attempt_count"] == 2
 
 
+def test_info_retry_and_candidate_fact_repair_have_separate_single_limits(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    needs_info = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "映画はお好きですか？", "purpose": "確認"}],
+        "user_info_reason": "確認", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "ask_user_info", "decision_reason": "", "next_action": "",
+    }
+    def candidates(first_text):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": {"label": "自然", "text": first_text},
+            "alternatives": [
+                {"label": "別案", "text": "映画いいですね！最近の作品で印象に残ったものはありますか？"},
+                {"label": "短め", "text": "映画の話もっと聞きたいです！"},
+            ],
+            "reason": "相手の質問に答える", "strategy": "映画の話を続ける", "conversation_stage": "Stage 2",
+            "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+        }
+    responses = [needs_info, candidates("洋画をよく観ます！"), candidates("映画は好きです！" )]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [{"question": "映画はお好きですか？", "answer": "映画は好きです"}],
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["recommended"]["text"] == "映画は好きです！"
+    assert response.json()["api_attempt_count"] == 3
+    assert len(prompts) == 3
+
+
 def test_weekend_direct_question_gets_user_info_question(client):
     _, backend = client
     context = {
@@ -1433,6 +1477,16 @@ def test_movie_watching_experience_does_not_confirm_movie_preference(client):
         "ephemeral_user_answers": [],
     }
     candidate = backend.Candidate(label="候補", text="映画好きです！")
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_unconfirmed_recent_movie_absence_is_not_invented(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": ["喫茶店めぐり", "植物の世話"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="候補", text="映画いいですね！最近は全然観れてないです")
     assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
 
 

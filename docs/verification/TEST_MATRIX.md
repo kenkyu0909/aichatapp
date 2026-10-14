@@ -200,15 +200,22 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T90 | 会話003（初回メッセージから最大20通） | 既存アプリAPI、架空プロフィール、実Gemini、Codex相手役 | NOT_TESTED | `conversation_003.json`/`.html`/分析へ保存予定。20通目への相手返信は保存し、具体的合意・拒否・技術停止を正確に判定する。 |
 | T91 | 同一APIキー・異なるモデル間の15 RPM間隔制御 | オフライン関数テスト、Windows/Python 3.12 | PASS | API1の3.5から3.1へ移っても同じ認証枠として4.05秒間隔を適用。レビュー指摘を受けた修正。全pytest 136 passed, 1 warning。 |
 | T92 | 映画を観た経験と映画が好きという事実の区別 | FastAPI TestClient、架空データ | PASS | `映画を観たことがある`だけでは`映画好きです`を確認済みとしない。レビュー指摘を受けた回帰テスト。 |
-| T93 | T77回答後/短文ミラーリング/不要質問/未確認経験/誘い段階の修正後実API再確認 | 架空データ、隔離SQLite、既存`/api/generate`、実Gemini | NOT_TESTED | `quality_checks_003_followup.json`へ保存。元のT77/B/C/Gの失敗を上書きせず、回答は事前質問の正確な文面を使う。プロフィールにない経験を出した場合は最大1回の制約付き再生成を行う。 |
+| T93 | T77回答後/短文ミラーリング/不要質問/未確認経験/誘い段階の修正後実API再確認 | 架空データ、隔離SQLite、既存`/api/generate`、実Gemini | FAIL | `quality_checks_003_followup.json`と`quality_checks_003_recheck.json`。T77は再チェックで2試行後3案を返した。A/Bは3案、句読点なし。Cは3案の一つが未確認の最近の視聴状況を述べたためFAIL。Gは方針と候補の不一致を修復後も解消できず、アプリが候補を拒否したためFAIL（外部ブロックではなく応答検証失敗）。元の失敗記録は保持。 |
 | T94 | `invite_gently`時の候補と方針の一致 | FastAPI TestClient + Geminiモック | PASS | 方針が誘いを示すのに全候補が相槌だけの場合は1回だけ再生成。再生成に誘い候補が含まれたことを確認。 |
 | T95 | 未確認の最近の休日経験・喫茶店頻度の抑止 | FastAPI TestClient + Geminiモック | PASS | プロフィールの趣味だけで「最近家で過ごした」「よく喫茶店を巡る」という新しい経験・頻度を確定せず、1回限りの修正を行う。 |
-| T96 | 休日事実・否定的な趣味・誘い方針の境界検査 | FastAPI TestClient/関数テスト + Geminiモック | PASS | 休日の直接質問を安全にユーザー確認へ送る。休日の「家で映画」と「映画館」の区別、映画の否定プロフィール、回答済み質問の反復、`respect_no`と矛盾する候補、一般的な「ご飯行きませんか？」を検査。全pytest 149件、Firefox UIテストを含む。 |
+| T96 | 休日事実・否定的な趣味・誘い方針の境界検査 | FastAPI TestClient/関数テスト + Geminiモック | PASS | 休日の直接質問を安全にユーザー確認へ送る。休日の「家で映画」と「映画館」の区別、映画の否定プロフィール、回答済み質問の反復、`respect_no`と矛盾する候補、一般的な「ご飯行きませんか？」を検査。 |
+| T97 | 本人情報の質問再評価と候補事実修復の上限分離 | FastAPI TestClient + Geminiモック | PASS | 回答後に情報質問が一度出ても、候補品質修復を別の1回に制限し、最大3要求で確認済み範囲の候補を返すことを検証。 |
+| T98 | 未確認の最近の映画視聴状況の検出 | FastAPI関数テスト | PASS | プロフィールに直近の視聴状況がない場合「最近は全然観れてない」という一人称の未確認経験を候補に含めない。 |
+| T99 | T77修正後の実API回答 | 架空回答、隔離SQLite、既存`/api/generate`、実Gemini | PASS | `quality_checks_003_recheck.json`。API1/`gemini-3.5-flash-lite`、2試行後3候補。答えた映画・洋画の範囲で応答し、句読点禁止を守った。初回失敗T88は履歴として残す。 |
 
 ### 2026-10-14 最新オフライン確認
 
-- 全pytest: **149 passed, 1 warning**（Starlette/httpxの非推奨通知）。`node --check app.js`、Python `py_compile`、`git diff --check`も成功。Firefox UI自動テストを含む。
+- 全pytest: **151 passed, 1 warning**（Starlette/httpxの非推奨通知）。`node --check app.js`、Python `py_compile`、`git diff --check`も成功。Firefox UI自動テストを含む。
 - 最新の実API品質確認は`quality_checks_003.json`に保存。9論理要求、確定10プロバイダー試行、API1/`gemini-3.5-flash-lite`、429なし。出力品質にFAILが残ったため、後続の限定追試をT93で記録する。
-- T93とT90は未実施。会話003はまだ開始していない。過去の失敗T77/T88/T89は履歴として維持する。
+- T93は実施してFAIL。T77回答後の再確認はT99としてPASS。会話003の本体T90は未実施。過去のT77/T88/T89の失敗履歴は維持する。
 
-現時点の項目数は96: PASS 85 / FAIL 3 / FIXED 1 / BLOCKED 3 / NOT_TESTED 4。
+現時点の項目数は99: PASS 88 / FAIL 4 / FIXED 1 / BLOCKED 3 / NOT_TESTED 3。
+
+#### 最新コードのActions
+
+- HEAD `aee118313bd8a05bbae30cb03e2cb37330e36ab0`でPush run [38554061358](https://github.com/kenkyu0909/aichatapp/actions/runs/38554061358)とPR run [38554066709](https://github.com/kenkyu0909/aichatapp/actions/runs/38554066709)がsuccess。pytest、Firefox UIテスト、Node構文チェックを含む。

@@ -120,13 +120,18 @@ def has_gentle_invitation(candidates: list[dict[str, Any]]) -> bool:
 def main() -> int:
     global OUTPUT
     followup = "--followup" in sys.argv[1:]
+    recheck = "--recheck" in sys.argv[1:]
     if followup:
         OUTPUT = OUTPUT.with_name("quality_checks_003_followup.json")
+    if recheck:
+        OUTPUT = OUTPUT.with_name("quality_checks_003_recheck.json")
     selected_cases = CASES
     if followup:
         selected_cases = [case for case in CASES if case[0] in {
             "A_short", "B_two_or_three_sentences", "C_calm", "G_invite_opportunity",
         }]
+    if recheck:
+        selected_cases = [case for case in CASES if case[0] == "G_invite_opportunity"]
     if OUTPUT.exists():
         raise SystemExit(f"{OUTPUT.name} already exists; refusing to overwrite it")
     if not API_DIR.is_dir():
@@ -245,7 +250,11 @@ def main() -> int:
                 "expected": "three distinct live candidates when generation is safe; no Japanese comma/period in recipient text",
                 "result": summary,
                 "method": "real Gemini through existing /api/generate; fictional profile and isolated SQLite",
-                "evaluation": "PASS" if substantive_result else ("BLOCKED" if summary.get("http_status", 200) != 200 or state["status"] == "BLOCKED" else "FAIL"),
+            "evaluation": "PASS" if substantive_result else (
+                "BLOCKED" if summary.get("transport_error_type") or summary.get("error_code") in {
+                    "all_models_rate_limited", "api_permission_denied", "model_unavailable",
+                } else "FAIL"
+            ),
                 "human_quality_review": "PENDING",
                 "heuristic_assessment": {
                     "nonempty_candidate_text": bool(text_out),
@@ -256,11 +265,11 @@ def main() -> int:
             state["tests"].append(test_result)
             atomic_save(state)
             print(f"{case_id}: HTTP {summary.get('http_status', 'transport-error')} alias={summary.get('api_alias')} model={summary.get('model')} attempts={attempts} candidates={len(summary.get('candidates', []))}")
-            if state["status"] == "BLOCKED" or summary.get("http_status") != 200:
+            if state["status"] == "BLOCKED" or summary.get("transport_error_type"):
                 state["status"] = "BLOCKED"
                 state["blocking_reason"] = summary.get("safe_error") or "API request did not complete successfully"
                 break
-            if summary.get("error_code") in ("all_models_rate_limited", "api_permission_denied", "model_not_found"):
+            if summary.get("error_code") in ("all_models_rate_limited", "api_permission_denied", "model_unavailable"):
                 state["status"] = "BLOCKED"
                 state["blocking_reason"] = summary.get("safe_error") or summary["error_code"]
                 break
