@@ -92,4 +92,5 @@
 - 検証報告コミットSHA: `80d2349ebfd53cbc87a6df0a10d786b7634451be`
 - 前回進捗コミットSHA: `998a84b511bb154082b6ce0e238f95adaf8a15b6`
 - API更新後のsmoke testコミットSHA: `ba1a45205167ab1830982d8dc1bcb7e74822f701`
+- 最終検証内容のGitHub公開確認SHA: `3fcedae1e67e867c41be4692265145bb2498fa05`（PROGRESSのSHA記録を追加する直前に確認）
 - Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft）
