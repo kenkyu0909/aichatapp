@@ -13,7 +13,7 @@
 - Firefox UI: 3件成功。質問、回答、スキップ、初回候補、会話方針、コピー、手動送信記録を架空データと固定APIモックで確認。
 - JavaScript構文: `node --check app.js` 成功。
 - 差分整合: `git diff --check` 成功。
-- GitHub Actions: 今回の最終コミットでは未実施。Push後、PR #4最新HEADと同じSHAの実行を確認しURLを追記する。
+- GitHub Actions: 実装HEAD `5954b06c418158a48c60aa57b55e17f47a52c54a`のPush [run 38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397)とPR [run 38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。報告書だけの後続コミットでもCIを再実行する。
 - 実Gemini API: 0回（ユーザー指示による未実施）。品質評価結果は今回なし。
 
 ### 実装内容・変更ファイル
@@ -55,9 +55,9 @@
 ### GitHub
 
 - ブランチ: `codex/full-system-verification`
-- 最終コミットSHA: 未作成
+- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`（Actionsで検証済み）。報告書コミットSHA: 作成中。
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持、未マージ）
-- 今回のGitHub Actions: 未実施。最終HEADのPush/PR実行を後から記録。
+- 今回のGitHub Actions: 実装HEADのPush [38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397) / PR [38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。報告書追記後の最新HEADでも再実行する。
 - `prompt_spec.md`: `docs/verification/prompt_spec.md`
 
 ---

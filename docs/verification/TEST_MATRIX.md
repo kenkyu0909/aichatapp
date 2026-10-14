@@ -122,4 +122,4 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 - ローカル統合pytest: **103 passed, 1 warning**（Starlette/httpxの非推奨通知）。`node --check app.js`と`git diff --check`も成功。Firefox UIテスト3件を含む。
 - 最終レビュー後のモック確認: transport/不正JSON失敗を成功記録にしないこと、明確な拒否4表現の安全停止、本人情報確認中の再送なし・回答後1回だけ生成を確認。関連: T59/T60/T64/T65。
 - T63はプロンプト指示と構造化応答のモック確認に限る。モデルの実判断はT71で未実施。
-- この追記の対象HEAD・GitHub Actions URLはコミット/Push後に記録する。
+- 実装コミット`5954b06c418158a48c60aa57b55e17f47a52c54a`のActions: [Push run 38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397) / [PR run 38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)。両方成功。Ubuntu/Python 3.11、Firefoxセットアップ、pytest、`node --check app.js`、artifact uploadを確認。

@@ -12,12 +12,12 @@
 - 実装: `start.bat`はポートを占有するプロセスを終了せず、固有`app_id`を持つ応答を確認してからFirefoxを開く。起動順序・識別条件はテストで静的確認。今回、バッチを実際に起動する試験は未実施。
 - 最終レビュー指摘も反映: 不正JSON/通信失敗はHTTP 200を含め成功扱いにせず、状態をBLOCKEDとして保存。明確な連絡終了表現を追加し、本人情報の確認中は回答があるまで再生成しないことを検証。
 - 今回のローカル統合テスト: `pytest -q --junitxml=test-results\pytest.xml` は **103 passed, 1 warning**。警告はStarlette/httpxの非推奨通知。`node --check app.js` 成功。`git diff --check` 成功。Firefox UIテスト3件を含む。
-- GitHub Actionsの今回の修正HEAD向け実行は、コミット/Push後に確認してここへ追記する。現時点では未実施。
-- 実施中: 最終差分レビュー、GitHub進捗/テスト報告更新、Push後のActions確認。
+- GitHub Actions: 実装コミット`5954b06c418158a48c60aa57b55e17f47a52c54a`のPush run [38536298397](https://github.com/kenkyu0909/aichatapp/actions/runs/38536298397)とPR run [38536305576](https://github.com/kenkyu0909/aichatapp/actions/runs/38536305576)が成功。Firefoxセットアップ、pytest、JavaScript構文チェック、artifact保存が完了。
+- 実施中: Actions証拠を含む報告コミットをPushし、その報告コミットを対象に再度Actionsを確認。PR #4本文も更新する。
 - 未実施: Gemini実APIの文章品質、Windows `start.bat`の実起動/ポート競合動作。前者は今回の明示的なAPI禁止、後者は既存データ/ポートを使わない安全な隔離実機試験を用意できていないため。
 - 現在のブロッカー: なし。実API品質の判断はユーザーが後日許可するまで保留。
 - 次: レビューフィードバック反映、全テスト再実行、報告書更新、意味単位でコミット・Push、PR #4最新HEADのCI結果を記録。
-- 最終コミットSHA: 未作成。Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4
+- 実装コミットSHA: `5954b06c418158a48c60aa57b55e17f47a52c54a`。最終報告コミットSHA: 作成中。Pull Request: https://github.com/kenkyu0909/aichatapp/pull/4
 
 ## 2026-10-14 利用制限時の優先フォールバック追加
 
