@@ -53,13 +53,13 @@
 | T47 | 悪意あるプロフィール命令への実API耐性 | 架空プロフィールで実API生成 | NOT_TESTED | 不正な指示を実APIへ送る試験は未実施。 |
 | T48 | ネットワーク切断のUI処理 | ローカル遮断・Firefox | NOT_TESTED | 切断状態の再現は未実施。 |
 | T49 | 作業ブランチpush・Draft PR作成 | GitHub操作 | PASS | 作業ブランチpush成功。PR #4を`feat/ui-local-backend-v1`宛てのDraftで作成。 |
-| T50 | CIが最新作業ブランチで実行 | GitHub Actions、pytest、Node構文確認 | NOT_TESTED | Workflow修正済み。push後に実行URL・commit SHA・件数を記録する。 |
+| T50 | CIが作業ブランチPush・PRで実行 | GitHub Actions、pytest、Node構文確認 | PASS | 初回修正commit `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`でPush run [#38516050254](https://github.com/kenkyu0909/aichatapp/actions/runs/38516050254)・PR run [#38516055938](https://github.com/kenkyu0909/aichatapp/actions/runs/38516055938)が成功。15 passed、Node構文成功。最終HEADでも再確認する。 |
 
 ## 集計
 
 - 合計: 50
-- PASS: 42
+- PASS: 43
 - FAIL: 0
 - FIXED: 0（修正後の再テストはPASSとして記録）
 - BLOCKED: 0
-- NOT_TESTED: 8
+- NOT_TESTED: 7

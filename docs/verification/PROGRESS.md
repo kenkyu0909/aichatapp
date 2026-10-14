@@ -7,7 +7,10 @@
 - 開始時のローカル・GitHub HEAD: `63b972811e32996d6fdcf0cf248d49c21efc4b9b`（一致を確認）
 - 既存PR #4: Open、Draft。ベースは`feat/ui-local-backend-v1`。
 - 既存の進捗・マトリクス・最終報告を読み、前回未実施の7項目を引き継いだ。
-- 既存CIの対象ブランチ設定を確認。通常CIの修正は完了、push後のActions実行は未確認。
+- 通常CIを`codex/full-system-verification` Pushと`feat/ui-local-backend-v1`宛てPRで起動する設定に修正。Workflow変更commit `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`でPush runとPR runが成功。
+- Push run: https://github.com/kenkyu0909/aichatapp/actions/runs/38516050254
+- PR run: https://github.com/kenkyu0909/aichatapp/actions/runs/38516055938 （15 passed、Node構文確認成功）
+- これはCI初回修正コミットの実行結果。後続のコード修正後、最終HEADで再実行する。
 - 実APIキーは参照・使用していない。旧キーの有効性も確認していない。
 
 ## 作業開始
@@ -38,7 +41,7 @@
 - UI実操作: `PASS`（Firefox）
 - 不具合修正後のpytest: `PASS`（15件成功、警告1件）
 - GitHub push・Draft PR: `PASS`（再試行でpush成功。PR #4をDraftで作成）
-- 継続作業CI修正: `NOT_TESTED`（Workflow変更済み。Actions結果待ち）
+- 継続作業CI初回: `PASS`（commit `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`でpush/PR run成功。pytest 15件、Node構文確認成功。最終HEADでは再確認待ち）
 
 ## 完了した作業
 
@@ -92,7 +95,7 @@
 
 ## 継続作業の進捗
 
-- CI修正コミット・実行URL: 未push。Workflow修正後にpushし、最新HEADのrunを記録する。
+- CI初回修正・Actions確認: `e27df38846ffd02baf8c3a4293188a9e84a4f3a4`。Push/PRの両runが成功。最終HEADの再実行は後続修正push後。
 - T05、T19、T30、T35、T36、T47、T48: 今回の再検証を開始。結果はTEST_MATRIX.mdに証拠とともに追記する。
 - UI検証はFirefoxのみ。Chromeは使用しない。
 
