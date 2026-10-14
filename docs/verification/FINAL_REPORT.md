@@ -6,7 +6,7 @@
 
 ## テスト集計
 
-- テストマトリクス: 55件 — PASS 53 / FAIL 0 / BLOCKED 2 / NOT_TESTED 0（会話品質評価は今回実験の生成がなかったため採点せず）
+- テストマトリクス: 56件 — PASS 53 / FAIL 0 / BLOCKED 3 / NOT_TESTED 0（会話品質評価は今回実験の生成がなかったため採点せず）
 - pytest: `43 passed, 1 warning`（Windows Python 3.12.10、`2026-10-14`）。Starlette/httpxの非推奨警告1件。
 - JavaScript構文: `node --check app.js` 成功。
 - Firefox E2E: 既存の隔離DB UI回帰テストがpytest内で成功。今回作成のHTMLをFirefox 157で実際に開き、1メッセージ、両プロフィール、BLOCKED状態、未評価10項目、外部リソースなしを確認。スクリーンショット: `simulations/conversation_001_firefox.png`。
@@ -18,7 +18,7 @@
 - API1 / `gemini-3.5-flash-lite`で実通信を1回試行。既存アプリの`/api/generate`がHTTP 502と「Gemini APIキーまたはモデルの利用権限を確認してください。」を返した。
 - 実APIリクエスト試行1、成功0、失敗1。API2と3.1モデルは未使用。429応答ではなかったため、ユーザー指定のレート制限時フォールバックは発動させていない。
 - APIキーまたはモデル権限・接続のどれが原因かは特定できない。根本原因が分からないため、認証失敗として他キーを試すこともしなかった。キー、生のSDK例外、認証ヘッダーはJSON/HTML/出力へ記録していない。
-- 生成候補0件、アプリ側送信0通、架空相手役の開始発言1通。食事の誘いなし、日時・場所の合意なし。会話品質10項目はすべて未評価。固定文やモックで結果を補っていない。
+- 生成候補0件、アプリ側送信0通、架空相手役の開始発言1通。食事の誘いなし、日時・場所の合意なし。会話品質10項目はすべて未評価（T56 BLOCKED）。固定文やモックで結果を補っていない。
 - 会話とプロフィール: `simulations/conversation_001.json`、`simulations/profiles.md`。説明: `simulations/analysis.md`。単体HTML: `simulations/conversation_001.html`。
 
 ## 8765番ポート・起動
