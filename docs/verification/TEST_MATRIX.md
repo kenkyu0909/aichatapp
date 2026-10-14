@@ -190,3 +190,11 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 - workflowはpytestとNode構文検査を完了。作業ブランチの後続変更がある場合は、PR checksで当該HEADの実行を確認してください。
 
 - 報告書更新HEAD `a40c251c62c400401c9aef3e77beeaf7ceb76079`のPush Actions [38544920718](https://github.com/kenkyu0909/aichatapp/actions/runs/38544920718) とPR Actions [38544928533](https://github.com/kenkyu0909/aichatapp/actions/runs/38544928533)も成功。該当PR HEADと一致。
+
+## 2026-10-14 実API品質評価003
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T88 | T77修正後の本人情報確認と回答後生成 | 架空データ、隔離SQLite、既存`/api/generate`、実Gemini | NOT_TESTED | 実行予定は`quality_checks_003.json`。スクリプト作成・構文確認済み。まだAPI通信していない。旧T77のFAILは履歴として維持する。 |
+| T89 | 短文/複数文/落ち着いた文/冗談/深刻な話/反復/誘い/断りの実生成 | 架空会話、隔離SQLite、実Gemini | NOT_TESTED | A〜Hを順番に最大1論理リクエストずつ検証する。途中失敗・利用制限時は保存して中断。 |
+| T90 | 会話003（初回メッセージから最大20通） | 既存アプリAPI、架空プロフィール、実Gemini、Codex相手役 | NOT_TESTED | `conversation_003.json`/`.html`/分析へ保存予定。20通目への相手返信は保存し、具体的合意・拒否・技術停止を正確に判定する。 |

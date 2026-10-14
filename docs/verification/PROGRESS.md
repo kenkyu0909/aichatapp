@@ -259,3 +259,12 @@
 - 再レビューで、`好きではありません`などの丁寧な否定文が肯定主張の根拠に誤用される可能性を検出。プロフィールと一時回答の双方で、否定表現を肯定候補の根拠から除外し、映画・カフェの肯定候補を止めるテストを追加した。
 - 対象pytest6件: PASS。変更後の全`pytest -q`: **134 passed, 1 warning**（Firefox UIテスト含む）。`node --check app.js`、`git diff --check`: PASS。
 - この修正はまだ未コミット・未Push。実APIへはまだ通信していない。
+
+### 実API品質テスト準備（2026-10-14）
+
+- 最新ブランチをfetchし、HEAD `650bdab22a9fd52b5734a5741bb831bfa25a560a`がリモートと一致することを確認。PR #4はOPEN・Draft、baseは`feat/ui-local-backend-v1`。
+- 同HEADを対象とするGitHub Actions Push run [38551188561](https://github.com/kenkyu0909/aichatapp/actions/runs/38551188561)およびPR run [38551197992](https://github.com/kenkyu0909/aichatapp/actions/runs/38551197992)はsuccess。
+- 実API品質チェック用`scripts/run_quality_checks_003.py`を作成。実在のAPI設定を読むのは既存`app.gemini_configurations()`だけ。キー値を出力・保存せず、隔離SQLiteを使い、出力JSONを途中保存し、既存ファイルの上書きを拒否する。T77事前質問はGemini呼び出し0回で検査し、その後にT77回答済みとA〜Hを順番に実API確認する設計。スクリプトの構文確認は成功。
+- 利用対象のAPI設定は指定ディレクトリ内に存在することだけを確認し、値は読み出して表示していない。実API呼び出しはこの更新時点では未実施。
+- 既知のモック/オフライン試験は全体134 passed、警告1件。Firefox UIテストを含む。`node --check app.js`、`git diff --check`も成功。
+- 次は本準備コミットをPushしてから、T77修正後の実API確認と品質ケースを必要最小限で実施する。途中で制限・通信障害が出た場合は出力JSONを保持して停止し、架空の生成結果を作らない。
