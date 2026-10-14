@@ -665,6 +665,9 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert "軽い好意" in backend.read_prompt("first")
     assert "マッチできた喜び" in backend.read_prompt("first")
     assert "3候補では" in backend.read_prompt("first")
+    assert "3候補を別々に点検" in backend.read_prompt("first")
+    assert "句読点チェックも各候補" in backend.read_prompt("first")
+    assert "軽い好意とマッチできた喜び" in backend.read_prompt("first")
     assert "マッチ前" in backend.read_prompt("like")
     assert c.post("/api/generate", json={
         "mode": "first", "match_id": mid, "response_version": 2,
@@ -676,6 +679,7 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     from google import genai
 
     c, backend = client
+    assert "本人の好み・経験・予定への直接質問" in backend.read_prompt("reply")
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
     captured = {}
