@@ -296,8 +296,9 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 | T139 | APIキー形式の作業ツリースキャン | `AIza...`パターンのファイル名のみ出力する検索 | PASS | 一致ファイルなし。秘密値を出力していない。 |
 | T140 | Gemini実API利用可否と品質確認 | 課金・残枠の確認状態を確認 | BLOCKED | 課金状態と現在のプロジェクト利用枠を確認できない。API通信0論理要求/0 provider attempts。課金を発生させる可能性を避け、会話004は開始しない。 |
 | T141 | ミラーリング/反復/意味的多様性の新規実出力採点 | 実Geminiの連続応答が必要 | NOT_TESTED | 今回の実API応答なし。過去の会話003/品質006は失敗の参考記録として保持し、現在のコードの成功証拠に転用しない。 |
+| T142 | 最新コード/検証commitのPush・PR Actions | GitHub Actions実行記録とログ | PASS | SHA `f12dc9751496e4bf981fb152231fcf6c052a3f71`。Push [38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)とPR [38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が成功。両方372 passed, 1 warning、Firefox準備/Node構文検査/Artifact upload成功。 |
 
-本節を含む集計: 141項目、PASS 122 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。旧FAILは履歴として維持。T140/T141は実装成功や文章品質PASSを意味しない。今回の作業ブランチPush前のため、対応するGitHub Actions結果は未実施。
+本節を含む集計: 142項目、PASS 123 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。旧FAILは履歴として維持。T140/T141は実装成功や文章品質PASSを意味しない。
 
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 

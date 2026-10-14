@@ -52,6 +52,7 @@
 
 ## GitHub反映
 
-- 現在の作業ツリー変更はこの進捗記録を含み、まだPushされていない。
-- 最終commit SHA、最新Actions URL、PR本文更新はPush後に追記する。
-- 次: 変更差分と記録をレビューし、ユーザーの指示ファイルを除外して意味のあるcommitを作成、Push、最新HEADのActionsとPR #4のDraft状態を確認する。
+- 追加のActionsリンクとPR状態の報告更新を作成中。
+- コード/検証commit: `f12dc9751496e4bf981fb152231fcf6c052a3f71`。Push [Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083) とPR [Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功。両方372 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact保存も成功。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHAはf12dc97。マージしていない。
+- 残り: このActions結果とPR状態をPROGRESS/TEST_MATRIX/FINAL_REPORTへ追記する。その報告commitもPushし、最新HEADのActionsを再確認してPR本文にURLを追加する。

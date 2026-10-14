@@ -4,6 +4,8 @@
 
 **CONDITIONAL GO（オフライン安定性のみ確認）**。現在のコードは全pytest 372件とFirefox UI単独5件が成功し、構文・差分検査も成功しました。課金状態とGemini利用枠を確認できないため、今回の実API要求数は0です。新しい生成品質は未確認であり、ミラーリング・共感反復・候補の意味的多様性・誘い判断を合格扱いにしません。実用開始前に実Geminiの限定品質評価が必要です。詳しい当日結果は本報告末尾の「2026-10-15 夜間自律品質改善の中間最終報告」と[夜間進捗](OVERNIGHT_GOAL.md)、[評価計画](simulations/overnight_eval_plan.md)を参照してください。
 
+コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
+
 ## 2026-10-14 返信品質・初回メッセージ・会話制御の最終報告
 
 ### 総合判定
@@ -574,6 +576,6 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 
 ## テスト集計とGitHub
 
-- TEST_MATRIX: 141項目、PASS 122 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。
+- TEST_MATRIX: 142項目、PASS 123 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142はコード/検証commitのPush/PR Actions成功。
 - `OVERNIGHT_GOAL.md`に達成条件、根拠、不合格項目、次の作業を記録。
-- 今回の作業ツリー変更はまだ未コミット/未Push。最終SHA、Actions URL、PR本文更新はPush後に記録する。PR #4はDraftを維持し、マージしない。
+- 今回の結果記録の追記はまだ未コミット/未Push。PR #4はOPEN/Draft、head `f12dc9751496e4bf981fb152231fcf6c052a3f71`、マージしていない。結果追記をPushした後、最新head ActionsとPR本文を確認する。
