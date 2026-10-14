@@ -10,7 +10,7 @@
 - pytest: `43 passed, 1 warning`（Windows Python 3.12.10、`2026-10-14`）。Starlette/httpxの非推奨警告1件。
 - JavaScript構文: `node --check app.js` 成功。
 - Firefox E2E: 既存の隔離DB UI回帰テストがpytest内で成功。今回作成のHTMLをFirefox 157で実際に開き、1メッセージ、両プロフィール、BLOCKED状態、未評価10項目、外部リソースなしを確認。スクリーンショット: `simulations/conversation_001_firefox.png`。
-- GitHub Actions: このコミットをpush後に実行し、最新SHAのPush/PR両runをここへ記録する（現在は未実行）。
+- GitHub Actions: commit `df7110205b8e522475cdcad7e08c8152ace360cb`対象の[Push run 38525998484](https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484)と[PR run 38526003199](https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199)はいずれも成功。pytest 43 passed、`node --check app.js`成功。
 
 ## 今回の実験
 
@@ -54,7 +54,10 @@ Googleの公式資料では`gemini-3.5-flash-lite`の無料枠と、無料枠の
 - リポジトリ: https://github.com/kenkyu0909/aichatapp
 - ブランチ: `codex/full-system-verification`
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft、未マージ）
-- 最終SHA / Actions: push後に記録。
+- 検証対象SHA: `df7110205b8e522475cdcad7e08c8152ace360cb`。
+- Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484
+- Actions PR: https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199
+- 今回の進捗・マトリクス・最終報告とHTML/JSONがこのコミットに含まれる。
 - [進捗](PROGRESS.md) / [テストマトリクス](TEST_MATRIX.md) / [会話HTML](simulations/conversation_001.html) / [会話JSON](simulations/conversation_001.json) / [分析](simulations/analysis.md)
 
 ---

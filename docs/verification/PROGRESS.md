@@ -13,8 +13,9 @@
 - 結果: `conversation_001.json`に1回の失敗、実送信0通、相手役1通を保存。架空のGemini候補や会話継続は作っていない。HTMLとプロフィール、分析も生成。
 - `scripts/simulate_conversation.py`、`scripts/render_conversation_report.py`、`tests/test_conversation_simulation.py`を追加。候補を保存してから段階再開できるCLI、APIエラー後のJSON/一時DB照合、送信数20通の上限制御、成功条件の人による最終確認を実装。HTMLは値をエスケープし、外部依存なし。
 - pytest最終ローカル実行: 43 passed、警告1件（Starlette/httpx deprecation）。`node --check app.js`成功。FirefoxでHTMLを実際に開き、会話1件、架空プロフィール、BLOCKED状態、採点未実施の10項目、外部読込なしを確認。スクリーンショットを保存。
-- 2026-10-14現在、この更新は未コミット/未プッシュ。次はレポート、マトリクス、PR #4本文を更新してコミット・Pushし、最新HEADのActionsを確認する。
+- 実験結果・レポートをcommit `df7110205b8e522475cdcad7e08c8152ace360cb`としてpush済み。Push Actions [38525998484](https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484)とPR Actions [38526003199](https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199)は同SHAを対象に成功。pytest 43 passed、Node構文チェック成功。
 - 今回の実験はGemini実応答がないため、会話品質10項目、候補選択、デート誘い、約束成立はNOT_TESTED相当（実験全体の結果BLOCKED）。料金・プロジェクト別割当も不明。旧APIキーの失効は確認できていない。
+- PR #4本文はこの後、会話HTML・JSON・分析、T52–T55、Actions URL、残課題を追記する。PRはDraft維持・未マージ。
 
 ## 2026-10-14 継続検証の最新状況
 

@@ -76,4 +76,10 @@
 
 今回の全項目は55件: PASS 53 / FAIL 0 / BLOCKED 2 / NOT_TESTED 0（T01–T51の前回値を維持し、T52–T55を追加）。会話品質10項目は点数を付ける実生成結果がないため、実験レポートで未評価と明記。
 
-詳細な実施条件、期待値、実結果、API/モック区分は上記各行および`simulations/analysis.md`を参照。ローカル検証コミットSHAはGitHub Push後に追記する。
+詳細な実施条件、期待値、実結果、API/モック区分は上記各行および`simulations/analysis.md`を参照。
+
+- 実験/テストコードSHA: `df7110205b8e522475cdcad7e08c8152ace360cb`
+- GitHub Actions Push: https://github.com/kenkyu0909/aichatapp/actions/runs/38525998484 （同SHA、成功、pytest 43 passed）
+- GitHub Actions PR #4: https://github.com/kenkyu0909/aichatapp/actions/runs/38526003199 （同SHA、成功、pytest 43 passed）
+- Node構文: 同runで`node --check app.js`成功。
+- Firefox表示画像: `simulations/conversation_001_firefox.png`。
