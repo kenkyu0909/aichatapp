@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -13,8 +14,8 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, field_validator
 
@@ -28,6 +29,20 @@ DATA.mkdir(parents=True, exist_ok=True)
 PHOTOS.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
+logger = logging.getLogger(__name__)
+
+
+async def storage_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Return a local storage error without exposing paths or user data."""
+    logger.error("Local storage operation failed (%s)", type(exc).__name__)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "ローカルの保存先を読み書きできませんでした。保存先を確認してください。"},
+    )
+
+
+app.add_exception_handler(OSError, storage_error_handler)
+app.add_exception_handler(sqlite3.Error, storage_error_handler)
 
 
 @contextmanager
@@ -220,7 +235,10 @@ def delete_match(match_id: int):
         match = one_match(db, match_id)
         db.execute("DELETE FROM matches WHERE id=?", (match_id,))
     if match["photo"]:
-        (PHOTOS / match["photo"]).unlink(missing_ok=True)
+        try:
+            (PHOTOS / match["photo"]).unlink(missing_ok=True)
+        except OSError:
+            logger.error("Failed to remove a photo after match deletion")
     return {"ok": True}
 
 
@@ -262,16 +280,35 @@ async def upload_photo(match_id: int, file: UploadFile = File(...)):
     if not ext:
         raise HTTPException(400, "JPEG・PNG・WebP画像のみ登録できます")
     filename = uuid.uuid4().hex + ext
-    (PHOTOS / filename).write_bytes(raw)
+    photo_path = PHOTOS / filename
+    temporary_path = PHOTOS / ("." + filename + ".tmp")
     try:
+        with temporary_path.open("xb") as photo_file:
+            photo_file.write(raw)
+            photo_file.flush()
+            os.fsync(photo_file.fileno())
+        os.replace(temporary_path, photo_path)
         with database() as db:
             one_match(db, match_id)
             db.execute("UPDATE matches SET photo=? WHERE id=?", (filename, match_id))
-    except Exception:
-        (PHOTOS / filename).unlink(missing_ok=True)
+    except HTTPException:
+        temporary_path.unlink(missing_ok=True)
+        photo_path.unlink(missing_ok=True)
         raise
+    except (OSError, sqlite3.Error):
+        try:
+            temporary_path.unlink(missing_ok=True)
+            photo_path.unlink(missing_ok=True)
+        except OSError:
+            logger.error("Failed to clean up a temporary photo after a storage error")
+        raise HTTPException(
+            500, "写真を保存できませんでした。保存先を確認してください。"
+        ) from None
     if match["photo"]:
-        (PHOTOS / match["photo"]).unlink(missing_ok=True)
+        try:
+            (PHOTOS / match["photo"]).unlink(missing_ok=True)
+        except OSError:
+            logger.error("Failed to remove an old photo after successful replacement")
     return {"ok": True}
 
 
@@ -440,7 +477,13 @@ def generate(data: GenerateInput):
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=key)
+        client = genai.Client(
+            api_key=key,
+            http_options=types.HttpOptions(
+                timeout=30_000,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
         response = client.models.generate_content(
             model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
             contents=json.dumps(context, ensure_ascii=False),
