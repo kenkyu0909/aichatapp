@@ -97,5 +97,5 @@ APIキーを読み取ったとき、秘密値を伏せる処理が失敗し、�
 - 作業開始時コミット: `78a66c9cba0e6ddb7bc1441e65e1eae75a5e304b`
 - 初期進捗コミット: `e0410c8`（ローカル）
 - 最終実装コミットSHA: `ae042ea41b3b1439abc6c8c27c8945a1fd915682`
-- 報告書コミットSHA: この報告を含む最終Gitコミット。最終HEADは最終応答にも記載。
+- 報告書コミットSHA: `3fcedae1e67e867c41be4692265145bb2498fa05`（この報告書の最新内容を含むコミット）
 - Pull Request URL: https://github.com/kenkyu0909/aichatapp/pull/4（Draft、`feat/ui-local-backend-v1`宛て）
