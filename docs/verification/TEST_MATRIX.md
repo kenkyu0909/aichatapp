@@ -799,3 +799,10 @@ T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` �
 | T345 | 最終記録SHAのPush/PR Actions・全pytest・JS構文 | GitHub Actions PushとPull Request | PASS | SHA `963be64f989c53a0ef19f2114672743c738d9e30`。Push [38783196561](https://github.com/kenkyu0909/aichatapp/actions/runs/38783196561) / PR [38783205142](https://github.com/kenkyu0909/aichatapp/actions/runs/38783205142) は同一HEADでsuccess。GitHub **1105 passed / 1 warning in 113.81s**、JS syntax check成功。集計345: PASS242 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。保存済み実Gemini品質FAILは残る。|
 
 最新ID行: 345。累計: PASS242 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+
+### 2026-10-16 03:12 JST 本人確認質問と直接回答の整合
+
+| T346 | 本人確認質問の粒度と回答後候補の質問整合性 | pytest固定架空ケース、FastAPI/モック・オフライン | PASS | `test_missing_fact_question_matches_the_specific_information_requested`, `test_movie_user_question_matches_asked_experience_scope`, `test_unpunctuated_movie_past_question_checks_the_movie_not_movie_preference`, `test_unclassified_personal_direct_question_requires_matching_user_answer`。好み/ジャンル/頻度/最近・過去の経験の区別を含む **66 passed in 2.59s**。Gemini実通信0回。現在346項目: PASS243 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+最新ID行: 346。累計: PASS243 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|

@@ -1172,3 +1172,9 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 作業SHA `963be64f989c53a0ef19f2114672743c738d9e30` のPush Actions [38783196561](https://github.com/kenkyu0909/aichatapp/actions/runs/38783196561) とPR Actions [38783205142](https://github.com/kenkyu0909/aichatapp/actions/runs/38783205142) が同一HEADでsuccess。GitHub pytest **1105 passed / 1 warning in 113.81s**、`node --check app.js`成功。
 - 直前の品質重点テスト36 passed、FirefoxコアUI4件 passed。最新作業ブランチ `963be64`、PR #4 OPEN/Draft、base `feat/ui-local-backend-v1`。
 - 総合NO-GOは維持。Gemini実通信0回。保存済みQUALITY009の自然さ・意味的多様性FAILがあり、今回のオフライン確認で実生成品質を主張しない。
+
+
+### 2026-10-16 03:12 JST 本人確認質問の粒度・回答整合性
+
+- 未確認の本人情報を相手から尋ねられた場合の本人質問文と、回答後候補の回答範囲を固定ケースで重点検証。書籍/映画について好み・ジャンル・頻度・直近体験・過去体験の区別と、相手の直接質問に答える条件を含む **66 passed in 2.59s**。
+- オフラインテストでありGemini実通信0回。質問粒度の保護確認であって、実生成文章品質のPASSではない。

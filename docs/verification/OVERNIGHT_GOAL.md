@@ -900,3 +900,9 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - SHA `963be64f989c53a0ef19f2114672743c738d9e30` のPush [38783196561](https://github.com/kenkyu0909/aichatapp/actions/runs/38783196561) / PR [38783205142](https://github.com/kenkyu0909/aichatapp/actions/runs/38783205142) がsuccess。全pytest 1105 passed / 1 warning、JS構文成功。
 - アプリのテスト済みオフラインUI・安全フィルターはPASS。実Geminiの品質009のFAILは未解決扱いで、GO判定はNO-GO。
 - 最新指示は不変。Gemini実通信、会話004、新規会話HTMLは行わず、次は再現可能なP0のオフライン修正があるか継続監査する。
+
+
+### 2026-10-16 03:12 JST 本人への質問と回答範囲
+
+- 相手の直接質問に必要な粒度で本人へ確認し、回答後はその質問に答える候補を要求するオフラインケース66件が成功（2.59秒）。趣味/ジャンル/頻度/最近・過去の体験の区別を含む。
+- これは本人情報のガードと質問構造の確認。実Gemini品質確認は行っておらずNO-GOを維持。

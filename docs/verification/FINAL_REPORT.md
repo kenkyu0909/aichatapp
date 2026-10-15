@@ -1257,3 +1257,8 @@ Firefoxの主要UIテスト4件（first/reply/followup/likeと本人情報質問
 ### 2026-10-16 03:11 JST 最終Actions記録追補
 
 最新SHA `963be64f989c53a0ef19f2114672743c738d9e30` のPush Actions [38783196561](https://github.com/kenkyu0909/aichatapp/actions/runs/38783196561) とPR Actions [38783205142](https://github.com/kenkyu0909/aichatapp/actions/runs/38783205142) はsuccess。同一HEADでGitHub pytest 1105 passed / 1 warning in 113.81s、JavaScript構文検査も成功。Gemini実通信は0回。保存済み品質009の文章自然さ・候補多様性FAILが残るので総合NO-GO。
+
+
+### 2026-10-16 03:12 JST 本人情報確認の重点回帰
+
+本人への確認質問の粒度と回答後候補が相手の直接質問へ答えることを、好み/ジャンル/頻度/最近・過去の体験の区別を含むオフラインケースで検証し66件成功（2.59s）。Gemini実通信は0回であり実生成品質判定とは分離して記録。
