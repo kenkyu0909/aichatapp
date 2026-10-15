@@ -959,3 +959,10 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - ローカル全pytest **932 passed in 117.81s**、focused invite tests **4 passed**。Gemini API0回。T313の修正は最新Actionsで確認済み。CIのNode 20/Ubuntu runner移行に関する警告はActionsログにあるが、ジョブ成功。
 - T314をPASSとして追加。Matrixは314項目: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質自然さ・意味的候補差FAILは未解決、総合NO-GO。
 - PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、head`a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`、未マージ。今回のActions記録は未コミット。次はそれをPushし、保存済み品質009で未解決の反復・候補方針差をオフライン監査する。conversation_004/新規会話HTMLは行わず、Chrome/Gemini APIも使用しない。
+
+### 2026-10-15 21:02 JST 継続チェックポイント：品質009再生・Firefox UIの再確認
+
+- 最新コードSHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`（検証資料HEAD `331b61f1c09a7ca092cf170551c5cd440bde3182`）で `python -m pytest -q tests/test_quality_checks_009.py` **5 passed in 0.33s**。保存済み品質009原文はそのまま保ち、現行安全フィルターが誤字、直接質問未回答、未確認本人事実、拒否後の軽視表現を除外し、安全候補を維持することを再確認した。これは文章全般の自然さや候補多様性の合格を意味しない。
+- `python -m pytest -q tests/test_ui_firefox.py` はFirefox実UI **6 passed in 82.61s**。Chrome不使用。Gemini実API0回。全pytest932件の成功と合わせ、検証資料へT315/T316を追加した。
+- Matrixは316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・意味的候補多様性FAILは未解決で、総合NO-GO。
+- 今回のテスト結果を含む文書差分はこれからcommit/Pushし、Actionsを確認する。PR #4はDraft・未マージ。次は品質009の保存済み反復/候補方針差を引き続きオフラインで調査する。実Gemini通信、会話004、新規会話HTMLは行わない。未追跡のユーザー指示3ファイルは保持する。

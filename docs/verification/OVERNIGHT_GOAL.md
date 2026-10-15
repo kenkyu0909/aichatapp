@@ -699,3 +699,17 @@ prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15
 Gemini APIは0回。会話004・新規会話HTMLは指示により未実施。総合判定**NO-GO**。Test Matrix 313項目: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。次は最新差分を選択的にPushしてActionsを確認し、QUALITY009の残るP0品質失敗をオフラインで修正する。
 
 2026-10-15 20:49 JST: `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`のPush [38729897573](https://github.com/kenkyu0909/aichatapp/actions/runs/38729897573)およびPR [38729902486](https://github.com/kenkyu0909/aichatapp/actions/runs/38729902486) Actionsがsuccessし、両方とも同じ最新HEADを検証した。Backend pytest、Firefox確認、JS構文検査、Artifact保存に成功。ローカル全pytest932 passed。Matrixは314項目: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・意味的多様性FAILは未解決のため総合NO-GOを維持。Gemini API0回、conversation_004/新規HTMLは未実施。PR #4 OPEN/Draft・未マージ。
+
+### 2026-10-15 21:02 JST 状態追補
+
+| ゴール | 状況 | 今回の確認 |
+|---|---|---|
+| 1. 本人情報の正確性 | 部分修正 / 全体未達 | 保存済みQUALITY009再生5件で既知の安全フィルター修正を再確認。日本語全般の意味理解・事実根拠は未達。|
+| 2. 句読点・改行 | 未達 | 今回実生成の評価なし。保存済みの違反が0件という限定情報は新しい生成への保証ではない。|
+| 3. ミラーリング | 未達 | 固定20ケースの採点は未実施。|
+| 4. 共感の反復防止 | 未達 | QUALITY009の実生成で見つけた反復/会話停滞は未解決。|
+| 5. 候補多様性 | 未達 | 品質009の実生成の意味的方針差FAILは未解決。|
+| 6. 誘い判断 | 部分修正 / 全体未達 | T313の安全な方針降格修正を維持。全シナリオ評価は未達。|
+| 7. 安定性 | ローカル合格 / 最新資料commit CI待ち | 全pytest932 passed、QUALITY009 replay5 passed、Firefox UI6 passed。最新資料commitのActionsはPush後に確認する。|
+
+Gemini API0回。会話004・新規HTMLは未実施。総合NO-GO。Test Matrix316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。次は資料差分をPushしてCIを確認後、保存済み品質009の残るP0をオフラインで進める。

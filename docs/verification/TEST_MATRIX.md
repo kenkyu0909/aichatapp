@@ -692,3 +692,9 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T314 | 誘い方針の安全候補同期修正に対する最新HEADのGitHub Actions | Push/PR Actionsのhead SHA・ジョブ結果を照合 | PASS | SHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`のPush [38729897573](https://github.com/kenkyu0909/aichatapp/actions/runs/38729897573)・PR [38729902486](https://github.com/kenkyu0909/aichatapp/actions/runs/38729902486)がsuccess。backend pytest、Firefox確認、JavaScript構文検査、Artifactアップロードに成功。PR #4はOPEN/Draft、head SHA一致。|
 
 最新ID行: 314。累計: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+
+| T315 | 品質方針修正後のFirefox主要UI回帰 | `python -m pytest -q tests/test_ui_firefox.py`。Firefox実ブラウザー操作 | PASS | コードSHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`、同コードを含むHEAD `331b61f1c09a7ca092cf170551c5cd440bde3182`。Firefox UI **6 passed in 82.61s**。既存の主要画面操作・ブラウザー例外監視を実行。Chrome不使用、Gemini実通信0回。|
+
+| T316 | 保存済みQUALITY009出力を現行安全フィルターで再生 | `python -m pytest -q tests/test_quality_checks_009.py`。架空の過去出力を隔離バックエンドへ投入 | PASS | コードSHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`。**5 passed in 0.33s**。保存済みの元文章は変更せず、安全候補を残し問題候補を理由付きで除外する回帰を確認。Gemini実通信0回。モデル文章の自然さ・意味的多様性全般の解決を示すものではない。|
+
+最新ID行: 316。累計: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
