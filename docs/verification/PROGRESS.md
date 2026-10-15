@@ -549,3 +549,12 @@
 - 変更前の重点回帰4件が失敗することを確認。修正後focused 5 passed。全pytestとFirefox UI **717 passed in 98.36s**。Python compile、`node --check app.js`、`git diff --check`成功。
 - 現在の作業SHA `b5637aa` のActionsは実行中。今回の追補コードは未コミット。API呼び出し0回。GitHub push/Actionsは追補コミット後に確認する。PR #4 OPEN/Draft、マージなし。総合判定NO-GO（QUALITY009の実生成文評価FAILと広い品質基準が残る）。
 - 次: 追補をコミット・Pushし、同一SHAのActionsを確認。その後、品質009に記録された拒否/不安ケースと候補ロールの整合を未見ケースで検証する。ユーザー提供の未追跡txtは引き続きステージしない。
+
+
+### 2026-10-15 14:29 JST：会うことへの抵抗を表す断りへの対応
+
+- 前回レビューのUI確認質問・同義頻度修正を含む `029f86a2baaba36dc88919f7f6ab3e70cfe643ff` はPush済みで、Push/PR両Actionsが同SHAで成功。PR #4はOPEN/Draftを維持。
+- 次のP0監査で「直接会うのは少し抵抗があります」が拒否/慎重状態に分類されず、誘い候補を通すことを修正前2件FAILで再現。抵抗があるという明示表現を拒否・不安判定に加え、抵抗がないという否定形の肯定対照は拒否扱いしないよう修正。中立な応答は残す。
+- 重点回帰5 passed。バックエンド **641 passed in 17.92s**。全pytestとFirefox UI **720 passed in 101.07s**。Python/JavaScript構文と差分検査成功。Gemini実API 0回。
+- この修正と最新の検証記録は未コミット。最新SHAのActionsも未実施。QUALITY009の文章品質FAILと意味評価基準未達があるため総合NO-GO。conversation_004・新会話HTMLは実施しない。
+- 次: 抵抗判定のパッチを記録とともに追跡対象のみcommit/pushし、同一SHAのPush/PR Actionsを確認する。その後は会話009の直接質問・候補方針の品質問題へ進む。ユーザー提供のtxtはステージしない。

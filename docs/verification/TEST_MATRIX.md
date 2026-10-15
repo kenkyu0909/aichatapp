@@ -481,3 +481,16 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T246 | 最新差分のPython/JavaScript構文と空白 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 2026-10-15 14:25 JST、すべて成功。|
 
 最新ID行は246件。累計: PASS184 / FAIL13 / FIXED29 / BLOCKED5 / NOT_TESTED15。旧FAILは履歴として維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは指示どおり未実施。
+
+
+### 2026-10-15 14:29 JST：会うことへの抵抗表現の安全判定
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T247 | 「抵抗があります」の慎重・拒否判定と否定の対照 | pytest / 候補フィルター | FIXED | 「直接会うのは少し抵抗があります」「実際に会うことにはまだ抵抗があります」を修正前に2件再現し、既存条件が認識せず再勧誘候補を通す穴を修正。明示的な肯定「直接会うことに抵抗はありません」は拒否扱いしない。中立候補は残る。|
+| T248 | 抵抗表現と既存の不安・中立候補回帰 | pytest focused | PASS | 不安/抵抗/中立候補の重点セット **5 passed**。修正前2 failures、肯定文の対照1 passed。|
+| T249 | 現行バックエンド全体 | `python -m pytest tests/test_app.py -q` | PASS | **641 passed in 17.92s**。|
+| T250 | 最新コードの全pytest・Firefox UI | `python -m pytest -q` | PASS | 2026-10-15 14:29 JST、**720 passed in 101.07s**。Firefox UIを含む。Chrome未使用。|
+| T251 | 最新差分のPython/JavaScript構文と空白 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 2026-10-15 14:29 JST、すべて成功。|
+
+最新ID行は251件。累計: PASS188 / FAIL13 / FIXED30 / BLOCKED5 / NOT_TESTED15。修正後の最新Actionsは未実施（前コミット `029f86a` のPush/PR Actionsは成功）。今回Gemini実API 0回。`conversation_004`・新会話HTMLは指示どおり未実施。

@@ -3596,6 +3596,29 @@ def test_meeting_unease_filters_outing_questions_but_keeps_neutral_topics(client
     assert backend.candidate_has_meeting_related_question("急がなくて大丈夫です\nカフェならどんなところが好き")
 
 
+@pytest.mark.parametrize("partner_message", [
+    "直接会うのは少し抵抗があります",
+    "実際に会うことにはまだ抵抗があります",
+])
+def test_meeting_resistance_without_unease_keyword_still_blocks_reinvitation(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+    invitation = backend.Candidate(label="誘い", text="よかったら今度一緒にカフェに行きませんか？")
+    neutral = backend.Candidate(label="中立", text="話してくれてありがとうございます！")
+
+    assert backend.partner_has_active_invitation_refusal(context)
+    assert backend.partner_latest_message_expresses_meeting_unease(context)
+    assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(invitation, context)
+    assert "相手の断りや慎重さに反する誘い" not in backend._candidate_rejection_reasons(neutral, context)
+
+
+def test_positive_resistance_reassurance_is_not_misclassified_as_refusal(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "直接会うことに抵抗はありません"}]}
+
+    assert not backend.partner_has_active_invitation_refusal(context)
+
+
 def test_cafe_preference_polarity_is_preserved(client):
     _, backend = client
     context = {

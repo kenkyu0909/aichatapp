@@ -240,6 +240,10 @@ REFUSAL_REINVITATION_PATTERN = re.compile(
 MINIMIZING_REASSURANCE_PATTERN = re.compile(
     r"安心してください|心配しないで|気にしないで|(?:不安|心配).{0,12}大丈夫|大丈夫.{0,12}(?:不安|心配しなくて)|焦らず.{0,18}(?:やり取り|会話|話)"
 )
+MEETING_RESISTANCE_PATTERN = re.compile(
+    r"(?:(?:直接|実際に)?会う|会って|会うこと).{0,16}抵抗(?:が|を|は)?(?:あります|ある|感じます|感じる)|"
+    r"抵抗(?:が)?(?:あります|ある).{0,14}(?:会う|会って)"
+)
 PURCHASE_NEGATION_PATTERN = re.compile(
     r"(?:衝動買い|即決(?:購入)?|即買い|すぐ.{0,4}買|迷わず買).{0,14}(?:避け|控え|しません|しない|しないです|買わない)|"
     r"すぐには買わない|衝動買いはしない|即決はしない|衝動買いを避け(?:ています|ている)|衝動買いは控え(?:ています|ている)"
@@ -306,7 +310,10 @@ def partner_has_active_invitation_refusal(context: dict) -> bool:
         r"(?:まだ|ちょっと).{0,8}(?:会う|会って|一緒に行く).{0,10}(?:不安|難|迷|悩)|"
         r"(?:会う|行く).{0,8}(?:迷|悩)"
     )
-    refusal_indexes = [index for index, text in partner_messages if refusal_pattern.search(text)]
+    refusal_indexes = [
+        index for index, text in partner_messages
+        if refusal_pattern.search(text) or MEETING_RESISTANCE_PATTERN.search(text)
+    ]
     if not refusal_indexes:
         return False
     last_refusal_index = max(refusal_indexes)
@@ -338,7 +345,7 @@ def partner_latest_message_expresses_meeting_unease(context: dict) -> bool:
     )
     if not latest_partner or not partner_has_active_invitation_refusal(context):
         return False
-    return bool(re.search(
+    return bool(MEETING_RESISTANCE_PATTERN.search(latest_partner) or re.search(
         r"まだ会う|会う.{0,12}(?:不安|怖|心配|難)|会うのは.{0,12}(?:不安|怖|難)|会うこと.{0,12}(?:不安|怖|慎重)",
         latest_partner,
     ))
