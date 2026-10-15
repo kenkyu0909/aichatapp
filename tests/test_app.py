@@ -3729,7 +3729,7 @@ def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(clie
         strategy="カフェの話題を続ける",
     )
 
-    filtered = backend.filter_safe_candidates(repeated_positive_reactions, 2, {})
+    filtered = backend.filter_safe_candidates(repeated_positive_reactions, 3, {})
 
     assert filtered["available_candidate_count"] == 2
     assert [filtered["recommended"]["text"], filtered["alternatives"][0]["text"]] == [
@@ -3738,6 +3738,7 @@ def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(clie
     ]
     assert filtered["candidate_rejections"] == []
     assert "中心的な反応が似ている可能性" in filtered["candidate_notice"]
+    assert "安全確認後に表示できる候補は2案です（指定は3案）" in filtered["candidate_notice"]
 
     distinct_reply_purposes = repeated_positive_reactions.model_copy(update={
         "alternatives": [backend.Candidate(

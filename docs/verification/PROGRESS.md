@@ -630,3 +630,12 @@
 - PR #4はOPEN / Draft / base `feat/ui-local-backend-v1`、head `c6ea0337d525746463936c9e6c28f366e4190648`。マージなし。Gemini実API 0回。
 - Test Matrix 280項目: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。過去QUALITY009生成品質FAILは維持し、総合NO-GO。会話004と新規会話HTMLは未実施。
 - 次: Actionsの証拠URLと集計を各報告へ記録してPushし、そのドキュメント専用更新のActionsも追跡。次の未達課題は本人確認情報と直接質問への回答ガードの未見ケースを監査する。ユーザーの未追跡txtはステージしない。
+
+### 2026-10-15 15:46 JST 継続チェックポイント：意味重複と候補不足の両通知を回帰確認
+
+- `codex/directive-control` の最新版を確認。最優先は直接質問への回答、事実根拠、安全候補の保持、自然さ。実Gemini通信・会話004・新しい会話HTMLは行わない。
+- 3案要求時に意味的に近い安全候補が2案しかないケースを強化し、2候補を保持したまま意味重複の注意と候補不足の通知が同時に表示されることを確認。
+- focused pytest: **2 passed, 676 deselected**。既存ケースの強化のためTEST_MATRIXの項目数は増やさない。独立コードレビューは未解決指摘なし。
+- 最新Pushed HEAD `2f477fe520b2918aa8c64a50d74bbcb7464c8f94` のPush/PR Actionsは成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38694100416), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38694106252)。ただし、今回の追加assertと表記変更を含む作業ツリーは未コミットであり、これらのActionsは今回差分を検証していない。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。Gemini実API 0回。総合NO-GO（保存済みQUALITY009の生成品質FAILと包括基準未達）。ユーザー提供の未追跡txt 3点はステージしない。
+- 次: この小さなテスト/記録差分だけをコミット・Pushし、同一HEADのPush/PR Actionsを確認する。その後は品質009に関連する直接質問回答の網羅性をオフラインで監査する。
