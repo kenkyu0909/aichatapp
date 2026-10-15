@@ -1230,3 +1230,10 @@ Firefox E2Eを2件追加し、既存の会話004・新規HTML・実Gemini通信�
 - 最終コードの全pytest 1105 passed in 171.74s（Windows Firefox UI込み）。Python compile、JavaScript構文、git diff check成功。Gemini実通信0回。
 - 同一の旧HEAD cb04a58のPush run 38777573869は一時toast待機により失敗（1 failed / 1088 passed）、PR run 38777582476は成功。最新修正HEADのActionsは未確認。
 - 次は差分と検証資料をコミット・Pushし、最新Push/PR Actionsのhead SHAと成功結果を確認する。PR #4はDraft・未マージ。conversation_004、新しい会話HTML、Gemini実APIは現行指示の範囲外として未実施。
+
+
+### 2026-10-16 03:02 JST CI証拠追補
+
+- コードHEAD `029b45fe9a2c4f98d24e1253880e09c4eed24dbc` でPush Actions [38781778539](https://github.com/kenkyu0909/aichatapp/actions/runs/38781778539) とPR Actions [38781788477](https://github.com/kenkyu0909/aichatapp/actions/runs/38781788477) がsuccess。ログ上のpytestは1105 passed / 1 warning、JS構文チェックも成功。
+- PR #4はOPEN/Draft、未マージ。品質009の人手FAILは残るため総合NO-GO。Gemini実通信は0回。
+- 本追補後はdocsが未コミットとなるため、最終記録コミットのActionsも別途確認する。

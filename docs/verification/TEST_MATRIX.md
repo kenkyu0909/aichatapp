@@ -772,3 +772,10 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T341 | Firefoxプロフィール保存E2Eのtoast待機フレーク修正 | 2件のFirefoxプロフィール保存E2Eと全pytest | FIXED | 同SHA cb04a58c8e9cb53d6dd5abf97de947462525f3adのPush Actions 38777573869でFirefox保存テストがtoastの一時表示を取りこぼしfailure（1 failed / 1088 passed）。同SHAのPR Actions 38777582476はsuccess。関連する二つのプロフィール保存UIテストは保存成功後に閉じるモーダル状態を待ち、APIから保存値も確認するよう変更。Firefox focused 2 passed in 20.56s。最終全pytest 1105 passed。修正HEADのGitHub Actionsは未確認。|
 
 最新ID行: 341。累計: PASS238 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。既存QUALITY009の実生成自然さ・意味的候補多様性FAILは継続。|
+
+
+### 2026-10-16 03:02 JST 同一HEADのCI確認
+
+| T342 | 修正後の最新コミットでGitHub Actions再検証 | Push run / PR run、1105 pytest、JavaScript構文チェック | PASS | SHA `029b45fe9a2c4f98d24e1253880e09c4eed24dbc`。Push [38781778539](https://github.com/kenkyu0909/aichatapp/actions/runs/38781778539) とPR [38781788477](https://github.com/kenkyu0909/aichatapp/actions/runs/38781788477) は同一SHAでsuccess。Pushログ: 1105 passed, 1 warning in 114.85s。現在集計342項目: PASS239 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。既存実生成品質FAILは解消扱いにしない。|
+
+最新ID行: 342。累計: PASS239 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。Actionsが確認したSHAは `029b45fe9a2c4f98d24e1253880e09c4eed24dbc`。記録更新後のSHAでも再実行して照合する。
