@@ -183,3 +183,15 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 - 指示確認は作業の開始時刻・再開時刻ではない。確認の前後も安全な実装・テスト・記録を継続し、FAILなら修正サイクルへ、PASSなら次の未達課題へ進む。API上限後は追加通信をせずオフライン作業を行う。
 - 作業ブランチは `codex/full-system-verification` のままとし、指示ブランチを作業ブランチへmerge/rebase/cherry-pickしない。PR #4はDraft・未マージを維持する。
 - 完成期限は2026-10-16夜（JST）。`conversation_004` と新規会話HTMLは、ユーザーから別途明示指示があるまで実施しない。未達・環境制約・再開手順はGitHubへ記録する。
+
+## 2026-10-16 07:41 JST — 継続監査・次の優先作業
+
+**確認した状態:** 作業ブランチは `codex/full-system-verification`、最新テスト記録コミット `3dbb93aac5f498d40dcce86464f1a656ccde0b37`。PR #4は引き続きOPEN/Draft、未マージ。コードコミット `4c5c8158efa7f0b8340c0d0fd68f98406828b879` のPush/PR Actionsは両方success（各1363 passed）。T362〜T364の追加変更・テストを含む最新コミットのPush/PR Actionsは実行中で、成功扱いしない。ローカルでは全pytest 1364 passed / 202.96s、Firefox専用UI 12 passed / 157.28s、Python/JS構文とdiff検査が成功。Gemini通信0回。新E2Eは一時DBとFirefox、テストサーバー内Gemini SDKモックを使い外部通信なし。
+
+**次の作業（優先順）:**
+1. 最新SHA `3dbb93aac5f498d40dcce86464f1a656ccde0b37` のPush/PR Actionsが両方完了し、同一headShaでsuccessか確認。もし失敗ならログから原因を特定し、限定修正・再試験する。
+2. T364によりreply生成のブラウザー→実FastAPI経路は確認済み。未確認のコア範囲として、Firefoxでfirst / followup / like各モードのUI→実ルート→候補表示→コピーのみ非記録→手動送信履歴のうち実装可能な範囲を隔離DBとGemini SDKモックで通す。外部Gemini APIを呼ばない。
+3. 保存済みQUALITY009の直接質問回答漏れ、実質的に似た候補、共感反復、拒否/慎重反応の誘いを固定データで再監査する。安全な候補は保持して不足を通知し、固定文へのハードコードでPASSさせない。真の自然さ・意味多様性のFAILはFAILのまま残す。
+4. 変更ごとにpytest・Firefox・構文検査を実行し、TEST_MATRIX / PROGRESS / FINAL_REPORT / OVERNIGHT_GOALへ証拠を追記する。コミットをPush後、最新SHAのPush/PR ActionsとPR Draft状態を再確認する。
+
+**制約:** Gemini実APIは0回で継続し、会話004・新しい会話HTMLは実施しない。既存DB・APIキー・課金設定に触れず、Firefoxを使用してChromeを起動しない。PR #4はDraftのまま、マージ禁止。
