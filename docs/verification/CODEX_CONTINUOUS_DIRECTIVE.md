@@ -159,3 +159,19 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 4. 合格後も次の未達P0へ進み、PROGRESS・TEST_MATRIX・FINAL_REPORTを更新して作業ブランチへPushする。PR #4はDraft・未マージを維持する。
 
 稼働中は15〜20分ごと、毎時10分（JST）にこの指示ブランチを再取得する。指示確認を再開時刻として扱わず、待ち時間も安全なオフライン作業を続ける。
+
+
+---
+
+## 2026-10-16 01:00 JST — 完成期限当日の監査・優先指示
+
+**確認済み（GitHub connector）:** 作業ブランチ `codex/full-system-verification` HEAD `d9032ccd3b1924cee8f52eb296cccfdebb2078ee`（00:49 JSTのdocs記録コミット）。同SHAのPush Actions 38763736587とPR Actions 38763745807はともにsuccess、PR #4はOPEN/Draft・未マージ。直近のコードSHA `af1038c636341595c1d0eedbf443d72568fd0a6c` のpytestは**1012 passed**（Firefox込み）、最新docs-only HEADもCI success。TEST_MATRIXは331項目（PASS232/FAIL13/FIXED66/BLOCKED5/NOT_TESTED15）。QUALITY009は10 logical requests/12 provider attempts、自動条件PASSだが人手の文章品質FAIL。今回の新規Gemini通信は0。期限は**本日10月16日夜（JST）**。
+
+**優先順位を再確認:** これ以上の珍しい否定表現・ペット/性格のパターン追加やpytest件数増加を目的にしない。重大な実利用P0に限り追加する。
+
+1. **実用コア4モードの通し確認:** 架空データ＋隔離SQLite＋GeminiモックでFirefoxを使い `first` / `reply` / `followup` / `like` を各1回、プロフィール登録→生成→候補表示→コピー時の実改行→送信済み保存→再読込後の履歴順・本文一致まで確認する。モード間の取り違え、UI停止、データ消失、コピー/保存の不整合を最優先で直す。テストの実施証拠と未確認範囲を記録する。
+2. **QUALITY009の実出力に根差す回答品質:** `recent_movie_answered` では本人回答「最近は架空作品の『青い灯台』を観ました」を使わず質問で逸らした代替2案を不合格として維持する。新しい架空ラベルを送信文に混入させない。本人回答が不明なら質問対象を一致させて本人へ確認する。修正前FAILと修正後PASSをモックで確認する。
+3. **安全と自然さの両立:** `short_mirroring` の「どんな雰囲い」、`known_partner_fact` の未確認「私もお出かけが好き」、`joke_mirroring` の同義共感案、`respect_decline` の延期/不安への不適切な誘いを既存JSON原文で再確認。安全な1〜2案は保持し、不足を通知する。再生成の最大1回・既承認API上限を守り、モックPASSを実Gemini文章品質PASSと誤認しない。
+4. **完了判定の根拠:** 最終コードのfocused pytest→全pytest→Firefox→Python/JS構文→Push/PR Actions同一HEADを検証。TEST_MATRIXのFAIL/BLOCKED/NOT_TESTEDを削除せず、P0とP1を分けて `PROGRESS.md` / `FINAL_REPORT.md` / `OVERNIGHT_GOAL.md` に実用可否を明記する。実API未確認なら総合NO-GOまたは条件付きと明示し、CI PASSで隠さない。
+
+**継続ルール:** 稼働中は**毎時10分（JST）に必ず**、加えて15〜20分ごとに `git fetch` / `git show` で指示専用ブランチを読む。毎時00分の更新を待たず、各FAIL・修正・テスト完了後に次のP0へ自律移行。指示ブランチは読み取り専用とし、コード変更は作業ブランチだけ。PR #4をマージしない。ユーザーの秘密・既存DB・課金を保護し、許可外のGemini通信はせずオフライン作業へ切り替える。**conversation_004・新規会話HTMLは禁止（別途許可待ち）**。既存指示と期限優先方針をすべて維持する。
