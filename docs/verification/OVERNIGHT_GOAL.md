@@ -1046,3 +1046,10 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - 最新SHA `9389aa937df569a2aa7c2e683544fe8101e92766` のPush/PR Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895) / [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)成功。同じSHAのPushログ: 1302 passed / 1 warning、JS構文PASS。
 - PR #4 OPEN/Draft・未マージ。QUALITY009の実文章自然さ/候補多様性FAILは継続。次は保存済み候補重複の再生成上限とFirefox followupの`match_id`確認不足を調査する。
+
+##### 2026-10-16 07:04 JST T361 CI確認
+
+- 安定性の最新コード証拠: SHA `43a214dcaa4657aaf21094ddb7b311299f7567df`のPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)がsuccess。PR headSha一致。各1337 passed / 1 warning、JavaScript構文検査とArtifact upload成功。
+- 本人情報の正確性は限定オフライン文型ケースで部分達成。自由文全体と実Gemini出力は未確認。品質009の実生成自然さ・意味的候補多様性FAILが残るため総合NO-GO。
+- Gemini API 0回。conversation_004と新会話HTMLは継続指示により未実施。PR #4はDraft・未マージ。
+- 次: CI証拠の記録をPushして同一HEADのCIを確認し、P0の既知回答・自然な回答・Firefox生成導線を続ける。

@@ -1392,3 +1392,9 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - `app.py`に限定的な分類を追加し、本人の一時確認を経るまで候補を作らず、回答と同じ情報範囲だけを許可する。第三者（友達・妹）、公共施設の場所、一般的な助言質問を本人確認へ誤誘導しない回帰テストを加えた。これは有限文型の防御であり、全ての日本語質問を分類する保証ではない。
 - 最初の全テストでは幼少期の夢質問1件が失敗。条件を狭めた後のfocused 34件、全pytest 1337件、Firefox専用UI 11件は成功。Python compile、JavaScript構文、diff検査成功。コードレビューで後続指摘を反映し、最終レビューの該当境界は問題なし。
 - この差分のGemini実API利用は0回。QUALITY009の過去の自然さ・候補意味多様性FAILは残り、実生成品質を新たにPASSとはしない。総合判定NO-GOを維持する。本変更の最新GitHub ActionsはPush後に確認する。
+
+### T361 最新HEAD CI追補（2026-10-16）
+
+- 作業HEAD `43a214dcaa4657aaf21094ddb7b311299f7567df`を対象にPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)が成功。PR runのhead SHAは対象コミットと一致し、pytest **1337 passed / 1 warning**、JavaScript構文検査、Firefox準備、Artifact uploadを確認した。
+- T361は有限パターンによる本人確認分岐のオフライン修正であり、全ての日本語表現を判定する保証ではない。Gemini実通信は0回。
+- Test Matrixは361項目: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。QUALITY009に保存済みの実生成自然さと候補意味多様性のFAILは残るため総合NO-GO。PR #4はDraft・未マージ。

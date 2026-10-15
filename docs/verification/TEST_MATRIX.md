@@ -890,3 +890,5 @@ T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` の
 最新ID行: 361。累計: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。
 
 T359/T360 CI追補: 同一SHA `27c1ea252a976b3394ee877e96c926d32e9064b8` を対象とするPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)はsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft・未マージ。
+
+T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` のPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)は同一SHAでsuccess。Pushログで1337 passed / 1 warning、JavaScript構文検査とArtifact upload成功を確認。PR #4はOPEN/Draft・未マージ。

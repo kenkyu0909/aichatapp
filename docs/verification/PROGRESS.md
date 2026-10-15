@@ -1328,3 +1328,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Firefox専用UI **11 passed in 135.13s**（全pytestにもFirefoxテストを含む）。この変更によるGemini実通信0回。保存済みQUALITY009の自然さ/意味的多様性FAILは依然残るため総合NO-GO。会話004と新会話HTMLは現行指示どおり未実施。
 - QUALITY009の`known_partner_fact_after_fix`候補ペアは現行フィルターで安全候補2案を維持し、類似切り口と3案不足の両方を通知することを読み取り専用に確認。新規変更は不要。
 - Matrix T361追加後は361項目: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。これらの変更と記録を選択コミット・Pushし、同一最新HEADのPush/PR ActionsおよびPR #4 Draft状態を確認する。未追跡のユーザー指示ファイル3件は保持し、コミットしない。
+
+### 2026-10-16 07:04 JST T361 最新HEADのCI確認
+
+- 作業ブランチ `codex/full-system-verification` のHEAD `43a214dcaa4657aaf21094ddb7b311299f7567df` に対するPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)が同一SHAでsuccess。PR runのheadShaも一致。ログでpytest **1337 passed / 1 warning**、JavaScript構文検査、Firefox準備、test result Artifact uploadを確認。
+- GitHub上の最新指示を再取得。P0の本人事実・質問回答・拒否・句読点/改行とFirefox導線を継続し、Gemini追加通信0、conversation_004と新規HTMLは実施しない。
+- PR #4はOPEN/Draft・未マージ。累計TEST_MATRIX 361項目: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成自然さ・候補意味多様性FAILにより総合NO-GO。
+- 次: CI根拠を検証報告へ記録してdocs-only更新をPushし、その最新HEADのActionsを確認する。その後、独立監査で確認中の既知回答の再質問・安全候補と不足通知・Firefoxの生成経路結合を優先度順に続ける。ユーザー提供の未追跡指示3点は維持しコミットしない。
