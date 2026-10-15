@@ -826,3 +826,10 @@ Gemini実API通信は0回。QUALITY009の実文章品質FAILは維持し、conve
 修正前に重点FAILを再現。Focused回帰29 passed、`tests/test_app.py` 634 passed in 16.51s。Python compile、`node --check app.js`、`git diff --check`成功。全pytest（Firefox UI含む）は14:21 JSTに713 passed in 98.60s。今回Gemini API 0回。QUALITY009の実文章手動評価FAILは継続。conversation_004未実施。最新変更のGitHub Actions未確認。総合判定はNO-GO。
 
 実APIでの修正後品質、ミラーリング/意味的多様性/誘い判断の基準評価、全体回帰・Firefox・最新Actionsを残課題とする。
+
+
+## 2026-10-15 14:25 JST オフラインP0修正の追補
+
+独立レビューで、本人確認質問のUI言い換えが候補検査で一致せず、確認回答を含む適切な候補まで拒否する不具合を確認した。実際の確認質問を用いるテストは修正前に失敗し、元の相手質問が確認質問文に含まれる場合だけ回答との一致を確認する修正後に成功した。併せて「毎週」と「週に1回」など同じ周期の言い換えを正規化し、安全候補の誤拒否を直した。重点修正前後は4 failures → 5 passed。修正後の全pytest（Firefox UI含む）は717 passed in 98.36s。構文と差分検査も成功。
+
+この追補では実Gemini通信は0回。実文章の品質009 FAILは継続しているため、総合判定はNO-GO。マトリクス累計は246項目（PASS184 / FAIL13 / FIXED29 / BLOCKED5 / NOT_TESTED15）。作業ブランチの追補コミット・最新Actionsはこれから確認する。

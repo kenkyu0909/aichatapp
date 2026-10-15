@@ -485,7 +485,14 @@ def _japanese_integer(value: str) -> int | None:
 
 def _explicit_frequency_signature(text: str) -> set[str]:
     signatures: set[str] = set()
-    signatures.update(re.findall(r"毎日|毎朝|毎晩|毎週|毎月|毎年", text))
+    signatures.update({
+        "日1" for _ in re.finditer(r"毎日", text)
+    })
+    signatures.update({
+        f"{period}1" for marker, period in (("毎週", "週"), ("毎月", "月"), ("毎年", "年"))
+        if marker in text
+    })
+    signatures.update(re.findall(r"毎朝|毎晩", text))
     quantified = re.finditer(
         r"(?P<period>週(?!末)|月|年)(?:に)?\s*(?P<count>\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?",
         text,
@@ -2742,7 +2749,8 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         normalized_prefix = re.sub(r"\s+|[、。！!？?]", "", answer_prefix)
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)
         for answer in context.get("ephemeral_user_answers", []):
-            if re.sub(r"\s+|[?？。！!]", "", answer.get("question", "")) != exact_question:
+            answered_question = re.sub(r"\s+|[?？。！!]", "", answer.get("question", ""))
+            if answered_question != exact_question and exact_question not in answered_question:
                 continue
             answer_text = str(answer.get("answer", "")).strip()
             normalized_answer = re.sub(r"\s+|[、。！!？?]", "", answer_text)

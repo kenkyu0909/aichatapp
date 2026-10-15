@@ -468,3 +468,16 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 | T226 | 最新コードの構文・差分・秘密形式検査 | Python compile、Node構文、git diff、秘密形式スキャン | PASS | Python/JavaScript構文と差分検査成功。APIキー形式の一致0件。 |
 
 T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計は226項目: PASS172 / FAIL13 / FIXED22 / BLOCKED5 / NOT_TESTED14。過去の品質009実出力FAILを保持。今回の実Gemini呼び出し0。conversation_004は指示どおり未実施。最新SHAのGitHub Actions T222は未テスト。
+
+
+### 2026-10-15 14:25 JST：UI質問言い換えと頻度同義語のレビュー修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T242 | 本人確認UIが生成した言い換え質問と直接質問の対応 | pytest / 実際の `missing_personal_fact_question()` 出力を保存して候補検査 | FIXED | `何か得意なことありますか？` に対しUIの「相手の…にどう答えたいか…」という確認文と本人回答を使うと、根拠のある候補も拒否する不具合を修正前に再現。確認質問に元の質問が含まれる場合に限り回答を照合し、正しい回答を通す回帰を追加。|
+| T243 | 毎週/週1回など同義頻度の根拠照合 | pytest / 日・週・月・年の頻度同義語 | FIXED | 毎週と週に1回、毎月と月1回、毎年と年1回が異なるシグネチャとなり安全な候補を誤って落とす問題を修正前FAILで再現し、周期ごとに正規化。異なる頻度を同一視しない既存ケースも維持。|
+| T244 | レビュー指摘の修正前後再現 | pytest focused | PASS | 変更前4件失敗（頻度3件、実UI質問1件）。修正後重点セット5 passed。|
+| T245 | 最新コードの全pytest・Firefox UI | `python -m pytest -q` | PASS | 2026-10-15 14:25 JST、**717 passed in 98.36s**。Firefox UIを含む。Chrome未使用。|
+| T246 | 最新差分のPython/JavaScript構文と空白 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 2026-10-15 14:25 JST、すべて成功。|
+
+最新ID行は246件。累計: PASS184 / FAIL13 / FIXED29 / BLOCKED5 / NOT_TESTED15。旧FAILは履歴として維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは指示どおり未実施。

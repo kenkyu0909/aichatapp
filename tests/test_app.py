@@ -4718,3 +4718,34 @@ def test_unclassified_personal_direct_question_requires_matching_user_answer(cli
     mismatched = backend.Candidate(label="別の回答", text=evasive)
     assert backend._answers_verified_partner_question(grounded, context)
     assert not backend._answers_verified_partner_question(mismatched, context)
+
+
+@pytest.mark.parametrize(("claim", "evidence"), [
+    ("毎週カフェに行きます", "週に1回カフェに行きます"),
+    ("毎月カフェに行きます", "月1回カフェに行きます"),
+    ("毎年旅行します", "年に1回旅行します"),
+])
+def test_equivalent_frequency_phrasings_keep_grounded_candidates(client, claim, evidence):
+    _, backend = client
+    assert backend._frequency_claim_is_supported(claim, evidence)
+
+
+def test_actual_user_clarification_prompt_is_accepted_for_generic_direct_answer(client):
+    _, backend = client
+    partner_question = "何か得意なことありますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": "データ整理が得意です",
+    }]
+    candidate = backend.Candidate(label="回答済み", text="データ整理が得意です！")
+
+    assert backend._answers_verified_partner_question(candidate, context)

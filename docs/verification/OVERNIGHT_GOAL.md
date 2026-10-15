@@ -238,3 +238,18 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 | アプリ全体の安定性 | 条件付き | backend 634 passed、修正後の全pytest/Firefox UI 713 passed in 98.60s。Python/JavaScript構文と差分検査も成功。 | 最新コミットのGitHub Actionsは未確認。 |
 
 最後の確認: 2026-10-15 14:21 JST。今回の差分は未コミットで、Push・Actionsは未完了。今回Gemini実API 0回。conversation_004/新規HTMLは指示どおり未実施。QUALITY009の手動生成品質FAILを保持し、GOとは判定しない。
+
+
+### 2026-10-15 14:25 JST 継続チェックポイント
+
+| ゴール | 判定 | 確認状況 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 未確認の直接質問へのfail-openとUI確認質問との不一致を固定テストで修正。広い自然言語での意味的な捏造防止は未証明。|
+| 句読点・改行 | NOT_MET | 今回の追補は関連ロジックを変更していない。全体テストは成功したが、既定の包括ベンチマークは未完了。|
+| ミラーリング | NOT_MET | 20ケース90%の事前評価基準を満たす実測なし。|
+| 共感の反復防止 | NOT_MET | 保存済みQUALITY009の実生成FAILが残る。|
+| 返信候補の多様性 | NOT_MET | 意味的方針差15ケースの評価は未完了。|
+| 食事への誘い判断 | NOT_MET | 誘う/誘わない各5ケースの包括評価は未完了。|
+| アプリ全体の安定性 | CONDITIONAL | 修正後全pytest/Firefox 717 passed in 98.36s、Python/JavaScript構文と差分検査成功。最新追補SHAのGitHub Actions待ち。|
+
+修正前の失敗4件を再現し、修正後focused 5件成功。対象: UIの言い換え本人確認質問に対する回答の受け入れと、週/月/年の同義頻度表現。Gemini API 0回。会話004/新規HTMLは未実施。最新コミット・Actions確認後に次のP0へ進む。総合判定はNO-GO。
