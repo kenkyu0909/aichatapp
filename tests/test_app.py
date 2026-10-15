@@ -2413,6 +2413,175 @@ def test_mirroring_metrics_use_recent_partner_messages_and_never_me_messages_as_
     assert backend.missing_personal_fact_question(context) is not None
 
 
+def test_short_partner_message_rejects_overlong_candidate_and_preserves_safe_options(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カフェ好きです！"}],
+    }
+    value = backend.Suggestions(
+        recommended={
+            "label": "長すぎる返信",
+            "text": "いいですね！\nカフェ巡り楽しそうです\n最近のお店も気になります\nどんなお店が好きですか？",
+        },
+        alternatives=[
+            {"label": "短い返信", "text": "カフェ好きなんですね！\nよく行くお店ありますか？"},
+            {"label": "別の短い返信", "text": "いいですね！\n最近行ったお店ありますか？"},
+        ],
+        reason="相手の話題に反応する",
+        strategy="短く会話を続ける",
+    )
+
+    result = backend.filter_safe_candidates(value, 3, context)
+
+    assert result["available_candidate_count"] == 2
+    assert [result["recommended"]["label"], result["alternatives"][0]["label"]] == [
+        "短い返信", "別の短い返信",
+    ]
+    assert "相手の返信量に対して長すぎる候補" in result["candidate_rejections"][0]["reasons"]
+    assert "安全確認後に表示できる候補は2案です（指定は3案）" in result["candidate_notice"]
+
+
+def test_reply_length_guard_exempts_first_messages_but_caps_serious_context(client):
+    _, backend = client
+    candidate = backend.Candidate(
+        label="丁寧な返信",
+        text="それは大変でしたね\n無理しないでくださいね\n話してくれてありがとうございます\nゆっくり休めますように",
+    )
+
+    first_context = {
+        "mode": "first",
+        "history": [{"role": "them", "body": "カフェ好きです！"}],
+    }
+    serious_context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近仕事が忙しくて疲れています"}],
+    }
+
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(candidate, first_context)
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(candidate, serious_context)
+
+
+def test_reply_length_guard_caps_serious_disclosure_even_when_it_is_latest(client):
+    _, backend = client
+    candidate = backend.Candidate(
+        label="短文の相手に長すぎる返信",
+        text="それは大変でしたね\n無理しないでくださいね\n話してくれてありがとうございます",
+    )
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "最近仕事が忙しくて疲れています"},
+            {"role": "me", "body": "それは大変ですね"},
+            {"role": "them", "body": "今日はカフェに行きました！"},
+        ],
+    }
+
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(candidate, context)
+
+    context["history"][-1] = {"role": "them", "body": "最近仕事が忙しくて疲れています"}
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize("partner_text", [
+    "仕事って大変でしたか？",
+    "仕事は大変ですか",
+    "最近仕事が大変ではなくなりました",
+    "最近仕事は大変じゃなくなりました",
+])
+def test_reply_length_guard_does_not_exempt_serious_questions_or_resolved_contexts(client, partner_text):
+    _, backend = client
+    candidate = backend.Candidate(
+        label="短文の相手に長すぎる返信",
+        text="そうなんですね\n無理しないでくださいね\n話してくれてありがとうございます",
+    )
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_text}],
+    }
+
+    assert backend._candidate_exceeds_mirrored_length(candidate, context) is True
+
+
+def test_reply_length_guard_allows_compassionate_two_line_serious_reply(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近仕事が忙しくて疲れています"}],
+    }
+    candidate = backend.Candidate(
+        label="短く寄り添う返信",
+        text="それはしんどいですね\nあまり無理しないでくださいね",
+    )
+
+    assert backend._candidate_exceeds_mirrored_length(candidate, context) is False
+
+
+def test_short_partner_with_three_sentence_markers_allows_three_reply_lines(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "うん！いいね！楽しみ！"}],
+    }
+    three_line_candidate = backend.Candidate(
+        label="三つの短い反応",
+        text="そうなんだね！\nそれいいね！\n楽しんできてね！",
+    )
+    four_line_candidate = backend.Candidate(
+        label="短文に長すぎる返信",
+        text="そうなんだね！\nそれいいね！\n楽しんできてね！\nまた教えてね！",
+    )
+
+    assert backend.estimate_message_style(context["history"])["partner_sentence_estimate"] == 3
+    assert backend._candidate_exceeds_mirrored_length(three_line_candidate, context) is False
+    assert backend._candidate_exceeds_mirrored_length(four_line_candidate, context) is True
+
+
+@pytest.mark.parametrize(("partner_text", "marker_count"), [
+    ("カフェ好きです！", 1),
+    ("うん！いいね！", 2),
+])
+def test_short_partner_with_one_or_two_sentence_markers_keeps_two_line_ceiling(
+    client, partner_text, marker_count
+):
+    _, backend = client
+    context = {"mode": "reply", "history": [{"role": "them", "body": partner_text}]}
+    two_line_candidate = backend.Candidate(
+        label="二行返信",
+        text="そうなんだね！\nそれいいね！",
+    )
+    three_line_candidate = backend.Candidate(
+        label="三行返信",
+        text="そうなんだね！\nそれいいね！\n楽しみだね！",
+    )
+
+    assert backend.estimate_message_style(context["history"])["partner_sentence_estimate"] == marker_count
+    assert backend._candidate_exceeds_mirrored_length(two_line_candidate, context) is False
+    assert backend._candidate_exceeds_mirrored_length(three_line_candidate, context) is True
+
+
+@pytest.mark.parametrize("partner_text", [
+    "最近は不安なことはないです",
+    "最近仕事で不安を感じないです",
+    "体調は悪くないです",
+    "仕事はしんどくないです",
+    "最近は仕事が大変ではないです",
+    "疲れていません",
+])
+def test_reply_length_guard_does_not_exempt_negated_serious_wording(client, partner_text):
+    _, backend = client
+    candidate = backend.Candidate(
+        label="長すぎる返信",
+        text="そうなんですね\n不安なことがないならよかったです\n最近は何をして過ごすことが多いですか？",
+    )
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_text}],
+    }
+
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(candidate, context)
+
+
 def test_mirroring_records_tone_questions_emojis_and_repeated_acknowledgments(client):
     _, backend = client
     messages = [
@@ -8142,6 +8311,163 @@ def test_actual_user_clarification_prompt_is_accepted_for_generic_direct_answer(
     candidate = backend.Candidate(label="回答済み", text="データ整理が得意です！")
 
     assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize("answers", [
+    [
+        {"question": "普段は朝型ですか？", "answer": "朝型です"},
+        {"question": "普段は朝型ですか？", "answer": "夜型です"},
+    ],
+    [
+        {"question": "普段は朝型ですか？", "answer": "夜型です"},
+        {"question": " 普段は　朝型ですか！ ", "answer": "朝型です"},
+    ],
+])
+def test_conflicting_duplicate_clarification_answers_fail_before_provider_and_candidates(
+    client, monkeypatch, answers
+):
+    c, backend = client
+    mid = add_match(c, "架空の相手・確認回答テスト")
+    posted = c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "普段は朝型ですか？",
+    })
+    assert posted.status_code == 201
+
+    from google import genai
+
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("conflicting answers must block before Gemini"))
+    response = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "count": 3,
+        "user_answers": answers,
+    })
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "同じ確認質問に異なる回答があります。確認質問ごとに回答を1件だけ残して再試行してください。"
+    )
+    assert "recommended" not in response.json()
+    assert c.get(f"/api/matches/{mid}/messages").json() == [posted.json()]
+    assert backend._conflicting_user_answer_question(answers) is not None
+
+
+@pytest.mark.parametrize("answers", [
+    [
+        {"question": "週に何回くらい映画を観ますか？", "answer": "週1〜2回"},
+        {"question": "週に何回くらい映画を観ますか？", "answer": "週12回"},
+    ],
+    [
+        {"question": "週に何回くらい映画を観ますか？", "answer": "週12回"},
+        {"question": "週に何回くらい映画を観ますか？", "answer": "週1〜2回"},
+    ],
+])
+def test_weekly_range_and_count_answers_conflict_before_provider(client, monkeypatch, answers):
+    c, backend = client
+    mid = add_match(c, "架空の相手・頻度回答テスト")
+    posted = c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "週に何回くらい映画を観ますか？",
+    })
+    assert posted.status_code == 201
+
+    from google import genai
+
+    monkeypatch.setattr(
+        genai, "Client", lambda **_: pytest.fail("conflicting frequency answers must block before Gemini")
+    )
+    response = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "count": 3,
+        "user_answers": answers,
+    })
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "同じ確認質問に異なる回答があります。確認質問ごとに回答を1件だけ残して再試行してください。"
+    )
+    assert "recommended" not in response.json()
+    assert c.get(f"/api/matches/{mid}/messages").json() == [posted.json()]
+    assert backend._conflicting_user_answer_question(answers) is not None
+
+
+def test_equivalent_duplicate_clarification_answers_are_deduplicated_before_context(client):
+    c, backend = client
+    mid = add_match(c, "架空の相手・重複回答テスト")
+    assert c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "普段は朝型ですか？",
+    }).status_code == 201
+    captured = {}
+    original_build_context = backend.build_context
+
+    def capture_context(data):
+        captured["user_answers"] = list(data.user_answers)
+        return original_build_context(data)
+
+    backend.build_context = capture_context
+    response = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "count": 1,
+        "user_answers": [
+            {"question": "普段は朝型ですか？", "answer": "朝型です"},
+            {"question": " 普段は　朝型ですか！ ", "answer": "朝型です！"},
+        ],
+    })
+
+    assert response.status_code == 200
+    assert len(captured["user_answers"]) == 1
+    assert captured["user_answers"][0]["answer"] == "朝型です"
+
+
+def test_numeric_range_and_count_question_keys_remain_distinct_for_answer_conflicts(client):
+    _, backend = client
+    answers = [
+        {"question": "週1〜2回くらい映画を観ますか？", "answer": "週1〜2回です"},
+        {"question": "週12回くらい映画を観ますか？", "answer": "週12回です"},
+    ]
+
+    assert backend._normalize_clarification_question_key(answers[0]["question"]) != (
+        backend._normalize_clarification_question_key(answers[1]["question"])
+    )
+    assert backend._conflicting_user_answer_question(answers) is None
+    assert backend._deduplicate_user_answers(answers) == answers
+
+
+def test_equivalent_numeric_range_separators_match_for_questions_and_answers(client):
+    _, backend = client
+    first_question = "週に何回くらい映画を観ますか？週1-2回くらいですか？"
+    second_question = "週に何回くらい映画を観ますか？週1〜2回くらいですか？"
+    answers = [
+        {"question": first_question, "answer": "週1-2回です"},
+        {"question": second_question, "answer": "週1〜2回です"},
+    ]
+
+    assert backend._normalize_clarification_question_key(first_question) == (
+        backend._normalize_clarification_question_key(second_question)
+    )
+    assert backend._normalize_clarification_answer_key("週1-2回です") == (
+        backend._normalize_clarification_answer_key("週1〜2回です")
+    )
+    assert backend._conflicting_user_answer_question(answers) is None
+    assert len(backend._deduplicate_user_answers(answers)) == 1
+
+
+def test_numeric_range_answer_remains_distinct_from_twelve_answer(client):
+    _, backend = client
+    assert backend._normalize_clarification_answer_key("週1〜2回です") != (
+        backend._normalize_clarification_answer_key("週12回です")
+    )
+
+
+def test_question_key_still_ignores_harmless_punctuation_and_spacing(client):
+    _, backend = client
+    assert backend._normalize_clarification_question_key("普段は朝型ですか？") == (
+        backend._normalize_clarification_question_key(" 普段は　朝型ですか！ ")
+    )
 
 
 @pytest.mark.parametrize(("question", "unsupported_claim"), [

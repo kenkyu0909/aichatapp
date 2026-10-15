@@ -165,6 +165,59 @@ class GenerateInput(BaseModel):
         return value
 
 
+def _canonicalize_numeric_range_separators(value: str) -> str:
+    """Treat recognized separators between digits as the same range marker."""
+    return re.sub(r"(?<=\d)[〜~‐‒–—−-](?=\d)", "範囲", value)
+
+
+def _normalize_clarification_question_key(value: str) -> str:
+    """Normalize harmless formatting while preserving numeric range meaning."""
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    # Preserve the fact that "1〜2" is a range and canonicalize its variants.
+    normalized = _canonicalize_numeric_range_separators(normalized)
+    return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+
+
+def _normalize_clarification_answer_key(value: str) -> str:
+    """Normalize harmless answer formatting without erasing meaning-bearing marks."""
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    # Equivalent range separators should compare equal, while "12" remains distinct.
+    normalized = _canonicalize_numeric_range_separators(normalized)
+    normalized = re.sub(r"\s+", "", normalized)
+    # Only ignore punctuation at the end. Internal separators such as the range
+    # marker in "週1〜2回" must remain significant for conflict detection.
+    return re.sub(r"[。.!！?？、,；;：:]+$", "", normalized)
+
+
+def _conflicting_user_answer_question(answers: list[dict[str, str]]) -> str | None:
+    """Return a normalized question key if its supplied answers disagree."""
+    answers_by_question: dict[str, str] = {}
+    for item in answers:
+        question_key = _normalize_clarification_question_key(item.get("question", ""))
+        answer_key = _normalize_clarification_answer_key(item.get("answer", ""))
+        if not question_key:
+            continue
+        previous_answer = answers_by_question.get(question_key)
+        if previous_answer is not None and previous_answer != answer_key:
+            return question_key
+        answers_by_question[question_key] = answer_key
+    return None
+
+
+def _deduplicate_user_answers(answers: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep the first equivalent answer per normalized clarification question."""
+    seen: set[str] = set()
+    result: list[dict[str, str]] = []
+    for item in answers:
+        question_key = _normalize_clarification_question_key(item.get("question", ""))
+        if question_key and question_key in seen:
+            continue
+        if question_key:
+            seen.add(question_key)
+        result.append(item)
+    return result
+
+
 class Candidate(BaseModel):
     label: str = Field(min_length=1, max_length=50)
     text: str = Field(min_length=1, max_length=1000)
@@ -4968,6 +5021,48 @@ def candidate_has_high_confidence_japanese_error(text: str) -> bool:
     return "雰囲い" in text
 
 
+def _candidate_sentence_count(text: str) -> int:
+    """Count candidate lines after the separate sentence-break guard ran."""
+    return sum(bool(line.strip()) for line in text.splitlines())
+
+
+def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> bool:
+    """Reject replies that materially exceed the measured partner sentence range.
+
+    This is a conservative ceiling, not a target-length generator. First messages
+    have a different structure and are not constrained by this heuristic. Serious
+    disclosures still use the measured ceiling, which leaves room for a concise,
+    considerate response without allowing an unbounded reply.
+    """
+    if context.get("mode") != "reply":
+        return False
+
+    history = context.get("history", [])
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in history
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    measured = context.get("mirroring") or estimate_message_style(history)
+    partner_sentences = int(measured.get("partner_sentence_estimate") or 0)
+    if partner_sentences <= 0:
+        return False
+
+    target = str(measured.get("target_reply_length", ""))
+    if "原則1文" in target or "1〜2文" in target or "短い1〜2文" in target:
+        # A compact message can still contain several measured utterances
+        # (for example 「うん！いいね！楽しみ！」). Honor three such markers
+        # without loosening the 1–2 sentence ceiling for ordinary short inputs.
+        maximum_sentences = 3 if partner_sentences >= 3 else 2
+    else:
+        # Long partner messages are answered at a similar or slightly shorter
+        # length. Never force expansion just because the input itself is long.
+        maximum_sentences = partner_sentences
+    return _candidate_sentence_count(candidate.text) > maximum_sentences
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -4983,6 +5078,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("明らかな誤字")
     if any(not line.strip() for line in text.splitlines()):
         reasons.append("空行")
+    if _candidate_exceeds_mirrored_length(candidate, context):
+        reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
         reasons.append("相手の既知情報を再質問")
     if unsupported_personal_claim_topics([candidate], context):
@@ -5323,6 +5420,15 @@ def blocked_user_info_response(
 
 @app.post("/api/generate")
 def generate(data: GenerateInput):
+    if _conflicting_user_answer_question(data.user_answers) is not None:
+        raise HTTPException(
+            400,
+            "同じ確認質問に異なる回答があります。確認質問ごとに回答を1件だけ残して再試行してください。",
+        )
+    # Identical answers repeated with punctuation or whitespace variations are
+    # harmless, but keeping duplicates can make stale clarification state look
+    # authoritative. Pass one normalized-scope answer through the whole pipeline.
+    data.user_answers = _deduplicate_user_answers(data.user_answers)
     context = build_context(data)
     if data.mode in {"reply", "followup"} and partner_requests_contact_stop(context):
         return blocked_user_info_response(
