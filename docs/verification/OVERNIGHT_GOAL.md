@@ -416,3 +416,9 @@ Gemini実APIは今回0回。会話004および新規会話HTMLは未実施。PR 
 | アプリ全体の安定性 | CONDITIONAL | 現行フィルター再生とfocused pytest 12件成功。最新コミット`0d272b8`のPush/PR Actions成功。| 新規差分があれば最新SHAのActionsを確認。|
 
 Gemini実APIは今回0回。会話004・新会話HTMLなし。過去QUALITY009の手動生成品質FAILを解決済みにせず、総合NO-GOを維持する。
+
+### 2026-10-15 16:31 JST：直接質問の代替案にも回答を求める
+
+本人情報の正確性と候補の多様性は引き続きNOT_MET。保存済み映画質問ケースでは、現行ゲートが直接質問に答えない代替2案を安全側に除外し、確認済み回答を含む1案だけを残した。このため、返信プロンプトに「確認済みの直接回答は各候補に含める」指示を追加し、`prompt_spec.md`とプロンプト回帰テストへ反映した。関係するpytestは8 passed。新しいGemini生成はなく、実用文面の改善は未確認のため各ゴールをPASSへ変更しない。
+
+Test Matrixは289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。今回SHAのActionsはPush/PRとも進行中で、結果確認後に更新する。実API 0回。会話004/新HTMLなし。総合NO-GO。

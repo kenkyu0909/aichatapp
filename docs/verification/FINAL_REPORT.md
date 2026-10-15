@@ -947,3 +947,7 @@ Windowsのstart.batは一時DBを用いた8767番で起動し、Firefoxから架
 品質009に保存された架空の実Gemini候補を、現在の送信前フィルターへオフラインで再投入した。既知の誤字、映画の直接質問に答えない代替候補2件、根拠のない本人嗜好、不安への「安心してください」を表示対象から除外した。各ケースの安全候補は保持され、要求数に満たない場合は不足を通知した。誘い機会の候補は自然な誘いを含むため維持された。focused pytestは12 passed。
 
 この再生は既存の生成文に対する現在の安全ゲートを確認したもので、新しいGemini生成・実API品質の再評価ではない。過去の品質009手動FAIL、候補の意味的重複、ミラーリングの包括評価未達が残るため総合判定はNO-GO。Test Matrixは288項目: PASS212 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。最新コミット`0d272b853f19b81a95ba134648b95cbe1dedfa6c`対象のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38698084849) とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38698091260) は成功。PR #4はOPEN/Draft、未マージ。Gemini APIは0回。
+
+## 2026-10-15 16:31 JST プロンプト追補
+
+本人への直接質問に対する確認回答がある場合、各返信候補が回答内容を明示するよう`prompts/reply.txt`を補強した。回答を省いて別の質問だけで返す代替案は作らない。静的プロンプト確認を含む関連pytestは8 passed。実Geminiの新しい生成は行っていないため、実際の文章品質は未判定。Test Matrixは289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。今回差分のActionsはPush/PRとも進行中。総合NO-GOを維持する。

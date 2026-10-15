@@ -705,6 +705,8 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
 
     c, backend = client
     assert "本人の好み・経験・行動" in backend.read_prompt("reply")
+    assert "返信候補の各案にその回答を明確に含めます" in backend.read_prompt("reply")
+    assert "回答を省いて別の質問だけで返しません" in backend.read_prompt("reply")
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
     captured = {}

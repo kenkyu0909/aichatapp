@@ -682,3 +682,10 @@
 - 再生結果：短文2/3、映画直接質問1/3、既知相手事実2/3、誘い機会3/3、不安表現1/2が表示可能。安全フィルターの動作確認であり、Geminiの生成品質が改善した証拠ではない。
 - focused回帰 `python -m pytest -q tests/test_app.py -k "high_confidence_japanese_typo or recent_movie_answer or known_partner_fact or meeting_unease"` は**12 passed, 670 deselected**。新しい実API要求は0回。Test Matrix 288項目: PASS212 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持。
 - 次: 再生で候補不足となった直接質問と短文ケースを調べ、生成指示側で安全な回答候補を改善する。指示ブランチを15〜20分以内に再取得する。PR #4はOPEN/Draft、未マージ。未追跡ユーザー指示ファイルはステージしない。
+
+### 2026-10-15 16:31 JST 継続チェックポイント：直接質問への各案の回答を明示
+
+- 保存済み品質009の`recent_movie_answered`では、実際の推奨案は本人の確認回答を使った一方、代替案2件は映画の質問に答えず話題をすり替えていた。現行フィルターは2案を除外するが、安全な候補が1/3案だけになる。
+- `prompts/reply.txt`に、本人の回答が確認できる直接質問では返信候補の各案にその回答を含め、回答を省いて別の質問だけにしない指示を追加。`prompt_spec.md`へ同じ仕様を記録し、既存のV2情報質問テストに静的な確認を追加。
+- 関連pytest **8 passed, 674 deselected**。これはプロンプト内容と既存ローカル判定の確認であり、Gemini実生成品質は未確認。Gemini実API 0回。T288/T289を含むTest Matrix 289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。NO-GOを維持。
+- 次: 変更差分をコミット・Pushし、同一SHAのPush/PR Actionsを確認。実API禁止は維持し、返信候補の品質FAILは再開後に限定許可内で確認する。15〜20分ごとに指示ブランチを再取得し、PR #4はOPEN/Draftで保持。

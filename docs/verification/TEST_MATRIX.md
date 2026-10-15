@@ -588,3 +588,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T288 | QUALITY009保存済みGemini候補の現行送信前フィルター再生 | 架空データJSONをローカルで再生し`filter_safe_candidates`を実行。focused pytestも併用 | PASS | 短文ケースの誤字「雰囲い」、最近観た映画への直接質問を避ける代替2案、未確認の「私もお出かけが好き」、会う不安直後の「安心してください」を現行フィルターが除外。残る安全候補はそれぞれ2/3、1/3、2/3、1/2案で保持され、不足通知あり。誘い機会ケースは自然な誘いを含む3案を維持。focused pytest **12 passed**。保存済み候補のオフライン再生であり、新しいGemini実通信ではない。|
 
 最新ID行: 288。累計: PASS212 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。過去の品質009手動FAILは維持し、現在フィルターが既知候補を除外したことと、モデル自体が自然な候補を生成できることを区別する。|
+
+| T289 | 確認済みの本人回答を直接質問の各候補に含める指示 | reply prompt静的検査とpytest | PASS | reply用指示に「各候補が確認済み回答を含み、別質問だけですり替えない」と明記。`test_v2_user_info_question_is_separate_and_answers_are_ephemeral`を拡張し、`python -m pytest -q tests/test_app.py -k "v2_user_info_question or answers_verified_partner_question or recent_movie_answer or test_prompt"`で**8 passed**。実Geminiでの文章品質は未検証。|
+
+最新ID行: 289。累計: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|
