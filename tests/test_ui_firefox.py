@@ -513,6 +513,7 @@ def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_histo
     driver.find_element(By.CSS_SELECTOR, ".candidate button").click()
     WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText !== undefined"))
     assert driver.execute_script("return window.__copiedText") == expected
+    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
     driver.find_element(By.CSS_SELECTOR, ".candidate button:last-child").click()
     textarea = driver.find_element(By.CSS_SELECTOR, "#modal-body textarea")
     assert textarea.get_attribute("value") == expected

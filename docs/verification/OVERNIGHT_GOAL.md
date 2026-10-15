@@ -346,3 +346,18 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 今回のコード差分は `app.py` と `tests/test_app.py`、Gemini実API 0回、会話004/新会話HTMLなし。Test Matrix 278件: PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。過去の実生成FAILを解決済みに変えず、総合NO-GOを維持する。
 
 次の再開手順: (1) 追跡ファイルだけをコミット・Push、(2) Push/PRの両Actionsが最新SHAで成功することを確認、(3) PR #4がOPEN/Draft、base `feat/ui-local-backend-v1`であることを確認、(4) 次のcodex/directive-control更新を取得し、直接質問回答・会話前進の残存P0へ進む。ユーザー提供の未追跡txtはステージしない。
+
+
+### 2026-10-15 15:40 JST 更新
+
+| ゴール | 判定 | 根拠/残作業 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 個別の映画・読書直接質問ガードはテスト済み。全30ケースの事実意味評価は未完了。|
+| 句読点・改行 | NOT_MET | 全pytestとFirefox回帰は成功。独立の包括文体ベンチマークは未完了。|
+| ミラーリング | NOT_MET | 20ケース/90%基準は未評価。|
+| 共感の反復防止 | NOT_MET | QUALITY009の実生成FAILは維持。包括的な連続会話評価は未完了。|
+| 返信候補の多様性 | NOT_MET | 保存済みの同義反応ペアへ注意を出しつつ安全候補を保持。15ケース基準は未評価。|
+| 食事への誘い判断 | NOT_MET | 包括的10ケース基準は未完了。|
+| アプリ全体の安定性 | CONDITIONAL | 全pytest 757 passedに加え、コピー直後の送信履歴0件をFirefoxで検証。最新追加UI assertionを含むActionsは次のpush待ち。|
+
+2026-10-15 15:40 JST時点でGemini実API 0回。会話004/新規HTMLなし。Test Matrix 279項目（PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15）。最新Pushedコード `6db8503a221cec55639467f82cc2e7f05b9f5e09` のPush/PR Actionsは両方成功。Firefoxの追加assertは未コミット。総合判定NO-GOを維持し、会話品質009の過去FAILを成功に変更しない。

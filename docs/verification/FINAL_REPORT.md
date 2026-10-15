@@ -905,3 +905,8 @@ V2候補でreply_moveが重なる場合、候補を捨てずに進め方の重�
 - Test Matrix: 278項目（PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15）。
 
 この追補のコード・テスト・記録はまだコミット前であり、今回変更SHAのGitHub Actionsは未実施。PR #4はOPEN/Draftのまま維持し、マージしていない。総合判定は**NO-GO**。実生成の自然さ、共感反復、候補多様性の包括評価、およびその他の事前合意ベンチマークが未達である。
+
+
+## 2026-10-15 15:40 JST UI回帰追補
+
+Firefoxの改行保持テストを強化し、候補コピー直後には本人側の送信履歴が0件であることを明示確認した。手動で送信記録を確認した後は正確な改行付き本文が1件保存され、再読み込み後も1件であることを既存の同テストで確認する。focused Firefox testは**1 passed**。今回のassertを含む最新コミットはまだPush前であり、Actions検証は未実施。直前コミット `6db8503a221cec55639467f82cc2e7f05b9f5e09` に対するPush/PR Actionsは成功したが、追加UI assertの証拠とは区別する。最新Test Matrixは279件: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。

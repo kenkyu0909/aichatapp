@@ -611,3 +611,13 @@
 - 最新コミット `7bf133d435cdfcb10fe6c0e507e16e7a163a741c` に対するGitHub Actions Push・PR両run成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38692383229), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38692377526)。これらは今回の未コミット差分より前のSHAを検証した結果であり、今回の差分のCI証拠ではない。
 - 現在のコード差分 `app.py` / `tests/test_app.py` は未コミット。今回のTest Matrixは278項目（PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15）。Gemini API 0回。総合NO-GOは維持。
 - 次: 最終差分で構文と差分を確認し、今回の変更と検証記録をコミット・Push。同一SHAのPush/PR Actions、PR #4 OPEN/Draftを確認した後、直接質問の回答完全性など残るP0へ進む。ユーザーが置いた未追跡txtはステージしない。
+
+
+### 2026-10-15 15:40 JST 継続チェックポイント：コピーと送信履歴の分離をFirefoxで確認
+
+- 最新指示を15:40 JSTに再取得。会話004/新規会話HTMLと実Gemini通信を行わず、P0のコアUIを確認。QUALITY009の除外対象以外の未修正P0は、独立した保存出力監査で特定できなかった。
+- Firefox UIカバレッジ監査で、改行付き候補のコピー後に送信履歴が空であることをテストが明示検証していないと判明。コピー直後に本人側メッセージ0件を検証するassertを追加し、手動保存後/再読込後は既存の完全一致・1件のみの検証を保持。
+- Firefoxのfocusedテスト `test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history`: **1 passed**。Firefoxのみ使用、Chrome未使用。Gemini実API 0回。
+- 候補意味重複警告のコード・報告コミット `6db8503a221cec55639467f82cc2e7f05b9f5e09` はPush/PR Actions両方成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38693495802), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38693502508)。Firefox追加assertを含む未コミット差分は次のPushでCIを再実行する。
+- Test Matrix 279項目: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。直前のコード全pytest/Firefox 757 passed in 99.50s、今回の追加Firefoxチェック1 passed。総合NO-GO。未追跡のユーザー指示txtはステージしない。
+- 次: Firefox追加確認と報告を追跡ファイルに記録し、Push/PR両Actionsが新しいHEADで成功することを確認する。その後、直接質問回答・会話前進・候補多様性の残るP0/P1へ続行する。

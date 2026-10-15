@@ -555,3 +555,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T278 | Python/JavaScript構文・差分検査・独立レビュー | `py_compile`、`node --check app.js`、`git diff --check`、code reviewer | PASS | 構文・差分検査成功。独立レビューは最終差分に未解決指摘なし。 |
 
 最新ID行: 278。累計: PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。Gemini実APIは今回0回。前回のQUALITY009実生成品質FAILは履歴として維持し、意味的多様性全般の解決とは扱わない。今回コードのGitHub Actionsは未実施。 |
+
+| T279 | コピーのみでは送信履歴に記録されず、手動確認後は1件だけ保存 | Firefox UI / SQLite連携 | PASS | 改行付き返信をコピーした直後の本人送信バブル0件を確認。手動保存後は本文・改行を保持した1件だけが表示され、再読み込み後も1件のまま。Firefox単独テスト1 passed。 |
+
+最新ID行: 279。累計: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。全pytestはコード変更後757 passed in 99.50sで、最後のFirefox回帰T279は個別に1 passed。Gemini実APIは今回0回。 |
