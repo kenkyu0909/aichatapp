@@ -175,3 +175,11 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 4. **完了判定の根拠:** 最終コードのfocused pytest→全pytest→Firefox→Python/JS構文→Push/PR Actions同一HEADを検証。TEST_MATRIXのFAIL/BLOCKED/NOT_TESTEDを削除せず、P0とP1を分けて `PROGRESS.md` / `FINAL_REPORT.md` / `OVERNIGHT_GOAL.md` に実用可否を明記する。実API未確認なら総合NO-GOまたは条件付きと明示し、CI PASSで隠さない。
 
 **継続ルール:** 稼働中は**毎時10分（JST）に必ず**、加えて15〜20分ごとに `git fetch` / `git show` で指示専用ブランチを読む。毎時00分の更新を待たず、各FAIL・修正・テスト完了後に次のP0へ自律移行。指示ブランチは読み取り専用とし、コード変更は作業ブランチだけ。PR #4をマージしない。ユーザーの秘密・既存DB・課金を保護し、許可外のGemini通信はせずオフライン作業へ切り替える。**conversation_004・新規会話HTMLは禁止（別途許可待ち）**。既存指示と期限優先方針をすべて維持する。
+
+## 2026-10-16 05:30 JST — 毎時連携の役割確認
+
+- **ChatGPT（毎時00分 JST）:** GitHub上の最新進捗・実行結果・未解決事項を確認し、次の作業優先度をこの指示ファイルへ反映する。更新が不要なら、既存の優先順位を保つ。
+- **Codex（毎時10分 JST）:** `origin/codex/directive-control` をfetchしてこのファイルを読み、更新があれば安全な作業単位の完了後に優先順位へ反映する。さらに作業の区切り、および15〜20分ごとにも再確認する。
+- 指示確認は作業の開始時刻・再開時刻ではない。確認の前後も安全な実装・テスト・記録を継続し、FAILなら修正サイクルへ、PASSなら次の未達課題へ進む。API上限後は追加通信をせずオフライン作業を行う。
+- 作業ブランチは `codex/full-system-verification` のままとし、指示ブランチを作業ブランチへmerge/rebase/cherry-pickしない。PR #4はDraft・未マージを維持する。
+- 完成期限は2026-10-16夜（JST）。`conversation_004` と新規会話HTMLは、ユーザーから別途明示指示があるまで実施しない。未達・環境制約・再開手順はGitHubへ記録する。
