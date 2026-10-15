@@ -4846,6 +4846,30 @@ def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(clie
     )
 
 
+def test_repeated_rest_empathy_from_quality009_is_reported_as_low_diversity(client):
+    _, backend = client
+    repeated_rest_empathy = backend.Suggestions(
+        recommended=backend.Candidate(
+            label="共感と質問",
+            text="そういう日もありますよね笑\nゆっくり休めましたか？",
+        ),
+        alternatives=[backend.Candidate(
+            label="休息への共感",
+            text="お疲れ様です\nしっかり体を休めるのも大事ですね",
+        )],
+        reason="休日に寝ていた相手の話を受け止める",
+        strategy="相手の休日の過ごし方に反応する",
+    )
+
+    assert backend._has_redundant_positive_reaction(
+        repeated_rest_empathy.recommended,
+        repeated_rest_empathy.alternatives[0],
+    )
+    filtered = backend.filter_safe_candidates(repeated_rest_empathy, 3, {})
+    assert filtered["available_candidate_count"] == 2
+    assert "中心的な反応が似ている可能性" in filtered["candidate_notice"]
+
+
 def test_cafe_preference_polarity_is_preserved(client):
     _, backend = client
     context = {
@@ -7025,6 +7049,9 @@ def test_unverified_shared_preference_or_ownership_is_rejected_but_partner_quest
     unsafe = [
         "私も猫が好きです！",
         "自分も犬を飼っています！",
+        "自分は犬を飼っています！",
+        "自分は犬が好きです！",
+        "最近犬を飼い始めました！",
         "自分もラーメンが好きです！",
         "私も音楽をよく聴きます！",
         "私も猫が好きです！\n猫を飼っています！",
@@ -7041,6 +7068,398 @@ def test_unverified_shared_preference_or_ownership_is_rejected_but_partner_quest
         assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
 
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(safe, context)
+
+
+def test_confirmed_pet_fact_can_be_used_but_partner_interest_does_not_ground_it(client):
+    _, backend = client
+    partner_only_context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "犬が好きです！"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    confirmed_context = {
+        **partner_only_context,
+        "my_profile": {"facts": {
+            "pet_ownership": "犬を飼っています",
+            "pet_preferences": "犬が好き",
+        }},
+    }
+    confirmed_candidates = [
+        backend.Candidate(label="犬の飼育", text="自分は犬を飼っています！"),
+        backend.Candidate(label="犬の好み", text="自分は犬が好きです！"),
+    ]
+    unconfirmed_recent_claim = backend.Candidate(label="最近の経験", text="最近犬を飼い始めました！")
+
+    assert all(
+        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, partner_only_context)
+        for candidate in confirmed_candidates
+    )
+    assert all(
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, confirmed_context)
+        for candidate in confirmed_candidates
+    )
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        unconfirmed_recent_claim,
+        confirmed_context,
+    )
+
+
+def test_pet_intent_does_not_ground_current_ownership(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": "いつか犬を飼ってみたい"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="現在の飼育", text="犬を飼っています！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize("confirmed_negative_intent", [
+    "犬を飼いたいとは思わない",
+    "犬を飼う予定はない",
+    "犬を飼ってみたいわけではない",
+    "犬を飼いたいと思っていない",
+])
+def test_negative_pet_intent_does_not_ground_positive_intent(client, confirmed_negative_intent):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": confirmed_negative_intent}},
+        "ephemeral_user_answers": [],
+    }
+    positive = backend.Candidate(label="逆の意向", text="犬を飼いたいです！")
+    negative = backend.Candidate(label="同じ意向", text=confirmed_negative_intent + "！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(negative, context)
+
+
+@pytest.mark.parametrize("confirmed_negative_ownership", [
+    "犬は飼っていなかった",
+    "犬を飼っているわけではない",
+    "犬を飼育していません",
+    "犬を飼っているとは言えない",
+    "犬を飼っているとは限らない",
+    "犬を飼ってません",
+])
+def test_negative_pet_ownership_does_not_ground_current_positive_ownership(client, confirmed_negative_ownership):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": confirmed_negative_ownership}},
+        "ephemeral_user_answers": [],
+    }
+    positive = backend.Candidate(label="肯定へのすり替え", text="犬を飼っています！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+
+
+def test_positive_pet_desire_is_not_negated_by_later_absence_of_a_plan(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": "犬を飼いたいですが予定はありません"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの意向", text="犬を飼いたいです！")
+
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_pet_polarity_is_scoped_to_each_animal_in_one_sentence(client):
+    _, backend = client
+    ownership_context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": "犬を飼ってませんが猫を飼っています"}},
+        "ephemeral_user_answers": [],
+    }
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        backend.Candidate(label="犬の肯定", text="犬を飼っています！"),
+        ownership_context,
+    )
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
+        backend.Candidate(label="猫の肯定", text="猫を飼っています！"),
+        ownership_context,
+    )
+
+    preference_context = {
+        **ownership_context,
+        "my_profile": {"facts": {"pet_preferences": "犬が好きで猫は苦手"}},
+    }
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
+        backend.Candidate(label="犬の好み", text="犬が好きです！"),
+        preference_context,
+    )
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        backend.Candidate(label="猫の好み反転", text="猫が好きです！"),
+        preference_context,
+    )
+
+
+def test_pet_preference_contrast_requires_support_for_each_animal_claim(client):
+    _, backend = client
+    candidate = backend.Candidate(label="対比された好み", text="犬が苦手で猫が好きです！")
+    dog_only_context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_preferences": "犬が苦手"}},
+        "ephemeral_user_answers": [],
+    }
+    dog_and_cat_context = {
+        **dog_only_context,
+        "my_profile": {"facts": {"pet_preferences": "犬が苦手で猫が好き"}},
+    }
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, dog_only_context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, dog_and_cat_context)
+
+
+def test_pet_guard_distinguishes_third_party_and_partner_attribution(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "猫を飼っています！"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    unsupported_partner_acknowledgement = backend.Candidate(label="未確認の相手情報", text="犬飼ってるんだね！")
+    third_party_statements = [
+        backend.Candidate(label="第三者の飼育", text="友達が犬を飼っています！"),
+        backend.Candidate(label="第三者の飼育", text="犬は友達が飼っています！"),
+        backend.Candidate(label="第三者の飼育場所", text="犬は友達の家で飼っています！"),
+        backend.Candidate(label="第三者の好み", text="友達は猫が好きです！"),
+    ]
+
+    for acknowledgement in ("猫飼ってるんだね！", "猫飼ってるんですね！", "猫飼ってるんだ！"):
+        candidate = backend.Candidate(label="相手への相槌", text=acknowledgement)
+        assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        unsupported_partner_acknowledgement, context
+    )
+    assert all(
+        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        for candidate in third_party_statements
+    )
+    confirmed_third_party_context = {
+        **context,
+        "my_profile": {"facts": {
+            "friend_pet_info": "友達が犬を飼っています\n友達は猫が好きです\n犬は友達の家で飼っています",
+        }},
+    }
+    assert all(
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, confirmed_third_party_context)
+        for candidate in third_party_statements
+    )
+    partner_friend_fact_context = {
+        **context,
+        "history": [{"role": "them", "body": "友達が犬を飼っています！"}],
+    }
+    different_relationship = backend.Candidate(label="別の第三者", text="同僚が犬を飼っています！")
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        different_relationship,
+        partner_friend_fact_context,
+    )
+    mother_fact_context = {
+        **context,
+        "my_profile": {"facts": {"family_pets": "母が犬を飼っています"}},
+    }
+    father_claim = backend.Candidate(label="別の親族", text="父が犬を飼っています！")
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(father_claim, mother_fact_context)
+
+
+def test_uncertain_and_corrected_partner_pet_statements_do_not_ground_stale_facts(client):
+    _, backend = client
+    candidate = backend.Candidate(label="断定的な第三者情報", text="友達が犬を飼っています！")
+    uncertain_contexts = [
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼っているかもしれません！"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "多分友達が犬を飼っています"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼っているかも知れません"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼っている場合は見に行きたいです"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼ってるっぽいです"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼っている気がする"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼ってるか分からないです"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼ってるって聞きました"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": "友達が犬を飼ってる可能性があります"}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        },
+    ]
+    uncertain_context = uncertain_contexts[0]
+    corrected_context = {
+        **uncertain_context,
+        "history": [
+            {"role": "them", "body": "友達が犬を飼っています！"},
+            {"role": "them", "body": "さっきの訂正です 友達は犬を飼っていないです"},
+        ],
+    }
+    hypothetical_context = {
+        **uncertain_context,
+        "history": [{"role": "them", "body": "もし友達が犬を飼っていたら見に行きたいです"}],
+    }
+    omitted_animal_correction_context = {
+        **uncertain_context,
+        "history": [
+            {"role": "them", "body": "友達が犬を飼っています！"},
+            {"role": "them", "body": "訂正だけど今は飼ってないです"},
+        ],
+    }
+    natural_omitted_correction_contexts = [
+        {
+            **uncertain_context,
+            "history": [
+                {"role": "them", "body": "友達が犬を飼っています！"},
+                {"role": "them", "body": correction},
+            ],
+        }
+        for correction in ("いや今は飼ってないよ", "実は今は飼ってないよ")
+    ]
+
+    assert all(
+        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        for context in uncertain_contexts
+    )
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, corrected_context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, hypothetical_context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        candidate,
+        omitted_animal_correction_context,
+    )
+    assert all(
+        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        for context in natural_omitted_correction_contexts
+    )
+def test_past_pet_ownership_does_not_ground_current_ownership(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [],
+        "my_profile": {"facts": {"pet_ownership": "前は犬を飼ってた"}},
+        "ephemeral_user_answers": [],
+    }
+    current = backend.Candidate(label="現在の飼育", text="犬を飼っています！")
+    matching_past = backend.Candidate(label="過去の飼育", text="前は犬を飼ってた！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(current, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(matching_past, context)
+
+
+def test_movie_habit_acknowledgement_is_grounded_by_partner_history(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近映画にはまっています！"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    acknowledgements = [
+        "映画にはまってるんですね！",
+        "最近映画にハマってるんですね！",
+    ]
+    for text in acknowledgements:
+        candidate = backend.Candidate(label="相手の話への反応", text=text)
+        assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_partner_known_weekend_companion_is_not_reasked_but_cafe_details_are_allowed(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "休日は友達とカフェに行くことが多いです！"}],
+    }
+    repeated = backend.Candidate(label="既知情報の再質問", text="週末は誰と過ごすことが多いですか？")
+    paraphrased = backend.Candidate(label="言い換えた再質問", text="休みの日は誰と一緒にいることが多いですか？")
+    preference = backend.Candidate(label="異なる質問", text="週末は誰と過ごしたいですか？")
+    deeper = backend.Candidate(label="未回答の詳細", text="カフェではどんな飲み物を頼むことが多いですか？")
+
+    assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics([repeated], context)
+    assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics([paraphrased], context)
+    assert backend.repeated_partner_question_topics([preference], context) == []
+    assert backend.repeated_partner_question_topics([deeper], context) == []
+
+
+def test_unconfirmed_movie_habit_is_rejected_even_without_first_person_subject(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "犬が好きです！"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    unconfirmed = [
+        backend.Candidate(label="明示主語", text="自分は最近映画にはまってます！"),
+        backend.Candidate(label="省略主語", text="最近映画にはまってます！"),
+    ]
+    confirmed = backend.Candidate(
+        label="確認済みの趣味",
+        text="映画好きです！",
+    )
+    unconfirmed_recent_with_generic_hobby = backend.Candidate(
+        label="最近の習慣",
+        text="最近映画にはまってます！",
+    )
+    context["my_profile"]["facts"]["movie_hobby"] = "映画が好き"
+
+    assert all("未確認の本人事実" in backend._candidate_rejection_reasons(candidate, {
+        **context,
+        "my_profile": {"facts": {}},
+    }) for candidate in unconfirmed)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(confirmed, context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+        unconfirmed_recent_with_generic_hobby, context
+    )
+    context["my_profile"]["facts"]["recent_movie_habit"] = "最近映画にはまっています"
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
+        unconfirmed_recent_with_generic_hobby, context
+    )
 
 
 def test_confirmed_shared_preference_can_be_used_without_false_rejection(client):

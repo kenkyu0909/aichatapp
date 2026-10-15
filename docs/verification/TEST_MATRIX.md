@@ -728,3 +728,10 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T322 | 候補多様性修正コードのPush/PR Actions | `gh run view`でrunのhead SHA、結論、ジョブを確認 | PASS | コードSHA `3df1847fcadf8f1ea811d84176ca275861310a6c`のPush [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)はいずれもsuccess、head SHA一致。pytest、Firefox準備、JavaScript構文検査、テスト結果Artifactアップロードに成功。Gemini実通信0回。|
 
 最新ID行: 322。累計: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・意味的候補多様性FAILは未解決。
+
+| T323 | ペット情報の根拠・対象者・極性・確度の分離 | 友人/同僚や母/父を区別する架空プロフィール・会話のFastAPI候補フィルターpytest | FIXED | 未確認の第三者情報、関係性や親族の取り違え、曖昧/伝聞/仮定情報、後続訂正、否定された飼育歴を再現。関連pet focused tests **18 passed**。最新全pytest **1002 passed in 128.39s**（Firefox UI込み）。Python compile・JS構文・diff検査成功。Gemini実API不使用。日本語すべてを網羅する保証ではない。|
+| T324 | QUALITY009の休息・慰労共感候補の意味的重複通知 | 保存済みの`joke_mirroring`実出力2候補を多様性判定・安全フィルターへ再生するpytest | FIXED | 修正前は「ゆっくり休めましたか？」と「体を休めるのも大事ですね」が多様性不足として検出されなかった。休息・慰労の共感が重なる場合は候補を残したまま不足通知を表示する。修正前テスト**1 failed**、修正後focused tests **2 passed**。全pytest **1002 passed in 128.39s**。Gemini実API不使用。これは警告検出であり、モデル文章自体の品質改善を示さない。|
+| T325 | ペット飼育の婉曲な否定・留保を肯定根拠にしない | 架空プロフィールの`とは言えない`・`とは限らない`を使ったFastAPI候補フィルターpytest | FIXED | 独立レビューで「犬を飼っているとは言えない」を肯定飼育の根拠にしうる問題を確認。該当表現を確定根拠から除外し、肯定候補を拒否する回帰を追加。後続の口語否定形テストも含むpet focused tests **18 passed**、全pytest **1002 passed in 128.39s**。Python/JS構文検査成功。Gemini実API不使用。|
+| T326 | 複数の動物を含む飼育・好みの極性を個別に判定 | 一文内の犬/猫の肯定・否定を分けるFastAPI候補フィルターpytest | FIXED | 初回の再現テストは**1 failed**。動物と述語の間を最短一致にし、各動物に対応する述語区間だけで肯定/否定を判定する。犬だけの根拠で猫の好みを述べる候補を拒否し、両方の根拠がある候補は保持。pet focused tests **18 passed**、全pytest **1002 passed in 128.39s**。独立コードレビューで修正を確認。Gemini実API不使用。|
+
+最新ID行: 326。累計: PASS230 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補間の意味的多様性は一部未解決で、総合判定NO-GO。

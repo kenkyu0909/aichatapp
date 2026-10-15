@@ -1533,7 +1533,7 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
     if not delimiter or delimiter.group(0) not in "!！?？":
         return False
     tail = remainder[:delimiter.start()].strip()
-    if not re.search(r"(?:なんですね|んですね|なんだね|のですね|んだね|なんだ)$", tail):
+    if not re.search(r"(?:なんですね|んですね|なんだね|のですね|んだね|なんだ|んだ|るんですね|るんだね|るんだ)$", tail):
         return False
     partner_clauses: list[str] = []
     for message in context.get("history", []):
@@ -1555,6 +1555,14 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
         return any(_has_recent_travel_evidence(clause) for clause in partner_clauses)
     if topic == "映画館頻度":
         return any(_has_cinema_habit_evidence(clause) for clause in partner_clauses)
+    if topic == "映画":
+        movie_habit = re.compile(r"(?:最近|ここしばらく)?(?:映画|洋画|邦画).{0,10}(?:にはまって|にハマって|にはまる|にハマる)")
+        return any(
+            movie_habit.search(clause)
+            and not _is_interrogative_evidence_clause(clause)
+            and not _is_effectively_negative_personal_fact(clause)
+            for clause in partner_clauses
+        )
     if topic == "出身地":
         claim_place = re.search(r"([一-龯ぁ-んァ-ヶA-Za-z]{2,20})(?:出身|生まれ)", match.group(0))
         return bool(claim_place) and any(
@@ -1592,6 +1600,7 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "映画": re.compile(
         r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
         r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
+        r"(?:最近|ここしばらく)?(?:映画|洋画|邦画).{0,8}(?:にはまって|にハマって|にはまる|にハマる)|"
         r"(?:最近|この前|昨日|先週).{0,10}(?:観た|見た)(?:映画|作品).{0,14}(?:面白|楽しかった|良かった)|"
         r"(?:最近|この前|昨日|先週).{0,10}(?:映画|洋画|邦画).{0,10}(?:観|見)(?:た|ました)|"
         r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)|"
@@ -1658,6 +1667,79 @@ SHARED_PERSONAL_ASSERTION_MARKER = re.compile(
 GENERIC_PERSONAL_CLAUSE_MARKER = re.compile(
     r"(?:好き|苦手|嫌い|得意|大丈夫|平気|派|飼っ|持っ|住ん|出身|行った|行き|観た|見た|読ん|作っ|食べ|飲み|聴き|聞き|集め|通って|働いて|趣味|ハマ|はま|空いて)"
 )
+PET_KIND_PATTERN = r"犬|猫|うさぎ|兎|ハムスター|鳥|ペット"
+PET_INTENT_PATTERN = re.compile(
+    rf"(?P<animal>{PET_KIND_PATTERN}).{{0,10}}?(?P<verb>飼ってみたい|飼いたい|飼う予定|飼えたら|飼ってみる)"
+)
+PET_INTENT_NEGATION_PATTERN = re.compile(
+    r"(?:とは思わない|とは思いません|と思わない|と思いません|と思っていない|と思っていません|"
+    r"とは考えていない|とは考えていません|"
+    r"わけではない|わけではありません|わけじゃない|わけじゃありません|"
+    r"はない|はありません|気はない|気はありません)"
+)
+PET_OWNERSHIP_PATTERN = re.compile(
+    rf"(?P<animal>{PET_KIND_PATTERN}).{{0,10}}?(?P<verb>飼い始め|飼って|飼った|飼育して)"
+)
+PET_THIRD_PARTY_SUBJECT_PATTERN = re.compile(
+    r"(?:友達|友人|家族|兄弟|きょうだい|姉妹|同僚|先輩|後輩|母|父|親|兄|姉|弟|妹|彼|彼女|実家).{0,6}(?:が|は|の|も|の家で|の家に|宅で)$"
+)
+PET_THIRD_PARTY_ENTITY_PATTERN = re.compile(
+    r"友達|友人|家族|兄弟|きょうだい|姉妹|同僚|先輩|後輩|母|父|親|兄|姉|弟|妹|彼|彼女|実家"
+)
+PET_UNCERTAIN_EVIDENCE_PATTERN = re.compile(
+    r"たぶん|多分|おそらく|恐らく|もしかすると|仮に|もし|"
+    r"(?:とは|と)言えない|(?:とは|と)限らない|"
+    r"(?:飼|飼育).{0,24}(?:か(?:どうか)?(?:は)?(?:分からない|わからない|わかりません|知りません|不明)|"
+    r"可能性(?:が|も)(?:ある|あります)|(?:って|と)聞いた|(?:って|と)聞きました|と聞いている)|"
+    r"かもしれない|かもしれません|かも(?:しれない|しれません|知れない|知れません)?|"
+    r"らしい(?:です)?|(?<!って)(?<!て)みたい(?:です)?|ようです|と思います|と思う|気がします|気がする|"
+    r"っぽい(?:です)?|とのこと|そうです|と聞きました|と聞いた|って聞いた|って聞きました|"
+    r"という話です|可能性(?:が|も)(?:ある|あります)"
+)
+PET_CONDITIONAL_EVIDENCE_PATTERN = re.compile(
+    r"(?:もし|仮に).{0,60}(?:たら|なら|場合|としたら)|"
+    rf"(?:{PET_KIND_PATTERN}).{{0,20}}(?:飼|飼育).{{0,12}}(?:場合|なら|たら)"
+)
+PET_CORRECTION_PATTERN = re.compile(
+    r"(?:訂正|さっきの(?:話|こと)?(?:は|を)?|間違え(?:ました|た)|言い直すと|いや|実は|今は|現在は)"
+)
+PET_PREFERENCE_PATTERN = re.compile(
+    rf"(?P<animal>{PET_KIND_PATTERN}).{{0,8}}?(?P<preference>好き|苦手|嫌い)|"
+    rf"(?P<preference_before>好き|苦手|嫌い).{{0,8}}?(?P<animal_before>{PET_KIND_PATTERN})"
+)
+
+
+def _pet_claim_entity_scope(clause: str, start: int, animal: str) -> str | None:
+    """Return a normalized third-party relationship when the claim names one."""
+    def normalize(entity: str) -> str:
+        return "友達" if entity == "友人" else entity
+
+    preceding = clause[:start]
+    match = PET_THIRD_PARTY_SUBJECT_PATTERN.search(preceding)
+    if match:
+        entity = PET_THIRD_PARTY_ENTITY_PATTERN.search(match.group(0))
+        if entity:
+            return f"third_party:{normalize(entity.group(0))}"
+
+    entity = r"(?:友達|友人|家族|兄弟|きょうだい|姉妹|同僚|先輩|後輩|母|父|親|兄|姉|弟|妹|彼|彼女|実家)"
+    # Japanese word order may place the animal before its owner: "犬は友達が飼っています".
+    patterns = (
+        rf"{re.escape(animal)}.{{0,10}}(?P<entity>{entity}).{{0,4}}(?:が|は|も).{{0,10}}(?:飼|好き|苦手|嫌い)",
+        rf"{re.escape(animal)}.{{0,8}}(?:飼|好き|苦手|嫌い).{{0,8}}(?P<entity>{entity})(?:が|は|も)",
+        rf"{re.escape(animal)}.{{0,10}}(?P<entity>{entity})(?:の家|のところ|宅).{{0,4}}(?:で|に).{{0,8}}(?:飼|世話)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, clause)
+        if match:
+            return f"third_party:{normalize(match.group('entity'))}"
+    return None
+
+
+def _pet_claim_segment(clause: str, animal_start: int, animal: str) -> str:
+    """Limit polarity checks to the text about this animal."""
+    following = re.search(PET_KIND_PATTERN, clause[animal_start + len(animal):])
+    end = animal_start + len(animal) + following.start() if following else len(clause)
+    return clause[animal_start:end]
 
 
 NEGATIVE_PERSONAL_FACT_RE = re.compile(
@@ -2783,6 +2865,8 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     found: list[str] = []
     for candidate in candidates:
         text = candidate.text
+        if _has_unverified_pet_claim(text, context):
+            found.append("ペット")
         trusted_clauses = [
             re.sub(r"[\s、。！!？?]", "", clause)
             for clause in _trusted_fact_clauses(context, include_negated=True)
@@ -2957,6 +3041,142 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
         if _movie_assertion_segments(text) and not _claim_supported_by_trusted_fact("映画", text, context):
             found.append("映画")
     return list(dict.fromkeys(found))
+
+
+def _pet_claim_is_supported_partner_attribution(
+    clause: str,
+    animal: str,
+    subtype: str,
+    polarity: str,
+    context: dict | None,
+) -> bool:
+    if context is None or not re.search(
+        r"(?:なんですね|んですね|なんだね|んだね|なんだ|んだ|のですね|だね)$", clause.strip("!！?？ ")
+    ):
+        return False
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    return (animal, subtype, polarity, "speaker") in _latest_pet_claim_signatures(
+        partner_messages,
+        include_uncertain=False,
+    )
+
+
+def _pet_claim_signatures(
+    text: str,
+    context: dict | None = None,
+    *,
+    include_uncertain: bool = True,
+) -> list[tuple[str, str, str, str]]:
+    """Extract pet claims with both meaning and the person they describe."""
+    signatures: list[tuple[str, str, str, str]] = []
+    clauses = re.split(r"(?<=[!?！？。])|\n+|けれども|けれど|けど|でも|一方で", text)
+    for raw_clause in clauses:
+        clause = raw_clause.strip()
+        if not clause or _reading_genre_segment_is_question_only(clause):
+            continue
+        if not include_uncertain and (
+            PET_UNCERTAIN_EVIDENCE_PATTERN.search(clause)
+            or PET_CONDITIONAL_EVIDENCE_PATTERN.search(clause)
+        ):
+            continue
+        intent_matches = list(PET_INTENT_PATTERN.finditer(clause))
+        for match in intent_matches:
+            if _candidate_claim_is_interrogative(clause, match):
+                continue
+            if _pet_claim_is_supported_partner_attribution(
+                clause, match.group("animal"), "intent", "positive", context
+            ):
+                continue
+            segment = _pet_claim_segment(clause, match.start("animal"), match.group("animal"))
+            claim_tail = segment[match.end() - match.start("animal"):].lstrip()
+            polarity = "negative" if PET_INTENT_NEGATION_PATTERN.match(claim_tail) else "positive"
+            scope = _pet_claim_entity_scope(clause, match.start(), match.group("animal")) or "speaker"
+            signatures.append((match.group("animal"), "intent", polarity, scope))
+        for match in PET_OWNERSHIP_PATTERN.finditer(clause):
+            if _candidate_claim_is_interrogative(clause, match):
+                continue
+            if any(intent.start() <= match.start() < intent.end() for intent in intent_matches):
+                continue
+            verb = match.group("verb")
+            ending = clause[match.end():match.end() + 8]
+            subtype = "started" if verb == "飼い始め" else "past" if verb == "飼った" or re.match(r"(?:い)?(?:ました|た)", ending) else "ongoing"
+            segment = _pet_claim_segment(clause, match.start("animal"), match.group("animal"))
+            polarity = "negative" if re.search(
+                r"(?:飼っていない|飼ってない|飼っていなかった|飼ってなかった|飼っていません|飼ってません|"
+                r"飼っていませんでした|飼ってませんでした|飼ったことがない|飼ったことがありません|"
+                r"飼っているわけではない|飼っているわけではありません|飼っているわけじゃない|"
+                r"飼ってるわけではない|飼ってるわけじゃない|飼育していない|飼育してません|"
+                r"飼育していません|飼育していなかった|飼育してなかった)",
+                segment,
+            ) else "positive"
+            if _pet_claim_is_supported_partner_attribution(
+                clause, match.group("animal"), subtype, polarity, context
+            ):
+                continue
+            scope = _pet_claim_entity_scope(clause, match.start(), match.group("animal")) or "speaker"
+            signatures.append((match.group("animal"), subtype, polarity, scope))
+        for match in PET_PREFERENCE_PATTERN.finditer(clause):
+            if _candidate_claim_is_interrogative(clause, match):
+                continue
+            animal = match.group("animal") or match.group("animal_before")
+            animal_start = match.start("animal") if match.group("animal") else match.start("animal_before")
+            segment = _pet_claim_segment(clause, animal_start, animal)
+            polarity = "negative" if re.search(
+                r"(?:苦手|嫌い|好きではない|好きじゃない|好きではありません|好きじゃありません)",
+                segment,
+            ) else "positive"
+            if _pet_claim_is_supported_partner_attribution(
+                clause, animal, "preference", polarity, context
+            ):
+                continue
+            scope = _pet_claim_entity_scope(clause, match.start(), animal) or "speaker"
+            signatures.append((animal, "preference", polarity, scope))
+    return list(dict.fromkeys(signatures))
+
+
+def _latest_pet_claim_signatures(
+    statements: list[str],
+    *,
+    include_uncertain: bool,
+) -> set[tuple[str, str, str, str]]:
+    """Keep the latest polarity for each animal, claim type, and entity scope."""
+    latest: dict[tuple[str, str, str], tuple[str, str, str, str]] = {}
+    for statement in statements:
+        if PET_CORRECTION_PATTERN.search(statement) and re.search(r"飼|飼育", statement):
+            # A correction such as "訂正だけど今は飼っていない" may refer to an
+            # earlier animal without naming it. Invalidate old ownership claims
+            # instead of treating the old positive as current evidence.
+            for key in [key for key in latest if key[1] in {"ongoing", "past", "started", "intent"}]:
+                del latest[key]
+        for signature in _pet_claim_signatures(statement, include_uncertain=include_uncertain):
+            animal, subtype, polarity, scope = signature
+            latest[(animal, subtype, scope)] = signature
+    return set(latest.values())
+
+
+def _has_unverified_pet_claim(text: str, context: dict) -> bool:
+    claims = _pet_claim_signatures(text, context)
+    if not claims:
+        return False
+    evidence = _trusted_fact_clauses(context, include_negated=True)
+    grounded = _latest_pet_claim_signatures(evidence, include_uncertain=False)
+    # A partner's messages can establish what the partner said about a third
+    # party, but must never be treated as facts about the app user.
+    partner_evidence = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    grounded.update(
+        signature
+        for signature in _latest_pet_claim_signatures(partner_evidence, include_uncertain=False)
+        if signature[3].startswith("third_party:")
+    )
+    return any(claim not in grounded for claim in claims)
 
 
 def _question_topic(text: str) -> str | None:
@@ -3516,7 +3736,11 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         (
             "休日の友人との過ごし方",
             knows_friend_weekend_activity,
-            re.compile(r"(?:休日|休みの日|週末).{0,14}友達と.{0,14}(?:会う|出かけ|カフェに行く|過ごす).{0,10}(?:ですか|ますか|多い|んですか|？|\?)"),
+            re.compile(
+                r"(?:休日|休みの日|週末).{0,14}(?:友達と.{0,14}(?:会う|出かけ|カフェに行く|過ごす).{0,10}(?:ですか|ますか|多い|んですか|？|\?)|"
+                r"(?:誰と|どなたと).{0,12}(?:過ご|一緒にいる|出かけ|会う).{0,12}(?:ことが多い|普段|よく|いつも).{0,10}(?:ですか|ますか|？|\?)|"
+                r"(?:過ご|一緒にいる|出かけ|会う).{0,12}(?:誰と|どなたと).{0,8}(?:ことが多い|普段|よく|いつも).{0,10}(?:ですか|ますか|？|\?))"
+            ),
         ),
         (
             "休日の過ごし方",
@@ -4046,6 +4270,10 @@ def _has_redundant_positive_reaction(left: Candidate, right: Candidate) -> bool:
     generic follow-up question, while avoiding a claim of general semantic
     understanding.
     """
+    rest_empathy = re.compile(r"(?:お疲れ(?:様|さま)|ゆっくり休|体を休め|休むのも大事|休息|休めましたか|寝て終わ|寝て過ご)")
+    if rest_empathy.search(left.text) and rest_empathy.search(right.text):
+        return True
+
     positive_reaction = re.compile(
         r"(?:ワクワク|楽し|いいですね|素敵|面白|気になります|うれし|嬉し|魅力的|最高)"
     )

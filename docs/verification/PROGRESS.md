@@ -1016,3 +1016,30 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - T321をFIXED追加。Test Matrix 322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。実生成QUALITY009の文章自然さ・意味的候補多様性FAILは残るため、全体判定NO-GO。
 - コード/testはcommit `3df1847fcadf8f1ea811d84176ca275861310a6c`としてPush済み。Push Actions [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR Actions [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)はいずれもsuccessし、両方のhead SHAがコードSHAと一致。pytest、Firefox準備、JavaScript検査、Artifact uploadに成功。PR #4はOPEN/Draft・未マージ、HEAD SHA一致を確認。
 - 次: Actionsの両runが正確なHEADで成功するか確認し、その結果とテストをGitHubへ記録する。続いて保存済みQUALITY009の直接質問に各候補が答えているか、および会話前進に関する次のP0をオフラインで監査する。実Gemini、conversation_004、新規会話HTMLは最新指示により実施しない。
+
+### 2026-10-15 23:57 JST 継続チェックポイント：第三者ペット情報と共感重複
+
+- `codex/directive-control`を23:50 JSTに再取得。期限優先・P0中心・Gemini実通信とconversation_004/新規会話HTML禁止・PR #4 Draft維持の指示を確認。次回は00:10 JSTまたは15〜20分後に再確認する。
+- 候補の本人情報検査で、相手が話した「友達の犬」を本人の「同僚の犬」に使える問題を修正。署名に対象の関係を保持し、友人/同僚、母/父などの根拠を混同しない。曖昧・仮定・伝聞の情報は確定根拠にせず、後の訂正や否定を受けて古い肯定情報を残さない。飼育情報の過去/現在と肯定/否定も分けた。否定・仮定・伝聞・対象者違いの回帰を追加。
+- 保存済みQUALITY009の`joke_mirroring`で、「そういう日もありますよね／ゆっくり休めましたか」と「お疲れ様です／体を休めるのも大事」が同種の休息共感として検出されない問題を再現。候補本文は保持し、意味的な共感が重なる場合に多様性不足を通知するよう修正。
+- Focused pet tests **10 passed**。意味的重複 focused tests **2 passed**。一度、曖昧表現の検査が「飼ってみたい」まで不確定扱いする回帰を見つけ、修正した。全pytest **996 passed in 125.96s**（Firefox UI込み）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。ChromeとGemini実APIは不使用。
+- T323/T324をFIXEDとして追加。Matrix324項目: PASS230 / FAIL13 / FIXED61 / BLOCKED5 / NOT_TESTED15。Gemini出力の自然さ・全体的な意味的候補多様性は未達のため総合NO-GO。最新コード/testと資料は未コミット。作業開始SHA `08a01621712f1aa6aad1ed17a2d82b19783744eb`。
+- 独立レビューで見つかった否定・曖昧表現の誤受理は順次再現・修正した。保存済みQUALITY009の直接質問をすり替える候補は現在のフィルターが拒否することを別監査で確認した。次は候補の会話前進と意味的差を見直す。
+- 次の作業: 最新差分を選択的にレビューし、再現可能なP0だけ修正する。最新コードを含む全テストを記録したうえで、3つの未追跡ユーザー指示ファイルを除外してコミット・Pushし、最新HEADのPush/PR ActionsとPR #4状態を確認する。conversation_004、新しい会話HTML、実Gemini通信は行わない。
+
+### 2026-10-16 00:04 JST 継続チェックポイント：飼育情報の婉曲な否定
+
+- `codex/directive-control`を00:00 JSTに再取得し、期限優先のP0作業、実Gemini通信・conversation_004・新規会話HTMLの保留、PR #4 Draft維持を確認した。作業ブランチは`codex/full-system-verification`。
+- 独立レビューで、本人プロフィールの「犬を飼っているとは言えない」「犬を飼っているとは限らない」が、現在の肯定飼育を裏づける根拠として扱われる可能性を確認。これらの留保表現を確定根拠から除外し、肯定候補が送信可能な安全候補に残らない回帰テストを追加した。前回の否定過去・婉曲否定修正も合わせ、pet focused tests **6 passed**。
+- `python -m pytest -q`: **998 passed in 129.27s**（Firefox UIを含む）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。Firefoxのpytest自動UIは実施した。ChromeとGemini実APIは不使用。
+- QUALITY009再監査では、保存済みの「最近観た映画」への話題すり替え候補を現在のフィルターが拒否し、安全な1案と候補不足通知を返すAPI経路テストを確認した。休息・慰労の同義的共感候補は両方残しつつ多様性不足を通知する。後者は警告機能の確認で、Gemini文章自体の改善を意味しない。
+- T325をFIXED追加。Test Matrix **325項目: PASS230 / FAIL13 / FIXED62 / BLOCKED5 / NOT_TESTED15**。実生成品質009で確認された自然さ・意味的多様性のFAILは未解決のため、総合判定は**NO-GO**。Gemini実API **0回**。会話004と新しい会話HTMLは保留。
+- 次の作業: 最新差分をレビューし、未追跡のユーザー指示ファイル3件を除外して変更をコミット・Pushする。Push後は同じ最新HEADに対するGitHub ActionsとPR #4のOPEN/Draft状態を確認し、結果を追記する。
+
+### 2026-10-16 00:13 JST 継続チェックポイント：複数のペット主張を分けて検査
+
+- 00:10 JSTに`codex/directive-control`を再取得。継続指示の優先順位に変更はなく、P0の候補正確性・直接質問・拒否尊重・実用導線を優先。Gemini実通信、conversation_004、新しい会話HTMLは引き続き行わない。
+- 独立レビューで同じ文中に複数の動物がいる場合の極性混同を再現。「犬を飼ってませんが猫を飼っています」では猫の肯定情報も否定として記録され、「犬が苦手で猫が好き」の候補では未確認の猫嗜好がフィルターをすり抜けた。動物と述語間の曖昧な一致を最短一致にし、好み・飼育の各述語を動物ごとの区間で判定するよう修正。確認済みの犬/猫の各組合せと口語否定の回帰を追加。
+- 修正前の対比テストは**1 failed**。修正後pet focused tests **18 passed**。最終全pytest **1002 passed in 128.39s**（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立レビューは複数動物の極性テストを再生し、今回見た範囲で新たなP0を報告しなかった。
+- T326をFIXEDとして追加。Test Matrix **326項目: PASS230 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15**。既存QUALITY009の文章自然さ・候補の実生成品質FAILは残るため総合判定NO-GO。今回Gemini実API0回、Firefox UIはpytest内で使用、Chrome不使用。
+- 次: 6つの対象ファイルだけをコミット・Pushし、ユーザーの未追跡指示ファイルを保持する。GitHub Actionsが同一の新HEADで成功するか確認し、PR #4がOPEN/Draftのままか確認する。

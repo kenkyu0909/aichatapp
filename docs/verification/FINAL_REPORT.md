@@ -1142,3 +1142,16 @@ T320をFIXEDとして記録。Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOC
 ### 残課題と総合判定
 
 Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009での自然さ・意味的多様性・質問回答の不足は、将来の実Gemini出力で再評価できていない。オフライン修復だけでは解決済みと扱わない。**総合判定: NO-GO**。会話004、新しい会話HTML、Gemini実通信は現行の指示により未実施。PR #4はOPEN/Draft・未マージ。
+
+### 2026-10-16 00:04 JST 最新チェックポイント
+
+- 独立レビューで見つかった飼育情報の婉曲否定・留保（「飼っているとは言えない」「飼っているとは限らない」）を、肯定飼育の確定根拠にしないよう修正した。追加した回帰を含むpet focused tests **6 passed**。
+- 最新全pytest **998 passed in 129.27s**（Firefox UI込み）。Python compile、JavaScript構文検査、`git diff --check`成功。Firefoxのpytest UIを使用。Gemini実API **0回**、Chrome不使用。
+- Test Matrixは**325項目: PASS230 / FAIL13 / FIXED62 / BLOCKED5 / NOT_TESTED15**。保存済みQUALITY009では自然さ・意味的な候補多様性の手動FAILが残り、オフライン修正だけで解消したとは扱わない。
+- 総合判定は**NO-GO**。会話004と新しい会話HTMLは現在の指示により未実施。修正と今回の記録はコミット・Push前。PR #4は引き続きDraft・未マージを維持する。
+
+### 2026-10-16 00:13 JST 追加回帰結果
+
+独立コードレビューで、ペット情報の口語否定、複数動物の好み・飼育を一文で述べる場合の極性混同を発見した。動物ごとに対応する述語の範囲で判定するよう修正し、「犬が苦手で猫が好き」等の正しい情報と未確認情報を区別するテストを追加した。レビュー後にpet tests **18 passed**、全pytest **1002 passed in 128.39s**。Python/JavaScript構文検査と差分チェックも成功。
+
+この変更を含む最新全テストは成功したが、保存済みGemini QUALITY009の文章自然さと意味的な候補多様性の手動FAILを解消した新規実API証拠はない。Gemini実通信は**0回**。総合判定は**NO-GO**を維持する。GitHub Actionsはコミット/Push後に最新SHAで確認する。会話004と新しい会話HTMLは指示どおり未実施。
