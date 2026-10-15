@@ -901,3 +901,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 今回の修正は、確認済み自由記述プロフィールの好みに合う候補を通しつつ、逆の好みと未確認頻度を遮断するもの。保存済みGemini候補再生回帰も含む。実Gemini API0回。実生成の自然さ・候補意味多様性FAILは残るためNO-GO。会話004/新規会話HTMLはユーザー指示により未実施。
 - PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、head`25f365fab245e83a46bd9f4236921429f3069639`、未マージ。未追跡のユーザー指示ファイル3件は保持。
 - 次: 保存済み品質009の候補方針重複/反復をオフラインで再現し、候補A/B/Cの役割の整合性と不足通知を調査。15〜20分以内にdirective-controlを再fetch/showする。Chrome/実Gemini APIは使用しない。
+
+### 2026-10-15 19:33 JST 継続チェックポイント：未記録の候補方針を重複扱いする通知を修正
+
+- 保存済みQUALITY009応答のオフライン再生で、過去データに`reply_move`がない場合も候補モデルの既定値`react`をすべて同一方針と見なし、誤った多様性警告を表示する問題を発見。返信本文と選択肢自体は変更していなかったが、履歴データ上では根拠のない通知だった。
+- 修正は、候補ごとに方針値が明示的に届いている場合に限り重複move警告を比較する。明示ラベルが実際に重複する既存ケースと、欠落時に誤警告しない新規回帰の双方を確認。
+- 修正前回帰FAIL、修正後focused tests **3 passed / 769 deselected**。全pytest **851 passed in 105.01s**（Firefox UI込み、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。実Gemini API0回。
+- Test Matrix 309項目: PASS222 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の文章自然さと意味的候補差の手動FAILは残るため総合NO-GO。変更は未コミット、最新差分Actions未実行。前回SHA`c3a410084f6d1fdd7977516c34bc46b05c5e2958`のPush [38720166592](https://github.com/kenkyu0909/aichatapp/actions/runs/38720166592)・PR [38720172981](https://github.com/kenkyu0909/aichatapp/actions/runs/38720172981) Actionsは成功。
+- 次: 差分を再確認してコード・テスト・報告を選択的にPushし、最新HEADのPush/PR Actionsを確認。P0の実生成FAILのうち、応答が自然に会話を進めるかをオフラインで次に分析。定期指示は15〜20分内に再取得。PR #4はDraft・未マージ。会話004/新規会話HTML・Gemini通信なし。

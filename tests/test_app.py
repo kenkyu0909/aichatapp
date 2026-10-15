@@ -4108,6 +4108,24 @@ def test_duplicate_reply_moves_keep_safe_candidates_and_show_diversity_notice(cl
     assert "進め方が重なっている" in partially_repeated_filtered["candidate_notice"]
 
 
+def test_omitted_reply_moves_do_not_create_duplicate_move_warning(client):
+    _, backend = client
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        recommended=backend.Candidate(label="反応", text="その話題は興味深いです！"),
+        alternatives=[
+            backend.Candidate(label="話題展開", text="どんなところが一番好きですか？"),
+        ],
+        reason="会話を続ける",
+        invite_decision="continue_conversation",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 2, {})
+
+    assert filtered["available_candidate_count"] == 2
+    assert "進め方が重なっている" not in filtered["candidate_notice"]
+
+
 def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(client):
     _, backend = client
     repeated_positive_reactions = backend.Suggestions(

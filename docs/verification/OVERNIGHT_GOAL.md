@@ -654,3 +654,5 @@ prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15
 19:20 JSTにコード差分を再確認し、プロフィールの好みが一致したとき早期returnで未確認頻度検査を飛ばす懸念を発見して修正した。頻度チェック後の根拠判定に変更し、確定好み・逆の比較・未確認頻度を区別するテスト3件が成功。focused tests **3 passed / 763 deselected**、全pytest **850 passed in 110.92s**。Firefox専用UI回帰 **6 passed in 84.73s**。Gemini実APIは0回。安定性のローカル検証は現行差分で成功したが、P0の意味的品質全般は未達。総合NO-GOを維持。
 
 コードSHA `25f365fab245e83a46bd9f4236921429f3069639` はPush [38719831848](https://github.com/kenkyu0909/aichatapp/actions/runs/38719831848)・PR [38719837338](https://github.com/kenkyu0909/aichatapp/actions/runs/38719837338) Actionsともsuccess。PR #4 OPEN/Draft・未マージ。Test Matrixは308項目: PASS222 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。
+
+2026-10-15 19:33 JST: 保存済み応答で返信方針情報が欠けているケースを、スキーマの既定値だけで「全案がreact」と判定し重複警告する問題を修正。明示された方針値だけを比較し、明示ラベルの重複は引き続き警告。focused tests **3 passed / 769 deselected**、全pytest **851 passed in 105.01s**（Firefox UI込み）。実Gemini0回。品質009実生成の自然さと候補差は未達、総合NO-GO。Test Matrix 309項目: PASS222 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。最新差分のActionsは未実行。

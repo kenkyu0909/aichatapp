@@ -3681,8 +3681,15 @@ def filter_safe_candidates(
     ):
         notices.append("候補の中心的な反応が似ている可能性があります。安全な候補は残しているため本文を確認して選んでください。")
     if isinstance(value, SuggestionsV2) and len(accepted) > 1:
-        reply_moves = {candidate.reply_move for candidate in accepted}
-        if len(reply_moves) < len(accepted):
+        # Do not infer duplicate strategies from the schema's default "react"
+        # when a provider or an older saved response omitted reply_move.
+        explicit_reply_moves = [
+            candidate.reply_move
+            for candidate in accepted
+            if "reply_move" in candidate.model_fields_set
+        ]
+        all_moves_are_explicit = len(explicit_reply_moves) == len(accepted)
+        if all_moves_are_explicit and len(set(explicit_reply_moves)) < len(accepted):
             notices.append("候補の進め方が重なっている可能性があります。本文を確認して選んでください。")
     result["candidate_notice"] = " ".join(notices)
     return result
