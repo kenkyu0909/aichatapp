@@ -925,6 +925,7 @@ def _is_effectively_negative_personal_fact(clause: str) -> bool:
 
 def _contrastive_evidence_clauses(fragment: str) -> list[str]:
     """Split contrastive facts while retaining a narrowly scoped elliptical positive."""
+    fragment = re.sub(r"(ですが|だけど|けれども?|一方で|ただ)[、,]\s*", r"\1", fragment)
     clauses = re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment)
     if len(clauses) != 2:
         return clauses
@@ -934,7 +935,10 @@ def _contrastive_evidence_clauses(fragment: str) -> list[str]:
     # Keep the joined wording as evidence only for that elliptical form.
     has_grounding_subject = bool(re.search(r"カフェ|喫茶店|お店|店|場所|映画|旅行|読書|本", left))
     has_subject_in_right = bool(re.search(r"カフェ|喫茶店|お店|店|場所|映画|旅行|読書|本", right))
-    elliptical_positive = bool(re.match(r"(?:好き|楽しい|はま|興味がある|興味あります)", right))
+    elliptical_positive = bool(re.fullmatch(
+        r"(?:好き(?:です|だ)?|楽しい(?:です|だ)?|はま(?:っています|っている|ってる|ってます)|興味(?:が)?(?:あります|ある))",
+        right.rstrip("!！"),
+    ))
     if (
         _is_effectively_negative_personal_fact(left)
         and has_grounding_subject
@@ -998,6 +1002,7 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
 
     def collect(value: Any) -> None:
         if isinstance(value, str):
+            value = re.sub(r"(ですが|だけど|けれども?|一方で|ただ)[、,]\s*", r"\1", value)
             for fragment in re.split(r"[。！？!?\n,、]+", value):
                 clauses = _contrastive_evidence_clauses(fragment)
                 for clause in clauses:
