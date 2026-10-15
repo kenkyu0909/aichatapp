@@ -2696,6 +2696,12 @@ def test_work_tenure_requires_exact_value_and_claim_type(client, confirmed_tenur
     ("5年", "勤続5年未満ですか？", True),
     ("5年", "勤続5年以上ですか？", True),
     ("5年", "5年以上の勤務経験がありますか？", True),
+    ("5年", "勤続5年ちょっとです！", False),
+    ("5年", "5年強の勤務経験があります！", False),
+    ("5年", "5年弱働いています！", False),
+    ("5年強", "5年強の勤務経験があります！", True),
+    ("5年ちょっと", "勤続5年ちょっとです！", True),
+    ("5年", "勤続5年ちょっとですか？", True),
 ])
 def test_work_tenure_claim_qualifier_must_match_confirmed_fact(
     client, confirmed_tenure, claim, supported

@@ -116,3 +116,12 @@ Firefox単独UI、Python/JavaScript構文、差分・秘密情報スキャンを
 - 全pytest **612 passed in 96.69s** は候補併合前のコードであり、最新全体回帰とはしない。差分後のfocused suite 12 passed。Python compile、Node構文、`git diff --check`成功、差分の秘密形式一致0件。最新作業ツリーの全pytest、Actionsは未確認。
 - 今回の実Gemini要求は**0**。quality_checks_009の実生成FAILを保持。conversation_004・新しい会話HTMLは作成しない。ユーザー指示ファイル3点は未追跡のままコミット対象外。PR #4はDraft・未マージ。
 - 現在のTest Matrixは231 ID行: PASS176 / FAIL13 / FIXED23 / BLOCKED5 / NOT_TESTED14。総合品質はNO-GO。残り時間は追跡ファイルの差分レビュー、commit/push、PRとActions確認に使い、13:00 JSTで安全に区切る。
+
+
+### 2026-10-15 12:56 JST：勤続年数の追加限定詞
+
+- 独立レビューで確認済み「5年」に「5年ちょっと」「5年強」「5年弱」を通す抜けを確認。3つの回帰テストを追加し、修正前に3件すべての失敗を再現した。
+- 年数照合と候補検出の双方に限定詞を追加し、疑問形は本人の断定事実として扱わない。修正後の範囲・数値・質問形focused suiteは**21 passed**。
+- 今回も安全な候補は残し、本人情報を断定する根拠が足りない場合は候補数不足を通知する。
+- 既存全pytest **612 passed** は候補併合以前であり、今回の修正後全体結果ではない。Gemini API 0回。conversation_004未実施。Test MatrixはID行233件（PASS177 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。総合判定NO-GO。
+- 次: 最新のPython/JavaScript構文・diff・秘密形式チェック、今回の追跡差分レビュー後に記録ファイルと実装修正をcommit/push。PR #4をDraftのまま確認し、最新Actionsを照合する。13:00 JSTで停止条件を守り、未完了は正確に残す。

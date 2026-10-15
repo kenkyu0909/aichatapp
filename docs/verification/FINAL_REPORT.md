@@ -801,3 +801,12 @@ Gemini実API通信は0回。QUALITY009の実文章品質FAILは維持し、conve
 修正前の勤続範囲テストは3件失敗、安全候補併合の再現テストも失敗した。修正後は勤続・カフェ根拠境界19件、候補併合・拒否時フィルター12件が成功。Python構文、JavaScript構文、`git diff --check`も成功し、変更差分のAPIキー形式検索は0件。
 
 全pytestの**612 passed in 96.69s**は、候補併合変更の前のコードに対する結果であり、最新コードの全体回帰成功とは扱わない。最新差分のfocused suiteは12 passed。T231の静的検査はPASS。Gemini実API追加0回。QUALITY009の実生成品質FAILを維持し、総合判定は**NO-GO**。conversation_004・新会話HTMLは未実施。最新SHAのGitHub Actionsはpush後に確認する。
+
+
+### 2026-10-15 12:56 JST：勤続年数の追加限定詞
+
+- 独立レビューで確認済み「5年」に「5年ちょっと」「5年強」「5年弱」を通す抜けを確認。3つの回帰テストを追加し、修正前に3件すべての失敗を再現した。
+- 年数照合と候補検出の双方に限定詞を追加し、疑問形は本人の断定事実として扱わない。修正後の範囲・数値・質問形focused suiteは**21 passed**。
+- 今回も安全な候補は残し、本人情報を断定する根拠が足りない場合は候補数不足を通知する。
+- 既存全pytest **612 passed** は候補併合以前であり、今回の修正後全体結果ではない。Gemini API 0回。conversation_004未実施。Test MatrixはID行233件（PASS177 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。総合判定NO-GO。
+- 次: 最新のPython/JavaScript構文・diff・秘密形式チェック、今回の追跡差分レビュー後に記録ファイルと実装修正をcommit/push。PR #4をDraftのまま確認し、最新Actionsを照合する。13:00 JSTで停止条件を守り、未完了は正確に残す。
