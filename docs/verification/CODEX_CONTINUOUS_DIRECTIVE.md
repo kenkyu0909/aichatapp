@@ -147,3 +147,15 @@ API上限・課金・機密・環境停止等の制約は必ず守る。実API�
 Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイントを付け、GO/NO-GO、差分、失敗再現、pytest件数、Actions HEAD SHA、Gemini論理要求/provider attempts、残課題と次の自律作業を記載する。過去の失敗・実出力は改ざんしない。Firefoxのみを使いChromeは使わない。作業ブランチ`codex/full-system-verification`のPR #4はDraft・未マージを維持する。
 
 このファイルはChatGPTの毎時監査により更新される。新規指示がなくても上記P0→P1→P2の順で継続すること。
+
+## 2026-10-15 20:56 JST — 継続監査と次の作業
+
+**確認結果：** 作業ブランチの修正SHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`では、invite_gentlyに安全な誘い候補がない場合の方針不整合を修正した。全pytestは932 passed。T313は修正済み。検証資料のみのSHA `331b61f1c09a7ca092cf170551c5cd440bde3182`もPush/PR Actionsが成功し、head SHA一致を確認した（[Push run 38730204905](https://github.com/kenkyu0909/aichatapp/actions/runs/38730204905)、[PR run 38730211609](https://github.com/kenkyu0909/aichatapp/actions/runs/38730211609)）。PR #4はOPEN/Draft、未マージ。Gemini実APIは今回0回。Test Matrixは314項目: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の生成自然さと意味的候補多様性はFAILのまま。
+
+**次の優先作業：**
+1. 品質009の保存済み生成失敗を文章自然さ・直接質問の回答・候補間の方針差に分け、再現テストと現行フィルターを照合する。既存の実生成原文や過去のFAILは変更・削除しない。
+2. 次はFirefoxでfirst→相手追加→reply生成→改行保持コピー→送信記録→履歴再表示のコア導線を架空データで確認する。Gemini呼出しを使わないテスト環境を優先し、Chromeは使わない。
+3. 実Gemini API、conversation_004、新しい会話HTMLはユーザーが別途許可するまで実施しない。安全候補は残し、不足は通知する。
+4. 合格後も次の未達P0へ進み、PROGRESS・TEST_MATRIX・FINAL_REPORTを更新して作業ブランチへPushする。PR #4はDraft・未マージを維持する。
+
+稼働中は15〜20分ごと、毎時10分（JST）にこの指示ブランチを再取得する。指示確認を再開時刻として扱わず、待ち時間も安全なオフライン作業を続ける。
