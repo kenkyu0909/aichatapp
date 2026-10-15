@@ -974,3 +974,10 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - コード/test commit `058ec382c8d734a5273d33af1bbf93609cefa61f`をPushした。最新SHAのActionsはこれから確認する。T313の証拠説明を更新済みで、Matrixは316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。品質009の実生成自然さ・意味的候補多様性FAILは未解決、総合NO-GO。
 - Firefox UI直実行6 passed in 82.61s（同一画面テストは全pytestにも含む）、品質009安全候補再生5 passed in 0.33s。Chrome不使用。conversation_004・新規会話HTMLは実施せず、Gemini APIも使用していない。
 - 次: docs差分をコミット・Pushし、最新コードSHAおよび最終文書HEADのActions、PR #4 Draft状態を確認する。その後、保存済み品質009の意味的反復/候補方針差へ戻る。15〜20分ごと・毎時10分にdirective-controlを読み直す。
+
+### 2026-10-15 21:05 JST 継続チェックポイント：コード・資料Actions成功
+
+- `058ec382c8d734a5273d33af1bbf93609cefa61f`のPush Actions [38731667450](https://github.com/kenkyu0909/aichatapp/actions/runs/38731667450)・PR Actions [38731677887](https://github.com/kenkyu0909/aichatapp/actions/runs/38731677887)がsuccessし、head SHA一致。これを含む資料commit `5081dcaf7acddceef30b09b3aeb4cd7b6380e954`のPush Actions [38731751338](https://github.com/kenkyu0909/aichatapp/actions/runs/38731751338)・PR Actions [38731758965](https://github.com/kenkyu0909/aichatapp/actions/runs/38731758965)もsuccess。
+- 全pytest **932 passed in 113.98s**。Firefox実UI **6 passed in 82.61s**。品質009保存結果の安全フィルター再生**5 passed in 0.33s**。Node/Ubuntu runnerの非阻害警告を除き、CI jobs成功。Gemini実API0回。
+- T317をPASS追加。Test Matrixは317項目: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の生成自然さ・意味的候補差FAILは解消していないため総合NO-GO。
+- PR #4はOPEN/Draft、head`5081dcaf7acddceef30b09b3aeb4cd7b6380e954`、未マージ。実験004/新HTMLなし。3つの未追跡ユーザー指示ファイルは保持。次は資料とPR本文を更新し、15〜20分以内にdirective-controlを再取得。次の作業は保存済みQUALITY009の意味的反復/候補方針差のオフライン再監査。

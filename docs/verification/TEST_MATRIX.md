@@ -698,3 +698,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T316 | 保存済みQUALITY009出力を現行安全フィルターで再生 | `python -m pytest -q tests/test_quality_checks_009.py`。架空の過去出力を隔離バックエンドへ投入 | PASS | コードSHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`。**5 passed in 0.33s**。保存済みの元文章は変更せず、安全候補を残し問題候補を理由付きで除外する回帰を確認。Gemini実通信0回。モデル文章の自然さ・意味的多様性全般の解決を示すものではない。|
 
 最新ID行: 316。累計: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+
+| T317 | 会話段階同期修正と検証資料の最新HEADに対するGitHub Actions | Push/PR Actionsログのhead SHA・pytest・Firefox・JS検査を確認 | PASS | コードSHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のPush [38731667450](https://github.com/kenkyu0909/aichatapp/actions/runs/38731667450)・PR [38731677887](https://github.com/kenkyu0909/aichatapp/actions/runs/38731677887)がsuccess。検証資料HEAD `5081dcaf7acddceef30b09b3aeb4cd7b6380e954`のPush [38731751338](https://github.com/kenkyu0909/aichatapp/actions/runs/38731751338)・PR [38731758965](https://github.com/kenkyu0909/aichatapp/actions/runs/38731758965)もsuccess。各runでbackend tests、Firefox準備、JavaScript構文検査、Artifact upload成功。PR #4はOPEN/Draft。|
+
+最新ID行: 317。累計: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
