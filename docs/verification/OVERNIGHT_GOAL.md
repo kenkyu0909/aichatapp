@@ -747,3 +747,10 @@ Firefox E2Eはfirst/reply、候補コピー、手動記録、履歴画面、再�
 
 Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。Gemini API0回。会話004/新規HTMLは最新指示により未実施。総合判定は**NO-GO**。コード/test修正SHA `691999ad4f5238f233107688ffb75bbed3b1090e`はPush済みで、Actions結果は未確認。次はActions完了後、直接質問候補の回答適合性とQUALITY009の意味的多様性に対する次のオフライン修正を進める。
 T319コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がともにsuccess。Actions上でpytest、JavaScript構文検査、artifact uploadが成功し、PR #4はDraft未マージ。実生成品質の残課題があるため総合NO-GO。|
+### 2026-10-15 22:27 JST 継続更新：買い物傾向の未確認性格推定を拒否
+
+T320として、保存済みQUALITY009の回答「少し調べてから買うことが多いです」から「慎重なほう」を推定した候補を不合格にし、安全候補を残す修正を記録。否定/対比、裸の形容、`慎重派`、文分割後の根拠スコープ、相反する本人確認情報も回帰対象にした。focused 23 passed、全pytest 972 passed in 120.06s（Firefox UI込み）。一度だけプロフィール保存toast待ちに失敗したFirefoxテストは単独と最新全体再実行で成功。Python/JS構文・diff検査成功。Gemini API0回。
+
+Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。Gemini実生成の自然さ・意味的候補多様性は未達なのでNO-GO。修正SHA`de93027d1b3b9206df92f14dd22375faec492f59`のPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326)とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254)は両方successし、head SHA一致を確認。PR #4はDraft・未マージ。3つのローカル指示ファイルは未追跡のまま保持。
+
+次: Actions結果を待つ間も、保存済み品質009の重複候補/直接質問への回答漏れを次のオフラインP0として検査する。会話004・新しい会話HTML・実Gemini通信は現行指示で実施しない。

@@ -1114,3 +1114,10 @@ Test Matrixは318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。
 
 全pytest **949 passed in 125.37s**（Firefox UI込み）、本人情報フィルターのfocused tests **15 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回、Firefox使用・Chrome不使用。Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。これはモック/ローカル安全検査の確認であり、QUALITY009に残る実生成の自然さ・候補多様性FAILを解決したものではない。総合判定は**NO-GO**を維持する。修正SHAのGitHub Actionsは確認待ち。PR #4はOPEN/Draft・未マージ。
 修正SHA `691999ad4f5238f233107688ffb75bbed3b1090e`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がsuccessし、head SHA一致を確認した。pytest、JavaScript構文検査、test artifact uploadはいずれも成功。|
+## 2026-10-15 22:27 JST 追補：買い物傾向に関する本人性格推定を遮断
+
+QUALITY009の保存済み実生成で確認された「少し調べてから買う」という一時回答から、明示されていない「慎重な性格」を推定する候補を修正した。根拠を買い物傾向の専用プロフィール欄または買い物の性格について尋ねた本人の一時回答に限定し、無関係な仕事欄やAI生成履歴を根拠にしない。否定、対比、短い断定、`慎重派`等の表現、根拠同士の極性矛盾も候補検査で拒否する。文ごとのスコープを保ったまま判定し、安全候補を残して不足を通知する。
+
+修正SHA `de93027d1b3b9206df92f14dd22375faec492f59`。Focused **23 passed**、全pytest **972 passed in 120.06s**（Firefox UI込み）。途中でプロフィール保存toast待ちが一度タイムアウトしたが、単独再実行と後続の全体再実行で成功し未再現。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回、Chrome不使用。
+
+T320をFIXEDとして記録。Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。品質009の自然さと意味的候補多様性FAILは残るため総合NO-GO。最新コードSHAに対するPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326)とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254)はいずれもsuccessし、対象SHA一致を確認した。pytest、Firefox準備、JavaScript構文検査、Artifact保存に成功。PR #4はOPEN/Draft・未マージ。次は検証資料をPush後、候補の意味的重複/直接質問の回答適合をオフライン評価する。会話004・新しいHTML・実Gemini通信は行わない。

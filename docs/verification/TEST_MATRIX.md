@@ -711,8 +711,11 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T319 | 本人への直接質問に対する確認済み回答の範囲・追加事実・矛盾の安全検査 | `python -m pytest -q`。架空プロフィールと一時回答を使うFastAPI/フィルター回帰 | FIXED | Windows、Python 3.12、Firefoxを含む全pytest **949 passed in 125.37s**。本人への確認済み回答以外に予定・場所・習慣・経験・別の好みを足す候補、肯定/否定の矛盾を送信可能にしない。安全な確認済み回答と相手への関連質問は維持し、安全候補が減る場合は候補不足を通知。focused tests **15 passed, 849 deselected**。`py_compile`、`node --check app.js`、`git diff --check`も成功。Gemini実通信0回。QUALITY009の自然さ/意味的候補多様性は未解決。変更SHA `691999ad4f5238f233107688ffb75bbed3b1090e`。|
 
 最新ID行: 319。累計: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
-最新T319コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`を対象にしたGitHub Actions: Push [38737598550](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [38737604331](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がともにsuccess。両runでbackend pytest、JavaScript構文検査、test artifact upload成功。|`;
-$progressNote = @'
+最新T319コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`を対象にしたGitHub Actions: Push [38737598550](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [38737604331](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がともにsuccess。両runでbackend pytest、JavaScript構文検査、test artifact upload成功。|
+
+| T320 | 保存済みQUALITY009の買い物傾向回答から未確認の性格を推定する候補を遮断 | 架空プロフィール・一時回答を使ったFastAPIフィルターpytest、QUALITY009保存出力の再生、全pytest | FIXED | 修正前に実出力候補「けっこう慎重なほうかもしれません」を再現。買い物傾向の明示根拠だけを使用し、無関係なプロフィール欄、AI生成履歴、否定/対比、候補と本人回答の極性不一致、相反する確定情報では候補を通さない。安全な確認済み候補は保持し、不足通知を行う。肯定/否定・句分割・無接尾断定形・慎重派・短文断片を含むfocused tests **23 passed**。全pytest **972 passed in 120.06s**（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。SHA `de93027d1b3b9206df92f14dd22375faec492f59`。同SHAのPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326) とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254)はいずれもsuccessでhead SHA一致。各runでpytest、Firefox準備、JavaScript構文検査、Artifact保存が成功。日本語意味判定は列挙形式の保守的な検査であり、あらゆる表現の網羅を示さない。|
+
+最新ID行: 320。累計: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・意味的候補多様性FAILは未解決。
 
 ### 2026-10-15 21:52 JST 追補：最新コードSHAのGitHub Actions
 

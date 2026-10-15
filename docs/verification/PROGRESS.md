@@ -998,3 +998,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - コード/testを`691999ad4f5238f233107688ffb75bbed3b1090e`として作業ブランチへPush済み。Actionsは実行待ち。3つのユーザー指示ファイルは未追跡のまま保持し、ステージしていない。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。
 - Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。過去の実Gemini品質FAILは維持。追加の実通信・会話004・新規会話HTMLは行っていない。
 - 次: 最新SHAのPush/PR ActionsとPR状態を確認し、この検証資料を更新する。その後、保存済みQUALITY009の「各候補が直接質問へ答えるか」と意味的候補差を再監査し、オフラインで次のP0修正を続ける。15〜20分以内または毎時10分に指示ブランチを再取得する。
+### 2026-10-15 22:27 JST 継続チェックポイント：QUALITY009買い物性格推定の根拠と極性
+
+- QUALITY009保存出力の本人回答「気になった新作は少し調べてから買うことが多いです」に、未確認の「慎重なほうかもしれません」を足す候補を修正前に再現した。別プロフィール欄の「仕事では慎重」、AI生成済み自分発言、買い物事実の否定/対比、肯定・否定の食い違い、文の分割による極性喪失も再現テスト化した。
+- `app.py`では買い物傾向の専用プロフィールキーと、その分野を明示的に尋ねた一時回答だけを根拠にする。候補と根拠の肯定/否定極性を照合し、複数の確定情報が食い違う場合は全方向の主張を拒否する。文を分割しても出所のスコープを各節に保持する。安全候補だけを残し、足りない場合は不足を通知する。
+- T320 FIXED。focused suite **23 passed**。最終コード全pytest **972 passed in 120.06s**（Firefox UI込み）。途中にprofile保存通知待ちのFirefox UIケースが1回タイムアウトしたが、同ケース単独再実行と後続の全pytestで成功し再現なし。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回、Chrome不使用。
+- code/test SHA `de93027d1b3b9206df92f14dd22375faec492f59`を作業ブランチへPush済み。同SHAのPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326) とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254) がsuccess。各runでpytest、Firefox準備、JavaScript構文検査、Artifact保存が成功し、PR Actions head SHA一致を確認した。
+- PR #4はOPEN/Draft、head SHA一致、未マージ。ユーザーの未追跡指示ファイル3件はステージしていない。Test Matrix 320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の自然さ・意味的候補多様性FAILは未解決、総合NO-GO。会話004・新しい会話HTML・実Gemini通信は指示どおり未実施。
+- 次: 同SHA Actionsの完了を確認してdocsをPushし、保存済み候補の意味的重複と直接質問回答の候補別整合を次のP0としてオフラインで調べる。安全フィルターは日本語全表現を網羅するものではない。
