@@ -689,3 +689,102 @@ def test_firefox_keeps_safe_candidate_visible_with_shortage_notice(local_app, fi
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
+
+
+def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_app, firefox):
+    app = local_app
+    driver = firefox
+    driver.get(local_app.url)
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "")
+    install_generate_mock(driver)
+
+    add_fictional_contact(driver, "架空のあおい")
+    driver.find_element(By.ID, "message-input").send_keys("休日は友達とカフェに行きました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+
+    add_fictional_contact(driver, "架空のゆき")
+    driver.find_element(By.ID, "message-input").send_keys("最近は美術館に行きました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+
+    contact_a = next(
+        item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item")
+        if "架空のあおい" in item.text
+    )
+    contact_a.click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のあおい"
+        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
+        == ["休日は友達とカフェに行きました！"]
+    )
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    assert "実際に送信した文章を記録" in modal(driver).find_element(By.ID, "modal-title").text
+
+    # The native dialog blocks pointer clicks on the contact list. Dispatch the
+    # same contact button handler to model a selection change while the stale
+    # candidate confirmation remains open.
+    driver.execute_script("""
+      const item = Array.from(document.querySelectorAll('.contact-item'))
+        .find(button => button.textContent.includes('架空のゆき'));
+      item.click();
+    """)
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のゆき"
+        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
+        == ["最近は美術館に行きました！"]
+    )
+
+    modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
+    visible_toast(driver, "相手が変わっています。もう一度確認してください")
+    assert modal(driver).get_attribute("open") is not None
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+
+    driver.find_element(By.ID, "close-modal").click()
+    assert driver.find_element(By.ID, "current-name").text == "架空のゆき"
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
+    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.them .bubble").text == "最近は美術館に行きました！"
+
+    contact_a = next(
+        item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item")
+        if "架空のあおい" in item.text
+    )
+    contact_a.click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のあおい"
+        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
+        == ["休日は友達とカフェに行きました！"]
+    )
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
+    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.them .bubble").text == "休日は友達とカフェに行きました！"
+
+    with urllib.request.urlopen(app.url + "api/matches", timeout=3) as response:
+        matches = json.load(response)
+    match_ids = {item["name"]: item["id"] for item in matches}
+    assert set(match_ids) >= {"架空のあおい", "架空のゆき"}
+    for name, expected in (
+        ("架空のあおい", "休日は友達とカフェに行きました！"),
+        ("架空のゆき", "最近は美術館に行きました！"),
+    ):
+        with urllib.request.urlopen(
+            app.url + f"api/matches/{match_ids[name]}/messages", timeout=3
+        ) as response:
+            messages = json.load(response)
+        assert [(message["role"], message["body"]) for message in messages] == [("them", expected)]
+
+    errors = record_artifact(
+        "firefox-stale-candidate-recording",
+        driver,
+        {"record_attempt_rejected": True, "old_and_new_histories_unchanged": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
