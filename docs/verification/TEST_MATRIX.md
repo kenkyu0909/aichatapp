@@ -616,3 +616,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T295 | 品質記録にreply_moveを保持し、秘密らしい候補を非保存 | pytest / 保存関数のユニット試験 | FIXED | 新規記録では各候補のlabel・reply_move・textを保存し、認証情報検出時は候補メタデータと本文をともに保存しない。品質009の既存JSONは変更していない。focused runner suite **3 passed**。コードレビューで未解決指摘なし。|
 
 最新ID行: 295。累計: PASS217 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成文面FAILは未解決。今回Gemini APIは0回。|
+
+| T296 | QUALITY009の映画回答フィクスチャからテスト注記を除去 | pytest / 架空データフィクスチャ検査 | PASS | 本人の架空回答を「最近は『青い灯台』を観ました」に整え、会話文にメタ注記「架空作品」が混入しないことを検査。修正前の回帰テストは失敗し、修正後focused suite **4 passed**、全pytest **766 passed in 104.03s**。これはテストデータの品質確認であり、Geminiの生成品質を確認したものではない。|
+
+最新ID行: 296。累計: PASS218 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。QUALITY009の文章手動FAILは未解決。|

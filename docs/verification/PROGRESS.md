@@ -728,3 +728,12 @@
 - 最終ローカル状態の全pytest **765 passed in 106.62s**。Firefox UIを含み、skipなし。py_compile、node --check app.js、git diff --check成功。品質ランナーfocused suite **3 passed**。コードレビューで秘密情報の非保存と候補方針保存に問題なし。
 - Matrix 295件: PASS217 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。最新確定Push SHA 9863eded6faaac8777c6060dd61580c7726c6236 のPush/PR Actions両方成功。ただしこのSHAのCIは直近のreply_move記録変更前であり、最終ローカル差分を次にPushして新SHAのActionsを確認する。
 - 次: ドキュメントとreply_move記録変更をPushしCI完了を確認。その後、会話候補の方針差・自然さの品質課題をオフラインで監査する。総合NO-GO、PR #4 OPEN/Draft、未マージ。ユーザー提供の未追跡指示ファイルはステージしない。
+
+### 2026-10-15 16:54 JST 継続チェックポイント：テスト用映画回答の自然化
+
+- `codex/directive-control` の最新版を確認。P0の実用品質・直接質問への回答・事実根拠・候補差を優先し、実Gemini通信、conversation_004、新規会話HTMLは実施しない。
+- quality009の将来用ケース `recent_movie_answered` から、本人の回答文に混ざっていたテスト注記「架空作品」を削除し、架空タイトルだけを残した。修正前に新規pytestが失敗することを確認し、修正後focused suiteは**4 passed**。
+- 全pytest **766 passed in 104.03s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。実Gemini APIは0回。レビュー担当者は変更範囲が狭く、テストが実生成品質を誤って主張しないことを確認し、指摘なし。
+- Test Matrixを296項目: PASS218 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15に更新。QUALITY009実生成の人手評価FAILは未解決なので総合NO-GO。
+- この追補と2つのコード/テスト変更は未コミット。ユーザー提供の未追跡指示ファイル3点は触れていない。既存PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `52b074cb32d4dec2425606c13e54d3033364896d`。同HEADのGitHub Push Actions [38701496111](https://github.com/kenkyu0909/aichatapp/actions/runs/38701496111) は成功だが、今回のローカル差分を含まない。
+- 次: 保存済みQUALITY009の直接質問・候補方針差・拒否対応をオフラインで再監査し、修正前FAILを保持したテストを追加する。実APIや新しい会話HTMLは作らない。

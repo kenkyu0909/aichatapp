@@ -971,3 +971,9 @@ PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush 
 評価ランナーの追加pytest 2件が成功。全pytest **764 passed in 104.45s**（Firefox UI含む、skipなし）。Python構文、JavaScript構文、diff検査も成功した。Gemini API通信は0回。新コードSHAのGitHub ActionsはPush後に確認する。品質009の生成文手動FAILと実用品質NO-GOは維持する。
 
 その後、今後の品質記録に各候補のreply_moveも保存し、秘密情報らしい応答は候補一式を記録しない回帰を追加した。最終ローカル差分の全pytestは**765 passed in 106.62s**、Firefox UI込み。runner focused suiteは3 passed。最終差分のActionsはPush後確認待ち。過去JSONはそのまま保持。
+
+## 2026-10-15 16:54 JST 最新オフライン確認
+
+架空の最近観た映画の回答フィクスチャから、テスト用注記「架空作品」を取り除いた。修正前に回帰テストが失敗し、修正後に成功することを確認した。focused suiteは**4 passed**、全pytestは**766 passed in 104.03s**（Firefox UIを含む）。Python構文、JavaScript構文、差分検査も成功。コードレビューで指摘なし。
+
+この変更はテスト入力の自然さを整えるものであり、Geminiの出力改善を示すものではない。Gemini実通信は0回。既存のQUALITY009実生成文面FAILは未解決のまま保持し、総合判定は**NO-GO**。TEST_MATRIXは296項目: PASS218 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。SHA `52b074cb32d4dec2425606c13e54d3033364896d` のActions [38701496111](https://github.com/kenkyu0909/aichatapp/actions/runs/38701496111) は成功したが、このローカル差分より前のHEADを対象とする。会話004と新規会話HTMLは指示により未実施。

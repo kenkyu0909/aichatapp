@@ -1,4 +1,5 @@
 from scripts.run_quality_checks_009 import (
+    CASES,
     record_candidates,
     smoke_candidate_set_status,
     smoke_has_live_valid_response,
@@ -52,3 +53,11 @@ def test_quality_record_preserves_candidate_reply_moves():
     assert [item["reply_move"] for item in recorded] == ["react", "expand"]
     assert [item["text"] for item in recorded] == ["短い反応です！", "次の話題につなげます！"]
     assert record_candidates([{"label": "秘密", "reply_move": "react"}], ["secret"], redacted=True) == []
+
+
+def test_fictional_movie_fixture_does_not_put_test_label_in_user_answer():
+    case = next(item for item in CASES if item["id"] == "recent_movie_answered")
+    answer = case["answers"][0]["answer"]
+
+    assert answer == "最近は『青い灯台』を観ました"
+    assert "架空作品" not in answer

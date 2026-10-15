@@ -478,3 +478,17 @@ Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。�
 | アプリ全体の安定性 | CONDITIONAL | 最終ローカル状態765 passed、Firefox UI、構文、diff検査成功。GitHub Actionsは今回の未コミットreply_move記録変更を含むSHAでは未確認。 |
 
 保存済み品質009の初回応答2/3案はpartial_safe。今後の品質JSONにはreply_moveを保存し、認証情報らしい候補を一切保存しない。旧JSONは変更なし。実Gemini 0回。conversation_004と新規HTMLは行わない。総合NO-GO。
+
+### 2026-10-15 16:54 JST：品質009のテストフィクスチャ確認
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 過去の実生成FAILが残り、新たなGemini検証なし。テスト入力中の人工的な注記だけを除去。 |
+| 句読点・改行 | NOT_MET | 既存の固定テストは通過。包括評価基準は未評価。 |
+| ミラーリング | NOT_MET | 20ケースの評価を未実施。 |
+| 共感の反復防止 | NOT_MET | QUALITY009の手動品質FAILが未解決。 |
+| 返信候補の多様性 | NOT_MET | 保存済み候補の意味的多様性は未達。 |
+| 食事への誘い判断 | NOT_MET | 固定回帰はあるが包括10ケース評価は未完了。 |
+| アプリ全体の安定性 | CONDITIONAL | 全pytest **766 passed in 104.03s**（Firefox UI含む）。Python/JavaScript構文とdiff検査成功。最新Actionsはローカル差分を含まない。 |
+
+フィクスチャ修正前に追加テストがFAILし、修正後focused suiteは4 passed。実Gemini通信0回。既存品質009 JSON/HTMLは変更なし。次は保存済み生成候補の直接質問回答性、候補の方針差、拒否への応答をオフラインで監査する。総合NO-GO。

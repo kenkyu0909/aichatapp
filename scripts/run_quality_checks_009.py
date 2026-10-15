@@ -34,7 +34,7 @@ CASES = [
     {"id": "short_mirroring", "latest": "カフェ好きです！", "history": [], "answers": []},
     {"id": "joke_mirroring", "latest": "休日ほぼ寝て終わりました笑", "history": [], "answers": []},
     {"id": "direct_question_unconfirmed", "latest": "映画好きですか？", "history": [], "answers": []},
-    {"id": "recent_movie_answered", "latest": "最近どんな映画を観ましたか？", "history": [], "answers": [{"question": "最近観た映画の作品名を教えてください", "answer": "最近は架空作品の『青い灯台』を観ました"}]},
+    {"id": "recent_movie_answered", "latest": "最近どんな映画を観ましたか？", "history": [], "answers": [{"question": "最近観た映画の作品名を教えてください", "answer": "最近は『青い灯台』を観ました"}]},
     {"id": "answered_purchase_fact", "latest": "気になる新作を見つけたらすぐ買うタイプですか？", "history": [], "answers": [{"question": "気になる新作を見つけたらすぐ買うタイプですか？", "answer": "気になった新作は少し調べてから買うことが多いです"}]},
     {"id": "known_partner_fact_after_fix", "latest": "最近は新しいカフェも探してます！", "history": [("them", "休日は友達とカフェに行くことが多いです！"), ("me", "いいですね！")], "answers": []},
     {"id": "invite_opportunity", "latest": "中野で落ち着いたカフェを見つけました！ケーキもおいしそうで気になってます", "history": [("them", "休日はカフェを探すのが好きです"), ("me", "落ち着いたお店が好きです！"), ("them", "私も静かなところが好きです！けいさんはどんなお店に行きますか？"), ("me", "季節のタルトがあるお店を選ぶことが多いです！")], "answers": []},
