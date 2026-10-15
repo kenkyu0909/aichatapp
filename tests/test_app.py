@@ -700,6 +700,15 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert c.get(f"/api/matches/{mid}/messages").json() == []
 
 
+def test_all_sendable_modes_require_a_final_language_quality_readthrough(client):
+    _, backend = client
+    for mode in ("first", "reply", "followup", "like"):
+        prompt = backend.read_prompt(mode)
+        assert "各本文を読み直し" in prompt
+        assert "漢字変換ミス、助詞抜け、語の取り違え" in prompt
+        assert "新しい事実・経験・感想を加えません" in prompt
+
+
 def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, monkeypatch):
     from google import genai
 

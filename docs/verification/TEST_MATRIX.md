@@ -639,3 +639,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T301 | カフェの一般的な好みと雰囲気の好みを区別し、直接質問へ本人の回答を返す | Windows 11 / pytest、架空プロフィールと一時回答の単体検証 | FIXED | 「カフェは好き」という回答だけで「どんな雰囲気のカフェが好きか」が確認済みになる失敗を修正前に再現。否定極性の矛盾、相手の好みへのすり替え、反応だけ、質問だけ、希望・興味を確定好みに拡張する候補を拒否。二重否定・「好きというより」比較表現を曖昧として確認へ回し、並列スタイルの極性を分離し、同一スタイルの相反する限定は未確定にする。丁寧な否定「好みではありません」「好きではありません」と同系統表現も確認。focused **5 passed / 758 deselected**。最新全pytest **846 passed in 112.64s**（Firefox UI込み、失敗・skipなし）。py_compile、node --check app.js、git diff --check成功。Gemini実API 0回。|
 
 最新ID行: 301。累計: PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15。QUALITY009実生成の手動品質FAILは未解決。|
+
+| T302 | 生成前に本文の日本語表記・文法を読み直す共通プロンプト要件 | Windows 11 / pytest、first/reply/followup/likeのprompt loaderを確認 | FIXED | 全4モードの共通プロンプトに誤変換・助詞抜け等の最終読み直しと、校正時に事実を足さない指示を追加。`test_all_sendable_modes_require_a_final_language_quality_readthrough` **1 passed**。最終全pytest **847 passed in 118.15s**（Firefox UI込み、失敗・skipなし）。Python/JavaScript構文、diff検査成功。これはプロンプト継承の静的確認であり、Gemini実生成の文章品質を立証しない。実Gemini 0回。|
+
+最新ID行: 302。累計: PASS219 / FAIL13 / FIXED50 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|

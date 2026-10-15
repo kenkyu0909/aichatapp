@@ -819,6 +819,14 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - T301の証拠を更新。総項目301: PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15。実Gemini API 0回。QUALITY009の誤字・意味の似た代替案等の既存実生成FAILが残るためNO-GOを維持。
 - これら変更は未コミット/Push。HEAD `ce60f19dfafeb127de569e6d59beb9118a7b1c82`、PR #4 OPEN/Draft・未マージ。次は変更対象6ファイルだけをcommit/pushし、同一SHAのActionsを確認する。既存のユーザー提供未追跡指示ファイル3点を含めない。
 
+### 2026-10-15 18:49 JST 継続チェックポイント：生成文の最終校正指示
+
+- QUALITY009の実生成で出た「どんな雰囲い」について、既存の狭い高確度誤字フィルタだけでなく、全4生成モード共通プロンプトへ本文の最終読み直し（誤変換・助詞抜け・語の取り違え）を追加。修正時に未確認事実・感想を増やさない、安全な文にできない場合は候補不足を返すと明示。
+- 全4モードのprompt loaderで共通指示が反映される静的回帰テストを追加。`python -m pytest -q tests/test_app.py -k all_sendable_modes_require_a_final_language_quality_readthrough`: **1 passed / 763 deselected**。py_compile、node --check、git diff --check成功。実Gemini0回。これはプロンプト読み込み確認であり、モデルの文章品質合格とは扱わない。
+- 先行コードcommit `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd` のActionsは同一SHAで成功: [run 38715533553](https://github.com/kenkyu0909/aichatapp/actions/runs/38715533553)。このrunには今回の未コミットprompt/test追補は含まれない。
+- TEST_MATRIXを302項目へ更新: PASS219 / FAIL13 / FIXED50 / BLOCKED5 / NOT_TESTED15。最終差分を含む全pytest **847 passed in 118.15s**（Firefox UI込み、失敗・skipなし）。Python構文・JavaScript構文・diff検査成功。QUALITY009の実生成手動FAILが残るため総合NO-GO。最新prompt差分は未コミット/Pushで、CIは未確認。
+- PR #4はOPEN/Draft、head `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd`、base `feat/ui-local-backend-v1`、未マージ。次にprompt/testとレポート更新を選択commit/pushし、最新HEADのActionsを確認。ユーザー提供未追跡txt3点は保護する。
+
 ### 2026-10-15 18:29 JST 継続チェックポイント：カフェ雰囲気の回答粒度と否定整合性
 
 - 定期指示を再取得し、P0優先、Gemini実通信0回、conversation_004/新しい会話HTML未実施、PR #4 Draft・未マージを確認。

@@ -580,3 +580,11 @@ Gemini実API 0回。品質009の保存済み実生成FAILが残るため総合NO
 | アプリ全体の安定性 | ローカルPASS / CI未確認 | 全pytest **846 passed in 112.64s**、Firefox UI込み。構文・diff検査成功。 |
 
 全体**NO-GO**。実API0回、ローカル差分未Push、Actions未確認。PR #4 Draft・未マージ。次は6つの追跡対象ファイルを選んでPushし、最新SHAのActionsを確認する。
+
+### 2026-10-15 18:49 JST 追補：日本語本文の最終読み直し
+
+品質009にあった漢字誤変換を受け、4モード共通プロンプトで本文の最終校正を指示した。修正は語句の自然さに限り、確認済みでない事実・経験・感想を追加してはならない。安全に直せない候補は無理に補完しない。テストはプロンプト継承の静的確認 **1 passed / 763 deselected** で、Geminiモデル自体の実生成評価ではない。
+
+全pytestの直近成功はコード+カフェ修正SHA `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd` の**846 passed / 112.64s**。同SHAのGitHub Actions [run 38715533553](https://github.com/kenkyu0909/aichatapp/actions/runs/38715533553) は成功。今回の追加prompt差分は別の最新Actionsで確認が必要。7ゴールはどれも全体PASSではなく、総合NO-GOを維持する。
+
+prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15s**。Firefox UIテスト込み。Python/JavaScript構文とdiff検査成功。Pushして最新SHAのActionsを確認する必要がある。
