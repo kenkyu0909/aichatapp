@@ -1153,14 +1153,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 残課題: QUALITY009に記録済みの実Gemini自然さ・候補多様性FAIL。今回Gemini APIは0回。PR #4はOPEN/Draft・未マージ。
 
 
-### 2026-10-16 03:09 JST docs SHA Actions・Firefox E2E
+### 2026-10-16 03:08 JST docs SHA Actions・Firefox E2E
 
 - docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` もPush Actions [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) / PR Actions [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) が同一SHAでsuccess。実行対象コードは `029b45f` と同一。PR #4のheadは872095d。
 - Firefoxのfirst/reply/followup/like＋本人情報質問のUI経路4件は **4 passed in 47.17s**。架空データ、隔離SQLite、アプリ生成モック。候補コピーと送信記録の分離、改行/履歴の永続化、likeコピーによる履歴不変を確認。
 - 総合NO-GO継続。Gemini実通信0回。過去QUALITY009に実生成の自然さ・候補多様性FAILが残る。
 
 
-### 2026-10-16 03:14 JST QUALITY009由来の重点オフライン回帰
+### 2026-10-16 03:08 JST QUALITY009由来の重点オフライン回帰
 
 - 保存済みQUALITY009で観測した誤字、未確認の共通点、既知の相手情報の再質問、相手の拒否、同義の共感反復、最近観た映画の確認済み回答との矛盾に対応する重点テストを実行。**36 passed in 2.46s**。
 - 今回は保存済み出力に対するオフライン/モック検査のみで、実Gemini通信0回。対象ゲートの挙動は確認したが、過去の文章品質FAIL全般を解消したとは扱わない。総合NO-GO。
