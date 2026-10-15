@@ -1359,3 +1359,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 先行HEAD `620e34354f181f22d27a43805d3f3f2c4e5eb279`に対するPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)は同一SHAでsuccess。これらはT366テスト追加を含まない。
 - T366はコミット `e93aef60486e89a7e0d6ba9554b592f1276a0d68`としてPush済み。Push Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一SHAでsuccess。pytest、JavaScript syntax check、Firefox準備、結果Artifact uploadを確認。PR #4はOPEN/Draft・未マージ。保護対象の未追跡指示ファイル3件は維持し、コミットしていない。
 - QUALITY009の実Gemini文章自然さ・候補意味多様性FAILは未解決のため、総合NO-GOを維持する。次の自律作業は保存済み失敗例を用いた直接回答と候補間方針差の監査。T366を含むActions成功後に検証報告を更新するため、最新SHAのActionsも追って確認する。
+
+### 2026-10-16 08:10 JST QUALITY009関連ケースの再監査
+
+- 取得した指示SHA `28e9466072aa6ab4f1369306e901049a224baecf`は前回から変更なし。4モードのFirefox実ルート検証は完了済み。優先事項どおり、保存済みQUALITY009から直接質問回答、候補の意味的重複、共感反復、拒否/慎重反応後の誘いを再監査した。
+- 該当する既存回帰テストを選択実行: **14 passed, 1260 deselected in 2.20s**。直接質問への回答を満たさない代替候補は安全フィルターで落とされ、確認済み回答の候補を残して不足を通知する。類似する安全候補は1回限りの修復後も安全な候補を維持し、類似通知で伝える。断り・保留後の再勧誘は除外し、安全な中立候補があれば残す。
+- 今回の読み取り監査で新しい回帰は見つからなかった。既存QUALITY009の実生成自然さ・候補多様性FAILは、当時の実Gemini出力の評価として引き続き残す。修正後の本物のGemini出力は現行指示に従い再確認していない。API通信0回。
+- 直前HEAD `0dad91852210cdb1100dd7dd2cf341aa13e4bebe`のPush/PR Actions [38821349520](https://github.com/kenkyu0909/aichatapp/actions/runs/38821349520) / [38821354811](https://github.com/kenkyu0909/aichatapp/actions/runs/38821354811)は同一SHAでsuccess。詳細を追記するdocs-only更新後、最終HEADのActionsを再確認する。
+- 次: 現在の回答整合性・候補フィルターで残る限定範囲を確認し、実生成品質FAILを偽ってPASSにしない。PR #4はOPEN/Draft・未マージ、Firefoxのみ、会話004・新しい会話HTML・Gemini通信なし。

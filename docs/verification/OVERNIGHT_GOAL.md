@@ -1079,3 +1079,9 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - CI: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush/PR run 38820922000 / 38820929128は同一headでsuccess。pytest、JS syntax、Firefox準備、artifact uploadが成功。ローカル全pytest 1365 passed in 198.20s。
 - 他の品質ゴールはこの確認によって達成扱いにしない。保存済みQUALITY009の生成自然さと意味的多様性FAILが残るため、総合判定はNO-GO。
 - 次: CI結果を記録するdocs-only変更をcommit・pushし、そのHEADのActionsを確認。その後、保存済み実生成例から直接質問回答と候補の意味的な重複を監査する。
+
+##### 2026-10-16 08:10 JST: 既知の品質009境界を再確認
+
+- 回帰サブセット14件が成功。回答済み直接質問への回答漏れ候補、類似した安全候補、拒否/保留後の再勧誘に対する現行の安全処理を確認した。テストは既存ケースの再実行であり、テスト総数には加算していない。
+- 保存済みQUALITY009の本物のGemini文章品質FAILは未解決のまま。今回のオフライン回帰成功で過去FAILを上書きしない。Gemini通信0回。
+- 次は実利用上のP0のみを監査し、進捗を記録して同一最新HEADのGitHub Actionsを確認する。conversation_004、新HTML、PRマージは行わない。

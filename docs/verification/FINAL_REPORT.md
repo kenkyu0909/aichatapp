@@ -1420,3 +1420,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - focused Firefox 1 passed。全pytest **1365 passed in 198.20s**。Python compile、JavaScript構文、`git diff --check`成功。Gemini実通信0回。
 - T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)が同一headでsuccess。ローカル全pytestは1365 passed in 198.20s。Actionsログでpytest step、JavaScript構文検査、Firefox準備、test artifactの保存成功を確認した。
 - QUALITY009の過去の実Gemini出力にある自然さ・候補意味多様性FAILは残る。T366は通知動作のオフライン確認であり、生成文の品質を証明しない。総合判定は引き続き**NO-GO**。PR #4はDraft・未マージ。conversation_004と新規会話HTMLは未実施。
+
+## 2026-10-16 08:10 JST: QUALITY009の既存回帰を再監査
+
+- 実行した選択回帰: `python -m pytest -q tests/test_app.py -k 'quality009 or semantically_similar_safe_reactions or answered_direct_question or partner_exercise_frequency or refusal_filter_keeps_neutral_candidate or soft_reinvit'` — **14 passed, 1260 deselected in 2.20s**。
+- 確認できた動作: 回答済みの直接質問に答えない代替候補を除外し、安全な回答候補を保持。候補が不足する場合は通知。類似した安全候補も消さずに修復を1回まで試し、なお重なる場合は注意を表示。相手の断り/保留後の再勧誘候補を拒否し、中立候補は条件を満たせば保持。
+- 今回新しい回帰は見つからなかった。ただし過去QUALITY009の実Gemini文章品質・候補多様性FAILは過去出力の実評価であり、修正後の実生成を再確認していないため未解決扱いを維持する。Gemini API通信0回。
+- PR #4は引き続きDraft・未マージ。既存指示によりconversation_004と新しい会話HTMLは未実施。次の作業はこの確認結果の記録、最新HEAD CIの確認、未達P0の継続監査。
