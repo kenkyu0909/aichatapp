@@ -7715,3 +7715,524 @@ def test_actual_user_clarification_prompt_is_accepted_for_generic_direct_answer(
     candidate = backend.Candidate(label="回答済み", text="データ整理が得意です！")
 
     assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(("question", "unsupported_claim"), [
+    ("嫌いな食べ物ってある？", "パクチーが苦手です！"),
+    ("何か集めてるものある？", "古い切手を集めています！"),
+    ("将来の夢ってある？", "いつか自分のお店を開きたいです！"),
+    ("子どもの頃は何になりたかった？", "子どもの頃は先生になりたかったです！"),
+])
+def test_unknown_direct_personal_questions_require_confirmation_and_block_claims(
+    client, question, unsupported_claim
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    candidate = backend.Candidate(label="未確認の本人事実", text=unsupported_claim)
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": unsupported_claim,
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_nonpersonal_fact_question_does_not_trigger_personal_confirmation(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "水の沸点は何度ですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question("水の沸点は何度ですか？") is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("question", [
+    "将来の夢がある人って素敵ですよね？",
+    "食べられないものがある人向けのメニューはありますか？",
+])
+def test_third_party_personal_phrase_does_not_trigger_user_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_recent_weekend_question_requests_recent_instance_not_routine(client):
+    _, backend = client
+    question = "最近の休日は何をしましたか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"weekends": "休日は普段カフェで過ごすことが多いです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "最近" in clarification.question
+    assert "休日" in clarification.question
+    assert "普段" not in clarification.question
+    assert not backend._topic_is_verified("休日", context, question)
+
+    recent_answer = "この前は家でゆっくり過ごしました"
+    context["ephemeral_user_answers"] = [{"question": clarification.question, "answer": recent_answer}]
+    assert backend._topic_is_verified("休日", context, question)
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_profile_occupation_answers_occupation_question_and_is_retained(client):
+    _, backend = client
+    question = "お仕事は何ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="プロフィールにある職業", text="会社員です！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
+    assert "職業" not in backend.unsupported_personal_claim_topics([candidate], context)
+
+    unsupported_tenure = backend.Candidate(label="未確認の勤続年数", text="会社員として5年働いています！")
+    assert not backend._answers_verified_partner_question(unsupported_tenure, context)
+
+
+def test_school_profile_does_not_answer_personal_job_question(client):
+    _, backend = client
+    question = "お仕事は何ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"school": "大学生"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="学校情報の流用", text="大学生です！")
+
+    assert not backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_generic_company_employee_fact_does_not_answer_specific_job_type_question(client):
+    _, backend = client
+    question = "どんな職種で働いていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="職種の詳細不足", text="会社員です！")
+
+    assert not backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize("occupation", [
+    "会社員です。", "会社員です！", "会社員です🙂", "社員です✨", "正社員", "正社員です！",
+    "正社員として働いています", "公務員", "フリーランス", "会社勤めです",
+    "会社勤めで働いています", "派遣で働いています", "フリーターです",
+])
+def test_punctuated_generic_occupation_does_not_verify_specific_job_type(client, occupation):
+    _, backend = client
+    question = "どんな職種で働いていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": occupation}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._topic_is_verified("本人情報", context, question)
+
+
+@pytest.mark.parametrize("question", [
+    "どんな仕事をしてるんですか？",
+    "どんなお仕事ですか？",
+    "何系の仕事？",
+])
+def test_specific_work_detail_phrasings_require_a_specific_role(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._is_specific_job_question(question)
+    assert not backend._topic_is_verified("本人情報", context, question)
+
+
+@pytest.mark.parametrize("question", [
+    "どういう仕事をしていますか？",
+    "どんな職業ですか？",
+    "どんな業界で働いていますか？",
+    "担当業務は何ですか？",
+])
+def test_specific_occupation_questions_reject_generic_employee_profile(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員です。"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="一般的な職業名だけ", text="会社員です！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._is_specific_job_question(question)
+    assert not backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize("question", [
+    "何業種で働いていますか？",
+    "どんな業種ですか？",
+    "どんな分野のお仕事ですか？",
+])
+def test_industry_and_work_field_questions_require_matching_specific_evidence(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員です！"}},
+        "ephemeral_user_answers": [],
+    }
+    unsupported = backend.Candidate(label="一般的な雇用形態", text="会社員です！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._is_specific_job_question(question)
+    assert not backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(unsupported, context)
+
+
+def test_job_title_does_not_answer_industry_type_question(client):
+    _, backend = client
+    question = "どんな業種ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員", "job_title": "営業"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._topic_is_verified("本人情報", context, question)
+
+
+def test_verified_industry_allows_natural_industry_candidate(client):
+    _, backend = client
+    question = "どんな業界で働いていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員", "industry": "IT"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの業界", text="IT業界です！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_verified_industry_answers_industry_type_question(client):
+    _, backend = client
+    question = "業種は何ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"industry": "IT"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの業種", text="IT業種です！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_combined_industry_and_job_question_requires_both_confirmed_details(client):
+    _, backend = client
+    question = "業界や職種は何ですか？"
+    profile = {"facts": {"industry": "IT", "job_title": "営業"}}
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": profile,
+        "ephemeral_user_answers": [],
+    }
+    industry_only = backend.Candidate(label="業界だけ", text="IT業界です！")
+    both_details = backend.Candidate(label="業界と職種", text="IT業界で営業をしています！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(industry_only, context)
+    assert backend._answers_verified_partner_question(both_details, context)
+
+
+def test_combined_industry_and_assigned_duties_question_requires_both_scopes(client):
+    _, backend = client
+    question = "どんな業界でどんな業務を担当していますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"industry": "IT", "job_title": "営業"}},
+        "ephemeral_user_answers": [],
+    }
+    role_only = backend.Candidate(label="職務のみ", text="営業です！")
+    industry_only = backend.Candidate(label="業界のみ", text="IT業界です！")
+    both_scopes = backend.Candidate(label="両方", text="IT業界で営業をしています！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert not backend._answers_verified_partner_question(role_only, context)
+    assert not backend._answers_verified_partner_question(industry_only, context)
+    assert backend._answers_verified_partner_question(both_scopes, context)
+
+
+def test_job_title_can_answer_work_duties_question_at_matching_granularity(client):
+    _, backend = client
+    question = "どんな業務をしていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員", "job_title": "営業"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの担当", text="営業をしています！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._is_specific_job_question(question)
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_unverified_job_duties_question_requires_user_confirmation(client):
+    _, backend = client
+    question = "担当業務は何ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "正社員"}},
+        "ephemeral_user_answers": [],
+    }
+    unsupported = backend.Candidate(label="未確認の担当業務", text="プロジェクト管理をしています！")
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(unsupported, context)
+
+
+def test_specific_job_question_accepts_profile_backed_job_title(client):
+    _, backend = client
+    question = "どんな職種で働いていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"occupation": "会社員", "job_title": "営業"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの職種", text="営業です！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize("question", [
+    "大学では何を学んでいますか？",
+    "大学で何を勉強していますか？",
+    "専攻は何ですか？",
+])
+def test_school_enrollment_does_not_answer_study_subject_question(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"school": "大学生"}},
+        "ephemeral_user_answers": [],
+    }
+    unsupported = backend.Candidate(label="在学情報の流用", text="大学生です！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert not backend._topic_is_verified("本人情報", context, question)
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(unsupported, context)
+
+
+@pytest.mark.parametrize(("question", "supported_candidate"), [
+    ("大学では何を学んでいますか？", "大学では心理学を学んでいます！"),
+    ("大学で何を勉強していますか？", "大学で心理学を勉強しています！"),
+    ("専攻は何ですか？", "心理学を専攻しています！"),
+])
+def test_verified_major_accepts_scope_matched_answer(client, question, supported_candidate):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"school": "大学生", "major": "心理学"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの専攻", text=supported_candidate)
+    weak_candidate = backend.Candidate(label="粒度不足", text="心理学です！")
+
+    assert backend._topic_is_verified("本人情報", context, question)
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert not backend._answers_verified_partner_question(weak_candidate, context)
+
+
+def test_compound_industry_role_question_rejects_single_scope_answers(client):
+    _, backend = client
+    question = "業界や職種は何ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"industry": "IT", "job_title": "営業"}},
+        "ephemeral_user_answers": [],
+    }
+    role_only = backend.Candidate(label="職種だけ", text="営業です！")
+    industry_only = backend.Candidate(label="業界だけ", text="IT業界です！")
+    both = backend.Candidate(label="両方", text="IT業界で営業をしています！")
+
+    assert not backend._answers_verified_partner_question(role_only, context)
+    assert not backend._answers_verified_partner_question(industry_only, context)
+    assert backend._answers_verified_partner_question(both, context)
+
+
+@pytest.mark.parametrize(("answer", "claim", "supported"), [
+    (
+        "友達は落ち着いた雰囲気が好きです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達の好みは落ち着いたカフェで落ち着いた雰囲気が好きです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "母の好みは落ち着いたカフェで落ち着いた雰囲気が好きです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "彼氏の好みは落ち着いたカフェで落ち着いた雰囲気が好きです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達は落ち着いた雰囲気が好きです！自分はにぎやかな雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達は落ち着いた雰囲気が好きです！自分はにぎやかな雰囲気が好きです",
+        "私はにぎやかな雰囲気が好きなんです！",
+        True,
+    ),
+    (
+        "私はにぎやかなカフェが好きで母は落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達って落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "母って落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "私はにぎやかなカフェが好きで妻は落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "私はにぎやかなカフェが好きで夫は落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達から聞いたんですが落ち着いた雰囲気が好きです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達によれば落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達の話では落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "友達曰く落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "あおいは落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "あおいから聞いたんですが落ち着いた雰囲気が好き",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "私はにぎやかなカフェが好きであおいは落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "私はにぎやかな雰囲気が好き、あおいは落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        False,
+    ),
+    (
+        "私は、落ち着いた雰囲気が好きです",
+        "私は落ち着いた雰囲気が好きなんです！",
+        True,
+    ),
+])
+def test_cafe_atmosphere_clarification_uses_only_user_attributed_preference(
+    client, answer, claim, supported
+):
+    _, backend = client
+    question = "どんな雰囲気のカフェが好きですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+    candidate = backend.Candidate(label="本人の雰囲気の好み", text=claim)
+
+    assert backend._topic_is_verified("カフェ好み", context, question)
+    assert backend._answers_verified_partner_question(candidate, context) is supported

@@ -990,3 +990,120 @@ def test_firefox_like_candidate_can_be_copied_without_creating_match_history(loc
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
+
+
+def test_firefox_saved_profile_is_available_during_first_and_reply_generation(local_app, firefox):
+    """A UI-saved profile persists and can be read at first/reply request time."""
+    app = local_app
+    driver = firefox
+    driver.get(app.url)
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "")
+
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    profile_dialog = modal(driver)
+    inputs = profile_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
+    input_values = [
+        "架空のひなた", "28", "東京都", "デザイナー", "読書とカフェ巡り", "落ち着いた性格", "短く自然な口調"
+    ]
+    assert len(inputs) >= len(input_values)
+    for field, value in zip(inputs, input_values):
+        field.send_keys(value)
+    textareas = profile_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")
+    assert len(textareas) == 3
+    textareas[0].send_keys("自然な会話を大切にしたいです")
+    textareas[1].send_keys("休日は本屋やカフェへ行きます")
+    textareas[2].send_keys("急な誘いは避けたい")
+    profile_json = json.dumps({
+        "name": "架空のひなた",
+        "age": "28",
+        "area": "東京都",
+        "job": "デザイナー",
+        "hobbies": "読書とカフェ巡り",
+        "personality": "落ち着いた性格",
+        "style": "短く自然な口調",
+        "goal": "自然な会話を大切にしたいです",
+        "memo": "休日は本屋やカフェへ行きます",
+    }, ensure_ascii=False, separators=(",", ":"))
+    profile_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
+    visible_toast(driver, "自分のプロフィールを保存しました")
+
+    with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+        saved_profile = json.load(response)
+    assert saved_profile == {"content": profile_json, "avoid": "急な誘いは避けたい"}
+
+    add_fictional_contact(driver, "架空のなな")
+    first_text = "はじめまして！マッチできてうれしいです\n読書とカフェ巡りがお好きなんですね！"
+    reply_text = "カフェ巡りいいですね！\n最近行ってよかったお店はありますか？"
+    driver.execute_script("""
+      window.__generationObservations = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          const profileResponse = await originalFetch('/api/profile');
+          const profile = await profileResponse.json();
+          window.__generationObservations.push({payload, profile});
+          const candidateText = payload.mode === 'first' ? arguments[0] : arguments[1];
+          return new Response(JSON.stringify({
+            recommended:{label:'自然な案',text:candidateText},
+            alternatives:[
+              {label:'短め',text:'プロフィールのお話が気になりました！'},
+              {label:'別の質問',text:'休日はどんなお店に行くことが多いですか？'}
+            ],
+            reason:'架空プロフィールを利用したUIテスト用モックです',demo:false
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """, first_text, reply_text)
+
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generationObservations.at(-1).payload.mode") == "first"
+    assert driver.execute_script("return window.__generationObservations.at(-1).payload.match_id") is not None
+    assert driver.execute_script("return window.__generationObservations.at(-1).profile") == saved_profile
+    assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").get_attribute("textContent") == first_text
+
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1)
+    driver.find_element(By.ID, "message-input").send_keys("休日は友達とカフェに行ってきました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generationObservations.at(-1).payload.mode") == "reply"
+    assert driver.execute_script("return window.__generationObservations.at(-1).payload.match_id") is not None
+    assert driver.execute_script("return window.__generationObservations.at(-1).profile") == saved_profile
+    assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").get_attribute("textContent") == reply_text
+
+    errors = record_artifact(
+        "firefox-profile-generation-before-reload",
+        driver,
+        {"profile_saved_via_ui": True, "modes": ["first", "reply"], "profile_endpoint_read_at_request": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+    driver.refresh()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のなな")
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    restored_dialog = modal(driver)
+    restored_inputs = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
+    assert [field.get_attribute("value") for field in restored_inputs[:7]] == input_values
+    restored_textareas = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")
+    assert [field.get_attribute("value") for field in restored_textareas] == [
+        "自然な会話を大切にしたいです",
+        "休日は本屋やカフェへ行きます",
+        "急な誘いは避けたい",
+    ]
+    with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+        assert json.load(response) == saved_profile
+    errors = record_artifact(
+        "firefox-profile-retained-after-reload",
+        driver,
+        {"profile_retained_after_reload": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []

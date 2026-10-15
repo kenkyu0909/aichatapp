@@ -409,6 +409,11 @@ UNPUNCTUATED_INTERROGATIVE_ASSERTION = re.compile(
 
 
 def _topic_for_personal_question(text: str) -> str | None:
+    # Do not mistake a question about a third party or a general service for
+    # a request for the user's own information merely because it mentions a
+    # personal topic.
+    if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", text):
+        return None
     if (
         UNPUNCTUATED_INTERROGATIVE_ASSERTION.search(text)
         and not re.search(r"[?？!！]|ですか|ますか|でしょうか|ませんか|んですか", text)
@@ -450,6 +455,27 @@ def _topic_for_personal_question(text: str) -> str | None:
         return "予定"
     if re.search(r"休日|休みの日|週末", text) and re.search(r"何|どう|友達|家|過ご|出かけ", text):
         return "休日"
+    # These direct personal questions are commonly phrased without an explicit
+    # subject. Treat them as user facts, but keep the match anchored to clear
+    # personal markers so ordinary factual questions do not enter this gate.
+    if re.search(r"嫌いな?食べ物|苦手な?食べ物|食べられないもの", text) and re.search(
+        r"ある|いますか|ありますか|何|どんな|教えて|[?？]", text
+    ):
+        return "本人情報"
+    if re.search(r"将来の夢|将来やりたいこと|将来なりたいもの", text) and re.search(
+        r"ある|何|どんな|[?？]", text
+    ):
+        return "本人情報"
+    if re.search(r"子どもの頃|子供の頃|小さい頃|小学生の頃", text) and re.search(
+        r"何になりたかった|夢|なりたい|憧れ|[?？]", text
+    ):
+        return "本人情報"
+    if re.search(
+        r"(?:大学|大学院|学校|専門学校).{0,14}(?:何を学|何を勉強|何を専攻)|"
+        r"専攻.{0,12}(?:何|どんな|ですか|でしょうか|[?？])",
+        text,
+    ):
+        return "本人情報"
     if "映画館" in text:
         if re.search(r"どの映画館|どこの映画館|よく行く映画館|行きつけの映画館|行く映画館.{0,10}(?:どこ|場所)", text):
             return "映画館場所"
@@ -545,7 +571,7 @@ def _topic_for_personal_question(text: str) -> str | None:
     ):
         return None
     if re.search(
-        r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも))|何を|どこ(?![へにとからまで]?(?:でも|も)|か)|どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも))|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|性格|予定|空い|趣味|おすすめ)",
+        r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも))|何を|どこ(?![へにとからまで]?(?:でも|も)|か)|どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも))|住ん|地域|食べた|買|観た|見た|読んだ|担当業務|どういう仕事|どんな(?:お)?職業|どんな(?:お)?仕事|どんな(?:お)?業務|どんな分野.{0,6}(?:お仕事|仕事)|業界|業種|仕事|学校|休日|週末|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
         return "本人情報"
@@ -663,6 +689,43 @@ def _cafe_atmosphere_style_polarities(text: str) -> dict[str, bool]:
     return polarities
 
 
+def _user_attributed_preference_clauses(text: str) -> list[str]:
+    """Exclude explicit third-party preferences from facts supplied by the user."""
+    third_party_entity = (
+        r"(?:友達|友人|母|父|お母さん|お父さん|彼氏|彼女|妻|夫|配偶者|家族|同僚|上司|同級生|"
+        r"妹|兄|姉|弟|相手|友だち|友人の知人)"
+    )
+    third_party = rf"{third_party_entity}(?:の(?:好み|好き|嗜好|趣味)(?:は|が)|の話では|は|が|って|から(?:聞いた|聞きました|聞いた話)|によれば|によると|曰く)"
+    named_person_token = (
+        r"(?!(?:落ち着|静か|穏やか|にぎやか|賑やか|雰囲気|カフェ|お店|店|好き|レトロ|"
+        r"おしゃれ|広々|開放的|カジュアル|こぢんまり|シンプル|明る|暗|隠れ家|個性的|高級|自然|海|山|駅|"
+        r"最近|普段|週末|休日|昨日|今日|自分|私|僕|俺))"
+        r"[一-龯ぁ-んァ-ヶ]{2,5}(?:さん|ちゃん|くん)?"
+        r"(?:は|が|って|から(?:聞いた|聞きました|聞いた話)|によれば|によると|の話では|曰く)"
+    )
+    named_person = rf"^{named_person_token}"
+    first_person = r"(?:私|自分|僕|俺|わたし)(?:は|も|が)"
+    clauses = re.split(
+        rf"(?<=[!?！？。、\n])|(?={first_person})|(?={third_party})|"
+        rf"(?<=で)(?={named_person_token})|(?<=けど)(?={named_person_token})|"
+        rf"(?<=けれど)(?={named_person_token})|(?<=でも)(?={named_person_token})",
+        text,
+    )
+    third_party_subject = re.compile(rf"^(?:{third_party}|{named_person})")
+    third_party_attribution = re.compile(rf"{third_party}|{named_person}")
+    first_person_subject = re.compile(rf"^(?:はい|うん|ええ)?{first_person}")
+    return [
+        clause.strip()
+        for clause in clauses
+        if clause.strip()
+        and (
+            first_person_subject.search(clause.strip())
+            or not third_party_subject.search(clause)
+            and not third_party_attribution.search(clause)
+        )
+    ]
+
+
 def _japanese_integer(value: str) -> int | None:
     """Parse small Japanese numerals used for ages/counts without guessing larger forms."""
     if value.isdigit():
@@ -700,6 +763,70 @@ def _explicit_frequency_signature(text: str) -> set[str]:
 def _frequency_claim_is_supported(claim: str, evidence: str) -> bool:
     claimed = _explicit_frequency_signature(claim)
     return not claimed or claimed.issubset(_explicit_frequency_signature(evidence))
+
+
+GENERIC_OCCUPATION_LABELS = {
+    "会社員", "社員", "社会人", "会社勤め", "会社員です", "社員です", "社会人です",
+    "正社員", "正社員です", "契約社員", "契約社員です", "派遣社員", "派遣社員です",
+    "アルバイト", "パート", "自営業", "公務員", "フリーランス", "会社勤めです",
+    "派遣", "フリーター", "フリーターです",
+}
+WORK_FACT_KEYS = ("occupation", "job", "職業", "仕事")
+SPECIFIC_WORK_FACT_KEYS = ("job_title", "occupation_details", "job_type", "職種", "仕事内容", "業務内容")
+INDUSTRY_FACT_KEYS = ("industry", "job_industry", "業界", "業種", "仕事の分野", "分野")
+SCHOOL_FACT_KEYS = ("school", "学校", "education", "学歴", "専攻")
+STUDY_FACT_KEYS = ("major", "field_of_study", "study_subject", "専攻", "専攻分野", "学部", "研究分野")
+
+
+def _is_specific_job_question(question: str) -> bool:
+    return bool(re.search(
+        r"職種|職業|業界|業種|分野.{0,6}(?:お仕事|仕事)|仕事内容|業務内容|担当業務|どんな(?:お)?業務|何の仕事|どういう仕事|何を担当|何系の仕事|どんな(?:お)?仕事",
+        question,
+    ))
+
+
+def _normalize_occupation_label(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value)
+    return "".join(
+        character
+        for character in normalized
+        if unicodedata.category(character)[0] not in {"P", "S", "Z", "M"}
+    )
+
+
+def _is_generic_occupation_label(value: str) -> bool:
+    normalized = _normalize_occupation_label(value)
+    for suffix in ("として働いています", "として勤務しています", "で働いています", "です"):
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+    generic_labels = {_normalize_occupation_label(label) for label in GENERIC_OCCUPATION_LABELS}
+    return normalized in generic_labels
+
+
+def _verified_job_or_school_values(facts: dict, question: str) -> list[str]:
+    asks_school = bool(re.search(r"学校|大学|学生|学んで|専攻", question))
+    asks_study_subject = bool(re.search(r"何を学|何を勉強|何を専攻|専攻", question))
+    asks_industry = bool(re.search(r"業界|業種|分野.{0,6}(?:お仕事|仕事)", question))
+    asks_work = bool(re.search(r"仕事|職業|働いて|勤務|職種|業務|業界", question))
+    asks_role = bool(re.search(r"職種|担当業務|業務内容|どんな(?:お)?業務|仕事内容|何を担当", question))
+    if asks_study_subject:
+        keys = STUDY_FACT_KEYS
+    elif asks_school and not asks_work:
+        keys = SCHOOL_FACT_KEYS
+    elif asks_school and asks_work:
+        keys = (*WORK_FACT_KEYS, *SCHOOL_FACT_KEYS)
+    elif asks_industry:
+        # A job title or generic employment status cannot establish an
+        # industry; require a field that explicitly stores industry evidence.
+        keys = (*INDUSTRY_FACT_KEYS, *SPECIFIC_WORK_FACT_KEYS) if asks_role else INDUSTRY_FACT_KEYS
+    else:
+        keys = WORK_FACT_KEYS
+
+    values = [str(facts[key]).strip() for key in keys if facts.get(key)]
+    if _is_specific_job_question(question) and not asks_industry:
+        values.extend(str(facts[key]).strip() for key in SPECIFIC_WORK_FACT_KEYS if facts.get(key))
+        values = [value for value in values if not _is_generic_occupation_label(value)]
+    return values
 
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
@@ -949,10 +1076,17 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 and re.search(r"何年|何年間|勤続|職歴|経験年数", answer.get("question", ""))
                 for answer in context.get("ephemeral_user_answers", [])
             )
-        if re.search(r"仕事|職業|働いて|勤務|学校|大学|学生", question_text):
+        if re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question_text):
             if re.search(r"会社名|どこの会社|勤務先|会社は", question_text):
                 return any(facts.get(key) for key in ("employer", "company_name", "勤務先"))
-            return any(facts.get(key) for key in ("occupation", "job", "職業", "仕事", "school", "学校"))
+            if _verified_job_or_school_values(facts, question_text):
+                return True
+            return any(
+                answer.get("answer", "").strip()
+                and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", answer.get("question", ""))
+                and _same_personal_information_scope("本人情報", question_text, answer.get("question", ""))
+                for answer in context.get("ephemeral_user_answers", [])
+            )
         if re.search(r"何歳|年齢|いくつ.{0,5}(?:歳|年齢)", question_text) and any(
             facts.get(key) for key in ("age", "年齢", "本人の年齢")
         ):
@@ -1075,13 +1209,29 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             values.append(str(value))
     topic_terms = PERSONAL_FACT_TOPICS[topic]
     if topic == "休日":
-        # A bare mention of weekends is not evidence for a specific activity.
-        weekend_values = [str(facts.get(key, "")) for key in topic_keys[topic]]
-        weekend_values.extend(
-            answer.get("answer", "")
-            for answer in context.get("ephemeral_user_answers", [])
-            if any(term in answer.get("question", "") for term in topic_terms)
-        )
+        recent_scope = _personal_information_scope(topic, question_text) == ("休日", "recent_experience")
+        if recent_scope:
+            weekend_values = [
+                str(facts.get(key, ""))
+                for key in ("recent_weekends", "recent_weekend_activity", "最近の休日", "最近の週末")
+                if facts.get(key)
+            ]
+            weekend_values.extend(
+                answer.get("answer", "")
+                for answer in context.get("ephemeral_user_answers", [])
+                if answer.get("answer", "").strip()
+                and any(term in answer.get("question", "") for term in topic_terms)
+                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            )
+        else:
+            # A bare mention of weekends is not evidence for a specific activity.
+            weekend_values = [str(facts.get(key, "")) for key in topic_keys[topic]]
+            weekend_values.extend(
+                answer.get("answer", "")
+                for answer in context.get("ephemeral_user_answers", [])
+                if any(term in answer.get("question", "") for term in topic_terms)
+                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            )
         activity_terms = ("カフェ", "喫茶店", "映画", "映画館", "読書", "本", "旅行", "出かけ", "家", "自宅", "寝", "植物", "美術館", "買い物", "友達")
         return any(any(term in value for term in activity_terms) for value in weekend_values)
     if any(term in value for value in values for term in topic_terms):
@@ -1340,6 +1490,9 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "相手に伝えてよい曜日や時間帯を教えてください"
     elif topic == "会う場所":
         question = "待ち合わせに使いたい地域や駅を教えてください"
+    elif topic == "休日" and re.search(r"最近|この前|昨日|先週|先日", source_question):
+        recency = next((term for term in ("昨日", "先週", "この前", "先日", "最近") if term in source_question), "最近")
+        question = f"{recency}の休日に何をしたか教えてください"
     elif topic == "休日" and re.search(r"友達|友人", source_question) and re.search(r"出かけ|会い|遊び", source_question):
         question = "週末は友達と出かけることが多いですか？"
     elif topic == "買い物" and re.search(r"すぐ|即|衝動|タイプ", source_question):
@@ -3990,6 +4143,112 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         # be treated as answered by an unrelated, evasive candidate. The API
         # preflight normally asks the user first; this is the final send guard.
         return False
+    if topic == "本人情報" and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question):
+        # Profile-backed occupation facts are trusted evidence, but the generic
+        # confirmation validator below only accepts ephemeral user answers.
+        # Match concise answers to the exact profile value and keep additional
+        # claims (such as unsupported tenure) fail-closed.
+        if not re.search(r"何年|何年間|勤続|職歴|経験年数|会社名|どこの会社|勤務先|会社は", question):
+            facts = context.get("my_profile", {}).get("facts", {})
+            known_occupations = _verified_job_or_school_values(facts, question)
+            if known_occupations:
+                answer_seen = False
+                segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
+                for segment in (part.strip() for part in segments if part.strip()):
+                    normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
+                    if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね"}:
+                        continue
+                    if _is_partner_directed_followup_question(segment, question):
+                        continue
+                    without_subject = re.sub(
+                        r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_segment
+                    )
+                    matched_fact = False
+                    if re.search(r"何を学|何を勉強|何を専攻|専攻", question):
+                        study_values = [
+                            _normalize_occupation_label(str(facts[key]))
+                            for key in STUDY_FACT_KEYS if facts.get(key)
+                        ]
+                        allowed_study_answers = {
+                            phrase
+                            for value in study_values
+                            for phrase in (
+                                f"{value}を学んでいます",
+                                f"{value}を学んでます",
+                                f"大学で{value}を学んでいます",
+                                f"大学では{value}を学んでいます",
+                                f"大学で{value}を学んでます",
+                                f"大学では{value}を学んでます",
+                                f"{value}を勉強しています",
+                                f"{value}を勉強してます",
+                                f"大学で{value}を勉強しています",
+                                f"大学では{value}を勉強しています",
+                                f"大学で{value}を勉強してます",
+                                f"大学では{value}を勉強してます",
+                                f"{value}を専攻しています",
+                                f"{value}を専攻してます",
+                                f"{value}専攻です",
+                            )
+                        }
+                        if without_subject not in allowed_study_answers:
+                            return False
+                        answer_seen = True
+                        continue
+                    asks_industry = bool(re.search(r"業界|業種|分野.{0,6}(?:お仕事|仕事)", question))
+                    asks_role = bool(re.search(r"職種|担当業務|業務内容|どんな(?:お)?業務|仕事内容|何を担当", question))
+                    if asks_industry and asks_role:
+                        industries = [
+                            _normalize_occupation_label(str(facts[key]))
+                            for key in INDUSTRY_FACT_KEYS if facts.get(key)
+                        ]
+                        roles = [
+                            _normalize_occupation_label(str(facts[key]))
+                            for key in SPECIFIC_WORK_FACT_KEYS if facts.get(key)
+                            and not _is_generic_occupation_label(str(facts[key]))
+                        ]
+                        allowed_combinations = {
+                            phrase
+                            for industry in industries
+                            for role in roles
+                            for phrase in (
+                                f"{industry}業界で{role}をしています",
+                                f"{industry}業界で{role}として働いています",
+                                f"{industry}業界の{role}です",
+                                f"{industry}業種で{role}をしています",
+                                f"{industry}分野で{role}をしています",
+                            )
+                        }
+                        matched_fact = without_subject in allowed_combinations
+                        if not matched_fact:
+                            return False
+                        answer_seen = True
+                        continue
+                    for value in known_occupations:
+                        normalized_value = _normalize_occupation_label(value)
+                        if asks_industry and not asks_role:
+                            allowed_answers = {
+                                normalized_value,
+                                f"{normalized_value}業界です",
+                                f"{normalized_value}業種です",
+                                f"{normalized_value}分野です",
+                                f"{normalized_value}業界で働いています",
+                                f"{normalized_value}業種で働いています",
+                            }
+                        else:
+                            allowed_answers = {
+                                normalized_value,
+                                f"{normalized_value}です",
+                                f"{normalized_value}をしています",
+                                f"{normalized_value}として働いています",
+                            }
+                        if without_subject in allowed_answers:
+                            matched_fact = True
+                            break
+                    if not matched_fact:
+                        return False
+                    answer_seen = True
+                if answer_seen:
+                    return True
     if topic == "読書" and _personal_information_scope(topic, question) == ("読書", "genre"):
         facts = context.get("my_profile", {}).get("facts", {})
         evidence: list[tuple[str, bool | None]] = []
@@ -4044,12 +4303,13 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
             for key in ("favorite_cafes", "favorite_places", "cafe_preferences", "好きなカフェ")
             if facts.get(key)
         ]
-        evidence.extend(
-            str(answer.get("answer", "")).strip()
-            for answer in context.get("ephemeral_user_answers", [])
-            if answer.get("answer", "").strip()
-            and _personal_information_scope(topic, answer.get("question", "")) == ("カフェ", "atmosphere")
-        )
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            if (
+                answer_text
+                and _personal_information_scope(topic, answer.get("question", "")) == ("カフェ", "atmosphere")
+            ):
+                evidence.extend(_user_attributed_preference_clauses(answer_text))
         candidate_prefix = re.split(r"\n|[?？]", candidate.text, maxsplit=1)[0]
         if _reading_genre_segment_is_question_only(candidate_prefix):
             return False

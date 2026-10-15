@@ -838,3 +838,23 @@ T329 SHAのPush/PR Actions [38762044607](https://github.com/kenkyu0909/aichatapp
 追いメッセージ候補をコピーしても履歴が変わらず、明示記録後のみ履歴へ追加されることを確認。マッチ前like候補はコピーのみでSQLite/API/画面の会話履歴を空のまま保つ。Code reviewerの指摘により、再読込前後でJS error監視結果を個別に記録し、toastを明示待機するテストに修正。TEST_MATRIXは335項目: PASS235 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15。総合NO-GO。Gemini通信0回。PR #4はDraft・未マージ。
 
 次: 対象testと検証記録だけをコミットしてPushし、最新SHAのPush/PR Actionsを確認する。ユーザー提供txtはステージしない。CI後に残る実利用コア導線をオフラインで継続確認する。
+
+### 2026-10-16 01:37 JST latest-head CI
+
+SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](https://github.com/kenkyu0909/aichatapp/actions/runs/38770088351)とPR [Actions 38770097358](https://github.com/kenkyu0909/aichatapp/actions/runs/38770097358)が同一HEADでsuccess。GitHub pytest **1019 passed, 1 warning**、Firefox/JS/artifactも成功。PR #4 OPEN/Draft・未マージ。T336 PASS、Matrix336項目: PASS236 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15。Gemini API0回、品質009実生成FAIL継続のためNO-GO。
+
+### 2026-10-16 02:27 JST — 本人事実ガードの継続結果
+
+職業・業種・業界・専攻の確認質問を求められた粒度に合わせた。第三者・固有名・伝聞による好みを本人事実へ混ぜる経路を塞ぎ、本人自身の回答を残す対照も確認した。最終回帰ではfocused 21件、全`tests/test_app.py` 1000件、全pytest 1089件が成功。独立レビューfocused 37件も成功し、指定ケースで新たなfail-openは見つからなかった。全範囲の意味理解を保証する結果ではない。
+
+| ゴール | 現状 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | FAIL（総合） | 今回のオフライン対象ガードは成功。過去QUALITY009の実生成出力には未確認本人事実の問題が記録され、現行Gemini実生成での再検証は指示により未実施。 |
+| 句読点・改行 | FAIL（総合） | Firefoxで改行保持を確認済みだが、現行Gemini実生成の文体品質は未再評価。 |
+| ミラーリング | FAIL（総合） | 保存済み実生成の自然さにFAILが残り、実APIの再評価は未実施。 |
+| 共感の反復防止 | FAIL | QUALITY009で意味的に似た候補のFAILが残る。 |
+| 返信候補の多様性 | FAIL | 保存済み実生成の候補多様性FAILが残る。 |
+| 食事への誘い判断 | NOT_TESTED | 今回はGemini実通信を行っていない。 |
+| アプリ全体の安定性 | ローカルPASS / CI未確認 | 全pytest 1089 passed、Python・JavaScript構文と差分検査が成功。最新差分のActionsはPush後に確認する。 |
+
+次は資料を最終SHAと整合させてPushし、最新コミットのPush/PR Actionsを確認する。QUALITY009に関する次の修正をオフラインで続ける。PR #4はDraft・未マージ。Gemini、会話004、新しい会話HTMLは現行指示に従って実施しない。

@@ -1203,4 +1203,20 @@ Firefox E2Eを2件追加し、既存の会話004・新規HTML・実Gemini通信�
 
 次: 該当testとPROGRESS/TEST_MATRIX/FINAL_REPORT/OVERNIGHT_GOALのみを選択的にコミット・Pushし、同一HEAD Actionsを確認する。未追跡のユーザー指示ファイル3件は保持する。
 
+### 2026-10-16 01:37 JST CI確認
+
+コミット `528d101a50b5b853ddf5044d1a5441aff64ceddb`に対するPush Actions [38770088351](https://github.com/kenkyu0909/aichatapp/actions/runs/38770088351)とPR Actions [38770097358](https://github.com/kenkyu0909/aichatapp/actions/runs/38770097358)は、head SHA一致で両方success。GitHub上のpytestは**1019 passed, 1 warning**。Firefox準備、JavaScript構文検査、test artifact uploadも成功。PR #4はOPEN/Draft・未マージ。T336 PASSによりMatrixは336項目（PASS236 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15）。Gemini通信は0回。品質009の保存済み実生成自然さ・候補多様性FAILが残るため総合判定NO-GO。
+
+次のP0候補は本人プロフィールをUI保存した後に生成payloadで利用することの統合Firefox確認。別の監査で、profile保存の既存UIテストとfirst/reply生成テストが分かれており、profile→generation contextを一体で検証していない点が見つかった。安全な架空データとモックのみで追加確認する。
+
 次: 変更とレポートを既存PR #4の作業ブランチへコミット・Pushし、同じHEADのPush/PR Actionsを確認する。続けて、Firefoxでfollowup/likeのコピー・手動記録・再読込のコア導線を確認する。
+
+## 2026-10-16 02:27 JST — 本人情報の質問範囲と事実帰属
+
+本人の職業・職種・業界・業種、在学状況・専攻の確認で、質問が求める情報の粒度に合わない事実を根拠として候補が通る問題を修正した。業界と職務のような複合質問では両方の確認済み情報を要求する。カフェの雰囲気については、友人・家族・固有名の好みや伝聞を本人の回答から分離し、読点で複数節をつないだ場合も同じ検査を行う。本人自身の明示回答は引き続き利用できる。
+
+- 回帰テストは修正前の失敗を再現し、修正後に`tests/test_app.py` **1000 passed**、全pytest **1089 passed in 178.94s**となった。
+- Python構文検査、`node --check app.js`、`git diff --check`が成功した。Firefoxを含む全pytestでUIの主要テストも通過した。
+- 独立Pythonレビュー **37 passed**。独立セキュリティ確認で今回の具体例に残るfail-openは見つからなかった。完全な意味検査の保証ではない。
+- Gemini実通信0回。保存済みQUALITY009にある実生成の自然さ・候補多様性FAILは未解決。従って総合判定は**NO-GO**。
+- 現行コードは未Pushのため、最新コミットでのGitHub Actionsは未確認。PR #4はOPEN/Draft・未マージを維持し、ユーザー指示txt3点はステージしない。

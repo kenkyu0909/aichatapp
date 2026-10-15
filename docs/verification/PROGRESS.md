@@ -1106,3 +1106,24 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - Focused Firefox tests **2 passed in 23.06s**。toast待機強化前の全pytest **1019 passed in 159.21s**（Firefox UI込み）、強化後focusedは再度成功。Python compile、JavaScript構文、差分検査を別途確認中。今回Gemini実通信0回。
 - T334/T335を追加し、TEST_MATRIX **335項目: PASS235 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15**。既存QUALITY009の実生成自然さ・候補多様性FAILは残るためNO-GO。コードと今回の検証記録は未コミット・未Push、Actionsは今回の追加テストを含まない前HEAD対象で成功済み。ユーザー提供の未追跡指示ファイル3点は保持・未ステージ。
 - 次: Python/JavaScript構文とdiffの終了コードを確認し、`tests/test_ui_firefox.py`と4つの報告ファイルを選択的にコミット・Pushする。最新Push/PR Actionsが同じSHAで成功することを確認する。その後、コアのモード導線で残る実利用上の未達を確認する。
+
+### 2026-10-16 01:37 JST 528d101のCI結果
+
+- `528d101a50b5b853ddf5044d1a5441aff64ceddb`を対象とするPush Actions [38770088351](https://github.com/kenkyu0909/aichatapp/actions/runs/38770088351)とPR Actions [38770097358](https://github.com/kenkyu0909/aichatapp/actions/runs/38770097358)が両方successし、head SHA一致。GitHub pytest **1019 passed, 1 warning**、Firefox準備、JavaScript構文検査、artifact upload成功。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `528d101a50b5b853ddf5044d1a5441aff64ceddb`。マージしていない。
+- T336 PASS、Test Matrix **336項目: PASS236 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15**。実Gemini通信0回、QUALITY009実生成FAIL継続のためNO-GO。
+- 手元でPython compile、`node --check app.js`、`git diff --check`はexit code 0。ユーザー提供未追跡ファイル3点は維持し未ステージ。
+- 次: 既存のprofile保存とgenerationが独立しているギャップについて、Firefoxでprofileを保存し生成payloadへの反映と再読込を確認するE2Eを追加・実施する。Gemini通信は行わない。
+
+### 2026-10-16 02:25 JST 継続チェックポイント：本人回答と第三者情報の分離
+
+- 指示用ブランチ`codex/directive-control`を02:10 JSTに再取得。HEADは`0e96dc5002a9d73676420d623aefa073728bd8e5`のまま。Gemini実通信、会話004、新しい会話HTMLは引き続き行わない。
+- 既存レビューから本人確認ガードの誤通過を再現した。職業・職種・業種・業界・専攻の質問で、質問が求める粒度とプロフィール情報を照合する。複合質問には両方の根拠を要求する。第三者や固有名、伝聞で述べられたカフェの好みを本人の事実として使わない。本人自身の読点付き回答は維持し、`レトロな店`のような表現は人名と誤認しないよう対照を追加した。
+- 最終修正の前に読点区切りの第三者表現が誤通過する回帰を確認。修正前 focused café tests **1 failed, 19 passed**、修正後**21 passed**。全`tests/test_app.py` **1000 passed**、全pytest **1089 passed in 178.94s**（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
+- 最新Test Matrixは339項目: PASS238 / FAIL13 / FIXED68 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実Gemini文章自然さ・候補多様性FAILは残るため総合NO-GO。Pythonレビューを最終差分に対して再確認中。
+- この作業はまだ未コミット・未Push。リモート作業HEADは`528d101a50b5b853ddf5044d1a5441aff64ceddb`。PR #4は02:20 JST確認時OPEN/Draft、base=`feat/ui-local-backend-v1`、未マージ。ユーザーの未追跡指示ファイル3点を保持しステージしない。
+- 次: 最終レビュー結果を確認し、追加の具体的fail-openがあれば修正・再テストする。その後、コード・テスト・4つの検証資料だけをコミット・Pushし、同じ最新HEADでPush/PR Actionsを実行・確認する。PR #4はDraft・未マージを維持する。
+
+### 2026-10-16 02:27 JST 本人情報検査の最終レビュー
+
+Pythonレビューと独立セキュリティ確認を再実施した。今回の対象ケースでは、複合業界・職務質問の片側だけの回答、大学在籍だけを専攻として扱う候補、確認済み専攻と矛盾する候補、友人・家族・固有名の好みを本人の好みとする回答、第三者情報と本人情報を読点でつないだ回答を拒否することを確認した。本人自身の読点付き嗜好回答は維持し、`レトロな店`を人名として誤認しない。独立レビューでは今回確認した範囲で追加の具体的なfail-openは見つからなかった。レビューFocused **37 passed**。これは対象ケースの確認であり、あらゆる日本語表現の完全な意味理解を保証するものではない。
