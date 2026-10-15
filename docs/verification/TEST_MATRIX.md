@@ -779,3 +779,11 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T342 | 修正後の最新コミットでGitHub Actions再検証 | Push run / PR run、1105 pytest、JavaScript構文チェック | PASS | SHA `029b45fe9a2c4f98d24e1253880e09c4eed24dbc`。Push [38781778539](https://github.com/kenkyu0909/aichatapp/actions/runs/38781778539) とPR [38781788477](https://github.com/kenkyu0909/aichatapp/actions/runs/38781788477) は同一SHAでsuccess。Pushログ: 1105 passed, 1 warning in 114.85s。現在集計342項目: PASS239 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。既存実生成品質FAILは解消扱いにしない。|
 
 最新ID行: 342。累計: PASS239 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。Actionsが確認したSHAは `029b45fe9a2c4f98d24e1253880e09c4eed24dbc`。記録更新後のSHAでも再実行して照合する。
+
+
+| T343 | Firefoxでfirst/reply/followup/likeの中核操作を再確認 | Selenium Firefox、架空データ、アプリ生成モック、隔離SQLite | PASS | 4 UIテスト: `test_firefox_first_to_reply_copy_manual_record_and_history_flow`, `test_firefox_first_message_and_temporary_profile_questions`, `test_firefox_followup_copy_and_manual_record_preserve_multiline_history`, `test_firefox_like_candidate_can_be_copied_without_creating_match_history`。**4 passed in 47.17s**。コピーのみでは送信記録されず、明示記録と再読込後の履歴順/本文・改行を確認。Chrome不使用、Gemini実通信0回。現在343項目: PASS240 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+最新ID行: 343。累計: PASS240 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+
+T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` のPush [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) とPR [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) もsuccess。コードはT342に記したSHAと同一。

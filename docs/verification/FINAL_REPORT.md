@@ -1237,3 +1237,13 @@ Firefox E2Eを2件追加し、既存の会話004・新規HTML・実Gemini通信�
 - コードHEAD `029b45fe9a2c4f98d24e1253880e09c4eed24dbc` でPush Actions [38781778539](https://github.com/kenkyu0909/aichatapp/actions/runs/38781778539) とPR Actions [38781788477](https://github.com/kenkyu0909/aichatapp/actions/runs/38781788477) がsuccess。ログ上のpytestは1105 passed / 1 warning、JS構文チェックも成功。
 - PR #4はOPEN/Draft、未マージ。品質009の人手FAILは残るため総合NO-GO。Gemini実通信は0回。
 - 本追補後はdocsが未コミットとなるため、最終記録コミットのActionsも別途確認する。
+
+
+### 2026-10-16 03:06 JST Firefox中核導線の追試
+
+Firefox UIでfirst/reply、本人情報質問、followup、likeの実操作テスト4件が成功（47.17s）。候補コピーと送信記録は分離し、履歴の順序/本文/改行が再読込後も保たれ、like候補コピーでは会話履歴が変わらないことを確認した。架空データと隔離SQLiteを使用。Gemini実通信0回。
+
+
+### 2026-10-16 03:09 JST 最新HEAD追補
+
+Firefoxの主要UIテスト4件（first/reply/followup/likeと本人情報質問）が47.17秒で成功。さらにdocs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` を対象としたPush Actions [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) とPR Actions [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) がsuccess。実生成品質FAILが残るためNO-GOは維持。

@@ -1144,3 +1144,17 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Push Actionsログでpytest **1105 passed, 1 warning in 114.85s**、JavaScript構文チェック成功を確認。ローカルでは全pytest 1105 passed in 171.74s、Python compile、`node --check app.js`、`git diff --check`成功。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、最新head `029b45f`。Gemini通信0回。過去QUALITY009の実生成自然さと候補多様性FAILが残るため総合NO-GO。
 - 次は保存済み品質009の誤字・候補の質問回答漏れ・意味的重複をオフラインで再監査する。conversation_004、新規HTML、Gemini実通信は保留。ユーザーの未追跡指示txt3件は保持し、ステージしない。
+
+
+### 2026-10-16 03:06 JST Firefox主要モードの再確認
+
+- Firefoxの実UIを使う4テストを再実行: 初回→返信→候補コピー→送信記録→履歴再表示、初回メッセージと本人情報の一時質問、追いメッセージの改行コピー/記録/再読込、マッチ前likeのコピーと履歴不変を確認。**4 passed in 47.17s**。Chromeは使用していない。
+- 保存とコピーの分離、再読込後の履歴本文と順序、like候補が送信履歴に入らないことを確認した。Firefox UI確認の範囲でPASS。全モードの実Gemini品質を意味しない。
+- 残課題: QUALITY009に記録済みの実Gemini自然さ・候補多様性FAIL。今回Gemini APIは0回。PR #4はOPEN/Draft・未マージ。
+
+
+### 2026-10-16 03:09 JST docs SHA Actions・Firefox E2E
+
+- docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` もPush Actions [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) / PR Actions [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) が同一SHAでsuccess。実行対象コードは `029b45f` と同一。PR #4のheadは872095d。
+- Firefoxのfirst/reply/followup/like＋本人情報質問のUI経路4件は **4 passed in 47.17s**。架空データ、隔離SQLite、アプリ生成モック。候補コピーと送信記録の分離、改行/履歴の永続化、likeコピーによる履歴不変を確認。
+- 総合NO-GO継続。Gemini実通信0回。過去QUALITY009に実生成の自然さ・候補多様性FAILが残る。

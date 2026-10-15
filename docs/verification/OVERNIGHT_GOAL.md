@@ -875,3 +875,15 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - アプリ安定性の今回の修正確認はPASS。ただし総合判定は、過去の実生成品質FAILと未実施項目が残るためNO-GO。
 - PR #4 OPEN/Draft・未マージ。Gemini実通信0回、conversation_004と新規HTMLは現行指示により保留。
 - 次は保存済み品質009の既知FAILをオフラインで再評価し、残るP0の再現可能な改善点だけを修正する。
+
+
+### 2026-10-16 03:06 JST Firefox中核導線
+
+- Firefoxを使い、first/replyの候補コピー・明示送信記録・履歴確認、本人への一時情報質問、followupの改行保持、likeコピー時の履歴不変を確認。架空データ・隔離DBのUIテスト4件が47.17秒で成功。Chrome不使用。
+- Stability goalのこのUI経路はPASS。既存実生成品質のFAILは別に維持し、総合NO-GO。
+
+
+### 2026-10-16 03:09 JST 最新docs SHA確認
+
+- docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` のPush/PR Actionsも成功（[38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008)、[38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105)）。PR #4 head一致、OPEN/Draft。
+- Firefoxの実UI主要導線4件が47.17秒で成功。コピー・明示的記録・再読込後の履歴・改行を確認。
