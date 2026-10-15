@@ -707,3 +707,15 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T318 | Firefoxで初回生成から返信・コピー・手動記録・履歴・再読込までの一連操作 | `python -m pytest -q tests/test_ui_firefox.py::test_firefox_first_to_reply_copy_manual_record_and_history_flow` および全pytest | PASS | Windows上のFirefox実ブラウザー。架空の「あおい」、一時DB、Gemini APIモックを使用。コピーのみでは会話に追加されず、手動記録後に履歴・再読込で改行を含む本文が保持され、first/replyモード、JS runtime/consoleエラーなしを確認。レビュー指摘反映後の対象テスト1 passed in 11.39s、全pytest933 passed in 123.63s（Firefox UIを含む）。レビュー前のFirefox UI全体7 passed in 90.08s。実Gemini通信0回。Chrome不使用。|
 
 最新ID行: 318。累計: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+
+| T319 | 本人への直接質問に対する確認済み回答の範囲・追加事実・矛盾の安全検査 | `python -m pytest -q`。架空プロフィールと一時回答を使うFastAPI/フィルター回帰 | FIXED | Windows、Python 3.12、Firefoxを含む全pytest **949 passed in 125.37s**。本人への確認済み回答以外に予定・場所・習慣・経験・別の好みを足す候補、肯定/否定の矛盾を送信可能にしない。安全な確認済み回答と相手への関連質問は維持し、安全候補が減る場合は候補不足を通知。focused tests **15 passed, 849 deselected**。`py_compile`、`node --check app.js`、`git diff --check`も成功。Gemini実通信0回。QUALITY009の自然さ/意味的候補多様性は未解決。変更SHA `691999ad4f5238f233107688ffb75bbed3b1090e`。|
+
+最新ID行: 319。累計: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+最新T319コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`を対象にしたGitHub Actions: Push [38737598550](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [38737604331](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がともにsuccess。両runでbackend pytest、JavaScript構文検査、test artifact upload成功。|`;
+$progressNote = @'
+
+### 2026-10-15 21:52 JST 追補：最新コードSHAのGitHub Actions
+
+- T319のコード/test SHA `691999ad4f5238f233107688ffb75bbed3b1090e`を対象に、Push [Actions 38737598550](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions 38737604331](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331) が両方success。pytest、JavaScript構文検査、Artifact保存に成功。
+- PR #4はOPEN/Draft、head SHAは `691999ad4f5238f233107688ffb75bbed3b1090e`。未マージ。
+- 次: 検証資料をこのCI証拠とともにPushし、品質009の実出力から直接質問に答えない候補・意味的に似た候補の残存経路を調べる。会話004、新規会話HTML、Gemini実通信は行わない。

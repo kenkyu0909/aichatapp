@@ -1107,3 +1107,10 @@ Gemini実APIは0回。修正SHAへのGitHub Actionsは未確認。保存済みQU
 Firefoxで初回候補生成からコピー、手動送信記録、相手メッセージ追加、通常返信生成、履歴表示、再読込後のSQLite会話保持までを通すE2Eを追加した。コピーだけでは送信記録に追加されないこと、本文の改行保持、first/replyの区別、ブラウザーruntime/console errorなしを架空データ・一時SQLite・Geminiモックで確認した。レビュー前のFirefox UI全体7 passed in 90.08s。レビューで再読込後の相手本文/順序確認不足が見つかり、全3発言の発言者・本文順を照合するよう修正。修正後のfocused Firefox test 1 passed in 11.39s、全pytest933 passed in 123.63s（Firefox UI込み）。Gemini実通信は0回。
 
 Test Matrixは318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。Firefox操作とオフライン回帰は合格だが、保存済みQUALITY009の実生成における自然さ・意味的候補多様性FAILは未解決のため、総合NO-GOを維持する。今回のテスト変更を含む最新コミットとGitHub Actionsはこれから確認する。PR #4はDraft・未マージを維持する。
+
+### 2026-10-15 21:48 JST 追補：確認済み本人回答からの根拠外追加を抑止
+
+本人への直接質問に対する一時回答を、候補内の他の本人主張まで正当化する根拠として使ってしまうリスクを修正した。予定・場所・経験・習慣などの追加主張、回答との肯定/否定の矛盾、相手発言だけを根拠にした「私も」の好み/所有を拒否し、安全候補が足りなければ候補不足を返す。修正SHAは`691999ad4f5238f233107688ffb75bbed3b1090e`。
+
+全pytest **949 passed in 125.37s**（Firefox UI込み）、本人情報フィルターのfocused tests **15 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回、Firefox使用・Chrome不使用。Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。これはモック/ローカル安全検査の確認であり、QUALITY009に残る実生成の自然さ・候補多様性FAILを解決したものではない。総合判定は**NO-GO**を維持する。修正SHAのGitHub Actionsは確認待ち。PR #4はOPEN/Draft・未マージ。
+修正SHA `691999ad4f5238f233107688ffb75bbed3b1090e`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がsuccessし、head SHA一致を確認した。pytest、JavaScript構文検査、test artifact uploadはいずれも成功。|

@@ -989,3 +989,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 新規E2E単体は初回・再確認とも成功。レビューで相手発言の本文と全発言順序の検査不足が指摘されたため、再読込後の3発言を発言者/本文の組で照合するよう修正。修正後の対象テスト **1 passed in 11.39s**、全pytest **933 passed in 123.63s**（Firefox UIを含む）。レビュー前のFirefox UI全体は7 passed in 90.08s。Gemini実通信0回、Chrome不使用。
 - T318をPASSとして追加。Matrixは318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。実生成品質009の自然さ・意味的候補多様性FAILは未解決で、総合NO-GOを維持。
 - このUI追加と結果はこれからコミット・Pushする。最新SHAのPush/PR ActionsおよびPR #4 OPEN/Draftを確認する。会話004・新規会話HTMLは現行指示により実施しない。未追跡のユーザー指示ファイル3件はステージしない。
+
+### 2026-10-15 21:48 JST 継続チェックポイント：本人情報の回答範囲を fail-closed に制限
+
+- 保存済みQUALITY009の未解決P0（本人の確認済み回答へ根拠外の文を足す候補）を追加ケースで再現。本人が「辛いものは大丈夫」と答えた後に、未確認の予定・居住地・経験・習慣・別の好みを付け足したり、回答の一部を否定したりする候補を許可し得た。
+- `app.py`で直接質問への本人情報回答を節ごとに検査し、確認済み回答そのものと明確な相手向け質問だけを通すようにした。不確かな追加文、根拠のない一人称の好み/所有、プロフィール上の否定事実と逆の主張は安全候補として返さず、候補不足を通知する。AIが以前書いた文章は本人確認済み情報として扱わない。
+- `tests/test_app.py`へ予定・場所・経験・習慣・頻度/肯定否定の対照ケースを追加。修正後のfocused suite **15 passed / 849 deselected**。最新コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`で全pytest **949 passed in 125.37s**（Firefox UI込み）。Python構文検査、JavaScript構文検査、`git diff --check`成功。Gemini実通信0回、Chrome不使用。
+- コード/testを`691999ad4f5238f233107688ffb75bbed3b1090e`として作業ブランチへPush済み。Actionsは実行待ち。3つのユーザー指示ファイルは未追跡のまま保持し、ステージしていない。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。
+- Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。過去の実Gemini品質FAILは維持。追加の実通信・会話004・新規会話HTMLは行っていない。
+- 次: 最新SHAのPush/PR ActionsとPR状態を確認し、この検証資料を更新する。その後、保存済みQUALITY009の「各候補が直接質問へ答えるか」と意味的候補差を再監査し、オフラインで次のP0修正を続ける。15〜20分以内または毎時10分に指示ブランチを再取得する。

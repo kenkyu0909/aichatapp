@@ -732,3 +732,18 @@ Gemini API0回。会話004・新規HTMLは未実施。総合NO-GO。Test Matrix3
 | アプリ全体の安定性 | Firefox UIを含む全pytest933 passed。レビュー指摘を反映したfocused Firefox test 1 passed in 11.39s。Actionsは新しいテスト差分のPush後に確認する。 | ローカルPASS / CI待ち |
 
 Firefox E2Eはfirst/reply、候補コピー、手動記録、履歴画面、再読込保持、runtime/consoleエラー不在を確認した。Gemini API0回、Chrome不使用。Test Matrix 318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。**総合判定NO-GO**。次は構文/diff検査、レビュー、コミット・Push、最新SHAのActionsとPR状態を確認し、その後もP0品質のオフライン監査を続ける。
+
+### 2026-10-15 21:48 JST 更新
+
+| ゴール | 判定 | 今回の根拠 |
+|---|---|---|
+| 1. 本人情報の正確性 | 部分修正 / 全体未達 | 直接質問への一時回答に根拠外の予定・場所・経験・習慣・好みを追加する具体的回帰を修正し、相手の発言だけからの共有嗜好/所有主張も拒否する。focused tests 15 passed。ただし自然言語一般の事実意味理解を保証せず、QUALITY009の実生成FAILも残る。|
+| 2. 句読点・改行 | 未達 | 今回は実Gemini出力を新規に検査していない。|
+| 3. ミラーリング | 未達 | 固定評価20ケースの採点なし。|
+| 4. 共感の反復防止 | 未達 | 保存済みQUALITY009の反復・停滞FAILは未解決。|
+| 5. 候補多様性 | 未達 | 実生成候補の意味的方針差FAILは未解決。|
+| 6. 誘い判断 | 部分修正 / 全体未達 | T313のStageと安全候補同期を保持。今回の修正は誘い判断全体の実生成評価ではない。|
+| 7. アプリ全体の安定性 | ローカルPASS / CI確認待ち | 最新コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`で全pytest 949 passed in 125.37s（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。GitHub ActionsはPush後の実行待ち。|
+
+Test Matrixは319項目: PASS229 / FAIL13 / FIXED57 / BLOCKED5 / NOT_TESTED15。Gemini API0回。会話004/新規HTMLは最新指示により未実施。総合判定は**NO-GO**。コード/test修正SHA `691999ad4f5238f233107688ffb75bbed3b1090e`はPush済みで、Actions結果は未確認。次はActions完了後、直接質問候補の回答適合性とQUALITY009の意味的多様性に対する次のオフライン修正を進める。
+T319コードSHA `691999ad4f5238f233107688ffb75bbed3b1090e`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331)がともにsuccess。Actions上でpytest、JavaScript構文検査、artifact uploadが成功し、PR #4はDraft未マージ。実生成品質の残課題があるため総合NO-GO。|
