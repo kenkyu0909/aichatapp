@@ -830,27 +830,22 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
     for message in context.get("history", []):
         if message.get("role") != "them":
             continue
-        for fragment in re.split(r"[。！？!?\n]+", str(message.get("body", ""))):
+        # Keep terminal question marks attached so a question is never treated
+        # as evidence that the partner actually has the stated habit or history.
+        for fragment in re.split(r"(?<=[。！？!?])|\n", str(message.get("body", ""))):
             partner_clauses.extend(re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment))
     if topic == "場所探し":
         return any(
             re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)", clause)
             and re.search(r"(?:好き|楽しい|はま|趣味)", clause)
-            and not re.search(r"好きではない|好きじゃない|好きでない|苦手|嫌い|楽しくない|趣味ではない", clause)
+            and not _is_interrogative_evidence_clause(clause)
+            and not NEGATIVE_PERSONAL_FACT_RE.search(clause)
             for clause in partner_clauses
         )
     if topic == "旅行最近":
-        return any(
-            re.search(r"(?:最近|この前|昨日|先週).{0,14}(?:旅行|旅).{0,18}(?:行|出かけ)", clause)
-            and not re.search(r"行けません|行けなかった|行かなかった|行っていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行きません|行かない|行っていません|行ってない", clause)
-            for clause in partner_clauses
-        )
+        return any(_has_recent_travel_evidence(clause) for clause in partner_clauses)
     if topic == "映画館頻度":
-        return any(
-            re.search(r"映画館.{0,12}(?:よく|頻繁|月に|週に|何度|何回|たまに|時々|ときどき).{0,10}(?:行|通)", clause)
-            and not re.search(r"行けません|行けなかった|行かなかった|行っていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行きません|行かない|行っていません|行ってない", clause)
-            for clause in partner_clauses
-        )
+        return any(_has_cinema_habit_evidence(clause) for clause in partner_clauses)
     return False
 
 
@@ -906,8 +901,56 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
 
 
 NEGATIVE_PERSONAL_FACT_RE = re.compile(
-    r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行かない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
+    r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|趣味(?:では|じゃ)(?:なくて|ない|ありません|ないです)|趣味に(?:は)?していない|趣味に(?:は)?してない|趣味.{0,8}(?:ってほど|というほど)(?:では|じゃ)?(?:なくて|ない|ありません|ないです)|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行けない|行けなく|行けず|行けません|行けなかった|行かなかった|行っていなかった|行けていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行く機会が(?:ない|なかった|なくて|ありません)|行く時間が(?:ない|なかった|なくて|ありません)|行く余裕が(?:ない|なかった|なくて|ありません)|行かない|行っていません|行ってない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
 )
+
+NON_ASSERTIVE_EXPERIENCE_RE = re.compile(
+    r"行きたい|行ってみたい|行こうと思|行く予定|行くつもり|行くかもしれ|行くかも|行くと思|行けたら|行ければ|行けるといい|"
+    r"旅行したい|旅行してみたい|旅行しようと思|旅行する予定|旅行するつもり|旅行するかもしれ|旅行するかも|旅行の予定|"
+    r"行く機会|行く時間|行く余裕"
+)
+
+RECENT_TRAVEL_COMPLETION_RE = re.compile(
+    r"(?:最近|この前|昨日|先週).{0,18}(?:旅行|旅|京都|北海道|沖縄|海外|国内).{0,24}(?:行った|行きました|行ってき|出かけた|出かけました|訪れた|訪れました|旅行してき|旅行した|旅行しました)|"
+    r"(?:旅行|旅).{0,12}(?:最近|この前|昨日|先週).{0,24}(?:行った|行きました|行ってき|出かけた|出かけました|訪れた|訪れました|しました)"
+)
+
+CINEMA_HABIT_RE = re.compile(
+    r"(?:映画館|シネコン).{0,22}(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)|"
+    r"(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,12}(?:映画館|シネコン).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)"
+)
+
+
+def _has_recent_travel_evidence(clause: str) -> bool:
+    return bool(
+        RECENT_TRAVEL_COMPLETION_RE.search(clause)
+        and not _is_interrogative_evidence_clause(clause)
+        and not NEGATIVE_PERSONAL_FACT_RE.search(clause)
+        and not NON_ASSERTIVE_EXPERIENCE_RE.search(clause)
+    )
+
+
+def _has_cinema_habit_evidence(clause: str) -> bool:
+    return bool(
+        CINEMA_HABIT_RE.search(clause)
+        and not _is_interrogative_evidence_clause(clause)
+        and not NEGATIVE_PERSONAL_FACT_RE.search(clause)
+        and not NON_ASSERTIVE_EXPERIENCE_RE.search(clause)
+    )
+
+
+def _is_interrogative_evidence_clause(clause: str) -> bool:
+    """Questions express no confirmed fact about the speaker's own behavior."""
+    stripped = clause.strip()
+    return bool(
+        re.search(r"[?？]\s*$", stripped)
+        or re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ことありますか|ことがあるの|かな)[\s]*$", stripped)
+        # Casual Japanese chat often omits the question mark. These short
+        # forms are ambiguous, so evidence checks conservatively reject them.
+        or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}行ったこと(?:が)?あるの?\s*$", stripped)
+        or re.search(r"(?:映画館|シネコン).{0,16}(?:よく|頻繁に|月に|週に|たまに|時々|ときどき)?.{0,8}(?:行く|通う)の\s*$", stripped)
+        or re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)(?:のが)?好きなの\s*$", stripped)
+    )
 
 
 def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> list[str]:
@@ -1016,19 +1059,13 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         clauses = _trusted_fact_clauses(context)
         candidate_places = re.findall(r"京都|北海道|沖縄|海外|国内", text)
         return any(
-            re.search(r"最近|この前|昨日|先週", clause)
-            and re.search(r"旅行|旅|出かけ|行っ", clause)
+            _has_recent_travel_evidence(clause)
             and all(place in clause for place in candidate_places)
             for clause in clauses
         )
     elif topic == "映画館頻度":
         clauses = _trusted_fact_clauses(context)
-        return any(
-            re.search(r"映画館|シネコン", clause)
-            and re.search(r"よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき", clause)
-            and re.search(r"行|通", clause)
-            for clause in clauses
-        )
+        return any(_has_cinema_habit_evidence(clause) for clause in clauses)
     elif topic == "外出":
         return any(re.search(r"お出かけ|出かけ|外出", clause) for clause in _trusted_fact_clauses(context))
     elif topic == "買い物":

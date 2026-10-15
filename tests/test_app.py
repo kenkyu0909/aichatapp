@@ -2362,8 +2362,18 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
     ("カフェを探すのは好きじゃないです", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェを探すのは趣味ではないです", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェを探すのは趣味じゃありません", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味にしてないです", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味ではなくて", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味ってほどじゃない", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェ探しは趣味というほどではないです", "カフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行ったことありますか？", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行ったことある", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近海外とか行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
     ("映画館によく行くことありますか？", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館ってよく行くの", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館によく行くの", "映画館によく行くんですね！", "映画館頻度"),
+    ("カフェを探すのが好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行けませんでした", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けないです", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けないんです", "最近旅行に行かれたんですね！", "旅行最近"),
@@ -2437,6 +2447,21 @@ def test_unavailable_experience_is_not_trusted_as_positive_fact(client, negative
 def test_hobby_negation_is_not_trusted_as_positive_place_search_fact(client):
     _, backend = client
     context = {"my_profile": {"facts": {"hobbies": ["カフェを探すのは趣味ではない"]}}}
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="否定と反対の候補", text="カフェを探すのが好きです！")
+    ], context)
+
+
+@pytest.mark.parametrize("negative_fact", [
+    "カフェを探すのは趣味にしてないです",
+    "カフェを探すのは趣味ではなくて",
+    "カフェを探すのは趣味ってほどじゃない",
+    "カフェ探しは趣味というほどではないです",
+])
+def test_unasserted_place_search_is_not_trusted_as_profile_fact(client, negative_fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": [negative_fact]}}}
 
     assert "場所探し" in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="否定と反対の候補", text="カフェを探すのが好きです！")
