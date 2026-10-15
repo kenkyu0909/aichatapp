@@ -915,3 +915,9 @@ Firefoxの改行保持テストを強化し、候補コピー直後には本人�
 ## 2026-10-15 15:43 JST CI最終確認
 
 コミット `c6ea0337d525746463936c9e6c28f366e4190648` のPush [GitHub Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) およびPR [GitHub Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221) は成功した。Push artifactのpytest.xmlで**757 tests / 0 failures / 0 errors / 0 skipped**を確認。Firefox 157 UI E2E、JavaScript構文検査、artifact保存も成功。Test Matrix 280項目: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。今回のGemini実API通信は0回。PR #4はOPEN/Draftで未マージ。QUALITY009の過去実生成品質FAILと包括品質基準未達が残るため、総合判定は**NO-GO**。
+
+## 2026-10-15 16:02 JST：追加の送信候補安全確認
+
+最新作業では、本人の二択嗜好質問が未分類のまま候補を通すケースと、確認済みカフェ情報だけで質問回避候補が通るケースを修正。誘い承諾を誤って拒否しないこと、招待と個人質問が同一発言に含まれる場合も本人質問を落とさないことを回帰確認した。カフェの話題への好み、否定形、自然な肯定形も区別する。
+
+最新ローカル検証は **761 passed in 97.39s**（Firefox UI含む）。focused suite 5 passed、Python/JavaScript構文と`git diff --check`成功、独立レビューの最終指摘なし。Gemini実APIは0回。これはオフライン検証であり、過去QUALITY009の実生成文章品質FAILを解消した証拠ではない。総合NO-GOを維持し、最新コードActions未実行の状態を記録する。

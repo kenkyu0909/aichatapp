@@ -387,6 +387,13 @@ PERSONAL_FACT_TOPICS = {
 def _topic_for_personal_question(text: str) -> str | None:
     if not re.search(r"[?？]|ですか|ますか|どんな|何を|どこに|いつ|頻度|食べること|何歳|年齢|\d{2}歳|いくつ", text):
         return None
+    invitation_free_text = INVITATION_PATTERN.sub("", text).strip(" \t\r\n?？!！か")
+    if invitation_free_text != text.strip(" \t\r\n?？!！か"):
+        if not invitation_free_text:
+            return None
+        text = invitation_free_text
+    if re.search(r"(?:派ですか|派でしょうか|それとも)", text):
+        return "本人情報"
     if re.search(r"何歳|年齢|いくつ.{0,5}(?:歳|年齢)", text):
         return "年齢"
     if re.search(r"会う|会え|待ち合わせ", text) and re.search(r"地域|場所|どこ", text):
@@ -438,7 +445,7 @@ def _topic_for_personal_question(text: str) -> str | None:
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
     if re.search(
-        r"(?:普段|最近|これまで|経験|タイプ|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
+        r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
         return "本人情報"
@@ -3015,6 +3022,11 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         "旅行": r"旅行|旅",
         "旅行最近": r"(?:旅行|旅|行っ|出かけ).{0,18}(?:最近|この前|先週|昨日)?|(?:最近|この前|先週|昨日).{0,18}(?:旅行|旅|行っ|出かけ)",
         "旅行頻度": r"(?:旅行|旅).{0,18}(?:よく|頻繁|何回|年に|月に|たまに)",
+        "カフェ好み": (
+            r"(?:カフェ|喫茶店)(?:巡り|に行くこと|に行くの)?(?:は|が|も)?"
+            r"(?:とても|すごく|めっちゃ|かなり)?好き(?:なんです|なんだ|なんですよ|ですね|です|だ|！|!|$)|"
+            r"好きな(?:カフェ|喫茶店)(?:巡り)?(?:が|は)?(?:いくつか|たくさん|いくつも)?あります"
+        ),
         "料理習慣": r"(?:料理|自炊).{0,18}(?:する|作る|しない|作らない)",
         "居住地": r"(?:住んで|在住|地域|エリア)",
         "予定": r"(?:曜日|時間|予定|空いて|都合)",
@@ -3022,6 +3034,8 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
     marker = patterns.get(topic)
     if not marker:
         return True
+    if _reading_genre_segment_is_question_only(answer_prefix):
+        return False
     return bool(re.search(marker, answer_prefix))
 
 

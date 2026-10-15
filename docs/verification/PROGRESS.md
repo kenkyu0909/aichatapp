@@ -639,3 +639,13 @@
 - 最新Pushed HEAD `2f477fe520b2918aa8c64a50d74bbcb7464c8f94` のPush/PR Actionsは成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38694100416), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38694106252)。ただし、今回の追加assertと表記変更を含む作業ツリーは未コミットであり、これらのActionsは今回差分を検証していない。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。Gemini実API 0回。総合NO-GO（保存済みQUALITY009の生成品質FAILと包括基準未達）。ユーザー提供の未追跡txt 3点はステージしない。
 - 次: この小さなテスト/記録差分だけをコミット・Pushし、同一HEADのPush/PR Actionsを確認する。その後は品質009に関連する直接質問回答の網羅性をオフラインで監査する。
+
+### 2026-10-15 16:02 JST 継続チェックポイント：直接質問の安全ゲート補強
+
+- 16:00台に `codex/directive-control` の最新版を再取得。今日のP0は本人事実の根拠、直接質問、断りの尊重、自然な返信。会話004と新規会話HTMLは禁止を維持し、Gemini API通信は0回。
+- オフライン監査で2つの送信ゲート欠陥を再現。未分類の二択嗜好質問は分類されず候補が通り、確認済みカフェ情報があると「最近おすすめのお店は？」等の回避候補が通った。さらに修正レビューで誘い承諾の誤ブロック、誘いと個人質問が同居する文の分類抜け、カフェの話題好み・否定形・自然な肯定形の境界を発見し、個別回帰を追加して修正した。
+- `app.py`: 二択の個人質問を本人確認へ回す。直接カフェ嗜好質問には、話題だけの反応・質問のみ・否定形を回答扱いしない。誘い文だけなら本人事実質問として誤分類せず、別の質問が同居すれば質問を維持する。
+- `tests/test_app.py`: 二択質問、カフェへの質問回避、話題への言及、否定形、自然な肯定形、単独の誘い承諾、個人質問と誘いの混在を回帰テスト化。修正前の再現2件はFAIL。最新focused suite **5 passed**。全pytest **761 passed in 97.39s**（Firefox含む）。Python/JavaScript構文とdiff検査成功。独立コードレビューで最終的な未解決指摘なし。
+- Test Matrix 284項目: PASS208 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実生成品質FAILを維持、総合NO-GO。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。未追跡のユーザー提供txt 3点は保持し、ステージしない。
+- 最新の既存Actions `9e2b8fd3ba8e917f8aa51dc3ccb43009d58ebdb9` のPush [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38694419437) とPR [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38694423729) は成功。ただし現在の `app.py`/`tests/test_app.py` 差分には適用されない。最新差分をコミット・Pushし同一HEADのActionsを確認する。
+- 次: この修正と検証をコミット・Pushし、最新SHAのPush/PR Actionsを確認。続いて品質009の会話停滞・候補の意味重複を、APIなしで既存の実例と未見の対照ケースから監査する。

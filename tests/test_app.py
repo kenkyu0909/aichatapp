@@ -5118,6 +5118,95 @@ def test_unverified_personal_direct_question_rejects_topic_evasion(client, quest
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
 
 
+def test_unclassified_binary_personality_question_requires_user_confirmation(client):
+    _, backend = client
+    question = "インドア派ですか？それともアウトドア派ですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認", text="どちらかというとインドア派です！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "インドア派ですか？それともアウトドア派ですか？" in clarification.question
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_verified_cafe_preference_does_not_allow_evasion_of_yes_no_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カフェは好きですか？"}],
+        "my_profile": {"facts": {"favorite_cafes": ["落ち着いた喫茶店"]}},
+        "ephemeral_user_answers": [],
+    }
+    evasive = backend.Candidate(label="すり替え", text="最近おすすめのお店とかありますか？")
+    discussion_only = backend.Candidate(label="話題への好みだけ", text="カフェの話題は好きです！")
+    contradictory = backend.Candidate(label="確認済み情報と矛盾", text="カフェは苦手です")
+    non_assertive = backend.Candidate(label="好みを断定しない", text="好きなカフェの話ですね！")
+    question_only = backend.Candidate(label="質問だけ", text="好きなカフェはありますか？")
+    non_answer = backend.Candidate(label="不自然な省略", text="好きなカフェです！")
+    grounded = backend.Candidate(label="直接回答", text="カフェは好きです！落ち着いた喫茶店が好みです")
+
+    assert backend._topic_for_personal_question(context["history"][-1]["body"]) == "カフェ好み"
+    assert backend._topic_is_verified("カフェ好み", context, context["history"][-1]["body"])
+    assert not backend._answers_verified_partner_question(evasive, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert not backend._answers_verified_partner_question(discussion_only, context)
+    assert not backend._answers_verified_partner_question(contradictory, context)
+    assert not backend._answers_verified_partner_question(non_assertive, context)
+    assert not backend._answers_verified_partner_question(question_only, context)
+    assert not backend._answers_verified_partner_question(non_answer, context)
+    for negative_text in ("カフェは好きではないです", "カフェは好きでないです"):
+        negative = backend.Candidate(label="確認済み情報と矛盾", text=negative_text)
+        assert not backend._answers_verified_partner_question(negative, context)
+    assert backend._answers_verified_partner_question(grounded, context)
+    for affirmative_text in (
+        "カフェは好きなんです！",
+        "カフェ巡りが好きなんです！",
+        "好きなカフェがいくつかあります！",
+    ):
+        affirmative = backend.Candidate(label="自然な肯定回答", text=affirmative_text)
+        assert backend._answers_verified_partner_question(affirmative, context)
+
+
+def test_invitation_acceptance_is_not_misclassified_as_cafe_preference_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "今度カフェに行きませんか？"}],
+        "my_profile": {"facts": {"favorite_cafes": ["落ち着いた喫茶店"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="前向きに返答", text="ぜひ行きたいです！\n土曜日とかどうですか？")
+
+    assert backend._topic_for_personal_question(context["history"][-1]["body"]) is None
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_personal_question_is_preserved_when_partner_message_also_invites(client):
+    _, backend = client
+    question = "映画館派ですか？それとも家で観る派ですか？今度一緒に映画を観に行きませんか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="質問を飛ばす", text="ぜひ行きたいです！\n土曜日とかどうですか？")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert question in clarification.question
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
 @pytest.mark.parametrize(("question", "answer", "evasive"), [
     ("得意料理はありますか？", "カレーを作るのが得意です", "パスタを作るのが得意です！"),
     ("何か得意なことありますか？", "データ整理が得意です", "文章を書くのが得意です！"),

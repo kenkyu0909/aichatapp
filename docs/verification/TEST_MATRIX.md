@@ -563,3 +563,14 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T280 | 候補重複警告・Firefox送信分離を含むGitHub Actions | Push / PR workflow・artifact確認 | PASS | SHA `c6ea0337d525746463936c9e6c28f366e4190648`を対象にPush [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) とPR [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221) が成功。Push artifactのpytest.xml: 757 tests / 0 failures / 0 errors / 0 skipped。Firefox 157.0とJavaScript構文検査も成功。|
 
 最新ID行: 280。累計: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。対象SHA `c6ea0337d525746463936c9e6c28f366e4190648`のActionsは成功。 |
+
+### 2026-10-15 16:02 JST：本人質問の分類漏れとカフェ嗜好の回答すり替え
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T281 | インドア/アウトドア等の二択質問で本人確認へ誘導 | pytest / 直接質問分類 | FIXED | 未分類だった「インドア派ですか？それともアウトドア派ですか？」を本人情報の確認へ送り、未確認の候補を除外する。元の質問文を確認フォームに保持。|
+| T282 | 確認済みカフェ情報による質問すり替えを防止 | pytest / 候補フィルター | FIXED | カフェ好みの質問に対し、別の質問・「話題が好き」・質問のみ・確認済み情報と逆の否定形を拒否。根拠のある肯定形は許可。|
+| T283 | カフェへの誘い承諾を嗜好質問と誤判定しない | pytest / 招待候補フィルター | FIXED | 単独の「今度カフェに行きませんか？」を本人の嗜好質問として扱わず、前向きな承諾と日程相談を保持する。|
+| T284 | 個人質問と誘いが同じ文にある場合の分離 | pytest / 直接質問と招待分類 | FIXED | 映画館/自宅の二択と映画への誘いが同居する入力で、誘い部分を除いて本人質問を検出。回答確認前の承諾候補は送信可能にしない。|
+
+この追補後のTEST_MATRIXは284件: PASS208 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。最新コードの全pytest **761 passed in 97.39s**（Firefox UI含む）、直接質問 focused suite **5 passed**。`py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実API 0回。独立レビューの指摘を修正し再レビューで未解決指摘なし。最新Push済み `9e2b8fd3ba8e917f8aa51dc3ccb43009d58ebdb9` のPush/PR Actions成功は確認済みだが、現在の未コミットコード差分を含まない。 |
