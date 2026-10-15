@@ -673,15 +673,15 @@ API枠が尽きたため、これらは今回再通信していません。オ�
 ## 今回のテスト結果
 
 - テスト項目: 180
-- PASS: 151
+- PASS: 152
 - FAIL: 12（過去の履歴。品質008の現行ケースに未解決FAILなし）
 - FIXED: 4
 - BLOCKED: 5（過去の履歴）
-- NOT_TESTED: 8（今回の最新HEAD Actionsを含む）
+- NOT_TESTED: 7
 - pytest: 406 passed in 93.32s。Firefox UIテストを含む
 - Python構文、node --check app.js、git diff --check: PASS
 - 秘密形式検索: 一致なし。値は表示していない
-- GitHub Actions: 今回の変更をPush後に確認するため未実施
+- GitHub Actions: SHA f800fbeabb146258c6a20c583ea62c74f0cf4f46のPush [run 38664505348](https://github.com/kenkyu0909/aichatapp/actions/runs/38664505348)とPR [run 38664508934](https://github.com/kenkyu0909/aichatapp/actions/runs/38664508934)が成功。各406 passed, 1 warning。
 
 ## Gemini実API
 
@@ -708,7 +708,7 @@ API枠が尽きたため、これらは今回再通信していません。オ�
 - 静的検査だけで日本語の意味的な本人情報の捏造をすべて見つける保証はない
 - ミラーリング20ケース、共感の連続反復、多様性15ケースは未評価
 - 誘い判断の5+5ケースは未評価
-- 最新変更後のGitHub ActionsとPR本文更新は未完了
+- PR #4本文には最新Actionsリンクを追記済み
 - 旧キーの失効、課金状態、実費は未確認
 
 PR #4はOPEN/Draftのまま維持し、マージしていません。

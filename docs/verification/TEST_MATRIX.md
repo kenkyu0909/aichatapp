@@ -357,6 +357,6 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 | T177 | API上限・選択順・秘密情報非出力 | 実行ログとファイル検査 | PASS | 11論理要求 / 14 provider attempts、上限12 / 24以内。API1 / gemini-3.5-flash-liteのみ。秘密値は出力・保存していない。 |
 | T178 | 全pytest（Firefox UIを含む） | Windows / pytest | PASS | 406 passed in 93.32s。 |
 | T179 | Python/JavaScript構文・差分・秘密形式検査 | py_compile、node --check、git diff --check、rg | PASS | 構文・差分検査終了コード0。秘密形式の一致なし。 |
-| T180 | 最新HEADのGitHub Actions | GitHub Actions Push/PR | NOT_TESTED | 今回の変更は未Push。実行URLは未取得。 |
+| T180 | 最新HEADのGitHub Actions | GitHub Actions Push/PR | PASS | SHA f800fbeabb146258c6a20c583ea62c74f0cf4f46。Push [run 38664505348](https://github.com/kenkyu0909/aichatapp/actions/runs/38664505348)・PR [run 38664508934](https://github.com/kenkyu0909/aichatapp/actions/runs/38664508934)とも成功。各406 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact uploadも成功。 |
 
-集計: 180項目、PASS 151 / FAIL 12 / FIXED 4 / BLOCKED 5 / NOT_TESTED 8。過去のFAIL・BLOCKEDは履歴として維持する。品質008の現在ケースに未解決結果はないが、全体品質基準を満たしたとは扱わない。
+集計: 180項目、PASS 152 / FAIL 12 / FIXED 4 / BLOCKED 5 / NOT_TESTED 7。過去のFAIL・BLOCKEDは履歴として維持する。品質008の現在ケースに未解決結果はないが、全体品質基準を満たしたとは扱わない。

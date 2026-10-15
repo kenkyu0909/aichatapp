@@ -110,7 +110,7 @@
 | 4. 共感の反復防止 | 未達 / 未評価 | 連続会話で同義反復0件を判定していない。 | 3通以上の系列で意味的反復を評価する。 |
 | 5. 候補多様性 | 部分確認 | 一部の出力で方針差を確認。15ケース基準は未実施。安全案不足時の通知は確認済み。 | 15ケースで返信方針の違いを評価する。 |
 | 6. 誘い判断 | 部分確認 | 誘い候補と拒否ケースを限定再確認。5+5基準は未実施。 | 5件ずつ評価する。 |
-| 7. アプリ安定性 | ローカルPASS / CI待ち | pytest 406件成功、Firefoxを含む。構文・差分検査成功。ActionsはPush待ち。 | 最新コミットでPush/PR Actionsを確認する。 |
+| 7. アプリ安定性 | PASS | pytest 406件成功。Push [Actions 38664505348](https://github.com/kenkyu0909/aichatapp/actions/runs/38664505348)とPR [Actions 38664508934](https://github.com/kenkyu0909/aichatapp/actions/runs/38664508934)が同じSHAで成功。各406件、Firefox準備、JavaScript検査、Artifact保存を確認。 | 会話品質の未達基準を次回評価する。 |
 
 API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / gemini-3.5-flash-liteのみ。初回接続502と候補判定の初回不合格は履歴に残し、修正後に再確認した。限定ケースに未解決結果はないが、全体の品質基準は未達。conversation_004は実施していない。
 
