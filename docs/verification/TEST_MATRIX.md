@@ -792,3 +792,8 @@ T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` �
 | T344 | QUALITY009由来の誤字・事実根拠・既知情報・拒否・共感重複の重点回帰 | pytestの固定架空ケース、オフライン | PASS | typo rejection、未確認のshared preference拒否、既知の相手カフェ/週末情報を再質問しない判定、拒否後の中立候補維持、QUALITY009休息共感ペアの多様性検出と1回修復、最近観た映画回答の時期矛盾を含む**36 passed in 2.46s**。Gemini実通信0回。過去の実生成自然さ/候補多様性FAILを覆さない。総計344: PASS241 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
 
 最新ID行: 344。累計: PASS241 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+
+| T345 | 最終記録SHAのPush/PR Actions・全pytest・JS構文 | GitHub Actions PushとPull Request | PASS | SHA `963be64f989c53a0ef19f2114672743c738d9e30`。Push [38783196561](https://github.com/kenkyu0909/aichatapp/actions/runs/38783196561) / PR [38783205142](https://github.com/kenkyu0909/aichatapp/actions/runs/38783205142) は同一HEADでsuccess。GitHub **1105 passed / 1 warning in 113.81s**、JS syntax check成功。集計345: PASS242 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。保存済み実Gemini品質FAILは残る。|
+
+最新ID行: 345。累計: PASS242 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
