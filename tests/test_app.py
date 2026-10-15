@@ -2360,7 +2360,15 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
 
 @pytest.mark.parametrize(("partner_message", "acknowledgment", "topic"), [
     ("カフェを探すのは好きじゃないです", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味ではないです", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味じゃありません", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("最近旅行に行ったことありますか？", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館によく行くことありますか？", "映画館によく行くんですね！", "映画館頻度"),
     ("最近旅行に行けませんでした", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けないです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けないんです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けなくて", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けなくなって", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行かなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行っていなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けてないです", "最近旅行に行かれたんですね！", "旅行最近"),
@@ -2370,12 +2378,36 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
     ("最近旅行には行ったことがありません", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行くことがないです", "最近旅行に行かれたんですね！", "旅行最近"),
     ("映画館にはよく行きません", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けないです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けないんです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けなくて", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けなくなって", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行かなかったです", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行っていなかったです", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行けてないです", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行けていないです", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行けていません", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館にはよく行くことがないです", "映画館によく行くんですね！", "映画館頻度"),
+    ("最近旅行には行く機会がなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行く時間がなくて", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行けていなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行けず", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館にはよく行く機会がなくて", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行く時間がないです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けていなかったです", "映画館によく行くんですね！", "映画館頻度"),
+    ("新しいカフェを探すのは好きではありません", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("新しいお店を探すのは好きじゃありません", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("最近は旅行に行きたいです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行したいです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行してみたいです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行こうと思っています", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行く予定があります", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行くかもしれません", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館にはよく行きたいです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行く予定です", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館には週に一度行ってみたいです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行くかもです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行くと思います", "映画館によく行くんですね！", "映画館頻度"),
 ])
 def test_partner_attribution_does_not_reverse_negative_facts(client, partner_message, acknowledgment, topic):
     _, backend = client
@@ -2385,6 +2417,51 @@ def test_partner_attribution_does_not_reverse_negative_facts(client, partner_mes
         "ephemeral_user_answers": [],
     }
     candidate = backend.Candidate(label="逆の受け止め", text=acknowledgment)
+
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("negative_fact", [
+    "最近旅行には行けないです",
+    "映画館にはよく行けないんです",
+    "最近旅行には行けなくて",
+    "映画館にはよく行けなくなって",
+])
+def test_unavailable_experience_is_not_trusted_as_positive_fact(client, negative_fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"recent_activity": negative_fact}}}
+
+    assert negative_fact not in backend._trusted_fact_clauses(context)
+
+
+def test_hobby_negation_is_not_trusted_as_positive_place_search_fact(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["カフェを探すのは趣味ではない"]}}}
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="否定と反対の候補", text="カフェを探すのが好きです！")
+    ], context)
+
+
+@pytest.mark.parametrize(("intention", "claim", "topic"), [
+    ("最近旅行に行きたいです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行したいです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行こうと思っています", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行く予定があります", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行くかもしれません", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館にはよく行きたいです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行く予定です", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行くと思います", "映画館によく行きます！", "映画館頻度"),
+    ("映画館には週に一度行ってみたいです", "映画館によく行くんですね！", "映画館頻度"),
+])
+def test_future_intentions_are_not_misread_as_completed_or_habitual(client, intention, claim, topic):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": intention}],
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の経験を断定", text=claim)
 
     assert topic in backend.unsupported_personal_claim_topics([candidate], context)
 
@@ -2400,6 +2477,19 @@ def test_specific_claim_evidence_cannot_be_combined_across_unrelated_facts(clien
 
     assert topic in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="根拠を寄せ集めた候補", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"recent_activity": "最近旅行に行きたいです"}, "最近旅行しました", "旅行最近"),
+    ({"movie_theater_frequency": "映画館にはよく行く予定です"}, "映画館によく行きます", "映画館頻度"),
+])
+def test_future_profile_intention_does_not_verify_past_or_habit(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="予定を経験と誤認", text=claim)
     ], context)
 
 
