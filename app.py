@@ -427,6 +427,24 @@ DAILY_ROUTINE_SCHEDULE_QUESTION = re.compile(
     r"るか(?:教えて(?:ください)?|知りたい(?:です)?|)?|ますか|ていますか|てますか|"
     r"るの|るん|ている|てる|る|ます)?[?？!！]*$"
 )
+FUTURE_ACTIVITY_QUESTION = re.compile(
+    r"^(?=.*(?:明日|明後日|あさって|今夜|今晩|再来月|来月|今月|今度の|次の|"
+    r"次の休み|次の休日|次の週末|今度の週末|この週末|この(?:月|火|水|木|金|土|日)曜|"
+    r"\d{4}年|\d{1,2}月|\d{1,2}日|第[一二三四五六七八九十\d]+(?:週|月|土曜|日曜)|"
+    r"再来週|再来週末|今週末|来週末|来週|今週|"
+    r"(?:月|火|水|木|金|土|日)曜))"
+    r"(?=.*(?:何して|何をして|何する|何をする|どう過ご|何か予定|予定.{0,5}(?:ある|入って)|"
+    r"空いて|都合|会える|家(?:にいる|ですか)|自宅|外出|(?:仕事|学校).{0,6}(?:ですか|なの|ある)|"
+    r"(?:休み|お休み|出勤|勤務)(?:ですか|なの|日|する|あります|いつ|何時)|"
+    r"シフト.{0,8}(?:決ま|入って|ある|いつ|教えて)|出勤.{0,8}(?:いつ|何時|日|予定)|働く|"
+    r"(?:友達|家族|一人).{0,8}(?:出かけ|遊び|行く)|(?:行く|出かける|遊ぶ).{0,5}(?:予定|つもり))).*[?？!！]*$"
+)
+PAST_ACTIVITY_QUESTION = re.compile(
+    r"(?=.*(?:この前|この間|こないだ|先日|先週末|先週|昨日|きのう|一昨日|おととい|"
+    r"\d{4}年|\d{1,2}月|\d{1,2}日|(?:月|火|水|木|金|土|日)曜|朝|午前|昼|午後|夕方|夜|その時|そのとき))"
+    r"(?=.*(?:何して|何をして|何する|何をする|どう過ご|何を過ご))"
+    r"(?=.*(?:[?？]|(?:何して|何をして|何する|何をする|どう過ご|何を過ご).{0,18}(?:の|ん)?(?:ですか|でしょうか)?$|教えて(?:ください)?$))"
+)
 
 
 def _same_day_activity_scope(text: str) -> tuple[str, str] | None:
@@ -441,11 +459,91 @@ def _same_day_activity_scope(text: str) -> tuple[str, str] | None:
     return None
 
 
+def _future_activity_scope(text: str) -> tuple[tuple[str, ...], str] | None:
+    if not FUTURE_ACTIVITY_QUESTION.search(text):
+        return None
+    date_terms = re.findall(
+        r"次の週末|今度の週末|この週末|次の休み|次の休日|再来週末|今週末|来週末|再来週|来週|今週|"
+        r"再来月|来月|今月|今度の|次の|明後日|明日|あさって|今夜|今晩|"
+        r"第[一二三四五六七八九十\d]+(?:週|月|土曜|日曜)|この(?:月|火|水|木|金|土|日)曜|"
+        r"\d{4}年|\d{1,2}月|\d{1,2}日|"
+        r"(?:月|火|水|木|金|土|日)曜(?:日)?",
+        text,
+    )
+    if not date_terms:
+        return None
+    normalized_dates = tuple(dict.fromkeys("土曜" if term == "土曜日" else term for term in date_terms))
+    intent = "availability" if re.search(r"空いて|都合|会える|予定.{0,5}(?:ある|入って)", text) else "activity"
+    return normalized_dates, intent
+
+
+def _past_activity_scope(text: str) -> tuple[tuple[str, ...], str] | None:
+    """Return the relative period for a direct recent-past activity question."""
+    if not PAST_ACTIVITY_QUESTION.search(text):
+        return None
+    quoted_question = re.search(r"[「『](.*?)[」』]", text)
+    activity_pattern = r"何して|何をして|何する|何をする|どう過ご|何を過ご"
+    quoted_text = quoted_question.group(1) if quoted_question else ""
+    # A quote may contain only the event being referred to, while the actual
+    # personal question ("その時は何してた？") follows outside the quote.
+    # Only narrow the search to quoted text when that text itself contains the
+    # activity question; otherwise parse the whole message to retain the link.
+    source = quoted_text if re.search(activity_pattern, quoted_text) else text
+    clauses = [part.strip() for part in re.split(r"[?？!！\n]+", source) if part.strip()]
+    activity_clause_index = next(
+        (index for index in range(len(clauses) - 1, -1, -1)
+         if re.search(activity_pattern, clauses[index])),
+        None,
+    )
+    if activity_clause_index is None:
+        return None
+    activity_clause = clauses[activity_clause_index]
+    periods = re.findall(
+        r"先週末|この前|この間|こないだ|先日|先週|週末|昨日|きのう|一昨日|おととい|"
+        r"\d{4}年|\d{1,2}月|\d{1,2}日|(?:月|火|水|木|金|土|日)曜(?:日)?|"
+        r"午前|午後|朝|昼|夕方|夜|その時|そのとき",
+        activity_clause,
+    )
+    if re.search(r"その時|そのとき", activity_clause) and activity_clause_index > 0:
+        preceding_clause = clauses[activity_clause_index - 1]
+    elif re.search(r"その時|そのとき", activity_clause) and quoted_question:
+        outer_clauses = [
+            part.strip()
+            for part in re.split(r"[?？!！\n]+", text[:quoted_question.start()])
+            if part.strip()
+        ]
+        preceding_clause = outer_clauses[-1] if outer_clauses else ""
+    else:
+        preceding_clause = ""
+    if re.search(r"その時|そのとき", activity_clause) and preceding_clause:
+        preceding_clause = re.sub(r"\s+|[、。!！?？「」『』]", "", preceding_clause)
+        periods = ["その時", preceding_clause]
+    if not periods:
+        return None
+    normalized_periods = tuple(dict.fromkeys(periods))
+    intent = "availability" if re.search(r"空いて|都合|会え", text) else "activity"
+    return normalized_periods, intent
+
+
 def _topic_for_personal_question(text: str) -> str | None:
     # Do not mistake a question about a third party or a general service for
     # a request for the user's own information merely because it mentions a
     # personal topic.
     if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", text):
+        return None
+    third_party_subject = re.sub(
+        r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)?\s*", "", text
+    )
+    third_party = (
+        r"友達|友人|彼氏|彼女|元彼|元彼女|元夫|元妻|夫|妻|旦那|奥さん|ご主人|子ども|子供|子|家族|親|父|母|兄|姉|弟|妹|兄弟|姉妹|両親|祖父母|"
+        r"同僚|上司|先輩|後輩|先生|教師|知り合い"
+    )
+    if re.match(
+        rf"^(?:(?:私|僕|俺|自分)の\s*)?(?:(?:彼|彼女|夫|妻|旦那)の\s*)?"
+        rf"(?:あの|その|この|うちの)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が)\s*|"
+        rf"^(?:あの|その)?(?:{third_party})(?:さん|くん|ちゃん)?の.{{0,14}}(?:予定|スケジュール|何(?:して|する|をする)|どう過ご)",
+        third_party_subject,
+    ):
         return None
     if (
         UNPUNCTUATED_INTERROGATIVE_ASSERTION.search(text)
@@ -460,6 +558,10 @@ def _topic_for_personal_question(text: str) -> str | None:
     ):
         return None
     if SAME_DAY_ACTIVITY_QUESTION.search(text):
+        return "本人情報"
+    if FUTURE_ACTIVITY_QUESTION.search(text):
+        return "本人情報"
+    if _past_activity_scope(text):
         return "本人情報"
     if DAILY_ROUTINE_SCHEDULE_QUESTION.search(text):
         return "本人情報"
@@ -1112,6 +1214,20 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 and _same_day_activity_scope(answer.get("question", "")) == requested_activity_scope
                 for answer in context.get("ephemeral_user_answers", [])
             )
+        requested_future_scope = _future_activity_scope(question_text)
+        if requested_future_scope:
+            return any(
+                answer.get("answer", "").strip()
+                and _future_activity_scope(answer.get("question", "")) == requested_future_scope
+                for answer in context.get("ephemeral_user_answers", [])
+            )
+        requested_past_scope = _past_activity_scope(question_text)
+        if requested_past_scope:
+            return any(
+                answer.get("answer", "").strip()
+                and _past_activity_scope(answer.get("question", "")) == requested_past_scope
+                for answer in context.get("ephemeral_user_answers", [])
+            )
         if re.search(r"何年|何年間|勤続|職歴|経験年数", question_text):
             return any(facts.get(key) for key in (
                 "work_experience_years", "years_experience", "職歴年数", "勤務年数", "勤続年数"
@@ -1322,6 +1438,10 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
         return None
     if topic == "本人情報":
         if SAME_DAY_ACTIVITY_QUESTION.search(partner_messages[-1]):
+            return personal_fact_question(topic, partner_messages[-1])
+        if FUTURE_ACTIVITY_QUESTION.search(partner_messages[-1]):
+            return personal_fact_question(topic, partner_messages[-1])
+        if _past_activity_scope(partner_messages[-1]):
             return personal_fact_question(topic, partner_messages[-1])
         quoted_question = partner_messages[-1].strip().replace("\n", " ")[:180]
         return UserQuestion(
@@ -1554,6 +1674,29 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
             question = f"{day_label}の予定や今していることを教えてください"
         else:
             question = f"{day_label}の過ごし方を教えてください"
+    elif topic == "本人情報" and FUTURE_ACTIVITY_QUESTION.search(source_question):
+        quoted_question = source_question.strip().replace("\n", " ")[:180]
+        question = f"相手の「{quoted_question}」に答えるため該当する日の予定や過ごし方を教えてください"
+    elif topic == "本人情報" and _past_activity_scope(source_question):
+        scope_terms = (_past_activity_scope(source_question) or ((), "activity"))[0]
+        if scope_terms and scope_terms[0] == "その時":
+            quoted_question = re.sub(
+                r"[「」『』]", "", source_question.strip().replace("\n", " ")
+            )[:180]
+            question = f"相手の「{quoted_question}」について何をしていたか教えてください"
+            period = ""
+        else:
+            period = "".join(scope_terms) or "この前"
+        if len(scope_terms) > 1:
+            if scope_terms[0] in {"先週", "この前", "この間", "こないだ", "先日"}:
+                period = f"{scope_terms[0]}の{''.join(scope_terms[1:])}"
+            elif scope_terms[0] in {"昨日", "きのう", "一昨日", "おととい"} and (
+                scope_terms[1] in {"朝", "午前", "昼", "午後", "夕方", "夜"}
+                or re.search(r"(?:月|火|水|木|金|土|日)曜", scope_terms[1])
+            ):
+                period = f"{scope_terms[0]}の{''.join(scope_terms[1:])}"
+        if period:
+            question = f"{period}に何をしていたか教えてください"
     elif topic == "本人情報" and normalized:
         quoted_question = source_question.strip().replace("\n", " ")[:180]
         question = f"相手の「{quoted_question}」にどう答えたいか教えてください"
@@ -4389,10 +4532,18 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
     if topic == "本人情報":
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)
         requested_activity_scope = _same_day_activity_scope(question)
+        requested_future_scope = _future_activity_scope(question)
+        requested_past_scope = _past_activity_scope(question)
         for answer in context.get("ephemeral_user_answers", []):
             answered_question = re.sub(r"\s+|[?？。！!]", "", answer.get("question", ""))
             if requested_activity_scope:
                 if _same_day_activity_scope(answer.get("question", "")) != requested_activity_scope:
+                    continue
+            elif requested_future_scope:
+                if _future_activity_scope(answer.get("question", "")) != requested_future_scope:
+                    continue
+            elif requested_past_scope:
+                if _past_activity_scope(answer.get("question", "")) != requested_past_scope:
                     continue
             elif answered_question != exact_question and exact_question not in answered_question:
                 continue

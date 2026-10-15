@@ -1306,3 +1306,18 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 追加テストはfocused22 passed。最新ローカル全pytest **1143 passed in 182.96s**、Firefox専用UI **11 passed in 145.92s**。Python構文、JS構文、差分検査成功。修正はGeminiモック/オフライン検査であり実文章品質評価ではない。
 - 先行same-day guard commit `27e8ad2` のActionsは同一SHAで成功（Push [38790459970](https://github.com/kenkyu0909/aichatapp/actions/runs/38790459970)、PR [38790468366](https://github.com/kenkyu0909/aichatapp/actions/runs/38790468366)、1125 passed / 1 warning）。今回の日課質問修正のActionsは未実施。
 - 過去QUALITY009の実Gemini自然さ/候補多様性FAILが未解決のため総合NO-GOを維持。Gemini実通信0回。修正をPush後、最新コミットのCI結果を追記する。
+
+## 2026-10-16 04:56 JST 追加品質・回帰確認
+
+- T355: 過去/未来の予定質問で年月日・相対期間・曜日・時間帯・参照文脈の一時回答スコープを分離。修正前7ケースで再現し、修正後focused47 passed、関連群68 passed。全pytest **1230 passed in 182.72s**、Firefox専用 **11 passed in 144.61s**。Python/JavaScript構文と`git diff --check`成功。
+- この修正はGemini APIモック/オフライン検証であり、実モデルの生成品質をPASSにしない。Gemini実通信0回。過去QUALITY009の日本語自然さ・候補意味多様性FAILが残るため総合判定は**NO-GO**。
+- T355後のテストマトリクス集計: 355件（PASS251 / FAIL13 / FIXED71 / BLOCKED5 / NOT_TESTED15）。GitHub Actionsは今回の未コミット差分では未実行。Push後に同一HEADのPush/PR Actionsを確認する。
+- 変更対象: `app.py`、`tests/test_app.py`、検証記録。PR #4をDraftのまま保ち、マージしない。
+
+## 2026-10-16 05:12 JST 引用された過去イベントの確認スコープ修正
+
+- 失敗を再現: 引用された「昨日旅行/映画に行った？」の後にある「その時は何してた？」が、引用内だけを解析するため本人情報確認を迂回していた。確認質問に回答後、入れ子引用を含む確認文から同じ出来事スコープを復元できず、質問を繰り返す問題も独立レビューで発見。
+- 修正: `_past_activity_scope()` は引用内に活動質問がない場合に発話全体を解析し、引用記号を除いて先行イベントへ追質問を紐付ける。確認質問生成時は引用括弧を正規化し、回答と元の質問でスコープを一致させる。
+- 再検証: 関連テスト17 passed。全pytest **1237 passed in 182.83s**（Firefox UIテスト11件を含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Firefox専用の個別コマンド再実行は未実施。Gemini実通信0回。
+- 過去の品質009実Gemini文章自然さ・候補意味多様性FAILは未解決であり、総合NO-GO。今回の変更はオフライン/モック検証のみ。
+- GitHub Actionsは未コミットのため未実施。次はこの差分を選択コミット・Pushし、最新同一HEADのPush/PR ActionsとDraft状態を確認する。PR #4はマージしない。

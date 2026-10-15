@@ -7922,6 +7922,451 @@ def test_daily_schedule_advice_question_does_not_trigger_personal_confirmation(c
     assert backend._topic_for_personal_question(question) is None
 
 
+@pytest.mark.parametrize(("question", "answer"), [
+    ("来週の土曜は何してるの？", "来週の土曜は友達と出かける予定です"),
+    ("明後日何してるの？", "明後日は家でゆっくりする予定です"),
+    ("明日何するの？", "明日は家でゆっくりする予定です"),
+    ("次の休み何する予定？", "次の休みは家で映画を観ます"),
+    ("今夜は家にいるの？", "今夜は家にいる予定です"),
+    ("来週の土曜は仕事ですか？", "来週の土曜は仕事です"),
+    ("土曜日はカフェに行く予定？", "土曜日はカフェに行く予定です"),
+    ("今夜は家ですか？", "今夜は家にいます"),
+    ("来週って休みですか？", "来週は休みです"),
+    ("来週はお休みですか？", "来週は休みです"),
+    ("来週は出勤ですか？", "来週は出勤です"),
+    ("明日は仕事ですか？", "明日は仕事です"),
+    ("来週のシフトは決まってますか？", "来週のシフトは決まっています"),
+    ("次の出勤はいつですか？", "次の出勤は来週です"),
+    ("今週末は何してるの？", "今週末は家で過ごす予定です"),
+    ("次の週末は何する？", "次の週末は友達と出かける予定です"),
+    ("今度の週末は何する？", "今度の週末は家でゆっくりします"),
+    ("この週末はどう過ごす予定？", "この週末は家で過ごす予定です"),
+    ("土曜日は何してる？", "土曜日はまだ決めていません"),
+])
+def test_unconfirmed_future_activity_question_requires_exact_user_answer(client, question, answer):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert clarification.question != question
+    unsupported = backend.Candidate(label="未確認の予定", text=answer + "！")
+    assert not backend._answers_verified_partner_question(unsupported, context)
+
+    context["ephemeral_user_answers"] = [{"question": clarification.question, "answer": answer}]
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(backend.Candidate(label="確認済み", text=answer + "！"), context)
+
+
+def test_future_activity_user_answer_does_not_apply_to_another_date(client):
+    _, backend = client
+    answered_question = "来週の土曜は何してるの？"
+    new_question = "明日何するの？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": answered_question,
+            "answer": "来週の土曜は友達と出かける予定です",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別の日の予定", text="来週の土曜は友達と出かける予定です！"), context
+    )
+
+
+def test_next_week_answer_does_not_apply_to_week_after_next(client):
+    _, backend = client
+    answered_question = "来週の土曜は何してるの？"
+    new_question = "再来週の土曜は何してるの？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": answered_question,
+            "answer": "来週の土曜は友達と出かける予定です",
+        }],
+    }
+
+    assert backend._future_activity_scope(answered_question) != backend._future_activity_scope(new_question)
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別週の予定", text="来週の土曜は友達と出かける予定です！"), context
+    )
+
+
+@pytest.mark.parametrize(("answered_question", "new_question"), [
+    ("土曜は何するの？", "来月の土曜は何するの？"),
+    ("土曜は何するの？", "今度の土曜は何するの？"),
+    ("土曜は何するの？", "次の土曜は何するの？"),
+    ("来月の15日は何してる？", "来月の25日は何してる？"),
+    ("来月の第1土曜は何してる？", "来月の第3土曜は何してる？"),
+    ("今週は何するの？", "今週末は何するの？"),
+    ("来週は何するの？", "来週末は何するの？"),
+    ("来週は何するの？", "再来週は何するの？"),
+])
+def test_future_activity_answers_do_not_cross_week_and_weekend_scopes(
+    client, answered_question, new_question
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": answered_question, "answer": "友達と出かける予定です"}],
+    }
+
+    assert backend._future_activity_scope(answered_question) != backend._future_activity_scope(new_question)
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別の期間の予定", text="友達と出かける予定です！"), context
+    )
+
+
+@pytest.mark.parametrize("question", [
+    "そういえば先生は来週何する予定ですか？",
+    "そういえば、先生は来週何する予定ですか？",
+    "弟さんは明日何してるの？",
+    "私の妹は明日何するの？",
+    "夫は来週何する予定ですか？",
+    "彼氏は明日何するの？",
+    "旦那さんは来週何する予定ですか？",
+    "元夫は来週何する予定ですか？",
+    "奥さんは来週何するの？",
+    "うちの子は明日何するの？",
+    "彼の友達は来週何する予定？",
+    "子どもは明日何してるの？",
+    "その先生は来週何する予定ですか？",
+    "先生の来週の予定は何ですか？",
+    "元夫は来週何する予定ですか？",
+    "奥さんは来週何するの？",
+    "うちの子は明日何するの？",
+    "彼の友達は来週何する予定？",
+    "この先生は来週何する予定ですか？",
+])
+def test_prefaced_or_possessive_third_party_future_question_is_not_about_user(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("question", [
+    "次の週末は何する？",
+    "今度の週末は何する？",
+    "この週末はどう過ごす予定？",
+])
+def test_specific_future_weekend_is_not_verified_by_general_weekend_habit(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"weekends": "休日は家で読書することが多い"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._future_activity_scope(question) is not None
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._topic_is_verified("本人情報", context, question)
+
+
+@pytest.mark.parametrize("question", [
+    "この前は何してたの？",
+    "この前の週末は何してたの？",
+])
+def test_past_this_time_phrase_is_not_treated_as_future_schedule(client, question):
+    _, backend = client
+
+    assert backend._future_activity_scope(question) is None
+
+
+def test_future_activity_question_is_shown_before_gemini_generation(client, monkeypatch):
+    c, backend = client
+    from google import genai
+
+    mid = add_match(c, "架空の相手・未来の予定")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "来週の土曜は何してるの？"})
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("Gemini must not be called"))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert "来週の土曜は何してるの？" in body["user_questions"][0]["question"]
+    assert "該当する日の予定や過ごし方" in body["user_questions"][0]["question"]
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+
+
+@pytest.mark.parametrize("question", [
+    "来週の土曜は映画館が何時に開きますか？",
+    "今夜は何時まで営業していますか？",
+    "友達は明日何するの？",
+    "先生は来週何をする予定ですか？",
+    "妹は明日何してるの？",
+    "そういえば先生は来週何する予定ですか？",
+    "そういえば、先生は来週何する予定ですか？",
+    "弟さんは明日何してるの？",
+    "私の妹は明日何するの？",
+    "夫は来週何する予定ですか？",
+    "彼氏は明日何するの？",
+    "旦那さんは来週何する予定ですか？",
+    "子どもは明日何してるの？",
+    "その先生は来週何する予定ですか？",
+    "先生の来週の予定は何ですか？",
+])
+def test_nonpersonal_future_activity_question_does_not_trigger_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) not in {"本人情報", "予定"}
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize(("answered_question", "new_question"), [
+    ("2月15日は何してる？", "3月15日は何してる？"),
+    ("2026年2月15日は何してる？", "2027年2月15日は何してる？"),
+    ("来月の15日は何してる？", "再来月の15日は何してる？"),
+])
+def test_future_activity_answers_do_not_cross_absolute_month_year_or_relative_month(
+    client, answered_question, new_question
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": answered_question,
+            "answer": "その日は友達と出かける予定です",
+        }],
+    }
+
+    assert backend._future_activity_scope(answered_question) != backend._future_activity_scope(new_question)
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別日への流用", text="その日は友達と出かける予定です！"), context
+    )
+
+
+@pytest.mark.parametrize("question", [
+    "この前は何してたの？",
+    "この前の週末は何してたの？",
+    "こないだ何してましたか？",
+    "先週末はどう過ごしたの？",
+])
+def test_recent_past_activity_question_requires_personal_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._future_activity_scope(question) is None
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "何をしていたか" in clarification.question or "何を過ごしたか" in clarification.question
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="未確認の過去", text="友達と出かけていました！"), context
+    )
+
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": "友達と出かけていました",
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="確認済み", text="友達と出かけていました！"), context
+    )
+
+
+def test_recent_past_activity_answer_does_not_apply_to_a_different_period(client):
+    _, backend = client
+    first_question = "この前は何してたの？"
+    new_question = "先週末は何してたの？"
+    clarification = backend.personal_fact_question("本人情報", first_question)
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": clarification.question, "answer": "友達と出かけていました"}],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別期間", text="友達と出かけていました！"), context
+    )
+
+
+def test_recent_past_activity_question_is_confirmed_before_gemini_generation(client, monkeypatch):
+    c, backend = client
+    from google import genai
+
+    mid = add_match(c, "架空の相手・過去の活動")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "この前は何してたの？"})
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("Gemini must not be called"))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["user_questions"][0]["question"] == "この前に何をしていたか教えてください"
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+
+
+@pytest.mark.parametrize(("first_question", "second_question"), [
+    ("先週の土曜日は何してた？", "先週の日曜日は何してた？"),
+    ("この前の土曜は何してた？", "この前の月曜は何してた？"),
+    ("この前の週末は何してた？", "この前の土曜は何してた？"),
+    ("昨日の朝は何してた？", "昨日の夜は何してた？"),
+    ("2026年2月15日は何してた？", "2026年3月15日は何してた？"),
+])
+def test_recent_past_activity_scope_keeps_weekday_daypart_and_date(
+    client, first_question, second_question
+):
+    _, backend = client
+    assert backend._past_activity_scope(first_question) is not None
+    assert backend._past_activity_scope(first_question) != backend._past_activity_scope(second_question)
+
+
+@pytest.mark.parametrize("question", [
+    "昨日の夜は何してた？",
+    "昨日の朝はどう過ごしましたか？",
+    "一昨日の夜は何をしていましたか？",
+])
+def test_yesterday_daypart_activity_question_requires_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="未確認", text="家で映画を観ていました！"), context
+    )
+
+
+def test_yesterday_daypart_clarification_preserves_the_requested_period(client):
+    _, backend = client
+
+    clarification = backend.personal_fact_question("本人情報", "昨日の夜は何してた？")
+
+    assert clarification.question == "昨日の夜に何をしていたか教えてください"
+
+
+def test_referenced_past_question_scope_does_not_reuse_a_general_recent_answer(client):
+    _, backend = client
+    referenced_question = "この前映画を観た？その時は何してたの？"
+    general_question = "この前は何してたの？"
+
+    assert backend._topic_for_personal_question(referenced_question) == "本人情報"
+    assert backend._past_activity_scope(referenced_question) != backend._past_activity_scope(general_question)
+
+
+@pytest.mark.parametrize(("first_question", "second_question"), [
+    ("先週映画を見た？その時は何してた？", "先週旅行に行った？その時は何してた？"),
+    ("昨日カフェに行った？その時は何してた？", "昨日映画を見た？その時は何してた？"),
+    ("先週映画を見た？「その時は何してた？」", "昨日旅行に行った？「その時は何してた？」"),
+])
+def test_referenced_past_activity_scope_is_bound_to_its_preceding_event(
+    client, first_question, second_question
+):
+    _, backend = client
+
+    assert backend._past_activity_scope(first_question) is not None
+    assert backend._past_activity_scope(first_question) != backend._past_activity_scope(second_question)
+
+
+@pytest.mark.parametrize(("question", "profile_facts", "unsupported_candidate"), [
+    (
+        "「昨日旅行に行った？」その時は何してた？",
+        {"recent_trips": "先週京都へ旅行しました"},
+        "先週京都へ旅行しました！その時は家で寝ていました！",
+    ),
+    (
+        "「昨日映画を見た？」その時は何してた？",
+        {"recent_movies": "最近『青い灯台』を見ました"},
+        "最近『青い灯台』を見ました！その時は家で寝ていました！",
+    ),
+])
+def test_quoted_past_event_followup_still_requires_personal_activity_confirmation(
+    client, question, profile_facts, unsupported_candidate
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": profile_facts},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="確認済み旅行/映画に便乗した未確認活動", text=unsupported_candidate), context
+    )
+
+
+def test_quoted_past_event_clarification_answer_completes_confirmation_round_trip(client):
+    _, backend = client
+    question = "「昨日旅行に行った？」その時は何してた？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"recent_trips": "先週京都へ旅行しました"}},
+        "ephemeral_user_answers": [],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": "昨日は友達と映画を観ていました",
+    }]
+
+    assert backend._past_activity_scope(clarification.question) == backend._past_activity_scope(question)
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="回答に沿う候補", text="昨日は友達と映画を観ていました！"), context
+    )
+
+
 @pytest.mark.parametrize(("answered_question", "new_question"), [
     ("今日は何してますか？", "今日何してたの？"),
     ("今日何してたの？", "今日は何してますか？"),

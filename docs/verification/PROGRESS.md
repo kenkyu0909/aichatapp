@@ -1233,3 +1233,22 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 最終ローカル検証: 全pytest **1143 passed in 182.96s**。Firefox専用 **11 passed in 145.92s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。全pytestの1回目はFirefoxプロセス起動エラー2件で失敗したが、テストが作成した一時Firefoxプロファイルのプロセスだけを特定して終了し、Firefox単独テストと全pytestを再実行して成功。ユーザーのFirefoxプロセスやChromeには触れていない。
 - 先行コミット `27e8ad28027d0585e435f3154463b46b5039bb2e` のPush Actions [38790459970](https://github.com/kenkyu0909/aichatapp/actions/runs/38790459970) / PR Actions [38790468366](https://github.com/kenkyu0909/aichatapp/actions/runs/38790468366) は同SHAでsuccess、1125 passed / 1 warning、JS構文検査成功。今回の日課質問修正は未コミットでActions未確認。
 - 実Gemini通信0回。QUALITY009の保存済み実文章品質・候補多様性FAILは未解決のため総合NO-GO。次: 今回の差分と記録をコミット・Pushし、最新SHAのPush/PR Actionsを確認。その後、QUALITY009の未達P0を続ける。conversation_004と新規会話HTMLは現行指示で実施しない。
+
+### 2026-10-16 04:56 JST 未来・過去の予定スコープ保護
+
+- 監査で月日・年・「再来月」が同じ未来日スコープへ衝突し、別日への回答流用が可能なことを再現。`app.py`で年/月/日および再来月を個別に保持し、該当質問への一時回答だけを利用する。
+- 過去の「この前は何してた？」が本人確認を通らない問題も再現。最近の過去活動を直接尋ねるケース、曜日・週末・年月日・朝昼夜のスコープ、直前の別質問を参照する「その時」を本人情報確認へ回す。第三者質問は既存の除外を維持。
+- 修正前の再現テストは7件失敗。修正後のfocused 47 passed、関連する未来/過去/日課群68 passed。全pytest **1230 passed in 182.72s**。Firefox専用UI **11 passed in 144.61s**。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- Pythonレビューで月/年と再来月の衝突修正を確認。レビュー指摘の過去曜日・時間帯・参照文脈も修正しテスト化。Gemini実通信0回、Chrome不使用。
+- T355をFIXED追加。Matrix **355項目: PASS251 / FAIL13 / FIXED71 / BLOCKED5 / NOT_TESTED15**。保存済みQUALITY009の実Gemini自然さ・意味的候補多様性FAILは未解決のため総合NO-GO。
+- コード・テスト・記録はこれから選択コミットしてPushし、同一SHAのGitHub ActionsとPR状態を確認する。ユーザーの未追跡指示3ファイルは変更・ステージしない。
+- 次: Actions確認後、P0の次項目として保存済みQUALITY009の直接質問への回答漏れと短文ミラーリングのコアFirefox導線を継続監査する。Gemini通信、会話004、新しい会話HTMLは現行指示により行わない。
+
+### 2026-10-16 05:12 JST 引用された過去イベントの確認往復
+
+- 追加再現: `「昨日旅行に行った？」その時は何してた？` と同型の映画質問が、引用の外にある「その時」節を本人情報確認から漏らしていた。両ケースを修正前に失敗として確認し、引用イベントと追質問を同じ過去活動スコープに結び付けた。
+- 独立レビューで、確認質問の入れ子引用により回答後も同じ確認を繰り返す別の不具合を発見。引用括弧を正規化して確認質問へ埋め込み、確認回答が同じスコープとして認識される回帰テストを追加した。
+- 関連focused tests: 17 passed。修正後全pytest **1237 passed in 182.83s**（Firefox UI 11件を含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Firefox専用の別実行は未実施。この差分による実Gemini通信0回。
+- T355の既存FAILをFIXEDへ置換せず修正履歴を追記する。累計Matrix 355項目: PASS251 / FAIL13 / FIXED71 / BLOCKED5 / NOT_TESTED15。品質009の保存済み実文章自然さ・候補多様性FAILが残るため総合NO-GO。
+- 指示ブランチを2026-10-16 05:10 JSTに再取得。P0優先、conversation_004/新HTML/追加Gemini通信なしを確認。作業ブランチHEADは `740e5e90e9e9a97069d6804fa1166e19d5673c25`、本変更は未コミット、Actions未確認。PR #4 OPEN/Draft維持。
+- 次: 変更を選択コミット・Pushし同一SHAのPush/PR Actionsを確認。その後、QUALITY009の保存済み回答漏れとFirefoxコア導線の不具合監査へ進む。未追跡のユーザー指示ファイル3件はステージしない。
