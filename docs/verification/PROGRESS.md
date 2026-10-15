@@ -844,3 +844,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 変更ファイルはapp.pyとtests/test_app.py。旅行回答の本人帰属に関する先行差分も併存する。TEST_MATRIXを301項目、PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15へ更新。
 - QUALITY009の過去の実生成文面FAIL（誤字、候補間の方針差など）は解消していないため総合NO-GO。現ローカル差分のコミット/Pushと最新Actions確認はこれから。PR #4直前HEADはce60f19dfafeb127de569e6d59beb9118a7b1c82、OPEN/Draft。ユーザー提供の未追跡指示txt3点はステージしない。
 - 次: 最新コードをPythonレビューで再確認し、必要なら追加修正後にテスト。差分を選択的にコミット・Pushし、PR #4状態とActionsを最新SHAに照合する。その後、会話候補の方針差と保存済みQUALITY009の実出力を引き続き評価する。
+
+### 2026-10-15 19:00 JST 継続チェックポイント：最新SHAのCIを確認
+
+- `codex/directive-control` を再取得し、SHA `de38556ee55096b330ff5e81638bcad40586f442` の最新版を確認。期限は10/16夜。実Gemini通信は0回、会話004・新規会話HTMLは未実施。
+- コードは `codex/full-system-verification` のまま。未追跡のユーザー指示ファイル3件は保持し、ステージしていない。PR #4はOPEN/Draft、未マージ。
+- 最新コードSHA `532634105d9d7204aed931e36fe63b3541ad4fa3` を対象に、Push Actions [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005) とPR Actions [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421) が両方success。pytest、Firefox確認ステップ、JavaScript構文検査、結果Artifactのアップロードが成功。
+- `quality_checks_009` の直接質問失敗を再現するT303は、確認済みの映画回答候補を残し、質問を回避した代替2案を除外して不足を通知する。focused test **1 passed / 764 deselected**。全pytest **848 passed in 113.98s**（Firefox UIを含み失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- Test Matrixを304件へ更新: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成手動FAILは残るため、総合NO-GO。
+- 次: 保存済み品質009の誤字・候補方針重複を、既存出力を改変せずオフラインで引き続き再現・評価する。危険候補を数合わせで残さず、本人回答を守る候補フィルターを保つ。PR #4はDraft・未マージ。次回の指示fetchは15〜20分以内。

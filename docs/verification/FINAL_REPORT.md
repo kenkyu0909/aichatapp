@@ -1025,3 +1025,11 @@ PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush 
 prompt変更を含む最新ローカル差分で全pytest **847 passed in 118.15s**。Python・JavaScript構文と`git diff --check`も成功。Pushと最新SHAのActionsは未確認。
 
 品質009の最近観た映画への直接質問に回答しない代替案を、現在の候補選別処理が安全候補のみへ絞る統合テストを追加した。focused test **1 passed / 764 deselected**、変更後の全pytest **848 passed in 113.98s**（Firefox UI含む、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`も成功。commit `acdccc777187aa7cdf037f09038fefa4e914f3f5` のPush Actions [run 38716179909](https://github.com/kenkyu0909/aichatapp/actions/runs/38716179909) はsuccess。同runの対象は今回追加した統合テストと最終文書変更の前であるため、次のコミットSHAでもActionsを実行・確認する。
+
+## 2026-10-15 19:00 JST 追補：直接質問候補の修正と最新CI
+
+- 保存済み品質009で「最近どんな映画を観ましたか？」に推奨案だけが答え、代替案が作品名を省いて別の質問に移る実出力を基に、現在の候補フィルターを通す統合回帰を追加した。本人が確認した作品名を使う回答は残し、質問に答えない代替案だけを除外し、3案のうち安全な1案のみという不足を明示する。focused testは`1 passed / 764 deselected`。これはオフラインの構造化応答試験で、Gemini新規出力の再評価ではない。
+- 最新コードSHA `532634105d9d7204aed931e36fe63b3541ad4fa3` のPush Actions [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005) とPR Actions [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421) は同じSHAでsuccess。双方でpytest、Firefox確認ステップ、JavaScript構文チェック、Artifactアップロードが成功した。
+- 全pytestは`848 passed in 113.98s`（Firefox UIを含み失敗・skipなし）。Python構文、JavaScript構文、`git diff --check`も成功。Gemini実API通信は0回。
+- TEST_MATRIXは304項目: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成文面には誤字・候補の意味的重複等の手動FAILが残る。最新コードのオフライン安全ゲートとActions成功だけでは、それらが実モデル上で解決したとは言えないため総合判定は**NO-GO**。
+- PR #4はOPEN/Draft・未マージ。次は品質009の実出力を基に、誤字と返信方針の重複をオフラインで追加評価する。会話004や新しい会話HTMLは実施しない。
