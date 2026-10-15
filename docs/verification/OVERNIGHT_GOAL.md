@@ -950,3 +950,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - テスト: focused 27 passed、本人確認周辺52 passed、全pytest1125 passed、Firefox UI11 passed。Python/JavaScript構文とdiff checkもPASS。独立レビューで今回の差分に高確度のブロッカーなし。
 - Gemini実通信0回。実生成自然さ・候補多様性の過去FAILは維持されるためGOではない。最新変更は未コミット・Actions未確認。
 - 次: 変更を選択的にPushし同一SHAのCIを確認。続けてQUALITY009の残る実出力起点のP0を既存証拠とオフラインテストで監査する。conversation_004と新会話HTMLは実施しない。
+
+### 2026-10-16 04:21 JST 起床・就寝の本人確認
+
+- **達成状況: 部分達成。** 空プロフィールでの起床/就寝時刻に関する直接質問を複数の一般的な言い方で分類し、回答前の候補を拒否する。本人の一時回答後は同じ質問に対する回答のみを通し、確認値と異なる時刻を拒否する。
+- 確認範囲: 平日/週末/朝/普段、起きる/寝る/起床する/就寝する、習慣頻度、「か教えて」形式。一般助言・第三者・店舗質問を非該当に維持。
+- テスト: focused22 passed、全pytest1143 passed、Firefox11 passed、Python/JS構文・diff check PASS。独立レビューに残件なし。
+- 実Gemini通信0回。過去の品質009の実文章FAILが残るため総合GOにはしない。コード変更とT354の記録は未コミット・Actions未確認。
+- 次: 選択的にPushして同一SHA Actionsを確認し、品質009由来の残るP0へ進む。conversation_004/新会話HTMLは保留。

@@ -1225,3 +1225,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 標準形・丁寧形、現在/過去、別人についての質問、営業時間の非該当、回答後の追加未確認主張を含む回帰を追加。焦点テスト27 passed、本人確認関連群52 passed。全pytest **1125 passed in 184.70s**。Firefox専用UI **11 passed in 139.78s**。`py_compile`、`node --check app.js`、`git diff --check`も成功。
 - 独立レビューで今回の範囲の重大な残存問題なし。現在形の回答と過去形の質問（および逆）の混用を防ぐ2ケースも追加し、修正後に全テストを実行。
 - Gemini API通信0回。既存QUALITY009の実生成の自然さ・候補多様性FAILは未解決なので総合判定NO-GO。作業SHA `e28195c`を起点とする変更は未コミットで、Actions未確認。次: 選択的にソース/テスト/検証記録だけをコミット・Pushし、最新SHAのPush/PR ActionsとPR #4のDraft状態を確認する。ユーザーの未追跡指示ファイル3件はステージしない。
+
+### 2026-10-16 04:21 JST 日課質問ガードと最終ローカル検証
+
+- 監査で再現した直接の日課質問のfail-openを修正。朝/夜/平日/週末/普段の起床・就寝時刻、頻度表現、`起床する/就寝する`、`か教えて`形式を本人情報の確認へ誘導する。回答前の候補を拒否し、本人が確認した質問/回答に一致する候補だけを通し、異なる時刻は拒否する。
+- 追加検査: 直接質問形、曜日・頻度表現、名詞形、回答依頼形を含む focused **22 passed**。一般助言（健康/望ましい時間）、第三者主語、店の営業時間は本人の日課質問として誤分類しない。独立コードレビューでも今回の範囲の具体的なfail-open/false-positiveなし。
+- 最終ローカル検証: 全pytest **1143 passed in 182.96s**。Firefox専用 **11 passed in 145.92s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。全pytestの1回目はFirefoxプロセス起動エラー2件で失敗したが、テストが作成した一時Firefoxプロファイルのプロセスだけを特定して終了し、Firefox単独テストと全pytestを再実行して成功。ユーザーのFirefoxプロセスやChromeには触れていない。
+- 先行コミット `27e8ad28027d0585e435f3154463b46b5039bb2e` のPush Actions [38790459970](https://github.com/kenkyu0909/aichatapp/actions/runs/38790459970) / PR Actions [38790468366](https://github.com/kenkyu0909/aichatapp/actions/runs/38790468366) は同SHAでsuccess、1125 passed / 1 warning、JS構文検査成功。今回の日課質問修正は未コミットでActions未確認。
+- 実Gemini通信0回。QUALITY009の保存済み実文章品質・候補多様性FAILは未解決のため総合NO-GO。次: 今回の差分と記録をコミット・Pushし、最新SHAのPush/PR Actionsを確認。その後、QUALITY009の未達P0を続ける。conversation_004と新規会話HTMLは現行指示で実施しない。

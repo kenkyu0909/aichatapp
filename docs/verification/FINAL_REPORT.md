@@ -1299,3 +1299,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 検証: focused 27 passed、本人確認関連52 passed、全pytest **1125 passed in 184.70s**、Firefox専用UI **11 passed in 139.78s**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
 - 過去の品質009実Gemini文章自然さ・候補意味多様性FAILは未解決のままであり、今回のモック/フィルター検証を実モデル品質の成功とは扱わない。総合NO-GOを維持する。
 - この追記時点でソース・テスト変更は未コミット、最新GitHub Actions未確認。Push後に同じHEADのPush/PR Actionsを確認し、結果を進捗記録とPR本文へ反映する。
+
+## 2026-10-16 04:21 JST 本人の日課質問の追加検証
+
+- 起床・就寝時刻に関する相手の直接質問が未分類となり、未確認の予定/習慣を送信候補として通す問題を再現して修正。一般的な助言質問や第三者/店舗の質問は本人の事実確認へ誤誘導しない。
+- 追加テストはfocused22 passed。最新ローカル全pytest **1143 passed in 182.96s**、Firefox専用UI **11 passed in 145.92s**。Python構文、JS構文、差分検査成功。修正はGeminiモック/オフライン検査であり実文章品質評価ではない。
+- 先行same-day guard commit `27e8ad2` のActionsは同一SHAで成功（Push [38790459970](https://github.com/kenkyu0909/aichatapp/actions/runs/38790459970)、PR [38790468366](https://github.com/kenkyu0909/aichatapp/actions/runs/38790468366)、1125 passed / 1 warning）。今回の日課質問修正のActionsは未実施。
+- 過去QUALITY009の実Gemini自然さ/候補多様性FAILが未解決のため総合NO-GOを維持。Gemini実通信0回。修正をPush後、最新コミットのCI結果を追記する。

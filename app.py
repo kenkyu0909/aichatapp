@@ -418,6 +418,15 @@ SAME_DAY_CURRENT_ACTIVITY_QUESTION = re.compile(
     r"どう(?:やって)?\s*過ごして(?:る|いる|ます|います))"
     r"(?:(?:の|ん)?(?:ですか)?|か(?:ですか)?)[?？!！]*$"
 )
+DAILY_ROUTINE_SCHEDULE_QUESTION = re.compile(
+    r"^(?:そういえば|ちなみに)?\s*(?:(?:朝|夜|平日|週末|普段|いつも)(?:は|だと|なら)?\s*)?"
+    r"何時(?:ごろ|くらい|頃)?(?:に)?\s*(?:起き|寝|起床|就寝)"
+    r"(?:(?:ることが多い|るのが多い)(?:ですか|か(?:教えて(?:ください)?|知りたい(?:です)?)?)?|"
+    r"るんですか|るのですか|"
+    r"するんですか|するのですか|するの|しますか|することが多い(?:ですか)?|するのが多い(?:ですか)?|"
+    r"るか(?:教えて(?:ください)?|知りたい(?:です)?|)?|ますか|ていますか|てますか|"
+    r"るの|るん|ている|てる|る|ます)?[?？!！]*$"
+)
 
 
 def _same_day_activity_scope(text: str) -> tuple[str, str] | None:
@@ -451,6 +460,8 @@ def _topic_for_personal_question(text: str) -> str | None:
     ):
         return None
     if SAME_DAY_ACTIVITY_QUESTION.search(text):
+        return "本人情報"
+    if DAILY_ROUTINE_SCHEDULE_QUESTION.search(text):
         return "本人情報"
     if "映画館" in text and re.search(r"どこにあります|どこにある|場所.{0,8}(?:あります|ある)|どこ(?:ですか|でしょうか)", text) and not re.search(r"行く|行った|通う|利用|普段|よく|行きつけ|どの映画館|どこの映画館", text):
         return None

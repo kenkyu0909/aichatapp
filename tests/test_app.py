@@ -7911,6 +7911,17 @@ def test_same_day_business_hours_question_is_not_a_personal_activity_question(cl
     assert backend._topic_for_personal_question(question) is None
 
 
+@pytest.mark.parametrize("question", [
+    "何時に寝るのが健康ですか？",
+    "何時に起きるといいですか？",
+    "何時に起床するのが理想ですか？",
+])
+def test_daily_schedule_advice_question_does_not_trigger_personal_confirmation(client, question):
+    _, backend = client
+
+    assert backend._topic_for_personal_question(question) is None
+
+
 @pytest.mark.parametrize(("answered_question", "new_question"), [
     ("今日は何してますか？", "今日何してたの？"),
     ("今日何してたの？", "今日は何してますか？"),
@@ -7943,6 +7954,8 @@ def test_same_day_activity_answers_do_not_cross_current_past_scope(
     "食べられないものがある人向けのメニューはありますか？",
     "友達は今日何してたんですか？",
     "彼は今日何してたの？",
+    "友達は朝何時に起きるの？",
+    "この店は何時に開店しますか？",
 ])
 def test_third_party_personal_phrase_does_not_trigger_user_confirmation(client, question):
     _, backend = client
@@ -7956,6 +7969,48 @@ def test_third_party_personal_phrase_does_not_trigger_user_confirmation(client, 
     assert backend._topic_for_personal_question(question) is None
     assert backend._same_day_activity_scope(question) is None
     assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize(("question", "unsupported_claim", "conflicting_claim"), [
+    ("朝は何時に起きる？", "朝はだいたい7時に起きます！", "朝は8時に起きます！"),
+    ("何時ごろ寝ることが多い？", "だいたい23時に寝ます！", "22時ごろ寝ます！"),
+    ("平日は何時に起きることが多い？", "平日は7時に起きることが多いです！", "平日は8時に起きることが多いです！"),
+    ("朝何時に起きるのが多い？", "朝は7時に起きるのが多いです！", "朝は8時に起きるのが多いです！"),
+    ("何時ごろ就寝しますか？", "23時ごろ就寝します！", "22時ごろ就寝します！"),
+    ("普段何時に寝るか教えて", "普段は23時ごろに寝ます！", "普段は22時ごろに寝ます！"),
+    ("何時に寝ることが多いか教えて？", "23時ごろに寝ることが多いです！", "22時ごろに寝ることが多いです！"),
+    ("何時に起きることが多いか教えて", "7時ごろに起きることが多いです！", "8時ごろに起きることが多いです！"),
+    ("普段何時に寝ることが多いか教えて", "普段は23時ごろ寝ることが多いです！", "普段は22時ごろ寝ることが多いです！"),
+    ("週末は何時に起きる？", "週末は9時ごろに起きます！", "週末は8時ごろに起きます！"),
+    ("何時に起床するんですか？", "朝は7時ごろに起床します！", "朝は8時ごろに起床します！"),
+    ("何時ごろ起床するの？", "朝は7時ごろに起床します！", "朝は8時ごろに起床します！"),
+    ("何時に就寝するんですか？", "23時ごろに就寝します！", "22時ごろに就寝します！"),
+])
+def test_unknown_daily_routine_schedule_question_requires_user_confirmation(
+    client, question, unsupported_claim, conflicting_claim
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert question.rstrip("？?") in clarification.question
+    candidate = backend.Candidate(label="未確認の日課", text=unsupported_claim)
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": unsupported_claim,
+    }]
+    assert backend._answers_verified_partner_question(candidate, context)
+    conflicting = backend.Candidate(label="回答と異なる時刻", text=conflicting_claim)
+    assert not backend._answers_verified_partner_question(conflicting, context)
 
 
 def test_recent_weekend_question_requests_recent_instance_not_routine(client):

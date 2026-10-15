@@ -852,3 +852,9 @@ T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` �
 | T353 | 当日活動に関する相手の直接質問と一時回答のスコープ保護 | pytest (FastAPI/候補フィルターのオフライン回帰) | PASS | 架空の今日/昨日の過ごし方・現在の活動を使い、本人未確認時に質問へ分岐、回答なし候補を拒否、同じ日/同じ時制の回答だけを許可。丁寧形、第三者の活動、店舗営業時間の誤検出、回答後の未確認追加行動、現在回答と過去質問の交差利用を確認。焦点27 passed、関連群52 passed、全pytest1125 passed、Firefox UI11 passed。Gemini実通信なし。コードSHAは未コミット（起点 `e28195c`）。Actionsは未実施。|
 
 最新ID行: 353。累計: PASS250 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+T353追補: T353の修正コードはコミット `27e8ad28027d0585e435f3154463b46b5039bb2e`。Push Actions [38790459970](https://github.com/kenkyu0909/aichatapp/actions/runs/38790459970) / PR Actions [38790468366](https://github.com/kenkyu0909/aichatapp/actions/runs/38790468366) は同SHAでsuccess（1125 passed / 1 warning、JS構文成功）。その後の日課質問追加変更はT354に記録。
+
+| T354 | 起床・就寝時刻の日課質問での本人確認、回答範囲、非該当質問の誤分類防止 | pytest (オフライン/候補フィルター) | PASS | 架空データで「朝は何時に起きる」「平日は何時に起きることが多い」「週末は何時に起きる」「何時ごろ就寝しますか」「起床/就寝するんですか」「何時に寝ることが多いか教えて」をテスト。回答前は候補拒否、確認回答との不一致時刻も拒否。健康・理想時刻の一般助言、第三者の時刻、営業時間質問は本人確認へ誤誘導しない。focused 22 passed、全pytest1143 passed、Firefox専用11 passed、構文検査PASS。Gemini実通信なし。最新コードは未コミット、Actions未確認。|
+
+最新ID行: 354。累計: PASS251 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
