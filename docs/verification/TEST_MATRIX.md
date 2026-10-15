@@ -870,3 +870,5 @@ T353追補: T353の修正コードはコミット `27e8ad28027d0585e435f3154463b
 | T357 | 連絡を控えることへの否定表現と、第三者の引用に続く本人の明示回答 | pytest（候補安全フィルターのオフライン回帰） | FIXED | レビューで「連絡を控えていただく必要はありません」「連絡を控えてもらう必要はないです」「連絡を控えるべきではありません」を停止要求と誤認するケース、および友人の引用に続く本人の「私も観ました」を拒否するケースを確認。否定表現を継続希望として扱い、引用部分を除いて本人の直接回答を判定する。焦点49 passed。全pytest 1298 passed in 183.59s、Firefox専用11 passed in 146.93s。`py_compile`、`node --check app.js`、`git diff --check` PASS。Gemini実通信なし。GitHub Actionsは未コミットのため未確認。 |
 
 最新ID行: 357。累計: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。
+
+T357追補: コミット 3a2dadd1437b47cbce20a66a119776ac426da665のPush Actions [38806233543](https://github.com/kenkyu0909/aichatapp/actions/runs/38806233543)とPR Actions [38806241260](https://github.com/kenkyu0909/aichatapp/actions/runs/38806241260)は同一SHAでsuccess（各1298 passed / 1 warning、JavaScript構文検査成功）。

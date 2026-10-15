@@ -1341,3 +1341,11 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - Firefox専用UI **11 passed in 146.93s**。全pytest **1298 passed in 183.59s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`が成功した。
 - Yomiyasu lintは変更した資料4件で実行。既存長文による箇条書き比率などの警告が出た。今回の追記に起因する重大な指摘はなく、履歴報告の意味を変える大規模な書き換えはしていない。
 - T357をFIXEDとして記録。新しいマトリクス集計は357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。GitHub Actionsはコード変更をPushした後に確認する。
+
+### 2026-10-16 06:05 JST GitHub Actionsとレビュー確認
+
+- `3a2dadd1437b47cbce20a66a119776ac426da665`を作業ブランチへPushし、Push Actions [38806233543](https://github.com/kenkyu0909/aichatapp/actions/runs/38806233543)とPR Actions [38806241260](https://github.com/kenkyu0909/aichatapp/actions/runs/38806241260)の両方がsuccessであることを確認。両ログは1298 passed / 1 warningを示し、JavaScript構文検査も成功。
+- 独立コードレビューで、否定された連絡停止文が停止要求にならないことと、明確な停止依頼が引き続き検出されることを確認。映画の引用範囲の変更にも追加指摘なし。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHA `3a2dadd1437b47cbce20a66a119776ac426da665`。マージしていない。実Gemini通信0回。3件のユーザー指示ファイルは未追跡のまま保持。
+- T357追補: 同一SHAのPush/PR Actions success。マトリクス357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。
+- 次のP0は保存済みQUALITY009の直接質問への回答漏れ、候補方針の意味的重複、短文ミラーリング。会話004・新会話HTML・Gemini実通信は引き続き行わない。
