@@ -2355,6 +2355,9 @@ def test_unlisted_origin_city_can_be_acknowledged_as_partner_fact(client):
     ("毎日ランニングしています！", "運動習慣", {"exercise_habits": "週3回ランニングしています"}),
     ("毎日料理します！", "料理習慣", {"cooking_habits": "週末によく料理します"}),
     ("鎌倉によく行きます！", "居住地", {"region": "鎌倉", "frequently_visited_places": ["横浜"]}),
+    ("旅行は週に3回行きます！", "旅行", {"travel_frequency": "年に1回旅行に行きます", "hobbies": "旅行が好き"}),
+    ("カフェには毎日行きます！", "カフェ", {"cafe_frequency": "月に1回カフェに行きます"}),
+    ("映画館に毎日行きます！", "映画館頻度", {"movie_theater_frequency": "月に1回映画館に行きます"}),
 ])
 def test_open_vocabulary_personal_claims_require_matching_evidence(client, claim, topic, facts):
     _, backend = client
