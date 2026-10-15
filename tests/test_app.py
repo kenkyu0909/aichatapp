@@ -2233,6 +2233,23 @@ def test_recent_movie_title_and_general_preference_do_not_support_unconfirmed_op
     )
 
 
+@pytest.mark.parametrize("candidate_text", [
+    "赤い惑星は面白かったです！",
+    "青い灯台は面白くなかったです！",
+])
+def test_recent_movie_opinion_answer_requires_same_title_and_polarity(client, candidate_text):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近観た映画はどうでしたか？"}],
+        "my_profile": {"facts": {"recent_movies": "青い灯台を観て面白かったです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="作品や感想の不一致", text=candidate_text), context
+    )
+
+
 def test_movie_title_answer_does_not_license_unconfirmed_movie_opinion(client):
     _, backend = client
     context = {
