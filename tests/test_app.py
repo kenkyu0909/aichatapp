@@ -2371,6 +2371,18 @@ def test_affirmative_fact_after_desuga_contrast_remains_trusted(client, fact, cl
     ], context)
 
 
+def test_unrelated_positive_after_contrast_does_not_verify_negative_topic(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": "映画は好きではないですが旅行は好きです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="別テーマの肯定", text="映画が好きです！")
+    ], context)
+
+
 @pytest.mark.parametrize("partner_message", [
     "カフェを探すのは趣味ではないですが好きです",
     "カフェを探すのは趣味ではないですが楽しいです",

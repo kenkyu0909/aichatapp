@@ -833,9 +833,7 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
         # Keep terminal question marks attached so a question is never treated
         # as evidence that the partner actually has the stated habit or history.
         for fragment in re.split(r"(?<=[。！？!?])|\n", str(message.get("body", ""))):
-            # Keep ``ですが`` attached so polarity after the contrast can be
-            # interpreted in its original context (e.g. 趣味ではないですが好き).
-            partner_clauses.extend(re.split(r"だけど|けれども|けれど|一方で|ただ", fragment))
+            partner_clauses.extend(_contrastive_evidence_clauses(fragment))
     if topic == "場所探し":
         return any(
             re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)", clause)
@@ -924,6 +922,28 @@ def _is_effectively_negative_personal_fact(clause: str) -> bool:
         return False
     return True
 
+
+def _contrastive_evidence_clauses(fragment: str) -> list[str]:
+    """Split contrastive facts while retaining a narrowly scoped elliptical positive."""
+    clauses = re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment)
+    if len(clauses) != 2:
+        return clauses
+    left, right = (part.strip() for part in clauses)
+    # In phrases such as ``カフェ探しは趣味ではないですが好きです``, the
+    # affirmative predicate inherits its subject from the negative clause.
+    # Keep the joined wording as evidence only for that elliptical form.
+    has_grounding_subject = bool(re.search(r"カフェ|喫茶店|お店|店|場所|映画|旅行|読書|本", left))
+    has_subject_in_right = bool(re.search(r"カフェ|喫茶店|お店|店|場所|映画|旅行|読書|本", right))
+    elliptical_positive = bool(re.match(r"(?:好き|楽しい|はま|興味がある|興味あります)", right))
+    if (
+        _is_effectively_negative_personal_fact(left)
+        and has_grounding_subject
+        and not has_subject_in_right
+        and elliptical_positive
+    ):
+        clauses.append(fragment.strip())
+    return clauses
+
 NON_ASSERTIVE_EXPERIENCE_RE = re.compile(
     r"行きたい|行ってみたい|行こうと思|行く予定|行くつもり|行くかもしれ|行くかも|行くと思|行けたら|行ければ|行けるといい|"
     r"旅行したい|旅行してみたい|旅行しようと思|旅行する予定|旅行するつもり|旅行するかもしれ|旅行するかも|旅行の予定|"
@@ -979,9 +999,7 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for fragment in re.split(r"[。！？!?\n,、]+", value):
-                # Retain contrastive context so an explicit affirmative clause
-                # after ``ですが`` is not discarded with the preceding negation.
-                clauses = re.split(r"だけど|けれども|けれど|一方で|ただ", fragment)
+                clauses = _contrastive_evidence_clauses(fragment)
                 for clause in clauses:
                     clause = clause.strip()
                     if clause and (include_negated or not _is_effectively_negative_personal_fact(clause)):
