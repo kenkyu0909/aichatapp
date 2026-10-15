@@ -450,3 +450,17 @@ Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。�
 | アプリ全体の安定性 | CONDITIONAL | SHA 5e269301c6618571a4724b6918c4e50fe1d97bf6のPush/PR Actions両方成功、pytest 762 passed/1 warning、Firefox UIとJS構文を含む。Windows既定8765の占有プロセスは未特定でBLOCKED。 |
 
 実Gemini通信0回。PR #4 OPEN/Draft、未マージ。会話004/新規会話HTMLなし。総合NO-GO。次は保存済み品質ケースで返信候補の方針が本文に現れるか、安全候補を残しながら不足通知が機能するかをオフラインで確認する。
+
+### 2026-10-15 16:50 JST：品質評価ランナーと全回帰
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 過去の未確認候補FAILをゲートが除外した再生は確認。包括意味評価・新しいGemini確認なし。 |
+| 句読点・改行 | NOT_MET | オフライン回帰は通過。包括基準は未評価。 |
+| ミラーリング | NOT_MET | 20ケース基準未評価。 |
+| 共感の反復防止 | NOT_MET | 品質009の人手評価FAILが残る。 |
+| 返信候補の多様性 | NOT_MET | 安全候補の不足は正確に通知されるが意味的な多様性は未達。 |
+| 食事への誘い判断 | NOT_MET | 既存の誘い・拒否回帰は通過。包括10ケース未評価。 |
+| アプリ全体の安定性 | CONDITIONAL | 新しい評価ランナー回帰を追加し、全pytest 764 passed in 104.45s、Firefox UI含む。Python/JS構文とdiff検査成功。新コードSHA Actions確認待ち。 |
+
+ランナーは完全候補と安全な部分候補を区別し、実provider attempt・model identityがない応答をlive smoke PASSにしない。既存QUALITY009 JSONは保持し、2/3案をpartial_safeと読み取れる。実Geminiは0回。conversation_004/新規HTMLなし。総合NO-GO。

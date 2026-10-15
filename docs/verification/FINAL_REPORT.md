@@ -963,3 +963,9 @@ T290追加後のSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` で全pytest **76
 PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush [Actions 38699841263](https://github.com/kenkyu0909/aichatapp/actions/runs/38699841263) とPR [Actions 38699846020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699846020) は成功。双方のpytestは**762 passed、1 warning**。Firefox UIを含み、JavaScript構文検査も成功した。警告はStarlette TestClientとhttpxの非推奨通知。
 
 対象SHAは前回全pytestを通過したコード・テストSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` 以降のドキュメント更新のみで、今回のコミットにコード差分はない。保存済みQUALITY009の実生成手動FAIL、候補の意味的重複、実Geminiによる修正後の品質評価は未解決。したがって総合判定は**NO-GO**のまま。今回の実Gemini通信は0回。会話004と新規会話HTMLは未実施。PR #4はOPEN/Draft、未マージ。
+
+## 2026-10-15 品質ランナー監査・オフライン回帰
+
+品質009のsmoke評価が実API通信やモデル名なしでもPASSになり得る点を修正した。安全フィルターが候補を減らした結果はpartial_safeとして記録し、完全候補集合とは区別する。既存品質009 JSONは変更せず、既存の初回出力は1 provider attempt・API1 / gemini-3.5-flash-lite・2/3安全候補でpartial_safeと読み取れる。候補数不足のため安全候補を捨てることはしない。
+
+評価ランナーの追加pytest 2件が成功。全pytest **764 passed in 104.45s**（Firefox UI含む、skipなし）。Python構文、JavaScript構文、diff検査も成功した。Gemini API通信は0回。新コードSHAのGitHub ActionsはPush後に確認する。品質009の生成文手動FAILと実用品質NO-GOは維持する。

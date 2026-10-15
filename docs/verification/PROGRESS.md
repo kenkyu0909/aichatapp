@@ -712,3 +712,11 @@
 - このHEADはドキュメントのみのコミットであり、コードとテストは全pytest 762 passedを確認したSHA b7c55affef071a88b2fdf46f5e02134ca571c707から変更なし。
 - 保存済み映画質問では安全候補1/3件のみ。回答済み内容を各案へ入れるプロンプト指示とAPIモック回帰は追加済みだが、新しいGemini生成での品質改善は未確認。本人情報・自然さ・ミラーリング・意味的多様性はNOT_MET。総合NO-GOを維持。
 - Test Matrix: 292件、PASS216 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。次はreply候補の方針分離と安全候補不足を保存済みQUALITY009のケースで引き続き監査する。PR #4はDraft・未マージ。ユーザー提供の未追跡指示ファイルはステージしない。
+
+### 2026-10-15 16:45 JST 継続チェックポイント：品質評価ランナーの部分候補記録
+
+- QUALITY009の初回応答は3案指定に対して安全な候補が2案だった。JSON内の要求数・利用可能数と実provider試行1回・API1/model情報を読み、状態はpartial_safeと再分類できる。過去JSONと候補文は変更していない。部分候補は安全な出力を保持する正しい挙動だが、完全な3案や候補多様性の証拠ではない。
+- scripts/run_quality_checks_009.pyに候補集合状態（complete / partial_safe / invalid / not_applicable）の記録を追加し、smoke PASSはdemo応答でないこと、本人確認応答でないこと、provider試行があること、モデル名があることを確認する。安全な部分候補は引き続き保持する。Gemini通信0回。
+- tests/test_quality_checks_009.pyのfocused suiteは2 passed。scriptのpy_compileとdiff checkも成功。コードレビュアーは部分候補の安全性保持と実通信識別を確認し、未解決指摘なしと報告。
+- 全pytest **764 passed in 104.45s**。失敗/skipなし。Firefox UIを含む。py_compile、node --check app.js、git diff --check成功。GitHub Actionsはこの新しいコードSHAでは未実施。
+- Test Matrix 294件: PASS217 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。QUALITY009の文章手動評価FAILはそのまま維持。総合NO-GO。次は変更をPushして最新SHAのActionsを確認し、candidate-roleの品質再現へ戻る。PR #4 Draft・未マージ。ユーザー未追跡指示ファイルは未ステージ。

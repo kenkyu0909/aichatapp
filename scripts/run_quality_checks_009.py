@@ -42,6 +42,33 @@ CASES = [
 ]
 
 
+def smoke_candidate_set_status(
+    response: dict[str, Any], actual_count: int, requested_count: int
+) -> str:
+    """Separate a live safe shortage from a complete smoke candidate set."""
+    if response.get("demo") is not False or response.get("needs_user_info") is not False:
+        return "not_applicable"
+    if actual_count == requested_count:
+        return "complete"
+    if 0 < actual_count < requested_count:
+        return "partial_safe"
+    return "invalid"
+
+
+def smoke_has_live_valid_response(
+    response: dict[str, Any], actual_count: int, requested_count: int, provider_attempts: int
+) -> bool:
+    """Require evidence of a real model call while allowing safe shortages."""
+    return (
+        response.get("demo") is False
+        and response.get("needs_user_info") is False
+        and provider_attempts > 0
+        and bool(response.get("model"))
+        and smoke_candidate_set_status(response, actual_count, requested_count)
+        in {"complete", "partial_safe"}
+    )
+
+
 def save(state: dict[str, Any]) -> None:
     tmp = OUTPUT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -171,6 +198,10 @@ def main() -> int:
             no_punctuation = all("、" not in text and "。" not in text for text in texts)
             no_placeholders = all(not app_module.candidate_has_placeholder(text) for text in texts)
             no_missing_breaks = all(not app_module.candidate_has_missing_sentence_break(text) for text in texts)
+            smoke_candidate_status = (
+                smoke_candidate_set_status(body, len(candidates), requested_count=3)
+                if case["id"] == "smoke_reply" else None
+            )
             evaluation = {
                 "http_status": result.status_code,
                 "needs_user_info": body.get("needs_user_info"),
@@ -181,17 +212,22 @@ def main() -> int:
                 "punctuation_violation": not no_punctuation, "placeholder_violation": not no_placeholders,
                 "missing_sentence_break_violation": not no_missing_breaks,
                 "candidate_count": len(candidates), "candidate_distinct_count": len(set(norm)),
+                **({"candidate_set_status": smoke_candidate_status} if smoke_candidate_status else {}),
                 "unsupported_personal_claim_topics": facts,
                 "text_lengths": [len(text) for text in texts],
                 "sentence_estimates": [len([p for p in re.split(r"[!?！？]+|\n+", text.strip()) if p.strip()]) for text in texts],
                 "logical_request": state["logical_requests"] if attempts > 0 else None,
                 "app_generate_request": state["app_generate_requests"],
             }
-            # Smoke is a successful live endpoint/three-candidate response. Later
-            # cases are evaluated more strictly and remain distinct from transport success.
+            # Smoke verifies live generation and safe output. A safety-filtered
+            # shortage remains distinct from a complete three-candidate set.
             content_pass = (result.status_code == 200 and body.get("demo") is False and len(candidates) >= 1 and not secret_like
                             and no_punctuation and no_placeholders and no_missing_breaks and len(set(norm)) == len(norm)
                             and not facts and body.get("generation_blocked") is not True)
+            if case["id"] == "smoke_reply":
+                content_pass = content_pass and smoke_has_live_valid_response(
+                    body, len(candidates), requested_count=3, provider_attempts=attempts
+                )
             if case["id"] == "direct_question_unconfirmed":
                 content_pass = (result.status_code == 200 and direct_question and attempts == 0)
             if case["id"] == "recent_movie_answered":
@@ -231,10 +267,13 @@ def main() -> int:
             if state["provider_attempts"] > MAX_PROVIDER:
                 state.update(status="FAIL", blocking_reason="Application exceeded provider attempt budget; no further calls will be made")
                 break
-            if case["id"] == "smoke_reply" and result.status_code == 200 and body.get("demo") is False and attempts > 0 and body.get("model"):
+            if case["id"] == "smoke_reply" and content_pass:
                 state["smoke"] = "PASS"
-            elif case["id"] == "smoke_reply" and (body.get("error_code") or result.status_code >= 500):
-                state.update(status="BLOCKED" if body.get("error_code") else "FAIL", blocking_reason=f"Initial smoke request unsuccessful: {body.get('error_code', 'response_validation')}")
+            elif case["id"] == "smoke_reply" and not content_pass:
+                state.update(
+                    status="BLOCKED" if body.get("error_code") else "FAIL",
+                    blocking_reason=f"Initial smoke request unsuccessful: {body.get('error_code', 'incomplete_or_invalid_response')}",
+                )
                 break
             if body.get("error_code") or secret_like:
                 state["status"] = "BLOCKED"

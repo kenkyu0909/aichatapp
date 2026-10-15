@@ -604,3 +604,11 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T292 | 直接質問回帰を含む最新HEADのPush/PR Actions | GitHub Actions、pytestログ、PR HEAD照合 | PASS | SHA 5e269301c6618571a4724b6918c4e50fe1d97bf6のPush [run 38699841263](https://github.com/kenkyu0909/aichatapp/actions/runs/38699841263)とPR [run 38699846020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699846020)が成功。両方とも同じ最新HEADを対象。pytest **762 passed, 1 warning**。Firefoxを含むオフラインテスト、JavaScript構文検査も完了。警告はStarlette TestClientとhttpxの非推奨通知。コードはSHA b7c55affef071a88b2fdf46f5e02134ca571c707の全テスト成功から変更なし。|
 
 最新ID行: 292。累計: PASS216 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。実Gemini APIは0回。|
+
+| T293 | 品質009評価ランナーが安全な候補不足と完全候補集合・実API呼出しを区別 | 保存済み架空JSONの読取、pytestによる純関数検証 | FIXED | 実APIなし。ランナーは要求3案に対して安全候補2案の応答をpartial_safeと記録し、3案完全生成と混同しない。smoke PASSには実プロバイダー試行とモデル名も必要。既存quality_checks_009.jsonは未変更。記録済みsmoke_replyはAPI1・gemini-3.5-flash-lite・試行1回・安全候補2/3案なのでpartial_safeと再分類できる。focused pytest **2 passed**、py_compileとdiff検査成功。|
+
+最新ID行: 293。累計: PASS216 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。実Gemini APIは0回。|
+
+| T294 | 評価ランナー変更後の全pytestと構文検査 | Windows 11、Firefox UIを含むpytest、Python/JavaScript構文、diff検査 | PASS | 全pytest **764 passed in 104.45s**、失敗/skipなし。Firefox UIテストを含む。py_compileでapp.pyと関連スクリプト成功、node --check app.js成功、git diff --check成功。実Gemini APIは0回。ActionsはPush後に別IDで確認する。|
+
+最新ID行: 294。累計: PASS217 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
