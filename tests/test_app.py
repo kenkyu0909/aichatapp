@@ -2082,6 +2082,117 @@ def test_direct_personal_question_accepts_only_matching_ephemeral_answer(
     assert c.get("/api/profile").json()["content"] == ""
 
 
+@pytest.mark.parametrize("candidate_text", [
+    "映画はときどき観るんですか？",
+    "映画館へ行くのが好きなんですか？",
+])
+def test_recent_movie_answer_does_not_accept_topical_followup_as_answer(client, candidate_text):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(label="質問で回避", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "最近は青い灯台を観ました！",
+    "最近は青い灯台を観ました！\nどんなジャンルが好きですか？",
+])
+def test_recent_movie_answer_can_include_verified_title_and_followup(client, candidate_text):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="確認済み作品に回答", text=candidate_text), context
+    )
+
+
+@pytest.mark.parametrize(("answer_question", "answer_text", "candidate_text", "topic"), [
+    ("最近どんな本を読みましたか？", "最近は青い灯台を読みました", "本を読むのが好きです！", "読書"),
+    ("普段どんなジャンルの本を読みますか？", "ミステリーです", "読書が好きです！", "読書"),
+    ("最近どんなカフェに行きましたか？", "昨日は新しいカフェに行きました", "カフェが好きです！", "カフェ"),
+])
+def test_ephemeral_specific_answer_does_not_support_broader_preference(
+    client, answer_question, answer_text, candidate_text, topic
+):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": answer_question, "answer": answer_text}],
+    }
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="範囲の拡張", text=candidate_text)
+    ], context)
+
+
+@pytest.mark.parametrize(("answer_question", "answer_text", "candidate_text", "topic"), [
+    ("最近どんな本を読みましたか？", "最近は青い灯台を読みました", "最近は青い灯台を読みました！", "読書"),
+    ("普段どんなジャンルの本を読みますか？", "ミステリーです", "ミステリー小説が好きです！", "読書"),
+    ("最近どんなカフェに行きましたか？", "昨日は新しいカフェに行きました", "昨日は新しいカフェに行きました！", "カフェ"),
+])
+def test_ephemeral_answer_supports_matching_information_scope(
+    client, answer_question, answer_text, candidate_text, topic
+):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": answer_question, "answer": answer_text}],
+    }
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済み情報の範囲内", text=candidate_text)
+    ], context)
+
+
+@pytest.mark.parametrize(("claim", "topic"), [
+    ("ジムには週3で行きます！", "運動習慣"),
+    ("実家が横浜なのでよく帰ります！", "出身地"),
+    ("兄弟がいるのでよく連絡します！", "家族"),
+    ("料理は週末によくします！", "料理習慣"),
+])
+def test_uncovered_personal_fact_domains_are_rejected_without_evidence(client, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の個人事実", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("answered_question", "answer", "new_question"), [
+    ("最近どんな本を読みましたか？", "最近は青い灯台を読みました", "普段どのくらい本を読みますか？"),
+    ("最近どんな映画を観ましたか？", "最近は青い灯台を観ました", "映画は好きですか？"),
+])
+def test_ephemeral_answer_does_not_cover_different_direct_question_scope(
+    client, answered_question, answer, new_question
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": answered_question, "answer": answer}],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+
 def test_known_specific_curry_fact_does_not_trigger_user_question(client):
     _, backend = client
     context = {
