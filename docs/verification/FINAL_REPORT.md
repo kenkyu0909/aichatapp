@@ -957,3 +957,9 @@ Windowsのstart.batは一時DBを用いた8767番で起動し、Firefoxから架
 直前コミット`305b919401b1163f9ea69cae1764b26359c68073`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928)は成功（pytest 761件）。T290を追加した次のコミットのActionsは別途確認する。
 
 T290追加後のSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` で全pytest **762 passed in 110.09s**（Firefox UI込み）。Python構文、JavaScript構文、差分検査も成功。Push [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)はともに成功。この変更でプロンプトの直接回答指示と候補不足時の安全フィルターを回帰確認したが、実Geminiによる追従性は未検証。総合NO-GOを維持する。
+
+## 2026-10-15 16:40 JST 最新HEAD Actions確認
+
+PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush [Actions 38699841263](https://github.com/kenkyu0909/aichatapp/actions/runs/38699841263) とPR [Actions 38699846020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699846020) は成功。双方のpytestは**762 passed、1 warning**。Firefox UIを含み、JavaScript構文検査も成功した。警告はStarlette TestClientとhttpxの非推奨通知。
+
+対象SHAは前回全pytestを通過したコード・テストSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` 以降のドキュメント更新のみで、今回のコミットにコード差分はない。保存済みQUALITY009の実生成手動FAIL、候補の意味的重複、実Geminiによる修正後の品質評価は未解決。したがって総合判定は**NO-GO**のまま。今回の実Gemini通信は0回。会話004と新規会話HTMLは未実施。PR #4はOPEN/Draft、未マージ。

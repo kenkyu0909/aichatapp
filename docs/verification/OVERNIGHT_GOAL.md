@@ -436,3 +436,17 @@ T290を追加する前のプロンプト変更コミット`305b919401b1163f9ea69
 アプリ全体の安定性はCONDITIONAL。全pytest **762 passed in 110.09s**、Firefox UIを含み、Python/JavaScript構文とdiff検査に成功。T290を含むSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` はPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)が成功。
 
 Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。本人情報の包括的意味確認、自然さ・ミラーリング・候補多様性の実生成品質はNOT_MET。過去QUALITY009手動FAILを維持し、総合NO-GO。実Gemini 0回、会話004/新規HTMLなし。
+
+### 2026-10-15 16:40 JST CI確認
+
+| ゴール | 判定 | 根拠/次の作業 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 保存済み実生成の未回答/未確認候補を安全ゲートで除外し、直接回答のプロンプトとモック経路を追加した。修正後Gemini追従性は未確認。 |
+| 句読点・改行 | NOT_MET | 現行の固定回帰とFirefox回帰は成功。包括ベンチマークは未達。 |
+| ミラーリング | NOT_MET | 包括20ケースの採点未実施。 |
+| 共感の反復防止 | NOT_MET | QUALITY009の手動FAILが残る。 |
+| 返信候補の多様性 | NOT_MET | 保存済み映画質問では安全候補1/3件のみ。意味的方針差は未達。 |
+| 食事への誘い判断 | NOT_MET | 誘いと拒否の固定回帰はあるが、包括10ケース基準は未評価。 |
+| アプリ全体の安定性 | CONDITIONAL | SHA 5e269301c6618571a4724b6918c4e50fe1d97bf6のPush/PR Actions両方成功、pytest 762 passed/1 warning、Firefox UIとJS構文を含む。Windows既定8765の占有プロセスは未特定でBLOCKED。 |
+
+実Gemini通信0回。PR #4 OPEN/Draft、未マージ。会話004/新規会話HTMLなし。総合NO-GO。次は保存済み品質ケースで返信候補の方針が本文に現れるか、安全候補を残しながら不足通知が機能するかをオフラインで確認する。

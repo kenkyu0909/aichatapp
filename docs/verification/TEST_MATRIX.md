@@ -600,3 +600,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T291 | 直接質問の回帰を含む全pytest・構文・最新Actions | Windows 11でpytest、構文検査、GitHub Actions Push/PR | PASS | `python -m pytest -q`: **762 passed in 110.09s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`も成功。SHA `b7c55affef071a88b2fdf46f5e02134ca571c707` のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)は成功。Firefoxでの新しい手動実操作はしていない。|
 
 最新ID行: 291。累計: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|
+
+| T292 | 直接質問回帰を含む最新HEADのPush/PR Actions | GitHub Actions、pytestログ、PR HEAD照合 | PASS | SHA 5e269301c6618571a4724b6918c4e50fe1d97bf6のPush [run 38699841263](https://github.com/kenkyu0909/aichatapp/actions/runs/38699841263)とPR [run 38699846020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699846020)が成功。両方とも同じ最新HEADを対象。pytest **762 passed, 1 warning**。Firefoxを含むオフラインテスト、JavaScript構文検査も完了。警告はStarlette TestClientとhttpxの非推奨通知。コードはSHA b7c55affef071a88b2fdf46f5e02134ca571c707の全テスト成功から変更なし。|
+
+最新ID行: 292。累計: PASS216 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。実Gemini APIは0回。|

@@ -704,3 +704,11 @@
 - 最新コミットSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` の全pytest **762 passed in 110.09s**（Firefox UI含む）。Python `py_compile`、`node --check app.js`、`git diff --check`成功。Push [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)も成功。
 - Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。Gemini実API 0回。プロンプト変更の実生成品質、保存済みQUALITY009の意味重複、ミラーリングの包括検証が未達のため総合NO-GO。会話004・新規HTMLなし。PR #4 OPEN/Draft。
 - 次: 最新指示を定期取得し、保存済み候補の短文誤字/候補役割不足に対し、既存の安全候補保持を損なわない生成前の指示分離を監査する。ユーザー提供の未追跡ファイルは未ステージ。
+
+### 2026-10-15 16:40 JST 継続チェックポイント：最新HEADのCI完了
+
+- 16:38 JSTにcodex/directive-controlから指示を再取得。今日のP0として、QUALITY009の実生成FAILを維持しながら、直接質問に答える各候補・安全候補の保持・候補方針差を優先する。実Gemini通信は0回、conversation_004と新規会話HTMLは行わない。
+- 最新HEAD 5e269301c6618571a4724b6918c4e50fe1d97bf6はPR #4のheadと一致しOPEN/Draftのまま。Push [Actions 38699841263](https://github.com/kenkyu0909/aichatapp/actions/runs/38699841263)とPR [Actions 38699846020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699846020)は両方success。pytest 762 passed / 1 warning、Firefox UIを含む。JavaScript構文検査も成功。警告はStarlette TestClient/httpxの非推奨通知。
+- このHEADはドキュメントのみのコミットであり、コードとテストは全pytest 762 passedを確認したSHA b7c55affef071a88b2fdf46f5e02134ca571c707から変更なし。
+- 保存済み映画質問では安全候補1/3件のみ。回答済み内容を各案へ入れるプロンプト指示とAPIモック回帰は追加済みだが、新しいGemini生成での品質改善は未確認。本人情報・自然さ・ミラーリング・意味的多様性はNOT_MET。総合NO-GOを維持。
+- Test Matrix: 292件、PASS216 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。次はreply候補の方針分離と安全候補不足を保存済みQUALITY009のケースで引き続き監査する。PR #4はDraft・未マージ。ユーザー提供の未追跡指示ファイルはステージしない。
