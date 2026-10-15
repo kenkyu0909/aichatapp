@@ -801,6 +801,10 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     driver = firefox
     driver.get(local_app.url)
     add_fictional_contact(driver, "架空のさくら")
+    with urllib.request.urlopen(local_app.url + "api/matches", timeout=3) as response:
+        selected_match_id = next(
+            item["id"] for item in json.load(response) if item["name"] == "架空のさくら"
+        )
 
     incoming = "最近は仕事が忙しくて少し疲れています"
     already_sent = "無理しすぎないでくださいね"
@@ -849,6 +853,7 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     driver.find_element(By.ID, "follow-up").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
     assert driver.execute_script("return window.__generationPayloads.at(-1).mode") == "followup"
+    assert driver.execute_script("return window.__generationPayloads.at(-1).match_id") == selected_match_id
     candidate = driver.find_element(By.CSS_SELECTOR, ".candidate-text")
     assert driver.execute_script("return arguments[0].textContent", candidate) == followup
     assert driver.execute_script("return getComputedStyle(arguments[0]).whiteSpace", candidate) == "pre-wrap"
@@ -863,7 +868,14 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
              item.find_element(By.CSS_SELECTOR, ".bubble").get_attribute("textContent").strip())
             for item in browser.find_elements(By.CSS_SELECTOR, "article.chat-message")
         ]
+    def saved_history():
+        with urllib.request.urlopen(
+            local_app.url + f"api/matches/{selected_match_id}/messages", timeout=3
+        ) as response:
+            return [(item["role"], item["body"]) for item in json.load(response)]
+
     assert visible_history(driver) == initial_history
+    assert saved_history() == initial_history
 
     driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
     WebDriverWait(driver, 5).until(
@@ -871,16 +883,21 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     )
     assert driver.execute_script("return window.__copiedText") == followup
     assert visible_history(driver) == initial_history
+    assert saved_history() == initial_history
 
     driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
     WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     assert "実際に送信した文章を記録" in modal(driver).find_element(By.ID, "modal-title").text
     textarea = modal(driver).find_element(By.CSS_SELECTOR, "#modal-body textarea")
     assert textarea.get_attribute("value") == followup
+    edited_followup = "落ち着いたらゆっくり休んでくださいね\n返信は気にしないでください😊"
+    textarea.clear()
+    textarea.send_keys(edited_followup)
     modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 2)
-    expected_history = initial_history + [("me", followup)]
+    expected_history = initial_history + [("me", edited_followup)]
     assert visible_history(driver) == expected_history
+    assert saved_history() == expected_history
 
     errors = record_artifact(
         "firefox-followup-copy-record-before-reload",
@@ -893,6 +910,7 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     driver.refresh()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 3)
     assert visible_history(driver) == expected_history
+    assert saved_history() == expected_history
     errors = record_artifact(
         "firefox-followup-history-after-reload",
         driver,

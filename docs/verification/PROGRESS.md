@@ -1302,3 +1302,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 同一SHAのPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)がsuccess。Pushログは**1302 passed / 1 warning**、`node --check app.js`成功。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `9389aa937df569a2aa7c2e683544fe8101e92766`、未マージ。
 - 次は保存済みQUALITY009の候補重複の回復動作と、Firefox追いメッセージ導線の`match_id`確認不足を監査する。Gemini追加通信、conversation_004、新しい会話HTMLは行わない。
+
+## 2026-10-16 06:30 JST P0回帰確認
+
+- T359: 候補の意味的重複が1回の再生成後も残る場合に、追加再試行せず安全候補2案と不足・類似通知を返すことを確認する回帰テストを追加。作成APIの成功コードを誤って200と期待したため201へ直し、focused 2件が成功。
+- T360: Firefox追いメッセージ導線で選択中の`match_id`を検証。コピーのみでは画面とAPI履歴が変わらず、送信記録ダイアログで編集した複数行本文が保存後・再読み込み後も一致することを確認。focused Firefox 1件成功。
+- 全pytest **1303 passed in 183.71s**。`py_compile`、`node --check app.js`、`git diff --check`成功。PythonテストとFirefox差分は独立レビュー済み。
+- T359/T360のGitHub Actionsは該当変更をPush後に確認する。先行docs SHA `b6553b81ec79da9e69d360d5c9137be1f812fdc4` のPush/PR Actions [38809771834](https://github.com/kenkyu0909/aichatapp/actions/runs/38809771834) / [38809778162](https://github.com/kenkyu0909/aichatapp/actions/runs/38809778162)はsuccessだが、今回のテスト差分は含まれない。
+- Test Matrix 360項目: PASS253 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成自然さ・意味的候補多様性FAILが残るため総合NO-GO。Gemini実通信0回。会話004と新会話HTMLは実施しない。
+- 次: 選択コミット・Push後に同一SHAのPush/PR Actionsを確認する。未追跡のユーザー指示ファイル3件は保持し、コミットしない。

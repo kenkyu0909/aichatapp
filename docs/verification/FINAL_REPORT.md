@@ -1370,3 +1370,12 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 
 - SHA `9389aa937df569a2aa7c2e683544fe8101e92766` のPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)はsuccess。Pushログは**1302 passed / 1 warning**、JavaScript構文検査成功。
 - PR #4はOPEN/Draft・未マージ。次は保存済み品質不具合とFirefox追いメッセージのmatch_id確認を調査する。Gemini追加通信・conversation_004・新HTMLは実施しない。
+
+## 2026-10-16 06:30 JST 追補: 候補の多様性とFirefox記録導線
+
+- 全pytest 1303件が成功（183.71秒）。Firefoxの対象追いメッセージ試験も別途1件成功。構文検査と`git diff --check`成功。追加レビューでブロッカーなし。
+- T359は、候補多様化の一度の再生成後も内容が重なる場合に、安全な2案を残し、不足と類似を通知する挙動を確認した。
+- T360は、選択中の相手ID、コピーだけでは未記録、編集した複数行の手動送信記録と再読み込みを確認した。
+- Test Matrixは360項目: PASS253 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。
+- Gemini実通信0回。今回の試験はSDK/UIモックによるオフライン検証。保存済みQUALITY009の実生成自然さ・候補意味多様性FAILは未解決のため、総合NO-GOを維持する。
+- PR #4はDraft・未マージ。今回のテストを含むPush/PR Actionsはコミット後に確認する。

@@ -5236,9 +5236,10 @@ def test_quality009_rest_empathy_pair_triggers_one_diversity_repair(client, monk
 
     c, backend = client
     mid = add_match(c, "架空の休日会話")
-    c.post(f"/api/matches/{mid}/messages", json={
+    setup_response = c.post(f"/api/matches/{mid}/messages", json={
         "role": "them", "body": "休日ほぼ寝て終わりました笑",
     })
+    assert setup_response.status_code == 201, setup_response.text
     repeated = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
         "recommended": {
@@ -5305,6 +5306,61 @@ def test_quality009_rest_empathy_pair_triggers_one_diversity_repair(client, monk
         for item in [body["recommended"], *body["alternatives"]]
     )
     assert body["recommended"]["text"] == diverse["recommended"]["text"]
+
+
+def test_quality009_repeated_diversity_repair_keeps_safe_candidates_and_notifies(client, monkeypatch):
+    """A failed one-time diversity repair must not trigger a retry loop or hide safe replies."""
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の休日会話")
+    setup_response = c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "休日ほぼ寝て終わりました笑",
+    })
+    assert setup_response.status_code == 201, setup_response.text
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {
+            "label": "共感と軽い反応",
+            "text": "そういう日もありますよね笑\nゆっくり休めましたか？",
+        },
+        "alternatives": [{
+            "label": "休息への共感",
+            "text": "お疲れ様です\nしっかり体を休めるのも大事ですね",
+        }],
+        "reason": "休日の話を受け止めます",
+        "strategy": "会話を続けます",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "会話を始めたところです",
+        "next_action": "休日の話を続けます",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(repeated, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "offline-placeholder-key", "model-one"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(calls) == 2
+    assert "候補の進め方が重なる場合の1回限りの再生成" in calls[1]["config"].system_instruction
+    assert body["available_candidate_count"] == 2
+    assert body["recommended"]["text"] == repeated["recommended"]["text"]
+    assert body["alternatives"][0]["text"] == repeated["alternatives"][0]["text"]
+    assert "安全確認後に表示できる候補は2案です" in body["candidate_notice"]
+    assert "中心的な反応が似ている可能性" in body["candidate_notice"]
 
 
 def test_cafe_preference_polarity_is_preserved(client):
