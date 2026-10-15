@@ -386,6 +386,12 @@ PERSONAL_FACT_TOPICS = {
 
 
 def _topic_for_personal_question(text: str) -> str | None:
+    if re.search(
+        r"(?:予約|営業時間|営業状況|アクセス|駐車|入店|入場|利用条件).{0,16}(?:いける|行ける|できます|できますか)|"
+        r"(?:予約なし|予約不要).{0,10}(?:いける|行ける|入れる)",
+        text,
+    ):
+        return None
     if "映画館" in text and re.search(r"どこにあります|どこにある|場所.{0,8}(?:あります|ある)|どこ(?:ですか|でしょうか)", text) and not re.search(r"行く|行った|通う|利用|普段|よく|行きつけ|どの映画館|どこの映画館", text):
         return None
     explicit_movie_request = "映画" in text and re.search(
@@ -509,6 +515,18 @@ def _topic_for_personal_question(text: str) -> str | None:
     if re.search(
         r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
         text,
+    ):
+        return "本人情報"
+    # Short casual questions often omit explicit self-reference and formal
+    # endings. Treat common preference/ability/habit forms as personal facts
+    # so an unknown topic cannot bypass the user-confirmation gate.
+    if (
+        re.search(r"(?:派|型)[?？].{0,16}(?:派|型)[?？]", text)
+        or re.search(
+            r"(?:って|は|なら)?.{0,24}(?:いける|食べる|飲む|聴く|聞く|見る|観る|読む|できる|作れる)(?:ん|の)?[?？]$",
+            text,
+        )
+        or re.search(r"集めてる.{0,12}(?:ある|いる)[?？]$", text)
     ):
         return "本人情報"
     return None
@@ -1623,6 +1641,16 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS["カフェ"] = re.compile(
     + r"|(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:\d+|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?).{0,12}(?:カフェ|喫茶店)"
 )
 
+SHARED_PERSONAL_ASSERTION_PATTERN = re.compile(
+    r"(?:私|自分|僕|俺)も(?P<claim>[^!?！？\n。]{1,56})"
+)
+SHARED_PERSONAL_ASSERTION_MARKER = re.compile(
+    r"(?:好き|苦手|嫌い|得意|大丈夫|平気|派|飼っ|持っ|住ん|出身|行った|行き|観た|見た|読ん|作っ|食べ|飲み|聴き|聞き|集め|通って|働いて|趣味|ハマ|はま|空いて)"
+)
+GENERIC_PERSONAL_CLAUSE_MARKER = re.compile(
+    r"(?:好き|苦手|嫌い|得意|大丈夫|平気|派|飼っ|持っ|住ん|出身|行った|行き|観た|見た|読ん|作っ|食べ|飲み|聴き|聞き|集め|通って|働いて|趣味|ハマ|はま|空いて)"
+)
+
 
 NEGATIVE_PERSONAL_FACT_RE = re.compile(
     r"好きではなくて|好きじゃなくて|好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|(?:好き|楽しい|はま).{0,10}(?:とは思わない|とは言えない|わけではない|わけじゃない)|趣味(?:では|じゃ)(?:なくて|ない|ありません|ないです)|趣味に(?:は)?していない|趣味に(?:は)?してない|趣味.{0,8}(?:ってほど|というほど)(?:では|じゃ|でも)?(?:なくて|ない|ありません|ないです)|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行けない|行けなく|行けず|行けません|行けなかった|行かなかった|行っていなかった|行けていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行く機会が(?:ない|なかった|なくて|ありません)|行く時間が(?:ない|なかった|なくて|ありません)|行く余裕が(?:ない|なかった|なくて|ありません)|行かない|行っていません|行ってない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
@@ -1966,6 +1994,24 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
 
 def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
     return " ".join(_trusted_fact_clauses(context, include_negated=include_negated))
+
+
+def _shared_personal_claim_is_grounded(claim: str, trusted_clauses: list[str]) -> bool:
+    normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
+    normalized_claim = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_claim)
+    if not normalized_claim:
+        return False
+    negative_continuation = re.compile(
+        r"^(?:ではない|じゃない|ではありません|じゃありません|ではなく|じゃなく|とは言えない|とは思わない)"
+    )
+    for source_clause in trusted_clauses:
+        start = 0
+        while (position := source_clause.find(normalized_claim, start)) >= 0:
+            remainder = source_clause[position + len(normalized_claim):]
+            if not negative_continuation.match(remainder):
+                return True
+            start = position + 1
+    return False
 
 
 def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bool:
@@ -2619,6 +2665,66 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     found: list[str] = []
     for candidate in candidates:
         text = candidate.text
+        trusted_clauses = [
+            re.sub(r"[\s、。！!？?]", "", clause)
+            for clause in _trusted_fact_clauses(context, include_negated=True)
+        ]
+        shared_claims = [
+            match for match in SHARED_PERSONAL_ASSERTION_PATTERN.finditer(text)
+            if not _candidate_claim_is_interrogative(text, match)
+            and SHARED_PERSONAL_ASSERTION_MARKER.search(match.group("claim"))
+        ]
+        normalized_shared_claims: set[str] = set()
+        for match in shared_claims:
+            claim = match.group("claim")
+            normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
+            normalized_claim = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_claim)
+            if not _shared_personal_claim_is_grounded(claim, trusted_clauses):
+                found.append("共通点")
+                break
+            normalized_shared_claims.add(normalized_claim)
+        if shared_claims and "共通点" not in found:
+            # A grounded "me too" sentence does not license more personal facts
+            # later in the same candidate. Check additional declarative clauses
+            # independently so an ungrounded pet, habit, place, or experience
+            # cannot hide behind the first confirmed preference.
+            extra_claim_clause = re.compile(
+                r"(?<=[!?！？])|\n+|(?<=です)が|(?<=ます)が|(?<=でした)が|(?<=ました)が|"
+                r"(?<=ています)が|(?<=いる)が|けれども|けれど|けど|でも|一方で"
+            )
+            partner_source = " ".join(
+                [str(context.get("other", {}).get("description", ""))]
+                + [
+                    str(message.get("body", ""))
+                    for message in context.get("history", [])
+                    if message.get("role") == "them"
+                ]
+            )
+            normalized_partner_source = re.sub(r"[\s、。！!？?がはもをにで]", "", partner_source)
+            for clause in (part.strip() for part in extra_claim_clause.split(text) if part.strip()):
+                normalized_clause = re.sub(r"[\s、。！!？?]", "", clause)
+                normalized_clause = re.sub(r"^(?:私|自分|僕|俺)も", "", normalized_clause)
+                normalized_clause = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_clause)
+                if normalized_clause in normalized_shared_claims:
+                    continue
+                if re.search(r"(?:なんですね|んですね|なんだね|のですね|ですよね)$", clause.strip()):
+                    has_first_person_subject = bool(re.match(r"^(?:私|自分|僕|俺)(?:は|も|が)", clause.strip()))
+                    attributed_claim = re.sub(
+                        r"(?:なんですね|んですね|なんだね|のですね|ですよね)$", "", normalized_clause
+                    )
+                    if (
+                        not has_first_person_subject
+                        and attributed_claim
+                        and attributed_claim in normalized_partner_source
+                    ):
+                        continue
+                if re.match(r"^(?:そっちは|そちらは|あなたは|ちなみに|どんな|何|なに|どの|どれ|どちら|どう|どこ|いつ|おすすめ|最近|普段)", clause) and _reading_genre_segment_is_question_only(clause):
+                    continue
+                if not GENERIC_PERSONAL_CLAUSE_MARKER.search(clause):
+                    continue
+                if not _shared_personal_claim_is_grounded(clause, trusted_clauses):
+                    found.append("共通点")
+                    break
         for topic, pattern in UNVERIFIED_PERSONAL_CLAIM_PATTERNS.items():
             # Preserve sentence boundaries for the interrogative filter. Flattening
             # punctuation here let a later question hide an earlier movie assertion.
@@ -3470,6 +3576,26 @@ def _reading_genre_segment_is_question_only(text: str) -> bool:
     return bool(re.search(r"(?:かね|かな|か|でしょう)$", normalized))
 
 
+def _is_partner_directed_followup_question(text: str, direct_question: str) -> bool:
+    """Allow a clear question to the partner beside a verified personal answer."""
+    normalized = text.strip()
+    if not _reading_genre_segment_is_question_only(normalized):
+        return False
+    if re.match(
+        r"^(?:そっちは|そちらは|あなたは|相手は|ちなみに|最近|普段|休日|どんな|何|なに|どの|どれ|どちら|"
+        r"おすすめ|よく|カフェ|映画|本)",
+        normalized,
+    ):
+        return True
+    question_stem = re.split(
+        r"って|は|が|を|なら|好き|お好き|いける|食べる|飲む|聴く|聞く|見る|観る|読む|できます",
+        direct_question,
+        maxsplit=1,
+    )[0]
+    question_stem = re.sub(r"[\s、。！!？?]", "", question_stem)
+    return bool(len(question_stem) >= 2 and normalized.startswith(question_stem[:2]))
+
+
 def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
@@ -3575,27 +3701,43 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
                 return True
         return False
     if topic == "本人情報":
-        answer_prefix = re.split(r"\n|[!?！？]", candidate.text, maxsplit=1)[0]
-        normalized_prefix = re.sub(r"\s+|[、。！!？?]", "", answer_prefix)
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)
         for answer in context.get("ephemeral_user_answers", []):
             answered_question = re.sub(r"\s+|[?？。！!]", "", answer.get("question", ""))
             if answered_question != exact_question and exact_question not in answered_question:
                 continue
             answer_text = str(answer.get("answer", "")).strip()
-            normalized_answer = re.sub(r"\s+|[、。！!？?]", "", answer_text)
-            if normalized_answer and normalized_answer in normalized_prefix:
-                return True
-            anchors = [
-                token for token in re.split(
-                    r"は|が|を|に|で|と|の|も|へ|から|まで|です|ます|する|します|こと|ある|あります|いる|います|よく|普段|最近|自分|私|僕|俺",
-                    answer_text,
-                )
-                if len(token.strip()) >= 2 and token.strip() not in {
-                    "得意", "好き", "苦手", "趣味", "作る", "作ります", "見る", "観る", "読む", "行く", "する", "します"
-                }
-            ]
-            if any(re.sub(r"\s+", "", anchor) in normalized_prefix for anchor in anchors):
+            normalized_answer = re.sub(r"[\s、。！!？?]", "", answer_text)
+            if not normalized_answer:
+                continue
+            answer_seen = False
+            # Generic personal answers have no domain-specific polarity or
+            # scope validator. Split clauses before questions so a confirmed
+            # answer cannot license an unrelated statement about availability,
+            # location, habits, or past experiences. A small set of clearly
+            # partner-directed follow-up questions remains usable; uncertain
+            # clauses fail closed and the caller reports candidate shortages.
+            segments = re.split(
+                r"(?<=[!?！？])|\n+|(?<=です)が|(?<=ます)が|(?<=でした)が|(?<=ました)が|"
+                r"(?<=ています)が|(?<=いる)が|けれども|けれど|けど|でも|一方で",
+                candidate.text,
+            )
+            for segment in (part.strip() for part in segments if part.strip()):
+                normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
+                if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね"}:
+                    continue
+                if _is_partner_directed_followup_question(segment, question):
+                    continue
+                # Allow only the confirmed wording itself, optionally with a
+                # first-person subject. Substring matching would accept
+                # contradictions such as "とは言えません" and arbitrary
+                # claims appended to the confirmed answer.
+                answer_clause = re.sub(r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_segment)
+                if answer_clause == normalized_answer:
+                    answer_seen = True
+                else:
+                    return False
+            if answer_seen:
                 return True
         return False
     recent_movie_question = topic == "映画" and bool(

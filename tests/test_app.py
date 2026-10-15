@@ -6230,6 +6230,222 @@ def test_unclassified_personal_direct_question_requires_matching_user_answer(cli
     assert not backend._answers_verified_partner_question(mismatched, context)
 
 
+@pytest.mark.parametrize(("question", "answer", "grounded_text", "unsupported_text", "contradiction_text"), [
+    ("辛いものっていける？", "辛いものは大丈夫です", "辛いものは大丈夫です！", "辛い料理が大好きです！", "辛いものは苦手です！"),
+    ("甘いものって食べる？", "甘いものは時々食べます", "甘いものは時々食べます！", "甘いものをよく食べます！", "甘いものは食べません"),
+    ("朝型？夜型？", "どちらかというと朝型です", "どちらかというと朝型です！", "毎朝早起きしています！", "夜型です！"),
+    ("音楽は何聴く？", "最近はジャズをよく聴きます", "最近はジャズをよく聴きます！", "最近はロックをよく聴きます！", "最近はクラシックをよく聴きます！"),
+    ("料理できる？", "簡単な料理なら作れます", "簡単な料理なら作れます！", "料理は得意です！", "料理はできません"),
+    ("猫派？犬派？", "犬派です", "犬派です！", "猫派です！", "どちらかというと猫派です！"),
+    ("何か集めてるものある？", "古い切手を集めています", "古い切手を集めています！", "漫画を集めています！", "何も集めていません"),
+])
+def test_colloquial_personal_questions_require_matching_user_confirmation(
+    client, question, answer, grounded_text, unsupported_text, contradiction_text
+):
+    c, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert question in clarification.question
+    unverified = backend.Candidate(label="未確認", text=unsupported_text)
+    assert not backend._answers_verified_partner_question(unverified, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unverified, context)
+
+    match_response = c.post("/api/matches", json={"name": "架空のテスト相手", "description": "架空プロフィール"})
+    assert match_response.status_code == 201
+    match_id = match_response.json()["id"]
+    assert c.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": question}).status_code == 201
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "count": 3, "response_version": 2,
+    })
+    body = response.json()
+    assert response.status_code == 200, body
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert question in body["user_questions"][0]["question"]
+
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    grounded = backend.Candidate(label="確認済み回答", text=grounded_text)
+    unsupported = backend.Candidate(label="根拠外の回答", text=unsupported_text)
+    contradiction = backend.Candidate(label="矛盾する回答", text=contradiction_text)
+    assert backend._answers_verified_partner_question(grounded, context)
+    assert not backend._answers_verified_partner_question(unsupported, context)
+    assert not backend._answers_verified_partner_question(contradiction, context)
+
+
+def test_unknown_nonpersonal_question_is_not_misclassified_as_user_fact_question(client):
+    _, backend = client
+    assert backend._topic_for_personal_question("音楽って何ですか？") is None
+    assert backend._topic_for_personal_question("それって何かある？") is None
+    assert backend._topic_for_personal_question("甘いものってある？") is None
+
+
+def test_generic_confirmed_answer_does_not_ground_later_personal_claims(client):
+    _, backend = client
+    question = "辛いものっていける？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "辛いものは大丈夫です"}],
+    }
+    candidates = [
+        "辛いものは大丈夫です！\n激辛も大好きです！",
+        "辛いものは大丈夫です！\n毎日辛い料理を食べています！",
+        "辛いものは大丈夫です！\nでも辛いものは苦手です！",
+        "辛いものは大丈夫です！\n来週の水曜に会えます！",
+        "辛いものは大丈夫です！\n横浜の近くに住んでいます！",
+        "辛いものは大丈夫です！\n映画館に行きました！",
+        "辛いものは大丈夫です！\n最近友達と会いました！",
+        "辛いものは大丈夫です！\n料理をよく作ります！",
+        "辛いものは大丈夫ですとは言えません！",
+        "辛いものは大丈夫です！横浜に住んでますが近くですか？",
+        "辛いものは大丈夫です！来週なら空いてますが予定どうですか？",
+        "辛いものは大丈夫です！猫を飼っていますが好きですか？",
+    ]
+
+    for text in candidates:
+        candidate = backend.Candidate(label="追加事実あり", text=text)
+        assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_generic_confirmed_answer_allows_followup_question_but_no_extra_assertion(client):
+    _, backend = client
+    question = "辛いものっていける？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "辛いものは大丈夫です"}],
+    }
+
+    candidate = backend.Candidate(
+        label="確認済み回答と質問",
+        text="辛いものは大丈夫です！\nそっちはどうですか？",
+    )
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="短い相槌", text="はい！\n辛いものは大丈夫です！"),
+        context,
+    )
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="同じ話題の質問", text="辛いものは大丈夫です！\n辛いのは好きですか？"),
+        context,
+    )
+
+
+def test_generic_answer_filter_keeps_safe_candidate_and_reports_shortage(client):
+    _, backend = client
+    question = "辛いものっていける？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "辛いものは大丈夫です"}],
+    }
+    response = backend.SuggestionsV2(
+        needs_user_info=False,
+        recommended=backend.Candidate(label="安全な回答", text="辛いものは大丈夫です！"),
+        alternatives=[
+            backend.Candidate(label="未確認の予定", text="辛いものは大丈夫です！\n来週の水曜に会えます！"),
+            backend.Candidate(label="未確認の経験", text="辛いものは大丈夫です！\nこの前京都に行きました！"),
+        ],
+        reason="確認済みの回答",
+        invite_decision="continue_conversation",
+    )
+
+    filtered = backend.filter_safe_candidates(response, 3, context)
+
+    assert filtered["recommended"]["text"] == "辛いものは大丈夫です！"
+    assert filtered["alternatives"] == []
+    assert filtered["available_candidate_count"] == 1
+    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+
+
+def test_unverified_shared_preference_or_ownership_is_rejected_but_partner_question_remains(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "猫が好きで飼っています！"}],
+        "my_profile": {"facts": {"hobbies": ["読書", "カフェ巡り"]}},
+        "ephemeral_user_answers": [],
+    }
+    unsafe = [
+        "私も猫が好きです！",
+        "自分も犬を飼っています！",
+        "自分もラーメンが好きです！",
+        "私も音楽をよく聴きます！",
+        "私も猫が好きです！\n猫を飼っています！",
+        "私も猫が好きです！\n昔から犬も飼っています！",
+        "私も猫が好きです！\n自分は猫を飼ってるんですよね",
+    ]
+    safe = backend.Candidate(
+        label="相手への質問",
+        text="猫好きなんですね！\nどんな猫を飼ってるんですか？",
+    )
+
+    for text in unsafe:
+        candidate = backend.Candidate(label="未確認の共通点", text=text)
+        assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(safe, context)
+
+
+def test_confirmed_shared_preference_can_be_used_without_false_rejection(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "猫が好きで飼っています！"}],
+        "my_profile": {"facts": {"hobbies": ["猫が好き"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの共通点", text="私も猫が好きです！")
+
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_shared_preference_opposite_to_confirmed_fact_is_rejected(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "辛いもの好きですか？"}],
+        "my_profile": {"facts": {"preferences": "辛いものは大丈夫です"}},
+        "ephemeral_user_answers": [],
+    }
+    contradictory = backend.Candidate(label="逆の好み", text="私も辛いものは苦手です！")
+    grounded = backend.Candidate(label="同じ好み", text="私も辛いものは大丈夫です！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(contradictory, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(grounded, context)
+
+
+def test_shared_positive_claim_is_not_grounded_by_negative_profile_fact(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "猫が好きなんです！"}],
+        "my_profile": {"facts": {"preferences": "猫は好きではない"}},
+        "ephemeral_user_answers": [],
+    }
+    positive = backend.Candidate(label="逆の好み", text="私も猫は好きです！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+
+
+def test_place_logistics_question_is_not_misclassified_as_user_preference(client):
+    _, backend = client
+    question = "このカフェって予約なしでいける？"
+
+    assert backend._topic_for_personal_question(question) is None
+
+
 @pytest.mark.parametrize(("claim", "evidence"), [
     ("毎週カフェに行きます", "週に1回カフェに行きます"),
     ("毎月カフェに行きます", "月1回カフェに行きます"),
