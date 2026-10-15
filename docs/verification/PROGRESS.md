@@ -674,3 +674,11 @@
 - コードは直近のSHA 199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00から変更なし。最新コードActionsはPush [run 38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR [run 38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) が成功、761/0 failures。ドキュメント・T286追補を含むSHA 77eb7d12ab01e78a84fc102a8784f02937aff0c1のPush [run 38697551957](https://github.com/kenkyu0909/aichatapp/actions/runs/38697551957) とPR [run 38697556561](https://github.com/kenkyu0909/aichatapp/actions/runs/38697556561) も成功、artifactで761/0 failures/0 errors/0 skippedを確認。
 - 実Gemini APIは0回。過去品質009の手動生成品質FAILは未解決記録のまま。TEST_MATRIX 287項目: PASS211 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。PR #4 OPEN/Draft、未マージ。ユーザー提供の未追跡txtは未ステージ。
 - 次: T287とCtrl+C未検証事項を記録・PushしActions確認。その後は直接質問や候補品質のP0を保存済み出力とオフラインテストで継続する。
+
+### 2026-10-15 16:27 JST 継続チェックポイント：QUALITY009候補の送信前再生
+
+- 16:25 JSTに`codex/directive-control`最新版を取得。QUALITY009の実生成FAIL、候補ごとの直接回答、候補の役割差を優先。Gemini実API、conversation_004、新しい会話HTMLは引き続き未実施。
+- 保存済みの品質009候補を現行`filter_safe_candidates`で再生した。短文ミラーリングの既知誤字、最近観た映画への直接質問を避けた代替2案、未確認の外出嗜好、会う不安に対する「安心してください」をすべて除外。安全候補は残し、要求数に足りない場合の通知を保持。自然なカフェ誘いを含む既存3案は維持した。
+- 再生結果：短文2/3、映画直接質問1/3、既知相手事実2/3、誘い機会3/3、不安表現1/2が表示可能。安全フィルターの動作確認であり、Geminiの生成品質が改善した証拠ではない。
+- focused回帰 `python -m pytest -q tests/test_app.py -k "high_confidence_japanese_typo or recent_movie_answer or known_partner_fact or meeting_unease"` は**12 passed, 670 deselected**。新しい実API要求は0回。Test Matrix 288項目: PASS212 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持。
+- 次: 再生で候補不足となった直接質問と短文ケースを調べ、生成指示側で安全な回答候補を改善する。指示ブランチを15〜20分以内に再取得する。PR #4はOPEN/Draft、未マージ。未追跡ユーザー指示ファイルはステージしない。
