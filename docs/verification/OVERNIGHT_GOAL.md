@@ -713,3 +713,5 @@ Gemini APIは0回。会話004・新規会話HTMLは指示により未実施。�
 | 7. 安定性 | ローカル合格 / 最新資料commit CI待ち | 全pytest932 passed、QUALITY009 replay5 passed、Firefox UI6 passed。最新資料commitのActionsはPush後に確認する。|
 
 Gemini API0回。会話004・新規HTMLは未実施。総合NO-GO。Test Matrix316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。次は資料差分をPushしてCIを確認後、保存済み品質009の残るP0をオフラインで進める。
+
+2026-10-15 21:07 JST: 生成方針を降格した際にStage 4が残るケースを回帰で2件FAILとして再現し、誘い準備済みならconsider_invite / Stage 3、準備未完了ならcontinue_conversation / Stage 2へ同期した。回帰2 passed、全pytest932 passed in 113.98s。Python/JS構文検査とdiff check成功。修正SHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のActionsはPush後に確認する。Gemini API0回、conversation_004/新規会話HTMLなし。Matrixは316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。実生成QUALITY009自然さ・候補意味多様性FAILは残るためNO-GO。

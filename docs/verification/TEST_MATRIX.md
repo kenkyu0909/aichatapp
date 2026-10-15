@@ -685,7 +685,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 
 最新ID行: 312。累計: PASS224 / FAIL13 / FIXED55 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質FAILは継続。
 
-| T313 | invite_gently後に安全な誘い候補が生成されない場合の方針整合性 | 架空会話を使うFastAPIバックエンドpytest（準備済み/未準備の両条件） | FIXED | Geminiが`invite_gently`を返しても、許可された再生成後に安全な誘い候補がない場合は方針を安全候補へ合わせて降格する。誘い準備済みなら`consider_invite`、未準備なら`continue_conversation`。安全な既存候補は保持。修正前回帰FAIL、focused tests **4 passed**、全pytest **932 passed in 117.81s**（Firefox UI込み）。Gemini実通信0回。GitHub Actionsはこの修正SHAでは未確認。|
+| T313 | invite_gently後に安全な誘い候補が生成されない場合の方針・段階整合性 | 架空会話を使うFastAPIバックエンドpytest（準備済み/未準備の両条件） | FIXED | Geminiが`invite_gently`を返しても、許可された再生成後に安全な誘い候補がない場合は方針と段階を安全候補へ合わせて降格する。準備済みなら`consider_invite` / Stage 3、未準備なら`continue_conversation` / Stage 2。安全な既存候補は保持。方針修正のfocused tests **4 passed**。段階不一致の回帰は修正前2 failed、修正後2 passed。最終全pytest **932 passed in 113.98s**（Firefox UI込み）。Gemini実通信0回。最新SHAのActions確認待ち。|
 
 最新ID行: 313。累計: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
 
