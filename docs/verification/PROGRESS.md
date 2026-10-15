@@ -399,3 +399,13 @@
 - レビューで「カフェの話をしませんか」を会う誘いと誤認する範囲の広さも見つかったため、会う・外出を表す助詞と活動語に限定し、話題について話す提案は許容するテストを追加した。
 - オフライン修正を`c69e92f2ce6731083785322463e028f53fbdcd8d`として既存ブランチへPush。最新コミットを対象とする[GitHub Actions 38579919967](https://github.com/kenkyu0909/aichatapp/actions/runs/38579919967)はsuccess。Actions実ログでpytest **257 passed, 1 warning, 62.58秒**、Firefox準備、JavaScript構文検査、Artifact uploadを確認した。PR #4はOPEN/Draftのまま。
 - 次はこのオフライン記録を含むコミットを作成してActionsを再確認した後、指定APIフォルダーのみを使って品質005の最大8要求を実施する。合格条件を全て満たしたときだけconversation_004の開始を検討し、失敗またはクォータ/認証問題があればそこで止める。
+
+## 2026-10-15 実Gemini品質007と質問安全ゲート修正
+
+- 最新リモートHEAD `4e9138c8dfbb292978f47dad543a67ad8a712ebc`を取得して作業を継続。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。ユーザー指定の`指示.txt`は未追跡のまま保持。
+- 実Geminiを指定APIディレクトリから呼び出し、隔離SQLiteと架空データを使用。8論理要求/10 provider attemptsで上限8/16以内。API1 / `gemini-3.5-flash-lite`のみ。疎通はHTTP 200、3候補。429や認証/モデル/通信エラーなし。APIキーの値は読み出し表示・記録していない。
+- 実API品質はFAIL。本人が買い方を回答した後に、無関係なカフェ頻度を尋ねる応答があった。会話拡張ケースでは候補を返さず停止し、冗談・候補多様性・断り直後の話題選びにも問題があった。`quality_checks_007.json`に実出力を保存し、評価は`quality_checks_007_analysis.md`へ追記。
+- 8論理要求上限到達後は追加実API通信なし。品質条件を満たさないためconversation_004は開始せず、会話を作っていない。
+- `app.py`を修正し、直接質問と無関係な未確認候補を本人質問へ変換しない。1回の再生成後も残る候補は質問も送信候補も返さず停止する。不要なモデル本人質問には安全な返信を1回だけ再生成し、再度不適切なら停止。
+- 追加3テストを含め全pytest**375 passed, 1 warning**。Firefox単独`tests/test_ui_firefox.py`は**5 passed**。後続で`node --check app.js`、Python構文、`git diff --check`、秘密情報スキャンを最終確認する。
+- 作業中: `TEST_MATRIX.md`、`FINAL_REPORT.md`、この進捗、`OVERNIGHT_GOAL.md`、`prompt_spec.md`を最終結果へ更新。コミット・Push後に最新SHAのPush/PR Actionsを確認し、PR本文へ結果を追記する。PR #4はDraft維持、未マージ。

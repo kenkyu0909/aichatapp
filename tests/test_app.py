@@ -807,7 +807,7 @@ def test_answered_topic_is_not_asked_again_after_one_model_repair(client, monkey
     })
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["generation_blocked"] is True
+    assert body["generation_blocked"] is True, body
     assert body["needs_user_info"] is False
     assert body["user_questions"] == []
     assert body["recommended"] is None
@@ -841,7 +841,7 @@ def test_model_user_info_question_is_blocked_without_direct_need(client, monkeyp
     assert body["needs_user_info"] is False
     assert body["user_questions"] == []
     assert body["recommended"] is None
-    assert body["api_attempt_count"] == 2
+    assert body["api_attempt_count"] == 3
 
 
 def test_model_user_info_question_allows_unconfirmed_logistics_after_acceptance(client):
@@ -1105,7 +1105,7 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
     result = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert result.status_code == 200, result.text
     body = result.json()
-    assert body["invite_decision"] == "invite_gently"
+    assert body["invite_decision"] == "invite_gently", body
     assert "一緒に行きませんか" in body["recommended"]["text"]
     assert len(prompts) == 2
     assert "誘い判断と候補の不一致" in prompts[1]
@@ -2047,7 +2047,7 @@ def test_user_answer_resumes_generation_ephemerally_for_specific_question(
     })
 
     body = response.json()
-    assert response.status_code == 200
+    assert response.status_code == 200, body
     assert body["needs_user_info"] is False
     assert body["recommended"]["text"] == reply
     assert c.get("/api/profile").json() == before_profile
@@ -2261,7 +2261,7 @@ def test_tentative_availability_does_not_confirm_a_specific_schedule(client):
     assert backend.missing_personal_fact_question(context) is not None
 
 
-def test_unsupported_personal_claim_from_model_returns_user_question_not_candidate(client, monkeypatch):
+def test_unrelated_unsupported_personal_claim_from_model_is_blocked_without_extra_question(client, monkeypatch):
     from google import genai
 
     c, _ = client
@@ -2289,10 +2289,11 @@ def test_unsupported_personal_claim_from_model_returns_user_question_not_candida
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
+    assert body["needs_user_info"] is False
+    assert body["generation_blocked"] is True
+    assert body["user_questions"] == []
     assert body["recommended"] is None
     assert body["alternatives"] == []
-    assert "映画" in body["user_questions"][0]["question"]
     assert body["api_attempt_count"] == 2
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
@@ -2661,7 +2662,8 @@ def test_overnight_unconfirmed_fact_cases_never_return_sendable_candidates(clien
         })
         body = response.json()
         assert response.status_code == 200, f"case {index}: {body}"
-        assert body["needs_user_info"] is True, f"case {index}: {body}"
+        assert body["needs_user_info"] is False, f"case {index}: {body}"
+        assert body["generation_blocked"] is True, f"case {index}: {body}"
         assert body["recommended"] is None and body["alternatives"] == []
     assert repeated_responses == []
 
@@ -2791,6 +2793,168 @@ def test_legacy_response_cannot_return_unsupported_first_person_claim(client, mo
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
     assert response.status_code == 502
     assert response.json()["error_code"] == "invalid_response"
+
+
+def test_unrelated_unsupported_claim_does_not_become_user_question(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    match_id = add_match(c, "架空の買い物質問相手")
+    c.post(f"/api/matches/{match_id}/messages", json={
+        "role": "them", "body": "気になる新作を見つけたらすぐ買うタイプですか？",
+    })
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "推奨", "text": "私もカフェが好きなんですよ！"},
+        "alternatives": [
+            {"label": "別案", "text": "新作って見ているだけでも楽しいですよね！"},
+            {"label": "質問", "text": "最近気になったものはありますか？"},
+        ],
+        "reason": "自然な会話", "strategy": "話題を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "相手の質問に答える", "next_action": "話を広げる",
+    }
+
+    class FakeModels:
+        calls = 0
+
+        def generate_content(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    fake_models = FakeModels()
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=fake_models))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 3,
+        "user_answers": [{"question": "新作を見つけたらすぐ買うタイプですか？", "answer": "少し調べてから買います"}],
+    })
+    body = response.json()
+
+    assert response.status_code == 200
+    assert fake_models.calls == 2
+    assert body["generation_blocked"] is True, body
+    assert body["needs_user_info"] is False
+    assert body["user_questions"] == []
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert "カフェ" not in body["blocking_reason"]
+
+
+def test_unjustified_model_user_question_gets_one_safe_retry(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    match_id = add_match(c, "架空のカフェ会話相手")
+    c.post(f"/api/matches/{match_id}/messages", json={
+        "role": "them", "body": "休日に友達とカフェに行ってきました！",
+    })
+    unnecessary_question = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "お気に入りのカフェを教えてください", "purpose": "会話に使うため"}],
+        "user_info_reason": "会話を作るため", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "話題を続けます", "next_action": "返信します",
+    }
+    safe_response = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "推奨", "text": "友達とカフェに行くの楽しそうですね！"},
+        "alternatives": [
+            {"label": "展開", "text": "どんな雰囲気のお店だったんですか？"},
+            {"label": "短く", "text": "いいですね！\n最近見つけたお店ですか？"},
+        ],
+        "reason": "相手の話を聞く", "strategy": "会話を続ける", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "自然な会話を続ける",
+        "next_action": "店の雰囲気を聞く",
+    }
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=match_id, response_version=2))
+    backend.check_suggestions(backend.SuggestionsV2.model_validate(safe_response), 3, context)
+
+    class FakeModels:
+        def __init__(self):
+            self.responses = [unnecessary_question, unnecessary_question, safe_response]
+
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(self.responses.pop(0), ensure_ascii=False))
+
+    fake_models = FakeModels()
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=fake_models))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 3,
+    })
+    body = response.json()
+
+    assert response.status_code == 200, body
+    assert body["needs_user_info"] is False
+    assert body["generation_blocked"] is False
+    assert body["recommended"]["text"] == safe_response["recommended"]["text"]
+    assert body["api_attempt_count"] == 3
+
+
+def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    c.put("/api/profile", json={
+        "content": json.dumps({"name": "架空のけい", "hobbies": ["カフェ巡り"], "cafe_preferences": ["落ち着いたカフェ"], "cafe_frequency": "月に数回"}, ensure_ascii=False),
+        "avoid": "未確認の経験を作らない",
+    })
+    match_response = c.post("/api/matches", json={
+        "name": "架空の相手", "description": "カフェ巡りと旅行が好きです。落ち着いた店が好きです。",
+    })
+    match_id = match_response.json()["id"]
+    for role, message in [
+        ("them", "休日はカフェを探すのが好きです"),
+        ("me", "最近見つけたお店で特に気に入ったところありますか？"),
+        ("them", "中野で落ち着いたカフェを見つけました！ケーキもおいしそうで気になってます"),
+        ("me", "どんなケーキがあるんですか？"),
+        ("them", "中野のカフェが気になります！よく行きますか？"),
+    ]:
+        c.post(f"/api/matches/{match_id}/messages", json={"role": role, "body": message})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=match_id, response_version=2))
+    assert backend.invite_opportunity_ready(context)
+
+    unnecessary_question = {
+        "needs_user_info": True,
+        "user_questions": [{"question": "行きたいカフェの希望を教えてください", "purpose": "返信を作るため"}],
+        "user_info_reason": "会話を作るため", "recommended": None, "alternatives": [],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 3",
+        "invite_decision": "consider_invite", "decision_reason": "会話を続けます", "next_action": "返信します",
+    }
+    invite_response = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然な誘い", "text": "中野のカフェ気になります！\nよかったら今度一緒に行きませんか？"},
+        "alternatives": [
+            {"label": "会話を広げる", "text": "中野のカフェ気になります！\nどんな雰囲気のお店なんですか？"},
+            {"label": "話題を続ける", "text": "カフェ巡り楽しそうですね！\n中野にはよく行くんですか？"},
+        ],
+        "reason": "相手が興味を示す店の話題に自然につなぐ", "strategy": "相手の反応を尊重する",
+        "conversation_stage": "Stage 4", "invite_decision": "invite_gently",
+        "decision_reason": "相互に質問があり具体的な店の話題が続いている",
+        "next_action": "相手の反応を待つ",
+    }
+    backend.check_suggestions(backend.SuggestionsV2.model_validate(invite_response), 3, context)
+
+    class FakeModels:
+        def __init__(self):
+            self.responses = [unnecessary_question, unnecessary_question, invite_response]
+
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(self.responses.pop(0), ensure_ascii=False))
+
+    fake_models = FakeModels()
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=fake_models))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 3,
+    })
+    body = response.json()
+
+    assert response.status_code == 200, body
+    assert body["generation_blocked"] is False
+    assert body["invite_decision"] == "invite_gently"
+    assert any(backend.INVITATION_PATTERN.search(item["text"]) for item in [body["recommended"], *body["alternatives"]])
+    assert body["api_attempt_count"] == 3
 
 
 @pytest.mark.parametrize("scenario,expected_decision", [

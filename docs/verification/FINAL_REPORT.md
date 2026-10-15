@@ -1,8 +1,8 @@
-# 最終検証報告（2026-10-14 会話シミュレーション追加）
+# Matching Reply Assistant 最終検証報告
 
-## 最新判定（2026-10-15）
+## 最新判定（2026-10-15 実Gemini品質007）
 
-**CONDITIONAL GO（オフライン安定性のみ確認）**。現在のコードは全pytest 372件とFirefox UI単独5件が成功し、構文・差分検査も成功しました。課金状態とGemini利用枠を確認できないため、今回の実API要求数は0です。新しい生成品質は未確認であり、ミラーリング・共感反復・候補の意味的多様性・誘い判断を合格扱いにしません。実用開始前に実Geminiの限定品質評価が必要です。詳しい当日結果は本報告末尾の「2026-10-15 夜間自律品質改善の中間最終報告」と[夜間進捗](OVERNIGHT_GOAL.md)、[評価計画](simulations/overnight_eval_plan.md)を参照してください。
+**NO-GO**。オフラインの質問安全ゲート修正後は全pytest 375件とFirefox UI 5件が成功しました。さらに今回Geminiへ8論理リクエスト / 10プロバイダー試行を行いましたが、実生成品質にFAILが残ったため実用品質とは判定できません。利用枠上限後は追加通信を行わず、conversation_004は開始していません。詳細は末尾の「最終検証追記（2026-10-15 実Gemini品質007）」を参照してください。以前のセクションは当時の状態を記録した履歴です。
 
 コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
 
@@ -581,3 +581,83 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 - TEST_MATRIX: 144項目、PASS 125 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。従来のFAILは履歴として保持。T140は実API利用条件不明でBLOCKED、T141は新規実生成品質をNOT_TESTED。T142–T144は連続したコード・報告commitのPush/PR Actions成功。
 - `OVERNIGHT_GOAL.md`に達成条件、根拠、不合格項目、次の作業を記録。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。最新SHA、Actions URL、レポートリンクをPR本文へ追記済み。マージしていない。
+# 最終検証追記（2026-10-15 実Gemini品質007）
+
+## 総合判定: NO-GO
+
+実Geminiへの疎通は成功しましたが、今回の生成結果に本人回答と無関係な確認質問、冗談への不十分な応答、根拠のない相手情報、誘い機会で候補を返せない事例がありました。コードに安全ゲートを追加し、危険な候補は表示せず停止するようにしましたが、修正後の実Gemini品質はAPI上限のため再確認していません。返信AIを実用品質と判定できないためNO-GOです。
+
+## テスト集計
+
+- 検証項目: 161
+- PASS: 136
+- FAIL: 12
+- FIXED: 1
+- BLOCKED: 5
+- NOT_TESTED: 7
+- 全pytest: **375 passed, 1 warning, 79.01秒**
+- Firefox単独: **5 passed, 71.86秒**
+- Python構文、JavaScript構文、`git diff --check`: PASS
+- GitHub Actions: 今回の最新コミットをPushした後に確認する
+
+FAILには今回の実API品質ケースを含みます。過去のFAILも履歴として保持しています。
+
+## Gemini実API結果
+
+- 論理要求: **8/8**
+- provider attempts: **10/16**
+- モデル/API別名: `gemini-3.5-flash-lite` / API1のみ
+- 最初の疎通: HTTP 200、返信候補3案、1 provider attempt
+- 429、認証、モデル不在、接続エラー: 今回は観測なし
+- 会話004: 品質ゲートがFAILのため未実施
+- 課金状態、残り枠、実費: 未確認。課金やキー設定は変更していない
+
+最初の出力では句読点・改行・プレースホルダー違反はありませんでした。しかし候補間の返信方針が似ています。短い相手への返信量は許容範囲でしたが、冗談への応答は共感に偏り、架空相手の職業を仮定する候補がありました。本人が買い方を回答したケースでは、回答と無関係なカフェ頻度を尋ねました。会話を広げるケースでは3 provider attempts後も候補が返らず、断りケースでは再勧誘こそないものの、未確認の仕事やカフェ嗜好に触れる候補がありました。
+
+詳細な生成結果とケース別評価: [`quality_checks_007_analysis.md`](simulations/quality_checks_007_analysis.md)、構造化ログ: [`quality_checks_007.json`](simulations/quality_checks_007.json)。
+
+## 今回の修正
+
+| ファイル | 原因 | 修正・確認 |
+|---|---|---|
+| `app.py` | 未確認の本人事実が回答後も残ると、その事実を相手に直接聞かれたかに関係なく本人への確認質問へ変換していた。不要なモデル本人質問は即停止し、安全な候補に回復する機会がなかった。 | 本人質問の対象を相手の直接質問と一致する未確認事実に限定。無関係な主張は1回の修正後も残れば候補なしで停止する。不要質問には1回だけ安全な返信を再生成し、再度不適切なら停止。 |
+| `tests/test_app.py` | この質問逸脱と再生成経路の回帰が不足。 | 3テストを追加。無関係な質問への変換を防ぎ、1回の再生成で安全な候補へ回復し、`invite_gently`には実際の誘い候補が含まれることをモックで確認。 |
+| `scripts/run_quality_checks_007.py` | 今回の指定上限内で品質確認し、途中結果を継続保存する仕組みが必要。 | 8論理要求/16 provider attempts、隔離SQLite、API値非表示、途中状態保存を実装。 |
+| `docs/verification/simulations/quality_checks_007.json` / `_analysis.md` | 実出力と意味評価の記録が必要。 | 生成文を保持したまま評価を追記。改善後の成功とは扱っていない。 |
+
+追加テスト6件を含む全pytestは**375件成功**。Firefox単独は**5件成功**。オフラインテストは、実モデルの文章品質を保証しません。
+
+## 7ゴールの状況
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | FAIL | 無関係な確認質問が出た。修正後の実API再検証は未実施。 |
+| 句読点・改行 | PASS | 今回取得できた候補に違反なし。将来出力の保証ではない。 |
+| ミラーリング | FAIL | 冗談の温度感に合わず、相手の仕事を仮定する候補があった。20ケース基準未達。 |
+| 共感の反復防止 | FAIL | 共感中心の似た候補が残り、連続会話の基準を満たさない。 |
+| 返信候補の多様性 | FAIL | 3案の意味・方針差が弱いケースがある。 |
+| 食事への誘い判断 | FAIL | 誘い候補なしで停止するケースがあり、断り後の候補にも問題。 |
+| アプリ全体の安定性 | PASS | 375 pytest、Firefox 5件、Python/JavaScript構文と差分検査に成功。 |
+
+## 未解決の問題と利用判断
+
+返信候補を実用水準と判断する前に、次を実Geminiで再確認する必要があります。
+
+- 本人回答後にその回答へ沿った返信を作り、無関係な質問をしないこと。
+- 冗談・短文・落ち着いた文体を適切にミラーリングすること。
+- 3候補が意味のある別方針を持つこと。
+- 自然に誘える場面で誘いを候補へ含め、慎重さや拒否を尊重すること。
+- 修正後の質問安全ゲートで、危険な候補を止めつつ過剰に生成停止しないこと。
+
+API枠が尽きたため、これらは今回再通信していません。オフラインの安全ゲートは確認済みですが、現時点のAI生成品質で通常利用を推奨できません。
+
+## GitHub
+
+- ブランチ: `codex/full-system-verification`
+- 最終コミットSHA: Push後に追記
+- PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持、未マージ）
+- GitHub Actions: 最新SHAのPush/PR run確認後に追記
+- 進捗: [`PROGRESS.md`](PROGRESS.md)
+- マトリクス: [`TEST_MATRIX.md`](TEST_MATRIX.md)
+- 夜間目標: [`OVERNIGHT_GOAL.md`](OVERNIGHT_GOAL.md)
+- プロンプト仕様: [`prompt_spec.md`](prompt_spec.md)

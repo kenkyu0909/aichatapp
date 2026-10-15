@@ -1857,6 +1857,7 @@ def generate(data: GenerateInput):
     attempted_models: list[dict[str, str]] = []
     quality_repair_used = False
     question_repair_used = False
+    unnecessary_question_repair_used = False
     try:
         provider_attempt_limit = int(os.getenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "12"))
     except ValueError:
@@ -1944,6 +1945,14 @@ def generate(data: GenerateInput):
                                 model=model,
                             )
                         if not model_user_info_questions_are_necessary(context, parsed.user_questions):
+                            if not unnecessary_question_repair_used:
+                                unnecessary_question_repair_used = True
+                                system_instruction += (
+                                    "\n【不要な本人確認質問の修正：1回限り】相手から本人への直接質問がなく、本人の好みや予定を述べなくても自然に返せる場合は、"
+                                    "本人への質問を返さず、相手の発言に対する短い感想か話題を広げる相手向け候補を作ってください。"
+                                    "未確認の自己開示は省き、プロフィールにない店・予定・経験を追加しません。"
+                                )
+                                continue
                             return blocked_user_info_response(
                                 "会話から本人への追加確認が必要だと判断できませんでした。相手の発言だけで安全に返信できるよう、候補生成を中断しました。",
                                 skipped=False,
@@ -2011,6 +2020,21 @@ def generate(data: GenerateInput):
                             )
                             continue
                         if data.response_version == 2 and not data.skipped_user_info:
+                            # A hallucinated, unrelated personal claim must not be
+                            # converted into a question to the user. Ask only when
+                            # the missing fact is exactly what the partner directly
+                            # asked; otherwise fail closed after the one repair.
+                            if direct_topic not in unsupported_topics or any(
+                                topic != direct_topic for topic in unsupported_topics
+                            ):
+                                return blocked_user_info_response(
+                                    "候補に相手の質問と関係のない未確認情報が残ったため、本人への無関係な質問に置き換えず候補生成を中断しました。",
+                                    skipped=False,
+                                    attempted_models=attempted_models,
+                                    api_attempt_count=len(attempted_models),
+                                    api_alias=account,
+                                    model=model,
+                                )
                             answered_topics = {
                                 topic
                                 for answer in data.user_answers

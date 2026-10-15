@@ -302,6 +302,30 @@ T57実装commit `d5513f620b55758cc1a22957d431f61d1a4233ec` のGitHub Actions: [P
 
 本節を含む集計: 144項目、PASS 125 / FAIL 7 / FIXED 1 / BLOCKED 5 / NOT_TESTED 6。旧FAILは履歴として維持。T140/T141は実装成功や文章品質PASSを意味しない。
 
+## 2026-10-15 実Gemini品質確認007と質問ゲート修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T145 | 実API疎通と返信3案 | 架空会話、隔離SQLite、既存FastAPI `/api/generate` | PASS | API1 / `gemini-3.5-flash-lite`。HTTP 200、3候補、1 provider attempt。実文は`quality_checks_007.json`。 |
+| T146 | 短文相手への返信量 | 実Gemini、1文の架空入力 | PASS | 返信は各2文まで。プロフィール確認済みのカフェ趣味を使った候補を含む。 |
+| T147 | 冗談への適応と相手事実の扱い | 実Gemini、架空の「休日ほぼ寝て終わりました笑」 | FAIL | 冗談への自然な反応が弱く、相手プロフィールにない仕事を仮定する候補が出た。 |
+| T148 | 直接質問の本人確認粒度 | `/api/generate`ローカル事前確認 | PASS | 「映画好きですか？」に「映画はお好きですか？」と質問し、相手向け候補なし。API試行0。実Gemini評価ではない。 |
+| T149 | 確認済み買い方の回答後生成 | 実Gemini、架空の本人回答 | FAIL | 買い方へ答える代わりにカフェ頻度・店の好みを本人へ質問。候補は出さなかった。詳細は品質分析。 |
+| T150 | 相手が答えたカフェ頻度の再質問防止 | 実Gemini、架空履歴 | PASS | 既知の「友達とカフェへ行く頻度」を聞き直す候補なし。候補間の共感は一部類似。 |
+| T151 | カフェ会話からの誘い候補 | 実Gemini、相互質問を含む架空履歴 | FAIL | 3 provider attempts後も候補を返さず停止。自然な誘いが生成できたと確認できない。 |
+| T152 | 会うことに慎重な相手への応答 | 実Gemini、架空の不安表明 | FAIL | 再勧誘はなかったが、未確認の仕事を仮定し、断り直後にカフェ嗜好を聞く候補が含まれた。 |
+| T153 | 実生成候補の句読点・改行・プレースホルダー | `quality_checks_007.json`の候補を実文で検査 | PASS | 取得できた候補の「、」「。」、空行、文間の改行漏れ、プレースホルダーは0件。候補なし応答は対象外。 |
+| T154 | 返信候補の意味的多様性 | 実候補を手動分類 | FAIL | 応答形式上は異なるが、受け止め＋質問の型に寄るケースがあり、15ケースで2方針以上という基準は未達。 |
+| T155 | 無関係な未確認事実を本人質問へ変換しない | FastAPI + Gemini SDKモック | PASS | 直接質問と異なる話題の未確認主張が残った場合、質問へ置換せず候補なしで終了。`test_unrelated_unsupported_claim_does_not_become_user_question`。 |
+| T156 | 不要なモデル本人質問の回復 | FastAPI + Gemini SDKモック | PASS | 不要質問を受けた後、最大1回の安全な再生成で候補を返す。追加質問が続く場合の無制限ループなし。 |
+| T157 | 誘い判断と候補の一致 | FastAPI + Gemini SDKモック | PASS | `invite_gently`時に誘い候補を含み、不必要な本人質問から1回の再生成で回復する。実モデルの誘い判断を証明するものではない。 |
+| T158 | 全pytestとFirefoxを含む回帰 | Windows `.venv`、pytest全件 | PASS | **375 passed, 1 warning, 79.01秒**。警告はStarlette/httpx TestClient非推奨。 |
+| T159 | Firefox UI単独回帰 | Selenium Firefox、`tests/test_ui_firefox.py` | PASS | **5 passed, 71.86秒**。Chromeは使用していない。 |
+| T160 | Python/JavaScript構文と差分検査 | `py_compile`、`node --check app.js`、`git diff --check` | PASS | すべて終了コード0。追加の秘密形式スキャンも不一致。 |
+| T161 | conversation_004 | 品質ゲート後に実施 | NOT_TESTED | T147/T149/T151/T152/T154がFAILのため開始しなかった。会話を捏造せず、既存001〜003も変更していない。 |
+
+最新集計: 161項目、PASS 136 / FAIL 12 / FIXED 1 / BLOCKED 5 / NOT_TESTED 7。品質007の実API結果は失敗を含み、会話004は未実施。旧FAILは履歴として維持。
+
 Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 
 - [Push run 38569943665](https://github.com/kenkyu0909/aichatapp/actions/runs/38569943665) — success, 195 passed, 1 warning。

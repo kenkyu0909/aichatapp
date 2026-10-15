@@ -1,6 +1,12 @@
 # 夜間品質改善の進捗
 
-最終更新: 2026-10-15（全体テスト完了）
+## 最新結果（2026-10-15 品質確認007）
+
+総合判定は**NO-GO**です。明示的に許可された範囲でGemini実APIを8論理リクエスト / 10プロバイダー試行使い、疎通と3候補生成には成功しましたが、回答済み情報と無関係な本人質問、冗談への反応、候補の意味的多様性、誘い機会、断り後の話題選びにFAILが残りました。上限到達後は追加通信を行わず、品質ゲート未達のためconversation_004も開始していません。
+
+実出力は[`quality_checks_007.json`](simulations/quality_checks_007.json)、人手の意味評価は[`quality_checks_007_analysis.md`](simulations/quality_checks_007_analysis.md)にあります。修正後の全pytestは**375 passed, 1 warning**、Firefox単独UIは**5 passed**です。最新のGitHub Actionsは今回の変更をPushした後に確認します。以下の以前の記録は当時の状態を示す履歴であり、今回の実API結果より前の記述は最新判定ではありません。
+
+最終更新: 2026-10-15（品質確認007、Push/Actions確認待ち）
 
 ## 作業条件
 
@@ -58,3 +64,38 @@
 - 報告commit `ad427ef48562c02a205c376f16b78f74ffb53e2e`もPush済み。Push [Actions 38593518484](https://github.com/kenkyu0909/aichatapp/actions/runs/38593518484)とPR [Actions 38593529499](https://github.com/kenkyu0909/aichatapp/actions/runs/38593529499)が同SHAで成功。各runで372 passed, 1 warningを確認。
 - 進捗/集計の追記commit `321a43e8be6bba2722e860af63d43efb2d7355eb`のPush [Actions 38593909339](https://github.com/kenkyu0909/aichatapp/actions/runs/38593909339)とPR [Actions 38593921411](https://github.com/kenkyu0909/aichatapp/actions/runs/38593921411)が同SHAで成功。各runで372 passed, 1 warningを確認。後続の報告整理commitと最新headのCIはPR本文に記録する。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。マージしない。最新headとActionsの確認には[PR本文](https://github.com/kenkyu0909/aichatapp/pull/4)を参照する。
+
+## 2026-10-15 指定上限内の実Gemini確認と後続修正
+
+### 今回の実API記録
+
+- 実施前にリモート最新HEAD `4e9138c8dfbb292978f47dad543a67ad8a712ebc`を取得した。作業開始時のユーザー提供`指示.txt`は未追跡のまま保持し、変更・ステージしない。
+- ユーザーが実通信を明示的に許可したため、課金状態を理由に中止せず、架空データ・一時SQLite・既存FastAPI `/api/generate`経由で品質確認を行った。
+- 8論理リクエスト / 10プロバイダー試行。品質確認の上限8 / 16以内。API1 / `gemini-3.5-flash-lite`のみを利用。最初の疎通はHTTP 200、3候補、1試行。429、401、403、404、502は確認しなかった。
+- 実APIの品質判定は**FAIL**。本人への確認質問が回答内容と無関係なカフェ情報へ逸れた。会話を広げるケースでは候補を返せず停止した。冗談への反応、候補の意味的多様性、断り直後の話題にも問題があった。詳細は[`quality_checks_007_analysis.md`](simulations/quality_checks_007_analysis.md)。
+- 品質FAILのためconversation_004は開始していない。修正前の実出力は[`quality_checks_007.json`](simulations/quality_checks_007.json)に保存し、後から評価を加えた。実出力を書き換えていない。
+
+### 7ゴールの最新判定
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 1. 本人情報の正確性 | FAIL | 未確認事実を含む候補は候補検査で止まった一方、本人が買い方を回答済みなのに、無関係なカフェ情報を本人へ尋ねた。修正後の実API確認は未実施。 |
+| 2. 句読点・改行 | PASS（今回の取得出力） | 実際に返った送信候補の「、」「。」違反、文間の改行漏れ、空行、プレースホルダーは検出されなかった。すべての将来出力を保証する結果ではない。 |
+| 3. ミラーリング | FAIL | 1文の冗談に対して似た共感が続き、仕事を仮定する案も出た。20例採点および90%基準は未達。 |
+| 4. 共感の反復防止 | FAIL | 複数ケースで共感＋質問の型が重なり、会話連続評価のゼロ反復基準を確認できない。 |
+| 5. 返信候補の多様性 | FAIL | 構造上は候補が異なるが、意味や返信方針の差が弱いケースがあり、15例で2方針以上の基準を満たさない。 |
+| 6. 食事への誘い判断 | FAIL | 誘える場面で3試行後も候補がなく、拒否ケースでは未確認の職業やカフェ話題を含む候補が残った。 |
+| 7. アプリ全体の安定性 | PASS | 全pytest 375件成功、Firefox単独5件成功、Python/JavaScript構文と差分検査成功。GitHub Actionsはこの記録Push後に最新SHAで確認する。 |
+
+### 実出力を受けたオフライン修正
+
+- 未確認の本人事実が修正後も残ったとき、相手から直接尋ねられていない事柄を本人質問へ変換しない。1回の再生成後も危険な候補が残れば、質問も送信候補も返さず安全に停止する。
+- モデルが不要な本人質問を返した場合、相手向けの安全な候補を作る再生成を1回だけ行う。繰り返し失敗すれば停止する。
+- `invite_gently`と実際の候補の整合性、本人情報との関係、不要な本人質問の再生成をモックテストで確認した。追加した2テストを含め、最新全pytestは**375 passed, 1 warning**。Firefox単独は**5 passed**。
+- この修正後のGemini通信は上限到達により行っていない。改善した文章品質を実証したとは扱わない。
+
+### 再開手順
+
+1. [`quality_checks_007_analysis.md`](simulations/quality_checks_007_analysis.md)と`quality_checks_007.json`を読み、FAILケースを確認する。
+2. 次回、許可された新しい論理リクエスト枠で、修正後のコードを使って失敗した本人回答・候補多様性・会話停滞/誘い・断りケースを最小回数で実API再評価する。
+3. そのすべてが合格したときだけ、新しい会話実験IDで会話シミュレーションを開始する。既存の001〜003、品質006〜007を上書きしない。
