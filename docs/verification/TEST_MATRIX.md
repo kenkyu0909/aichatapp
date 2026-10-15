@@ -684,3 +684,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T312 | 映画館に関する本人確認質問の意図・範囲 | 架空の質問文を使ったpytest（正常系と誤判定対照） | FIXED | 映画館の利用経験・頻度・雰囲気・行きつけ場所を区別し、対応する一時確認質問を返す。映画館自体の所在地を尋ねる質問を本人情報確認に誤分類しない。本人情報の確認範囲も一致させる。重点65 passed / 774 deselected、関連199 passed / 647 deselected、全pytest930 passed。Python/JavaScript構文検査とdiff check成功。Firefox UIは全pytest内で実行。モック・ローカル検証のみ、Gemini実通信0回。Actionsは未実行。|
 
 最新ID行: 312。累計: PASS224 / FAIL13 / FIXED55 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質FAILは継続。
+
+| T313 | invite_gently後に安全な誘い候補が生成されない場合の方針整合性 | 架空会話を使うFastAPIバックエンドpytest（準備済み/未準備の両条件） | FIXED | Geminiが`invite_gently`を返しても、許可された再生成後に安全な誘い候補がない場合は方針を安全候補へ合わせて降格する。誘い準備済みなら`consider_invite`、未準備なら`continue_conversation`。安全な既存候補は保持。修正前回帰FAIL、focused tests **4 passed**、全pytest **932 passed in 117.81s**（Firefox UI込み）。Gemini実通信0回。GitHub Actionsはこの修正SHAでは未確認。|
+
+最新ID行: 313。累計: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。

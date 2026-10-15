@@ -1361,6 +1361,68 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
     assert len(prompts) == 1
 
 
+@pytest.mark.parametrize(("turns", "expected_decision"), [
+    (
+        [
+            ("them", "カフェ巡りは好きですか？"),
+            ("me", "カフェの話を聞きたいです！"),
+            ("them", "中野のカフェに行ってみたいです！"),
+        ],
+        "consider_invite",
+    ),
+    ([("them", "中野のカフェに行ってみたいです！")], "continue_conversation"),
+])
+def test_invite_gently_without_safe_invite_downgrades_to_contextual_policy(
+    client, monkeypatch, turns, expected_decision
+):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空りお")
+    for role, message in turns:
+        c.post(f"/api/matches/{mid}/messages", json={"role": role, "body": message})
+
+    def response(prefix):
+        return {
+            "needs_user_info": False,
+            "user_questions": [],
+            "user_info_reason": "",
+            "recommended": {"label": f"{prefix}反応", "text": "中野のカフェ気になります！"},
+            "alternatives": [
+                {"label": f"{prefix}展開", "text": "中野にはどんなカフェがあるんですか？"},
+                {"label": f"{prefix}感想", "text": "落ち着いたお店ってよさそうですね！"},
+            ],
+            "reason": "安全な候補を作成",
+            "strategy": "誘いを含まない候補",
+            "conversation_stage": "Stage 4",
+            "invite_decision": "invite_gently",
+            "decision_reason": "会話が前向きです",
+            "next_action": "自然に誘う",
+        }
+
+    responses = [response("初回"), response("修復後")]
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    result = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert result.status_code == 200, result.text
+    body = result.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert body["invite_decision"] == expected_decision
+    assert not any(backend.INVITATION_PATTERN.search(item["text"]) for item in candidates)
+    assert candidates[0]["text"] == "中野のカフェ気になります！"
+    assert "誘い候補" in body["decision_reason"]
+    assert "安全な候補は表示しています" in body["candidate_notice"]
+    assert not responses
+
+
 def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client, monkeypatch):
     from google import genai
 

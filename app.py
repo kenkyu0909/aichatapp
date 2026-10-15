@@ -4495,12 +4495,28 @@ def generate(data: GenerateInput):
                                 fallback_candidates,
                                 data.count,
                             )
+                            invite_opportunity_exists = invite_opportunity_ready(context)
                             parsed = parsed.model_copy(update={
                                 "recommended": safe_candidates[0],
                                 "alternatives": safe_candidates[1:],
+                                "invite_decision": "consider_invite" if invite_opportunity_exists else "continue_conversation",
+                                "decision_reason": (
+                                    "誘い候補を安全に作れなかったため、今回は誘いを確定せず安全な返信候補を優先します"
+                                    if invite_opportunity_exists
+                                    else "安全な誘い候補を作れず、会話が誘う段階にある根拠も確認できないため、今回は誘いを控えます"
+                                ),
+                                "next_action": (
+                                    "安全な候補から選び、会話の反応に応じて誘いを再検討します"
+                                    if invite_opportunity_exists
+                                    else "相手の発言に自然に返し、会話が進んだときに誘いを再検討します"
+                                ),
                             })
                             candidate_notice = " ".join(filter(None, [
-                                "安全な誘い候補を確認できなかったため、各試行で確認済みの安全な候補を表示します。",
+                                (
+                                    "誘い候補を安全に作れなかったため、今回は誘いを確定せず安全な候補を表示しています。"
+                                    if invite_opportunity_exists
+                                    else "誘い候補を安全に作れず、会話段階も確認できないため誘いは控えます。安全な候補は表示しています。"
+                                ),
                                 f"安全確認後に表示できる候補は{len(safe_candidates)}案です（指定は{data.count}案）。不足分を不適切な候補で補っていません。"
                                 if len(safe_candidates) < data.count else "",
                             ]))
@@ -4539,7 +4555,7 @@ def generate(data: GenerateInput):
                                 "alternatives": safe_candidates[1:],
                             })
                             candidate_notice = " ".join(filter(None, [
-                                "安全な誘い候補を確認できなかったため、各試行で確認済みの安全な候補を表示します。",
+                                "安全な誘い候補を作れなかったため、誘いを確定せず確認済みの安全な候補は表示しています。",
                                 f"安全確認後に表示できる候補は{len(safe_candidates)}案です（指定は{data.count}案）。不足分を不適切な候補で補っていません。"
                                 if len(safe_candidates) < data.count else "",
                             ]))

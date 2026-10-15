@@ -1084,3 +1084,9 @@ focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.
 重点テスト65件、関連テスト199件、全pytest930件が成功しました。Python構文検査、JavaScript構文検査、`git diff --check`も成功しました。全pytestにはFirefox UIテストが含まれます。Chromeは使用していません。Gemini実APIは使用していません。
 
 この結果はローカル質問判定の修正を示すもので、保存済みQUALITY009の文章自然さ・意味的な候補差のFAILは未解決です。総合判定は**NO-GO**を維持します。PR #4はOPEN/Draftで未マージです。今回の差分はまだコミット・Pushしておらず、GitHub Actionsは未実行です。
+
+### 2026-10-15 20:46 JST 追補
+
+品質009の`invite_gently`判断に対応する安全な誘い文が、初回候補にも許可された1回の再生成にも存在しない場合、方針だけが誘い継続を示す不整合を修正した。安全候補は維持し、サーバー側の誘い準備判定に応じて`consider_invite`または`continue_conversation`へ降格する。修正前回帰テストでFAILを確認し、準備済み・未準備の双方を確認したfocused suite **4 passed**。最新ローカル全pytest **932 passed in 117.81s**（Firefox UI込み）。Python/JavaScript構文とdiff検査も成功。
+
+Gemini実APIは0回。修正SHAへのGitHub Actionsは未確認。保存済みQUALITY009の文章自然さ・意味的候補多様性の手動FAILは未解決であり、総合判定は**NO-GO**。Test Matrixは313項目: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。PR #4はDraft・未マージを維持する。

@@ -943,3 +943,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - Gemini実APIは**0回**。この変更は確認質問のローカル判定を修正するもので、保存済みQUALITY009の実生成品質FAILを解決した証拠ではない。総合判定は**NO-GO**。
 - Test Matrixは312項目: PASS224 / FAIL13 / FIXED55 / BLOCKED5 / NOT_TESTED15。新規T312を追加した。現在のコード修正と報告更新は未コミット。Push後のGitHub Actionsも未確認。
 - 次は品質009の保存済み会話から「直接質問に答えない」「意味の似た共感が続く」失敗を別々に分析し、候補選別と返信方針生成の既存テストを基にP0を修正する。15〜20分以内に指示ブランチを再取得する。会話004・新しい会話HTMLは指示により作成しない。PR #4はDraft・未マージを維持する。
+
+### 2026-10-15 20:46 JST 継続チェックポイント：誘い方針を安全候補へ同期
+
+- 保存済み品質009の方針・候補整合性を調査し、`invite_gently`が返ったのに許可された再生成後も安全な誘い候補がない場合、古い誘い方針をそのまま表示する不整合を回帰テストで再現した。
+- `app.py`で最終的に残った安全候補と誘い準備状態を照合し、準備済みの会話は`consider_invite`、準備未完了は`continue_conversation`へ方針・理由・次の行動を同期する。安全候補を捨てず、再生成は既存の上限内。
+- レビューで指摘された「常にconsider_inviteへ降格する」ケースも修正し、準備済み/未準備双方をテスト。focused invite suite **4 passed**。全pytest **932 passed in 117.81s**。`py_compile`、`node --check app.js`、`git diff --check`成功。Firefox UIテストは全pytestに含む。Chrome不使用。
+- 今回Gemini実APIは**0回**。T313をFIXEDとして追加し、Test Matrixは313項目: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成の自然さ・意味的候補差FAILは未解決のまま。総合NO-GO。
+- 先行コードSHA `5493781f63af31b93c7b8dd39f92ae707fbd266c` のPush Actions [38728515711](https://github.com/kenkyu0909/aichatapp/actions/runs/38728515711)・PR Actions [38728519775](https://github.com/kenkyu0909/aichatapp/actions/runs/38728519775)はsuccessだったが、T313の未コミット変更を含まない。今回の差分と最新Actionsはこれから反映・確認する。
+- 次: docsを同期して選択的にコミット・Pushし、最新SHAのPush/PR ActionsとPR #4のDraft状態を検証する。その後は保存済みQUALITY009の自然さ/意味的候補方針差をオフラインで継続する。指示用ブランチは15〜20分内に再取得する。conversation_004・新規会話HTMLと実Gemini通信は行わない。未追跡ユーザー指示3ファイルは保持・非ステージ。
