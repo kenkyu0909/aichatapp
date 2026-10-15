@@ -1267,3 +1267,8 @@ Firefoxの主要UIテスト4件（first/reply/followup/likeと本人情報質問
 ### 2026-10-16 03:16 JST 最新CI追補
 
 SHA `473aa1e5705d6b630b8bc1cdcb195769f5cfc8fb` を対象とするPush Actions [38783750674](https://github.com/kenkyu0909/aichatapp/actions/runs/38783750674) とPR Actions [38783757484](https://github.com/kenkyu0909/aichatapp/actions/runs/38783757484) はsuccess。pytest 1105 passed / 1 warning in 129.75s、JavaScript構文検査成功。実Gemini通信0回。過去QUALITY009の実生成自然さ・候補多様性FAILが残るため総合NO-GO。
+
+
+### 2026-10-16 03:19 JST docs-only報告SHAのCI追補
+
+`79c22f1f11f906e313d0f79b717a56663a8ab06e` のPush Actions [38784229399](https://github.com/kenkyu0909/aichatapp/actions/runs/38784229399) とPR Actions [38784237425](https://github.com/kenkyu0909/aichatapp/actions/runs/38784237425) は同一SHAでsuccess。pytest 1105 passed / 1 warning in 148.17s、JS構文検査成功。これはdocs-only変更でコードは `473aa1e` から不変。
