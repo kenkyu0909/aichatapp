@@ -787,3 +787,8 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 
 
 T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` のPush [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) とPR [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) もsuccess。コードはT342に記したSHAと同一。
+
+
+| T344 | QUALITY009由来の誤字・事実根拠・既知情報・拒否・共感重複の重点回帰 | pytestの固定架空ケース、オフライン | PASS | typo rejection、未確認のshared preference拒否、既知の相手カフェ/週末情報を再質問しない判定、拒否後の中立候補維持、QUALITY009休息共感ペアの多様性検出と1回修復、最近観た映画回答の時期矛盾を含む**36 passed in 2.46s**。Gemini実通信0回。過去の実生成自然さ/候補多様性FAILを覆さない。総計344: PASS241 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+最新ID行: 344。累計: PASS241 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|

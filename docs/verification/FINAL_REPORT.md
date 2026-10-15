@@ -1247,3 +1247,8 @@ Firefox UIでfirst/reply、本人情報質問、followup、likeの実操作テ�
 ### 2026-10-16 03:09 JST 最新HEAD追補
 
 Firefoxの主要UIテスト4件（first/reply/followup/likeと本人情報質問）が47.17秒で成功。さらにdocs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` を対象としたPush Actions [38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008) とPR Actions [38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105) がsuccess。実生成品質FAILが残るためNO-GOは維持。
+
+
+### 2026-10-16 03:14 JST 保存済みQUALITY009由来の重点回帰
+
+誤字、本人事実の根拠、既知の相手情報の再質問、拒否後の応答、同義共感反復、最近の映画回答の時期矛盾に関するオフライン重点テスト36件が成功（2.46s）。この結果は保存済み出力に対する回帰であり、実Geminiの自然さFAILを解消・再評価したものではない。

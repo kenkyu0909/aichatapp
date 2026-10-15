@@ -887,3 +887,9 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` のPush/PR Actionsも成功（[38782221008](https://github.com/kenkyu0909/aichatapp/actions/runs/38782221008)、[38782228105](https://github.com/kenkyu0909/aichatapp/actions/runs/38782228105)）。PR #4 head一致、OPEN/Draft。
 - Firefoxの実UI主要導線4件が47.17秒で成功。コピー・明示的記録・再読込後の履歴・改行を確認。
+
+
+### 2026-10-16 03:14 JST 実出力由来のオフライン回帰
+
+- QUALITY009の保存候補から誤字、未確認の共通点、既知情報の聞き直し、拒否後の応答、同義共感、最近の映画回答との矛盾に絞った36テストが2.46秒で成功。
+- 安全フィルターの対象ケースはpassだが、新しいGemini文章品質を示すものではない。これらの履歴FAILを保持し総合NO-GO。Gemini通信0回。
