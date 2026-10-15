@@ -2303,6 +2303,46 @@ def test_sibling_relationship_claim_must_match_confirmed_relative(client):
     ], context)
 
 
+@pytest.mark.parametrize(("fact", "claim", "topic"), [
+    ("ランニングを週3回しています", "ジムには週3回行きます！", "運動習慣"),
+    ("妹が一人います", "妹が二人います！", "家族"),
+    ("妹が一人います", "兄弟が二人います！", "家族"),
+    ("週末によく料理します", "週末はよく和食を自炊します！", "料理習慣"),
+    ("", "鎌倉出身です！", "出身地"),
+    ("", "最近観た映画は感動しました！", "映画"),
+])
+def test_personal_fact_kind_detail_and_open_vocabulary_are_verified(client, fact, claim, topic):
+    _, backend = client
+    fact_key = {
+        "運動習慣": "exercise_habits",
+        "家族": "siblings",
+        "料理習慣": "cooking_habits",
+        "出身地": "hometown",
+        "映画": "recent_movies",
+    }[topic]
+    context = {
+        "my_profile": {"facts": {fact_key: fact} if fact else {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="詳細または事実の拡張", text=claim)
+    ], context)
+
+
+def test_unlisted_origin_city_can_be_acknowledged_as_partner_fact(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": "鎌倉出身です！"}],
+        "ephemeral_user_answers": [],
+    }
+
+    assert "出身地" not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="相手の出身への反応", text="鎌倉出身なんですね！")
+    ], context)
+
+
 @pytest.mark.parametrize(("source_question", "expected_question"), [
     ("兄弟とは仲がいいですか？", "兄弟や姉妹とはどのくらい仲がいいですか？"),
     ("家族は何人ですか？", "兄弟や姉妹が何人いるか教えてください"),
