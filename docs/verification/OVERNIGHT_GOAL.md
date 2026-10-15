@@ -1091,3 +1091,8 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 最新HEAD `f832bd0529970d1bd6fddfc34169b67a17002b47`のPush/PR Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706) / [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。
 - JUnit artifactで1365 tests / 0 failures / 0 errors / 0 skipped。JS syntaxとFirefox準備も成功。
 - CI successだけで品質GOにはしない。QUALITY009実生成FAILは残り、判定はNO-GO。次も本人情報の安全性とコア品質の未達を優先する。
+
+##### 2026-10-16 08:15 JST: 誘い判断の回帰確認
+
+- 誘いやすい会話での候補、方針と候補の整合性、拒否/保留後の再勧誘抑止を含む既存ケース8件が成功。追加テスト項目の重複計上はしない。
+- これはオフライン回帰結果。実Geminiの会話品質は未検証であり、過去QUALITY009 FAILを維持。次は最新CIを確認し、安全なP0監査を継続。

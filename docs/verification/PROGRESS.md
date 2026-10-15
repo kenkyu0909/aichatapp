@@ -1374,3 +1374,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Push runのJUnit artifact `offline-test-results/pytest.xml`で`tests=1365`, `failures=0`, `errors=0`, `skipped=0`を確認。JavaScript syntax check、Firefox準備、artifact uploadも成功。
 - PR #4はOPEN/Draft、最新head `f832bd0529970d1bd6fddfc34169b67a17002b47`、base `feat/ui-local-backend-v1`。未マージ。作業ツリーは保護対象の未追跡指示ファイル3件以外クリーン。
 - これはCI/回帰成功の証拠であり、QUALITY009に残る実Gemini文章自然さ・候補意味多様性FAILを解消しない。Gemini実通信0回、総合NO-GOを維持する。
+
+### 2026-10-16 08:15 JST 誘い判断・拒否境界の追加再監査
+
+- 誘い判断関連の既存回帰を追加実行: **8 passed, 1266 deselected in 1.96s**。自然な誘い機会での候補、`invite_gently`と候補の一致、相手の拒否/保留後の再勧誘抑止、安全な中立候補の保持を確認。
+- 新しい失敗やコード変更はなし。回帰テストは既存T313/T359等の範囲で再実行し、Test Matrixの項目数を重複加算しない。実Gemini出力を使わないため、文章品質の過去FAILは未解決のまま。
+- 直前のHEAD `3a5fdf3e4c16ac38cc704dc2d40d5f134795e67f`は検証記録の更新のみ。Push/PR Actionsはpush後に確認する。Gemini通信0回、Firefoxのみ。PR #4はDraft・未マージ。
+- 次: 最新HEAD Actionsを確認し、残る安全なオフライン監査を続ける。保存済みQUALITY009での自然さ・意味多様性FAILをモック成功で上書きしない。

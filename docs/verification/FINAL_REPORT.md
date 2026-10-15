@@ -1433,3 +1433,9 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - `f832bd0529970d1bd6fddfc34169b67a17002b47`を対象とするPush Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706)とPR Actions [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。
 - Push runから取得したJUnit artifactは1365 tests、0 failures、0 errors、0 skipped。JavaScript構文検査、Firefox準備、結果Artifact保存も成功。
 - Actionsはオフライン回帰の成功を示す。過去のQUALITY009実Gemini自然さ・候補意味多様性FAILは未解決であり、総合NO-GOを維持する。PR #4はDraft・未マージ。
+
+## 2026-10-16 08:15 JST 誘い判断境界の再確認
+
+- 既存の招待機会、`invite_gently`候補整合、拒否/保留の再勧誘抑止に関するfocused suiteは**8 passed, 1266 deselected in 1.96s**。
+- 追加の失敗は見つからず、修正は不要。安全候補の保持と不適切な再勧誘の除外をオフラインテストで確認した。
+- 実Gemini通信0回。実際の文章自然さ・意味的候補多様性に関する保存済みQUALITY009 FAILは未解決。総合NO-GO。PR #4はDraft・未マージ。
