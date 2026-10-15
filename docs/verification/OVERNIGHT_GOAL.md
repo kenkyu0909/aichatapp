@@ -664,3 +664,7 @@ prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15
 ### 2026-10-15 19:40 JST 追補
 
 部分的に存在する`reply_move`ラベルの検査を精緻化し、明示された重複だけを警告する。未知のラベルは既定値で補わない。focused tests **2 passed / 765 deselected**。Firefox UI **6 passed in 83.77s**、全pytestの再実行**851 passed in 103.89s**。最初の全pytestではプロフィール保存のUI通知待ちが単発FAILしたが、実保存APIは200応答、単独UIと再実行は成功。再現しないため不安定性として報告に残し、次のコア導線検証で監視する。Gemini実APIは0回。その他の品質009実生成FAILは未達でNO-GO。最新差分のCIは未実行。
+
+### 2026-10-15 19:48 JST 追補
+
+修正commit `18c29a6d35705e392bb7258ef218f6960c505257`のPush [38722645521](https://github.com/kenkyu0909/aichatapp/actions/runs/38722645521)・PR [38722651123](https://github.com/kenkyu0909/aichatapp/actions/runs/38722651123) Actionsがsuccess。部分欠落ラベルの重複通知テスト2件、全pytest851件、Firefox専用6件、構文検査成功。QUALITY009の実生成自然さ・候補方針多様性は未達でNO-GO。実Gemini API0回。PR #4 OPEN/Draft・未マージ。

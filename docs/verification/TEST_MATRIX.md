@@ -675,3 +675,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T310 | 最新候補方針修正のGitHub Actions（Push・PR） | Actionsログで対象SHA・Push・PR結果を照合 | PASS | SHA `2ec2f11c51078096170a46d4543f5b6975553dad`のPush [38721061798](https://github.com/kenkyu0909/aichatapp/actions/runs/38721061798)・PR [38721069405](https://github.com/kenkyu0909/aichatapp/actions/runs/38721069405)がともにsuccess。両方でbackend tests、Firefoxチェック、JavaScript構文検査、Artifacts保存が成功。PR #4 OPEN/Draft。|
 
 最新ID行: 310。累計: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。|
+
+| T311 | 部分的な`reply_move`重複修正のGitHub Actions（Push・PR） | Actionsログで最新SHA・Push・PR結果を照合 | PASS | SHA `18c29a6d35705e392bb7258ef218f6960c505257`のPush [38722645521](https://github.com/kenkyu0909/aichatapp/actions/runs/38722645521)・PR [38722651123](https://github.com/kenkyu0909/aichatapp/actions/runs/38722651123)がsuccess。両方でpytest、Firefoxチェック、JavaScript構文検査、Artifacts保存に成功。PR #4 OPEN/Draft。|
+
+最新ID行: 311。累計: PASS224 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質FAILは継続。|

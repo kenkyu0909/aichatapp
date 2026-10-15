@@ -918,6 +918,15 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、最新コードSHA`2ec2f11c51078096170a46d4543f5b6975553dad`、未マージ。未追跡の指示ファイル3件を保持。会話004/新しい会話HTML/実Gemini通信なし。
 - 次: 保存済みQUALITY009の会話停滞と候補方針差をもう一度、本文・過去文脈・既知情報の各要因に分けて見直し、オフラインの根本原因修正へ進む。15〜20分以内にdirective-controlを確認する。
 
+### 2026-10-15 19:48 JST 継続チェックポイント：最新候補方針修正のCI完了
+
+- commit `18c29a6d35705e392bb7258ef218f6960c505257`をPush済み。明示されたreply_moveが一部欠けた候補集合でも、既知ラベル同士の重複を通知し、欠落ラベルは推測しない。
+- Focused tests **2 passed / 765 deselected**。直前の全pytest **851 passed in 103.89s**、Firefox専用**6 passed in 83.77s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。
+- commitのPush Actions [38722645521](https://github.com/kenkyu0909/aichatapp/actions/runs/38722645521)・PR Actions [38722651123](https://github.com/kenkyu0909/aichatapp/actions/runs/38722651123)が対象SHA一致でsuccess。pytest、Firefox確認、JavaScript構文検査、Artifact保存を確認。
+- Matrix 311項目: PASS224 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。実Gemini API0回。品質009の実生成自然さ・候補多様性FAILは残るため総合NO-GO。1回のプロフィール保存トーストUIタイムアウトは単独・全体再実行では再現せず、既知の不安定性として監視。
+- PR #4 OPEN/Draft・未マージ。作業ツリーに残る未追跡3ファイルはユーザー提供の指示書で、保持している。会話004・新規会話HTML・実Gemini通信なし。
+- 次: 次のP0である返信候補の直接質問への回答完全性・会話の進展・意味的多様性を、品質009の原記録と現行フィルター/プロンプトに分けて調査する。directive-controlを15〜20分以内に再取得する。
+
 ### 2026-10-15 19:40 JST 継続チェックポイント：部分的に記録された候補方針も正しく比較
 
 - 最新コード作業中に方針ラベルが一部欠ける応答も考慮し、ロジックを改善した。欠落ラベルを`react`と推測せず、残りの候補に明示された同一方針が2つ以上あれば重複通知する。全欠落なら通知せず、explicit duplicateの既存テストも維持。
