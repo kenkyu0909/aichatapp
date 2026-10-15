@@ -1071,3 +1071,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - firstのmock候補は候補安全検証により1案だけ表示された。安全候補不足を許容し、検証を弱めず、不足状態も確認した。
 - 独立コードレビュー指摘なし。Gemini通信0回、user data不使用、Firefoxのみ。T365を含む全pytest 1365 passed in 199.68s（Firefox UI tests 13件含む）。専用focused Firefox 2 passed、Actions確認中。
 - 判定はNO-GOのまま。保存済みGemini生成の自然さと意味的候補多様性が未解決で、offline route E2Eは実Gemini品質を証明しない。
+
+##### 2026-10-16 08:00 JST: T366候補不足通知のFirefox確認
+
+- 達成条件: 安全フィルターが指定数より少ない候補を残す場合、候補数と不足理由を画面で知らせる。判定: **PASS（Firefox E2Eの固定応答で確認）**。
+- 証拠: T365 firstモードの安全候補1案fixtureを使い、応答とUIの両方で不足通知を確認。focused 1 passed、全pytest 1365 passed in 198.20s。Gemini通信0回。テスト変更はまだ未コミット。
+- CI: 直前のHEAD 620e343に対するPush/PR run 38820131346 / 38820136319はsuccessだが、T366を含まない。新HEADのActions確認が必要。
+- 他の品質ゴールはこの確認によって達成扱いにしない。保存済みQUALITY009の生成自然さと意味的多様性FAILが残るため、総合判定はNO-GO。
+- 次: T366と進捗を作業ブランチにcommit・pushし、同じSHAのActionsを確認。その後、保存済み実生成例から直接質問回答と候補の意味的な重複を監査する。

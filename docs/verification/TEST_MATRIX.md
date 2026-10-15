@@ -904,3 +904,9 @@ T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` の
 T359/T360 CI追補: 同一SHA `27c1ea252a976b3394ee877e96c926d32e9064b8` を対象とするPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)はsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft・未マージ。
 
 T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` のPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)は同一SHAでsuccess。Pushログで1337 passed / 1 warning、JavaScript構文検査とArtifact upload成功を確認。PR #4はOPEN/Draft・未マージ。
+
+| T366 | Firefox上の候補不足通知と安全候補の保持 | Firefox E2E、隔離SQLite、FastAPI実ルート、Gemini SDKモック | PASS | T365のfirstモードで3案中1案だけ安全検証を通過するfixtureを利用。残った候補を保ち、画面に候補数と不足の説明が出ることを確認。focused 1 passed、全pytest 1365 passed in 198.20s、Python compile / JavaScript syntax / diff check成功。Gemini実通信0回。 |
+
+最新ID行: 366。累計: PASS256 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
+
+T365最新SHAのCI追補: `620e34354f181f22d27a43805d3f3f2c4e5eb279`を対象とするPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)が同一head SHAでsuccess。両CIはT366テスト追加前に実行された。T366入りHEADのActionsは次のpush後に確認する。

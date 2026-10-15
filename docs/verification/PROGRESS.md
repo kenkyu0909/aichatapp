@@ -1351,3 +1351,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 読み取り監査によりfirst/followup/likeの既存Firefoxテストも `/api/generate` をfetch mockに置き換えており、実FastAPI生成経路を通っていないと分かった。T365で3モードを同じloopback一時サーバーとGemini SDKモック経由に拡張した。
 - T365 focused FirefoxはT364と合わせて2 passed in 26.16s。firstの未送信候補はDBを変更せず、手動記録後に保存。followupはcopy-onlyで履歴不変、手動記録後に保存。likeは候補コピーのみで送信履歴を変えない。firstモードは安全検証でmock候補のうち1案のみ通過し、不足候補をそのまま確認。検証基準を下げていない。
 - 独立コードレビューは指摘なし。T365を含む全pytest **1365 passed in 199.68s**。既存Firefoxテスト13件を含む。T364/T365 focused Firefoxは2 passed in 26.16s。Python/JavaScript構文とdiff検査PASS。実Gemini APIは0回。T365コードは未コミットでActions未確認。QUALITY009の実生成自然さ・候補意味多様性FAILにより総合NO-GOは維持。次: T365をコミット・Pushし、最新HEADの両Actionsを確認してPR #4のDraft状態を維持する。
+
+### 2026-10-16 08:00 JST T366: 安全候補不足の画面通知
+
+- 指示ブランチをfetchして最新版を確認。優先事項は4モードのFirefox実ルートと、QUALITY009で残る直接質問回答漏れ・意味的候補類似・共感反復・慎重/拒否時の誘いの監査。Gemini実通信、conversation_004、新規会話HTMLは行わない。
+- T365のfirstモードE2Eを拡張し、安全確認後に1案だけ残る状況で候補不足の説明が応答と画面の両方に表示されることを確認。安全候補は保持し、数合わせしない。focused 1 passed。全pytest **1365 passed in 198.20s**。Python compile、`node --check app.js`、`git diff --check`成功。Gemini通信0回。
+- 先行HEAD `620e34354f181f22d27a43805d3f3f2c4e5eb279`に対するPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)は同一SHAでsuccess。これらはT366テスト追加を含まない。
+- T366を含む変更は未コミット。次は変更と記録を選択的にcommit・pushし、そのHEADのPush/PR Actionsを確認する。PR #4はOPEN/Draft・未マージ。保護対象の未追跡指示ファイル3件は保持し、ステージしない。
+- QUALITY009の実Gemini文章自然さ・候補意味多様性FAILは未解決のため、総合NO-GOを維持する。次の自律作業は保存済み失敗例を用いた直接回答と候補間方針差の監査。

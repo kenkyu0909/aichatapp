@@ -1413,3 +1413,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - T365ではfirstの生成のみでDBが変わらないことと明示的な手動記録、followupのコピーのみでは履歴が変わらず手動記録後に保存されること、likeに保存操作がなく送信履歴を変えないことを確認した。
 - firstモードのモック3案のうち、アプリの候補検証が安全な1案だけを通した。これは実生成品質のPASSを意味しない。候補不足は維持され、検査を弱めていない。
 - 外部Gemini通信0回。独立コードレビューで指摘なし。T365を含む全pytest **1365 passed in 199.68s**（Firefox UIテスト13件を含む）。Python/JavaScript構文とdiff検査も成功。T365を含むGitHub ActionsはPush後に確認する。
+
+## 2026-10-16 08:00 JST T366追補
+
+- Firefoxのfirst生成E2Eに候補不足のUI通知確認を追加。安全検証後に3案指定から1案だけが残るfixtureで、安全候補が表示され、不足と指定数が利用者に示されることを確認。候補の水増しはない。
+- focused Firefox 1 passed。全pytest **1365 passed in 198.20s**。Python compile、JavaScript構文、`git diff --check`成功。Gemini実通信0回。
+- 直前HEAD `620e34354f181f22d27a43805d3f3f2c4e5eb279`のPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)は同一SHAでsuccess。T366はその後のテスト変更のため、T366入りHEADのActionsは未確認。
+- QUALITY009の過去の実Gemini出力にある自然さ・候補意味多様性FAILは残る。T366は通知動作のオフライン確認であり、生成文の品質を証明しない。総合判定は引き続き**NO-GO**。PR #4はDraft・未マージ。conversation_004と新規会話HTMLは未実施。

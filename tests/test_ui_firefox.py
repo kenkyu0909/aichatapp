@@ -749,6 +749,13 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
     assert first_response["demo"] is False
     assert first_response["conversation_stage"] == "Stage 1"
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == first_response["available_candidate_count"]
+    assert first_response["available_candidate_count"] < first_response["requested_candidate_count"]
+    assert "不足分を不自然な候補で補っていません" in first_response["candidate_notice"]
+    visible_candidate_notice = driver.find_element(
+        By.CSS_SELECTOR, "#suggestion-list .user-info-terminal"
+    ).text
+    assert "安全確認後に表示できる候補は" in visible_candidate_notice
+    assert "不足分を不自然な候補で補っていません" in visible_candidate_notice
     assert first_response["recommended"]["text"].startswith("はじめまして！")
     assert saved_history() == []
 
