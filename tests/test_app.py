@@ -1271,6 +1271,14 @@ def test_minimizing_reassurance_after_meeting_unease_is_rejected(client):
     assert "相手の不安を軽く扱う表現" in backend._candidate_rejection_reasons(candidate, context)
 
 
+def test_neutral_reassurance_with_respectful_pacing_survives_meeting_unease(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
+    candidate = backend.Candidate(label="圧力のない返答", text="大丈夫ですよ！\n無理せずお話しましょう")
+
+    assert "相手の不安を軽く扱う表現" not in backend._candidate_rejection_reasons(candidate, context)
+
+
 @pytest.mark.parametrize("invite", [
     "ご飯行きませんか？",
     "今度ご飯でもどうですか？",
