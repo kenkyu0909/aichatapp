@@ -359,4 +359,39 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 | T179 | Python/JavaScript構文・差分・秘密形式検査 | py_compile、node --check、git diff --check、rg | PASS | 構文・差分検査終了コード0。秘密形式の一致なし。 |
 | T180 | 最新HEADのGitHub Actions | GitHub Actions Push/PR | PASS | SHA f800fbeabb146258c6a20c583ea62c74f0cf4f46。Push [run 38664505348](https://github.com/kenkyu0909/aichatapp/actions/runs/38664505348)・PR [run 38664508934](https://github.com/kenkyu0909/aichatapp/actions/runs/38664508934)とも成功。各406 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact uploadも成功。 |
 
-集計: 180項目、PASS 152 / FAIL 12 / FIXED 4 / BLOCKED 5 / NOT_TESTED 7。過去のFAIL・BLOCKEDは履歴として維持する。品質008の現在ケースに未解決結果はないが、全体品質基準を満たしたとは扱わない。
+## 2026-10-15 自律品質確認009（進行中）
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T181 | 趣味から具体的な好み・経験・頻度を推測しない | pytest候補検査 | FIXED | 開始時のquality008再監査で、カフェ趣味から雰囲気嗜好を推測した候補が通ることを再現。最近の旅行・映画・映画館頻度・読書範囲も追加検査。節単位の根拠確認と質問誤検出防止を含む関連20件はPASS。`tests/test_app.py`。意味検査は限定的なルールであり、日本語全体を保証しない。 |
+| T182 | 会うことへの不安直後に店・日程の質問へ移らない | pytest候補検査 | FIXED | quality008の「まだ会うのはちょっと不安」直後の店質問を再現。外出/日程関連質問を除外し、中立な本の質問や短い受容文は残す。focused testを更新し、現行コードで再確認。`tests/test_app.py`。 |
+| T183 | 肯定情報と別属性への否定情報を分離する | pytest候補検査 | FIXED | 映画・旅行・カフェの肯定情報と別属性の否定情報を同じ文に記録した架空プロフィールで検証。関連13件はPASS。 |
+| T184 | FastAPI / 全pytest / Firefox UI回帰 | Windows Python 3.12 / pytest | NOT_TESTED | 現行修正適用後の全件は未実行。 |
+| T185 | Gemini実API品質確認009 | 既存アプリ経由・架空データ・隔離SQLite | FAIL | 10論理要求 / 12 provider attemptsで疎通と限定ケースの自動条件は通過。ただし手動レビューで誤字「どんな雰囲い」、候補の意味的重複、確認済み回答を使わない代替案、未確認の「私もお出かけが好き」を修正前に表示した実見逃しを確認。詳細は`simulations/quality_checks_009_analysis.md`。 |
+| T186 | conversation_004 | 品質ゲート後の実Gemini会話 | NOT_TESTED | 品質009は手動評価FAILのため開始条件を満たさず未実施。 |
+| T187 | 異なるプロフィール項目の根拠を混ぜない | pytest候補検査 | FIXED | 旅行趣味＋仕事の最近情報、映画館趣味＋ジム頻度、静かなカフェ好み＋店舗探索を別々に記録した架空プロフィールで不正な根拠合成を拒否。節単位の照合を追加。 |
+| T188 | 新しい経験/頻度検査で相手への質問を誤拒否しない | pytest候補検査 | FIXED | 「最近旅行に行きましたか」「最近映画を観ましたか」「映画館には月に何度行きますか」に加え、「最近映画観た？」「映画館によく行くの？」「最近どんな映画観たの？」「映画館よく行くかな？」を本人の断定として扱わない。 |
+| T189 | 未確認の外出嗜好を実Gemini候補から除外 | 実Gemini API + 安全候補フィルター、架空データ | FIXED | 修正前の実生成「私もお出かけが好きなので新しいお店は気になります！」を実際に記録。修正後の同系ケースでは2候補を残し、禁止された本人事実を除外、不足を通知。上限内のquality_checks_009、JSONと手動分析を参照。 |
+| T190 | 会う不安後の中立話題と外出質問の区別 | pytest候補フィルター | PASS | 店の好み質問は拒否、本の話題への質問は保持。謝意と中立な質問を同一候補に含む場合も保持。`python -m pytest tests/test_app.py -q -k "new_experience_patterns_do_not_reject_partner_questions or meeting_unease_filters_outing_questions"`: 10 passed。 |
+| T191 | 質問フィルターの自然な疑問形境界 | pytest / 自然な疑問語尾 | PASS | 「観た？」「行くの？」「観たの？」「行くかな？」「映画館によく行く？」「旅行に出かけた？」を本人の断定から除外。T190と同一の10 focused testsで確認。 |
+| T192 | 現行コード全pytest | Windows / pytest | NOT_TESTED | 直近の2件のレビュー境界修正を反映した最終回を実行中。 |
+| T193 | Firefox UI回帰（現行コード） | Firefox/Selenium | PASS | `python -m pytest tests/test_ui_firefox.py -q`: **6 passed in 79.98s**。Chromeは使用していない。今回の直近変更はサーバー候補判定のみ。 |
+| T194 | Python/JavaScript構文・差分・秘密情報検査 | py_compile / node / git diff / scan | PASS | 最新差分で`py_compile`、`node --check app.js`、`git diff --check`成功。変更diffのGeminiキー形式検索0件。CRLF変換の注意だけ。 |
+| T195 | 誘い後の明確な保留表現を継続拒否として扱う | pytest refusal-state + candidate filter | FIXED | レビューで「もう少し話してから」「今は会うのを控えたい」「会うのはまだ考えていない」を見逃し、再誘いを通す問題を再現。保留語を拒否状態に加え、再誘い候補を除外。focused testsで確認。 |
+| T196 | 相手の経験を受け止める文を本人事実と誤判定しない | pytestの履歴帰属テスト | FIXED | 相手が話した最近の旅行、カフェ探索、映画館頻度に対する「〜なんですね」型の反応を本人の経験として誤拒否する問題を修正。相手履歴に該当する肯定事実がある場合のみ帰属表現を許可。 |
+| T197 | 実API品質ランナーの重複ケース排除 | スクリプト定義レビュー | PASS | 同一入力の修正前/後重複を新規実行ケースから除き、修正後1回の確認を残す。既存JSONの実行履歴は保持。今回追加のAPI呼び出しなし。 |
+| T198 | 追加レビュー後の現行全pytest | Windows / pytest | PASS | 拒否表現・相手帰属の追加回帰を含め`python -m pytest -q`: **438 passed in 89.89s**。Firefox UIテストを含む。 |
+| T199 | 相手の否定発言を肯定事実へ反転させない | pytest / 履歴節の極性確認 | FIXED | 「好きじゃない」「旅行に行けなかった」「映画館によく行かない」という架空発言を肯定形で受け止める候補が通る問題を再現。相手の同一肯定節だけを根拠に許可し、否定発言からの逆転を拒否。 |
+| T200 | 疑問符のない会う関連質問を抑止 | pytest / question-clause判定 | FIXED | 「カフェならどんなところが好き」のように明示記号のない質問が、不安表明後の候補を通る問題を修正。中立的な本の話題は保持。 |
+| T201 | 最終差分の全pytest | Windows / pytest | PASS | 否定情報・疑問符なし質問の境界を含め`python -m pytest -q`: **441 passed in 92.12s**。Firefox UIテストを含む。 |
+
+この追記時点の履歴集計: 204項目。T181〜T183、T187〜T189、T195、T196、T199、T200は修正前の問題を再現し、範囲を限定した修正を確認。T185の実生成品質はFAILとして保持し、T186会話004は品質条件未達のため未実施。T190/T191はfocused 10 tests、T192/T198/T201全pytest、T193 Firefox、T194静的検査、T197ランナー重複確認でPASS。Actionsは最終コミットPush後に確認する。過去のFAILは履歴から削除しない。
+
+集計: 204項目、PASS 160 / FAIL 13 / FIXED 14 / BLOCKED 5 / NOT_TESTED 12。過去のFAIL・BLOCKEDは履歴として維持する。quality_checks_009は自動ゲートがPASSでも文章品質の手動判定はFAIL。conversation_004は未実施。
+
+| T202 | 相手の否定・未経験を肯定の受け止めへ反転しない | pytest / 同一節の極性検査 | FIXED | 追加レビューで「旅行には行かなかった」「行っていなかった」「行けていない」「行ったことがない」「行くことがない」および映画館の対応表現を含む候補が通ることを再現。否定パターンを追加し、17種類の肯定反転ケースを確認。修正後17 passed。`tests/test_app.py`。自由文全体の意味検出を保証するものではない。 |
+| T203 | 否定表現の最終修正を含む全pytest | Windows / pytest | PASS | `python -m pytest -q`: **455 passed in 92.87s**。Firefox UIテストを含む。 |
+| T204 | Python/JavaScript構文・差分検査 | py_compile / node --check / git diff --check | PASS | `app.py`、品質009スクリプト、`tests/test_app.py`のPython構文、`app.js`構文、差分検査が成功。 |
+| T205 | 最新コミットのGitHub Actions | Push / PR workflow | NOT_TESTED | 変更をPush後に最新SHAを対象とする実行を確認する。 |
+
+更新後集計: **208項目**。PASS 162 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 13。過去のFAIL・BLOCKEDは履歴として維持する。品質009の手動評価はFAILのまま、conversation_004は未実施のまま。

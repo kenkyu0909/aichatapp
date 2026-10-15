@@ -1072,6 +1072,23 @@ def test_appreciation_with_hesitation_does_not_reopen_refused_invite(client):
     assert backend.partner_has_active_invitation_refusal(context)
 
 
+@pytest.mark.parametrize("hesitation", [
+    "会うのはもう少し話してからがいいです",
+    "今は会うのを控えたいです",
+    "会うのはまだ考えていません",
+])
+def test_explicit_wait_before_meeting_keeps_invite_closed(client, hesitation):
+    _, backend = client
+    context = {"history": [
+        {"role": "me", "body": "よかったら今度カフェに行きませんか？"},
+        {"role": "them", "body": hesitation},
+    ]}
+    candidate = backend.Candidate(label="再勧誘", text="よかったら今度一緒にカフェに行きませんか？")
+
+    assert backend.partner_has_active_invitation_refusal(context)
+    assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
+
+
 def test_unrelated_solo_trip_does_not_reopen_refused_invite(client):
     _, backend = client
     context = {
@@ -2251,6 +2268,206 @@ def test_cafe_hobby_does_not_verify_specific_atmosphere_preference(client):
     assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], context)
     inflected = backend.Candidate(label="別候補", text="落ち着いた雰囲気のカフェが好きです")
     assert "カフェ" in backend.unsupported_personal_claim_topics([inflected], context)
+
+
+@pytest.mark.parametrize("claim", [
+    "私もゆっくり過ごせる場所を探すのが好きです",
+    "落ち着いたお店を見つけるのが好きです",
+    "静かなカフェをよく探しています",
+])
+def test_cafe_hobby_does_not_verify_place_search_preferences(client, claim):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["カフェ巡り"]}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="候補", text=claim)
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_explicit_place_search_fact_supports_only_matching_place_claim(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"cafe_preferences": "落ち着いたお店を探すのが好き"}},
+        "ephemeral_user_answers": [],
+    }
+    supported = backend.Candidate(label="確認済み", text="落ち着いたお店を探すのが好きです")
+    unsupported = backend.Candidate(label="未確認", text="にぎやかなお店を探すのが好きです")
+    neutral = backend.Candidate(label="中立", text="落ち着いたお店を探すのも楽しそうですね")
+
+    assert "場所探し" not in backend.unsupported_personal_claim_topics([supported], context)
+    assert "場所探し" in backend.unsupported_personal_claim_topics([unsupported], context)
+    assert "場所探し" not in backend.unsupported_personal_claim_topics([neutral], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"hobbies": ["旅行"]}, "最近京都に旅行しました！", "旅行最近"),
+    ({"hobbies": ["映画"]}, "最近映画を観ました！", "映画"),
+    ({"hobbies": ["映画"]}, "映画館には月に何度か行きます", "映画館頻度"),
+    ({"hobbies": ["読書"]}, "本は幅広く読みます！", "読書"),
+])
+def test_general_hobby_does_not_verify_specific_recency_frequency_or_scope(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認", text=claim)
+    ], context)
+
+
+def test_cafe_hobby_does_not_verify_general_outing_preference(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["読書", "カフェ巡り"]}}, "ephemeral_user_answers": []}
+
+    assert "外出" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認", text="私もお出かけが好きなので新しいお店は気になります！")
+    ], context)
+
+
+@pytest.mark.parametrize(("question", "topic"), [
+    ("最近旅行に行きましたか？", "旅行最近"),
+    ("最近映画を観ましたか？", "映画"),
+    ("最近映画観た？", "映画"),
+    ("映画館によく行くの？", "映画館頻度"),
+    ("映画館によく行く？", "映画館頻度"),
+    ("最近どんな映画観たの？", "映画"),
+    ("映画館よく行くかな？", "映画館頻度"),
+    ("最近旅行に出かけた？", "旅行最近"),
+    ("映画館には月に何度行きますか？", "映画館頻度"),
+])
+def test_new_experience_patterns_do_not_reject_partner_questions(client, question, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="質問", text=question)
+
+    assert topic not in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("partner_message", "acknowledgment", "topic"), [
+    ("最近は新しいカフェを探すのが好きです", "最近は新しいカフェを探すのが好きなんですね！", "場所探し"),
+    ("最近旅行に行きました", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館によく行きます", "映画館によく行くんですね！", "映画館頻度"),
+])
+def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_message, acknowledgment, topic):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": partner_message}],
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="相手の話への反応", text=acknowledgment)
+
+    assert topic not in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("partner_message", "acknowledgment", "topic"), [
+    ("カフェを探すのは好きじゃないです", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("最近旅行に行けませんでした", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行かなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行っていなかったです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けてないです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けていないです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行けていません", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行ったことがないです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行ったことがありません", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行には行くことがないです", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("映画館にはよく行きません", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行かなかったです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行っていなかったです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けてないです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けていないです", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行けていません", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館にはよく行くことがないです", "映画館によく行くんですね！", "映画館頻度"),
+])
+def test_partner_attribution_does_not_reverse_negative_facts(client, partner_message, acknowledgment, topic):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": partner_message}],
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="逆の受け止め", text=acknowledgment)
+
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"hobbies": ["旅行"], "recent_activity": "昨日は仕事が忙しかった"}, "昨日旅行に行きました", "旅行最近"),
+    ({"hobbies": ["映画館"] , "gym_frequency": "週に3回ジムへ行きます"}, "映画館には週に何度も行きます", "映画館頻度"),
+    ({"cafe_preferences": "静かなカフェが好き", "hobbies": ["新しいお店を探すこと"]}, "静かなカフェを探すのが好き", "場所探し"),
+])
+def test_specific_claim_evidence_cannot_be_combined_across_unrelated_facts(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="根拠を寄せ集めた候補", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("fact", "claim", "topic"), [
+    ("映画は好きですが映画館は苦手です", "映画は好きです！", "映画"),
+    ("旅行は好きですが海外は苦手です", "旅行が好きです！", "旅行"),
+    ("カフェ巡りが好きですが静かな店は苦手です", "カフェ巡りが好きです！", "カフェ"),
+])
+def test_affirmed_fact_survives_separate_negative_qualifier(client, fact, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": fact}}, "ephemeral_user_answers": []}
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済み", text=claim)
+    ], context)
+
+
+def test_safe_candidate_is_preserved_when_place_search_claim_is_rejected(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": ["読書", "カフェ巡り"]}},
+        "history": [{"role": "them", "body": "最近は新しいカフェも探してます！"}],
+        "ephemeral_user_answers": [],
+    }
+    payload = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="unsupported", text="私もゆっくり過ごせる場所を探すのが好きです"),
+        alternatives=[
+            backend.Candidate(label="safe", text="新しいお店を開拓するの楽しそうですね！")
+        ],
+        reason="架空テスト",
+        strategy="会話を続ける",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="まだ会話を続ける",
+        next_action="相手の話題を聞く",
+    )
+
+    filtered = backend.filter_safe_candidates(payload, 2, context)
+
+    assert filtered["recommended"]["label"] == "safe"
+    assert filtered["available_candidate_count"] == 1
+    assert "1案" in filtered["candidate_notice"]
+    assert any("未確認の本人事実" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
+def test_meeting_unease_filters_outing_questions_but_keeps_neutral_topics(client):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "ごめんなさい！まだ会うのはちょっと不安です"},
+        ],
+        "ephemeral_user_answers": [],
+    }
+    uneasy_probe = backend.Candidate(label="cafe-probe", text="無理のないペースで大丈夫ですよ！\n最近はどんなお店が好きなんですか？")
+    acknowledgment = backend.Candidate(label="acknowledgment", text="気持ちを伝えてくれてありがとうございます！\n無理せず話しましょう")
+    neutral_pivot = backend.Candidate(label="neutral", text="気持ちを伝えてくれてありがとうございます！\n最近どんな本を読んでるんですか？")
+    mixed_pivot = backend.Candidate(label="mixed", text="会うのは急がなくて大丈夫ですよ！\n最近どんな本を読んでるんですか？")
+
+    assert "会うことへの慎重さの直後の質問" in backend._candidate_rejection_reasons(uneasy_probe, context)
+    assert "会うことへの慎重さの直後の質問" not in backend._candidate_rejection_reasons(acknowledgment, context)
+    assert "会うことへの慎重さの直後の質問" not in backend._candidate_rejection_reasons(neutral_pivot, context)
+    assert "会うことへの慎重さの直後の質問" not in backend._candidate_rejection_reasons(mixed_pivot, context)
+    assert not backend.candidate_has_meeting_related_question(mixed_pivot.text)
+    assert backend.candidate_has_meeting_related_question("会うのは急がなくて大丈夫ですよ！\nどんなカフェに行きたいですか？")
+    assert backend.candidate_has_meeting_related_question("急がなくて大丈夫です\nカフェならどんなところが好き")
 
 
 def test_cafe_preference_polarity_is_preserved(client):

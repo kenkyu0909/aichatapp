@@ -286,8 +286,9 @@ def partner_has_active_invitation_refusal(context: dict) -> bool:
         if message.get("role") == "them"
     ]
     refusal_pattern = re.compile(
-        r"まだ会う|会うのは.{0,10}(?:不安|難|控え)|今は.{0,8}(?:難|無理)|"
+        r"まだ会う|会うのは.{0,14}(?:不安|難|控え|もう少し|まだ|考え)|今は.{0,12}(?:難|無理|会う.{0,10}(?:控え|考え|まだ))|"
         r"(?:会う|誘い|一緒に行く).{0,10}(?:断|ごめんなさい|遠慮)|"
+        r"(?:もう少し|少し).{0,10}(?:話|やり取り).{0,8}(?:してから|してからが)|"
         r"これ以上.{0,10}(?:やり取り|連絡)|連絡.{0,8}控え|行くのは.{0,8}(?:不安|難)"
     )
     hesitation_pattern = re.compile(
@@ -317,6 +318,24 @@ def partner_has_active_invitation_refusal(context: dict) -> bool:
     return refusal_active
 
 
+def partner_latest_message_expresses_meeting_unease(context: dict) -> bool:
+    """Identify immediate unease that calls for acknowledgment without date-topic probing."""
+    latest_partner = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    if not latest_partner or not partner_has_active_invitation_refusal(context):
+        return False
+    return bool(re.search(
+        r"まだ会う|会う.{0,12}(?:不安|怖|心配|難)|会うのは.{0,12}(?:不安|怖|難)|会うこと.{0,12}(?:不安|怖|慎重)",
+        latest_partner,
+    ))
+
+
 PERSONAL_FACT_TOPICS = {
     "買い物": ("買う", "買い物", "買い方", "購入", "パケ買い", "衝動買い", "買い替え"),
     "カレー": ("カレー", "カレーライス"),
@@ -328,6 +347,7 @@ PERSONAL_FACT_TOPICS = {
     "旅行": ("旅行", "旅", "出かけ", "行ったこと"),
     "旅行最近": ("旅行", "旅"),
     "旅行頻度": ("旅行", "旅"),
+    "外出": ("お出かけ", "出かけ", "外出"),
     "カフェ好み": ("カフェ", "喫茶店"),
     "料理習慣": ("料理", "自炊"),
     "食事": ("食べ物", "料理", "好きな食べ物", "お店", "食事"),
@@ -337,6 +357,7 @@ PERSONAL_FACT_TOPICS = {
     "カフェ": ("カフェ", "喫茶店", "コーヒー"),
     "カフェ最近": ("カフェ", "喫茶店"),
     "カフェ頻度": ("カフェ", "喫茶店"),
+    "場所探し": ("場所", "お店", "店", "カフェ", "喫茶店"),
     "映画館頻度": ("映画館",),
     "パン": ("パン", "パン屋", "ベーカリー"),
     "休日": ("休日", "休みの日", "週末"),
@@ -787,8 +808,50 @@ def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
     delimiter = re.search(r"[!?！？\n]", remainder)
     if delimiter and delimiter.group(0) in "?？":
         suffix = remainder[:delimiter.start()].strip()
-        return bool(re.fullmatch(r"(?:か|ですか|ますか|なんですか|なんです|でしょうか|のですか)?", suffix))
-    return bool(re.search(r"(?:ですか|ますか|なんですか|でしょうか)[ \t]*$", remainder))
+        if not suffix:
+            return True
+        question_tail = re.compile(
+            r"(?:[ぁ-んー\s]{0,16})(?:か|ですか|ますか|ませんか|でしたか|ましたか|ありましたか|いましたか|でしょうか|の|かな|好き|観た|見た|行った|読んだ|ある|いる|く|る|た|だ|い|ない|てる|ていた|てない)"
+        )
+        return bool(question_tail.fullmatch(suffix))
+    return bool(re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ありましたか|いましたか|でしょうか)[ \t]*$", remainder))
+
+
+def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Match[str], context: dict) -> bool:
+    """Do not reinterpret an explicitly attributed acknowledgment as the user's fact."""
+    remainder = text[match.end():]
+    delimiter = re.search(r"[!?！？\n]", remainder)
+    if not delimiter or delimiter.group(0) not in "!！?？":
+        return False
+    tail = remainder[:delimiter.start()].strip()
+    if not re.search(r"(?:なんですね|んですね|なんだね|のですね|んだね|なんだ)$", tail):
+        return False
+    partner_clauses: list[str] = []
+    for message in context.get("history", []):
+        if message.get("role") != "them":
+            continue
+        for fragment in re.split(r"[。！？!?\n]+", str(message.get("body", ""))):
+            partner_clauses.extend(re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment))
+    if topic == "場所探し":
+        return any(
+            re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)", clause)
+            and re.search(r"(?:好き|楽しい|はま|趣味)", clause)
+            and not re.search(r"好きではない|好きじゃない|好きでない|苦手|嫌い|楽しくない|趣味ではない", clause)
+            for clause in partner_clauses
+        )
+    if topic == "旅行最近":
+        return any(
+            re.search(r"(?:最近|この前|昨日|先週).{0,14}(?:旅行|旅).{0,18}(?:行|出かけ)", clause)
+            and not re.search(r"行けません|行けなかった|行かなかった|行っていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行きません|行かない|行っていません|行ってない", clause)
+            for clause in partner_clauses
+        )
+    if topic == "映画館頻度":
+        return any(
+            re.search(r"映画館.{0,12}(?:よく|頻繁|月に|週に|何度|何回|たまに|時々|ときどき).{0,10}(?:行|通)", clause)
+            and not re.search(r"行けません|行けなかった|行かなかった|行っていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行きません|行かない|行っていません|行ってない", clause)
+            for clause in partner_clauses
+        )
+    return False
 
 
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
@@ -815,12 +878,22 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "映画": re.compile(
         r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
         r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
+        r"(?:最近|この前|昨日|先週).{0,10}(?:映画|洋画|邦画).{0,10}(?:観|見)(?:た|ました)|"
         r"映画.{0,16}(?:最近|ここしばらく).{0,12}(?:観れて|見れて|観てい|見てい|観てない|見てない|観ていない|見ていない)|"
         r"(?:最近)?映画.{0,10}(?:たまに|時々|ときどき).{0,8}(?:観|見)(?:ます|る)(?!か)|"
         r"最近映画.{0,8}(?:観ていません|見ていません|観てない|見てない)(?!か)"
     ),
-    "読書": re.compile(r"幅広く読む|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)|最近.{0,12}(?:本|小説|漫画|マンガ).{0,12}(?:読んだ|読みました|読んでいます|読んでいません)(?!か)"),
+    "読書": re.compile(r"幅広く読む|本は幅広く読み(?:ます|ますね)|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)|最近.{0,12}(?:本|小説|漫画|マンガ).{0,12}(?:読んだ|読みました|読んでいます|読んでいません)(?!か)"),
     "カフェ": re.compile(r"お気に入りのお店|お気に入りの(?:カフェ|喫茶店).{0,8}(?:あります|がある)|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り)(?!ですか|ますか|[?？])|(?:カフェ|喫茶店).{0,12}(?:好きです(?!か)|好きだ|よく行きます|お気に入りがあります)|(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}(?:雰囲気|ところ|お店|カフェ).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])|(?:雰囲気|ところ|お店|カフェ).{0,12}(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])"),
+    "旅行最近": re.compile(r"(?:最近|この前|昨日|先週).{0,10}(?:旅行|旅|京都|北海道|沖縄|海外).{0,12}(?:行|旅行|出かけ)|(?:旅行|旅).{0,10}(?:最近|この前|昨日|先週).{0,12}(?:行|しました|した)"),
+    "外出": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:お出かけ|出かけること|外出).{0,16}(?:好き|趣味|よく行)|(?:お出かけ|外出).{0,10}(?:好きです|趣味です|好きだ)(?!か)"),
+    "映画館頻度": re.compile(r"(?:映画館|シネコン).{0,14}(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,10}(?:行|通)|(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,10}(?:映画館|シネコン).{0,10}(?:行|通)"),
+    "場所探し": re.compile(
+        r"(?:(?:私|自分|僕|俺)(?:も|は|が)?[^\n!?！？]{0,16})?"
+        r"(?:ゆっくり過ごせる|落ち着いた|静かな|にぎやかな|騒がしい)?"
+        r"(?:場所|お店|店|カフェ|喫茶店).{0,12}(?:探す|探して|見つける|開拓).{0,12}"
+        r"(?:のが好き|ことが好き|趣味|よく|頻繁に|多い|楽しみ|います|いる|います)"
+    ),
     "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります)"),
     "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|在住|の近くに住)|(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡).{0,8}(?:に住んでいます|在住|のほうによく行(?:きます|く)|によく行(?:きます|く))"),
     "食事": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:好きな食べ物|好物|料理).{0,16}(?:は|が).{1,16}(?:好き|です)"),
@@ -837,15 +910,17 @@ NEGATIVE_PERSONAL_FACT_RE = re.compile(
 )
 
 
-def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
+def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> list[str]:
     parts: list[str] = []
 
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for fragment in re.split(r"[。！？!?\n,、]+", value):
-                fragment = fragment.strip()
-                if fragment and (include_negated or not NEGATIVE_PERSONAL_FACT_RE.search(fragment)):
-                    parts.append(fragment)
+                clauses = re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment)
+                for clause in clauses:
+                    clause = clause.strip()
+                    if clause and (include_negated or not NEGATIVE_PERSONAL_FACT_RE.search(clause)):
+                        parts.append(clause)
         elif isinstance(value, list):
             for item in value:
                 collect(item)
@@ -856,7 +931,11 @@ def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
     collect(context.get("my_profile", {}).get("facts", {}))
     for answer in context.get("ephemeral_user_answers", []):
         collect(answer.get("answer", ""))
-    return " ".join(parts)
+    return parts
+
+
+def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
+    return " ".join(_trusted_fact_clauses(context, include_negated=include_negated))
 
 
 def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bool:
@@ -902,7 +981,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
     elif topic == "カフェ":
         facts = context.get("my_profile", {}).get("facts", {})
-        explicit_favorites = any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafes"))
+        explicit_favorites = any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafes", "cafe_preferences", "favorite_cafe_atmosphere"))
         atmosphere = re.findall(r"落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め", text)
         if atmosphere and not all(re.sub(r"いた$", "く", marker) in source or marker in source for marker in atmosphere):
             return False
@@ -921,6 +1000,37 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
         if re.search(r"よく行|よく巡|頻繁に|毎週|通って", text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
             return False
+    elif topic == "場所探し":
+        clauses = _trusted_fact_clauses(context)
+        candidate_atmosphere = re.findall(r"ゆっくり過ごせる|落ち着いた|静かな|にぎやかな|騒がしい", text)
+        candidate_frequency = re.findall(r"よく|頻繁に|毎週|月に|週に|多い", text)
+        candidate_negative = bool(NEGATIVE_PERSONAL_FACT_RE.search(text))
+        return any(
+            re.search(r"探す|探して|見つける|開拓", clause)
+            and all(term in clause for term in candidate_atmosphere)
+            and all(term in clause for term in candidate_frequency)
+            and bool(NEGATIVE_PERSONAL_FACT_RE.search(clause)) == candidate_negative
+            for clause in clauses
+        )
+    elif topic == "旅行最近":
+        clauses = _trusted_fact_clauses(context)
+        candidate_places = re.findall(r"京都|北海道|沖縄|海外|国内", text)
+        return any(
+            re.search(r"最近|この前|昨日|先週", clause)
+            and re.search(r"旅行|旅|出かけ|行っ", clause)
+            and all(place in clause for place in candidate_places)
+            for clause in clauses
+        )
+    elif topic == "映画館頻度":
+        clauses = _trusted_fact_clauses(context)
+        return any(
+            re.search(r"映画館|シネコン", clause)
+            and re.search(r"よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき", clause)
+            and re.search(r"行|通", clause)
+            for clause in clauses
+        )
+    elif topic == "外出":
+        return any(re.search(r"お出かけ|出かけ|外出", clause) for clause in _trusted_fact_clauses(context))
     elif topic == "買い物":
         candidate_negative = bool(PURCHASE_NEGATION_PATTERN.search(text))
         source_negative = bool(PURCHASE_NEGATION_PATTERN.search(source))
@@ -1020,7 +1130,13 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         time_markers = re.findall(r"最近|昨日|先週|この前|週末|休日|休みの日", text)
         if time_markers and not all(marker in source for marker in time_markers):
             return False
-    if topic not in {"カレー頻度", "カレー経験"} and any(term in source for term in PERSONAL_FACT_TOPICS[topic]):
+    if topic not in {"カレー頻度", "カレー経験", "場所探し", "旅行最近", "映画館頻度"} and (
+        any(term in source for term in PERSONAL_FACT_TOPICS[topic])
+        or (topic == "カフェ" and any(
+            context.get("my_profile", {}).get("facts", {}).get(key)
+            for key in ("cafe_preferences", "favorite_cafe_atmosphere")
+        ))
+    ):
         return True
     # An ephemeral answer may supply the exact scope requested even when its
     # text omits the category word (for example, a book title answering a
@@ -1047,6 +1163,10 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
             claim_text = text
             matches = list(pattern.finditer(claim_text))
             matches = [match for match in matches if not _candidate_claim_is_interrogative(claim_text, match)]
+            matches = [
+                match for match in matches
+                if not _candidate_claim_is_partner_attribution(topic, claim_text, match, context)
+            ]
             if topic == "買い物":
                 partner_sources = [context.get("other", {}).get("description", "")]
                 partner_sources.extend(
@@ -1816,6 +1936,25 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
     return bool(re.search(marker, answer_prefix))
 
 
+MEETING_RELATED_QUESTION_PATTERN = re.compile(
+    r"(?:カフェ|店|お店|ご飯|食事|ランチ|ディナー|会う|会え|一緒に|行きません|行ってみ|予定|日程|日時|いつ|どこ|場所|駅|土日|曜日|時間|空いて)"
+)
+QUESTION_ENDING_PATTERN = re.compile(
+    r"(?:[?？]|ですか|ますか|ませんか|でしょうか)[!！]?$|"
+    r"(?:どんな|どの|何|どこ|いつ|誰|どういう).{0,24}(?:好き|行きたい|あります|です|教えて|知りたい|感じ)$"
+)
+
+
+def candidate_has_meeting_related_question(text: str) -> bool:
+    """Return whether a question clause probes a meeting, venue, or schedule."""
+    question_clauses = re.split(r"(?<=[!?！？])|\n+", text)
+    return any(
+        QUESTION_ENDING_PATTERN.search(clause.strip())
+        and MEETING_RELATED_QUESTION_PATTERN.search(clause)
+        for clause in question_clauses
+    )
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -1843,6 +1982,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         and INVITATION_PATTERN.search(text)
     ):
         reasons.append("相手の断りや慎重さに反する誘い")
+    if partner_latest_message_expresses_meeting_unease(context) and candidate_has_meeting_related_question(text):
+        reasons.append("会うことへの慎重さの直後の質問")
     return reasons
 
 

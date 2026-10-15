@@ -427,3 +427,35 @@
 - 全pytestは406 passed in 93.32s。Python py_compile、node --check app.js、git diff --check成功。秘密形式検索に一致なし。Firefox UIを含む。Chromeは使用していない。
 - 証拠: quality_checks_008.json、quality_checks_008_analysis.md、QUALITY_ROOT_CAUSES_008.md。TEST_MATRIXは180項目へ更新し、過去FAILは保持した。
 - コード・検証記録commit f800fbeabb146258c6a20c583ea62c74f0cf4f46をPush済み。Push [Actions 38664505348](https://github.com/kenkyu0909/aichatapp/actions/runs/38664505348)とPR [Actions 38664508934](https://github.com/kenkyu0909/aichatapp/actions/runs/38664508934)が同じSHAで成功。各406 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact uploadも成功。
+
+## 2026-10-15 自律品質確認009
+
+- 自律作業指示を読み、13:00 JSTまで継続する。開始時のリモート/ローカルHEADは`873bac7d747a8e8281a65412ac04cc8b86afe3d4`。PR #4はOPEN/Draft。新規PRやマージは行わない。
+- quality_checks_008を再監査し、本人のカフェ趣味から場所の雰囲気・探索嗜好を補ってしまう候補と、会う不安の直後に店の好みを尋ねる候補を見落としていたことを確認。過去のJSONは変更しない。
+- 追加で、旅行趣味からの最近の旅行、映画趣味からの最近の鑑賞・映画館頻度、読書趣味からの幅広い読書という未確認主張と、肯定/否定が同じ文にあるプロフィールで肯定情報まで落とす誤検知を再現。
+- `app.py`で場所探索/属性、最近の旅行、映画館頻度を同一の信頼済み節で照合。対比接続語で節を分離し、肯定情報と別属性の否定を混同しない。会う不安の直後の外出関連質問を候補フィルターで除外。
+- 初期の関連回帰は13 passed。コードレビューで「別々の事実項目から根拠を寄せ集める」ケースを指摘され、節単位の照合に変更。続くレビューで新しい経験/頻度の検出が本人向け質問も誤拒否しうると指摘され、質問文を除外する語尾判定を追加。
+- 現在の限定回帰は**19 passed**（`tests/test_app.py -k "new_experience_patterns_do_not_reject_partner_questions or place_search or meeting_unease_filters_immediate_cafe_probe or general_hobby_does_not_verify or affirmed_fact_survives or specific_claim_evidence_cannot_be_combined"`）。`tests/test_app.py`と`tests/test_quality_checks_008.py`の**422 passed**は質問誤拒否修正前の実行で、現行HEADの全体結果として扱わない。最新差分で全pytestを再実行する。
+- 今回の実Gemini利用は**0論理要求 / 0 provider attempts**。conversation_004未実施。現在の上限は品質008とは別に12論理要求 / 24 provider attempts。
+- 差分・Firefox・構文/秘密情報検査、全pytest、実API品質009の可否判断、GitHub Actionsは未完了。詳細・各項目の状態は`AUTONOMOUS_UNTIL_1300_20261015.md`と`TEST_MATRIX.md`に記録する。
+
+### 2026-10-15 自律品質確認009：実API・レビュー後の修正
+
+- 実API品質確認009は既存アプリ経由、架空プロフィール、隔離SQLiteで**10論理要求 / 12 provider attempts**。上限12 / 24以内で、API1 / `gemini-3.5-flash-lite`のみ。認証・429・モデル不在・通信エラーなし。キー値は表示・保存していない。
+- API疎通と一部の自動条件は通ったが、手動文章評価は**FAIL**。誤字「どんな雰囲い」、候補の意味的重複、本人の架空回答に沿わない代替質問、修正前の未確認嗜好「私もお出かけが好き」の実出力を記録した。詳細は`simulations/quality_checks_009_analysis.md`。過去の出力は改変せずJSONに保持。
+- 実APIケースの後、レビューで会う不安直後の中立な本の質問も遮断する過剰制限を発見。会場・外出・日程関連だけを抑止し、中立話題は残すよう修正した。疑問符直前の「観た？」「行くの？」「かな？」も本人断定と誤認しないよう修正。
+- 修正後のfocused testsは**10 passed**（後続の否定形・相手発言の反例も含む）。現行コード全pytestは**441 passed in 92.12s**（Firefox UIを含む）。Firefox単独は**6 passed in 79.98s**。Python/JavaScript構文、git diff --check、変更diff内Geminiキー形式スキャン0件を確認。Actions確認は最終Push後。
+- 品質条件未達のためconversation_004は未実施。API残枠を会話実験へ使わない。
+- 最新集計204項目: PASS 160 / FAIL 13 / FIXED 14 / BLOCKED 5 / NOT_TESTED 12。Actions項目はPush後に追記する。
+- 追加のPythonレビュー後、相手の「もう少し話してから会いたい」「今は会うのを控えたい」「会うのはまだ考えていない」を拒否として認識できず再誘いを通す高優先度の境界を再現した。また、相手の旅行/店探し/映画館頻度を受け止める「〜なんですね」まで本人事実として落とす誤検知も確認。拒否表現を拡張し、相手履歴に根拠がある受け止め文は本人主張から区別するよう変更。
+- これらの再現6ケースを含むfocused testsは**16 passed**。修正後の全pytestは再実行中。新たな実API呼び出しは行っていない。将来の品質ランナーから同一入力の重複を除いた。既存実行JSONは保持。
+- 3回目のPythonレビューで追加の安全漏れを発見。相手の否定発言を肯定して受け止める候補（好きじゃない／行けなかった／行かない）と、疑問符なしの会う関連質問をオフラインで再現し修正。節単位の肯定根拠がある場合だけ相手帰属を許可する。中立話題は保持。
+- 最新focused tests **10 passed**。最終全pytestは**441 passed in 92.12s**。新規実API要求は0。構文・差分検査も成功。追加回帰を反映したTest Matrixを更新した。
+
+### 2026-10-15 11:22 JST：追加レビューの否定表現修正
+
+- Pythonレビューで、相手が「最近旅行には行かなかった」「行けていない」「行ったことがない」と言った場合でも、旅行したと肯定する受け止め候補が通ることを発見。映画館の頻度についても同じ境界があった。
+- 修正前に追加した回帰テストは4ケースで失敗。次のレビューで `行けてない / 行けていない / 行けていません` と「行ったことがありません」「行くことがない」も検出から漏れると分かった。検査語を増やし、旅行・映画館の17種類を修正後に確認して17 passed。
+- 全pytest: **455 passed in 92.87s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。API追加要求なし。Chrome未使用。
+- 最新集計は208項目: PASS 162 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 13。T205は最終Push後のActions待ち。
+- 次: 明示したファイルだけをステージし、秘密情報と差分を検査してコミット・Push。Actionsが最新SHAで成功したらTest Matrix、Final Report、PR #4を更新する。PRはDraftのまま維持し、13:00 JSTを過ぎた作業は行わない。
