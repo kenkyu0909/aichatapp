@@ -589,8 +589,8 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 
 ## テスト集計
 
-- 検証項目: 161
-- PASS: 136
+- 検証項目: 163
+- PASS: 138
 - FAIL: 12
 - FIXED: 1
 - BLOCKED: 5
@@ -598,7 +598,7 @@ TEST_MATRIXは127項目（PASS 110 / FAIL 7 / FIXED 1 / BLOCKED 4 / NOT_TESTED 5
 - 全pytest: **375 passed, 1 warning, 79.01秒**
 - Firefox単独: **5 passed, 71.86秒**
 - Python構文、JavaScript構文、`git diff --check`: PASS
-- GitHub Actions: 今回の最新コミットをPushした後に確認する
+- GitHub Actions: 実装コミット`44fbe733e00652774d942109fe2a2411fb67029d`の[Push run 38658096934](https://github.com/kenkyu0909/aichatapp/actions/runs/38658096934)と[PR run 38658104233](https://github.com/kenkyu0909/aichatapp/actions/runs/38658104233)が同じSHAで成功。各375 passed, 1 warning。報告追記コミットのActionsはPR本文に記録する。
 
 FAILには今回の実API品質ケースを含みます。過去のFAILも履歴として保持しています。
 
@@ -654,9 +654,9 @@ API枠が尽きたため、これらは今回再通信していません。オ�
 ## GitHub
 
 - ブランチ: `codex/full-system-verification`
-- 最終コミットSHA: Push後に追記
+- 実装・品質修正コミットSHA: `44fbe733e00652774d942109fe2a2411fb67029d`
 - PR #4: https://github.com/kenkyu0909/aichatapp/pull/4（Draft維持、未マージ）
-- GitHub Actions: 最新SHAのPush/PR run確認後に追記
+- GitHub Actions: 実装SHA `44fbe733e00652774d942109fe2a2411fb67029d`のPush [38658096934](https://github.com/kenkyu0909/aichatapp/actions/runs/38658096934) / PR [38658104233](https://github.com/kenkyu0909/aichatapp/actions/runs/38658104233)が成功。最終報告追記SHAのrunはPR本文を参照。
 - 進捗: [`PROGRESS.md`](PROGRESS.md)
 - マトリクス: [`TEST_MATRIX.md`](TEST_MATRIX.md)
 - 夜間目標: [`OVERNIGHT_GOAL.md`](OVERNIGHT_GOAL.md)
