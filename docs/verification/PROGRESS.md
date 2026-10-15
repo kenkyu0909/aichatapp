@@ -1043,3 +1043,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 修正前の対比テストは**1 failed**。修正後pet focused tests **18 passed**。最終全pytest **1002 passed in 128.39s**（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立レビューは複数動物の極性テストを再生し、今回見た範囲で新たなP0を報告しなかった。
 - T326をFIXEDとして追加。Test Matrix **326項目: PASS230 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15**。既存QUALITY009の文章自然さ・候補の実生成品質FAILは残るため総合判定NO-GO。今回Gemini実API0回、Firefox UIはpytest内で使用、Chrome不使用。
 - 次: 6つの対象ファイルだけをコミット・Pushし、ユーザーの未追跡指示ファイルを保持する。GitHub Actionsが同一の新HEADで成功するか確認し、PR #4がOPEN/Draftのままか確認する。
+
+### 2026-10-16 00:16 JST Actions・PR確認
+
+- コード/test/報告コミット `518d1a7fc6d6d7bf35cea667ae11e5de5fd992ef`を`codex/full-system-verification`へPush済み。
+- 同一SHAのPush Actions [38758432156](https://github.com/kenkyu0909/aichatapp/actions/runs/38758432156)とPR Actions [38758438161](https://github.com/kenkyu0909/aichatapp/actions/runs/38758438161)がsuccess。pytest、JavaScript構文検査、Artifact保存が成功した。ActionsはNode.js 20互換と`ubuntu-latest`将来移行の通知を出したが、ジョブは成功。
+- PR #4を確認: OPEN、Draft、base=`feat/ui-local-backend-v1`、head SHAはコミットと一致。マージしていない。
+- T327をPASSとして追加。Matrix 327項目: PASS231 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15。
+- 次はCI再確認の待ち時間に品質009の保存済み直接質問・誘いケースを監査し、実際に再現するP0がある場合だけ追加修正する。Gemini実通信とconversation_004/新しい会話HTMLは行わない。

@@ -1155,3 +1155,5 @@ Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。
 独立コードレビューで、ペット情報の口語否定、複数動物の好み・飼育を一文で述べる場合の極性混同を発見した。動物ごとに対応する述語の範囲で判定するよう修正し、「犬が苦手で猫が好き」等の正しい情報と未確認情報を区別するテストを追加した。レビュー後にpet tests **18 passed**、全pytest **1002 passed in 128.39s**。Python/JavaScript構文検査と差分チェックも成功。
 
 この変更を含む最新全テストは成功したが、保存済みGemini QUALITY009の文章自然さと意味的な候補多様性の手動FAILを解消した新規実API証拠はない。Gemini実通信は**0回**。総合判定は**NO-GO**を維持する。GitHub Actionsはコミット/Push後に最新SHAで確認する。会話004と新しい会話HTMLは指示どおり未実施。
+
+コミット `518d1a7fc6d6d7bf35cea667ae11e5de5fd992ef`のPush Actions [38758432156](https://github.com/kenkyu0909/aichatapp/actions/runs/38758432156)とPR Actions [38758438161](https://github.com/kenkyu0909/aichatapp/actions/runs/38758438161)は両方successし、head SHA一致を確認した。PR #4はOPEN/Draft・未マージ。ActionsがNode.jsランタイムとUbuntuイメージの移行通知を表示したが、失敗はない。
