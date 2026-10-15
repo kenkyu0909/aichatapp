@@ -2264,6 +2264,38 @@ def test_additional_negative_fact_forms_reject_opposite_claim(client, fact, clai
     ], context)
 
 
+@pytest.mark.parametrize(("claim", "topic"), [
+    ("実家は仙台です！", "出身地"),
+    ("ジムには年2回行きます！", "運動習慣"),
+])
+def test_unlisted_place_and_yearly_exercise_claims_require_evidence(client, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の地域や頻度", text=claim)
+    ], context)
+
+
+def test_sibling_relationship_claim_must_match_confirmed_relative(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"siblings": "妹がいます"}}, "ephemeral_user_answers": []}
+
+    assert "家族" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="異なるきょうだい", text="兄がいます！")
+    ], context)
+
+
+@pytest.mark.parametrize(("source_question", "expected_question"), [
+    ("兄弟とは仲がいいですか？", "兄弟や姉妹とはどのくらい仲がいいですか？"),
+    ("家族は何人ですか？", "兄弟や姉妹が何人いるか教えてください"),
+])
+def test_family_confirmation_question_matches_requested_detail(client, source_question, expected_question):
+    _, backend = client
+
+    assert backend.personal_fact_question("家族", source_question).question == expected_question
+
+
 @pytest.mark.parametrize(("answer_question", "answer_text", "candidate_text", "topic"), [
     ("最近どんな本を読みましたか？", "最近は青い灯台を読みました", "本を読むのが好きです！", "読書"),
     ("普段どんなジャンルの本を読みますか？", "ミステリーです", "読書が好きです！", "読書"),
