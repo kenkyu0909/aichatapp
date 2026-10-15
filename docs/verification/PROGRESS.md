@@ -827,6 +827,14 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - TEST_MATRIXを302項目へ更新: PASS219 / FAIL13 / FIXED50 / BLOCKED5 / NOT_TESTED15。最終差分を含む全pytest **847 passed in 118.15s**（Firefox UI込み、失敗・skipなし）。Python構文・JavaScript構文・diff検査成功。QUALITY009の実生成手動FAILが残るため総合NO-GO。最新prompt差分は未コミット/Pushで、CIは未確認。
 - PR #4はOPEN/Draft、head `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd`、base `feat/ui-local-backend-v1`、未マージ。次にprompt/testとレポート更新を選択commit/pushし、最新HEADのActionsを確認。ユーザー提供未追跡txt3点は保護する。
 
+### 2026-10-15 18:54 JST 継続チェックポイント：映画直接質問の回避案を送信前に除外
+
+- QUALITY009の`recent_movie_answered`で、最近観た作品名を回答した推奨案に対し、代替案「映画はときどき観るんですか？」「映画館へ行くのが好きなんですか？」が直接質問への回答を回避していた。保存済みJSONを変更せず、この正確な状況のcandidate-filter統合テストを追加。
+- `filter_safe_candidates`が確認済みの作品回答1案を残し、未回答の代替2案を除外、候補不足を通知することをfocused test **1 passed / 764 deselected**で確認。これはオフラインの構造化応答テストで、新しい実Gemini生成ではない。
+- 全pytest **848 passed in 113.98s**（Firefox UI込み、失敗・skipなし）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。実Gemini API0回。対象SHA `acdccc777187aa7cdf037f09038fefa4e914f3f5` のPush Actions run [38716179909](https://github.com/kenkyu0909/aichatapp/actions/runs/38716179909) はsuccess。なお今回の統合テスト+最新文書はこのSHA/Actions後のローカル変更に含まれ、別コミット・CIが必要。
+- TEST_MATRIX **303項目**: PASS219 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成文面FAILは未解決。Gemini実API0回。conversation_004/新規会話HTMLなし。総合NO-GO。
+- 次: 全pytestとPython/JS構文を完了し、今回の追跡差分をcommit/push。PR #4をDraft・未マージで保ち、最終SHAのPush/PR Actions双方を確認。ユーザー提供の未追跡指示txt3点はcommitしない。
+
 ### 2026-10-15 18:29 JST 継続チェックポイント：カフェ雰囲気の回答粒度と否定整合性
 
 - 定期指示を再取得し、P0優先、Gemini実通信0回、conversation_004/新しい会話HTML未実施、PR #4 Draft・未マージを確認。

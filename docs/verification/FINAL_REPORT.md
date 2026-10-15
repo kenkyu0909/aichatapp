@@ -1023,3 +1023,5 @@ PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush 
 続いて「どんな雰囲い」のような明らかな日本語の誤変換へ、送信前に本文を読み直す共通プロンプト指示を追加した。校正で事実や感想を補わず、安全に自然な文へ直せない候補は不足として扱う。first/reply/followup/likeすべてがこの指示を読み込むことをテスト **1 passed / 763 deselected** で確認した。モデルが新しい指示に従うかは実Gemini未検証。直前のコミット `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd` のActions [run 38715533553](https://github.com/kenkyu0909/aichatapp/actions/runs/38715533553) は成功したが、後続のprompt変更は含まない。最新差分の総合テストとActionsはこれから。
 
 prompt変更を含む最新ローカル差分で全pytest **847 passed in 118.15s**。Python・JavaScript構文と`git diff --check`も成功。Pushと最新SHAのActionsは未確認。
+
+品質009の最近観た映画への直接質問に回答しない代替案を、現在の候補選別処理が安全候補のみへ絞る統合テストを追加した。focused test **1 passed / 764 deselected**、変更後の全pytest **848 passed in 113.98s**（Firefox UI含む、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`も成功。commit `acdccc777187aa7cdf037f09038fefa4e914f3f5` のPush Actions [run 38716179909](https://github.com/kenkyu0909/aichatapp/actions/runs/38716179909) はsuccess。同runの対象は今回追加した統合テストと最終文書変更の前であるため、次のコミットSHAでもActionsを実行・確認する。

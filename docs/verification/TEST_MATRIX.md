@@ -643,3 +643,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T302 | 生成前に本文の日本語表記・文法を読み直す共通プロンプト要件 | Windows 11 / pytest、first/reply/followup/likeのprompt loaderを確認 | FIXED | 全4モードの共通プロンプトに誤変換・助詞抜け等の最終読み直しと、校正時に事実を足さない指示を追加。`test_all_sendable_modes_require_a_final_language_quality_readthrough` **1 passed**。最終全pytest **847 passed in 118.15s**（Firefox UI込み、失敗・skipなし）。Python/JavaScript構文、diff検査成功。これはプロンプト継承の静的確認であり、Gemini実生成の文章品質を立証しない。実Gemini 0回。|
 
 最新ID行: 302。累計: PASS219 / FAIL13 / FIXED50 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
+
+| T303 | 最近観た映画への直接質問で安全な回答を保ち、回避する代替案だけを除外する | Windows 11 / pytest、隔離されたSuggestionsV2候補選別の架空データ試験 | FIXED | 品質009の保存済み出力で推奨案は回答、代替案2件は最近の作品名を答えず別の質問へ移っていた。現行フィルターが確認済みの作品名回答を残し、未回答の代替案2件だけを除外して不足通知を返す回帰を追加。focused **1 passed / 764 deselected**。最新全pytest **848 passed in 113.98s**（Firefox UI込み、失敗・skipなし）。Python/JavaScript構文、diff検査成功。Gemini実API0回。|
+
+最新ID行: 303。累計: PASS219 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|

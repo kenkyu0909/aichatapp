@@ -2217,6 +2217,41 @@ def test_recent_movie_answer_can_include_verified_title_and_followup(client, can
     )
 
 
+def test_recent_movie_filter_keeps_answer_and_drops_evasive_alternatives(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    response = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        recommended=backend.Candidate(label="回答", text="最近は青い灯台を観ました！", reply_move="grounded_share"),
+        alternatives=[
+            backend.Candidate(label="代替案1", text="映画はときどき観るんですか？", reply_move="expand"),
+            backend.Candidate(label="代替案2", text="映画館へ行くのが好きなんですか？", reply_move="expand"),
+        ],
+        reason="最近観た作品を回答する",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="直接質問へ回答する",
+        next_action="相手の反応を待つ",
+    )
+
+    filtered = backend.filter_safe_candidates(response, 3, context)
+
+    assert filtered["recommended"]["text"] == "最近は青い灯台を観ました！"
+    assert filtered["available_candidate_count"] == 1
+    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+    assert {item["label"] for item in filtered["candidate_rejections"]} == {"代替案1", "代替案2"}
+    assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
 @pytest.mark.parametrize("candidate_text", [
     "青い灯台を観ましたか？",
     "最近『青い灯台』を観たんですか？",

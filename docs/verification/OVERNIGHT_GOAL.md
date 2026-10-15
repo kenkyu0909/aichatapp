@@ -588,3 +588,7 @@ Gemini実API 0回。品質009の保存済み実生成FAILが残るため総合NO
 全pytestの直近成功はコード+カフェ修正SHA `6389b5d5ca22da7a823bb11cf8d8a185ef1015bd` の**846 passed / 112.64s**。同SHAのGitHub Actions [run 38715533553](https://github.com/kenkyu0909/aichatapp/actions/runs/38715533553) は成功。今回の追加prompt差分は別の最新Actionsで確認が必要。7ゴールはどれも全体PASSではなく、総合NO-GOを維持する。
 
 prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15s**。Firefox UIテスト込み。Python/JavaScript構文とdiff検査成功。Pushして最新SHAのActionsを確認する必要がある。
+
+### 2026-10-15 18:56 JST 追補：直接質問への回答を候補選別で保持
+
+保存済みQUALITY009の最近観た映画の質問で、推奨案は回答するが、代替2案は作品名を省いて別の質問へ移っていた。構造化応答の統合テストを追加し、安全な回答を残して回避候補のみ除外することを検証した。focused 1 passed / 764 deselected。最新ローカル全pytest **848 passed in 113.98s**、Firefox UI込み。構文検査成功。commit `acdccc777187aa7cdf037f09038fefa4e914f3f5` のActions [38716179909](https://github.com/kenkyu0909/aichatapp/actions/runs/38716179909) は成功だが、新規統合テストを含まない。最新差分をPushして再度Actionsを確認する。QUALITY009実生成FAILは解消したと主張せず、総合NO-GOを維持。
