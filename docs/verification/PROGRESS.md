@@ -459,3 +459,46 @@
 - 全pytest: **455 passed in 92.87s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。API追加要求なし。Chrome未使用。
 - 最新集計は208項目: PASS 162 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 13。T205は最終Push後のActions待ち。
 - 次: 明示したファイルだけをステージし、秘密情報と差分を検査してコミット・Push。Actionsが最新SHAで成功したらTest Matrix、Final Report、PR #4を更新する。PRはDraftのまま維持し、13:00 JSTを過ぎた作業は行わない。
+- コード・回帰テスト・初回検証記録はcommit `2c4e0805a5d3d79b8af91c4755428422f8802445`でPush済み。GitHub Actions Push run [38670690590](https://github.com/kenkyu0909/aichatapp/actions/runs/38670690590)は同SHAで成功し、455 passed / 1 warning、Firefox準備・JavaScript構文・Artifact uploadも成功。警告はGitHub runner/actionのNode 20移行通知とUbuntu runnerの将来変更通知。
+- 最新Test Matrix集計208項目: **PASS 163 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 12**。CI結果と最新判定を記録した文書コミットを続けてPushする。PR #4はOPEN/Draftで未マージ。
+- 11:26 JSTの独立レビューで、否定の「行けないです/んです」と「行けなくて/行けなくなって」が相手の肯定経験として扱われる新たな漏れを発見。相手発言への帰属判定だけでなく、本人プロフィールの信頼済み事実抽出にも影響するため両方のガードを修正した。修正前のfocused testsは6件失敗し、修正後は29件成功。
+- 全pytestは追加のこの修正を含む状態で再実行中。今回の新規実API要求は0。T206・T207をFIXED、全件テスト・Actionsを完了までNOT_TESTEDとして記録し、結果確定後に更新する。
+- 11:32 JST、別の監査で追加の境界を確認。「好きではありません/好きじゃありません」の否定、「行く機会がなかった/行く時間がなくて/行けず」などの機会不足、さらに旅行・映画館の希望/予定/推測を過去経験や習慣として誤認していた。プロフィール根拠の検査にも同じ問題があった。
+- 旅行の最近の経験、映画館の習慣について肯定根拠を共通ヘルパーへ統合し、否定・非断定表現を追加除外。場所探しの極性判定も共通否定ルールを使用する。修正前にこれらを含むfocused runが20 failures、修正後は旅行・映画館・場所探しを含む**66 passed**。
+- 現行テストコレクションは498件。全pytest再実行、静的検査、独立レビュー、GitHub Actionsは未完了。実Gemini追加要求0件。最新FAIL品質を理由にconversation_004は行わない。Test Matrix 216項目: PASS165 / FAIL13 / FIXED18 / BLOCKED5 / NOT_TESTED15。次に全pytestを回し、PASS/FAILを実測後に更新する。
+
+### 2026-10-15 11:42 JST：質問・否定の追加境界と最終オフライン確認
+
+- 追加レビューで、本人プロフィール/相手履歴の「趣味ってほどじゃない」「趣味というほどではない」が肯定的なカフェ探索の根拠として通る問題と、句読点なしの「最近旅行行ったことあるの」「映画館によく行くの」「カフェを探すのが好きなの」を事実表明と誤認する問題を再現した。
+- まず回帰テストを追加し、6ケースが失敗することを確認。その後、否定形を追加し、口語疑問の曖昧な語尾を保守的に検出した。危険候補を無理に埋めず、安全な候補のみ残して不足を通知する方針を維持する。
+- 修正後の重点テストは**79 passed**。全pytestは**517 passed in 92.24s**。Python構文、JavaScript構文、`git diff --check`成功。最新コードcommit差分のAPIキー形式検索は0件。全pytestにはFirefox UIテストが含まれる。Chrome未使用。
+- 今回の実Gemini追加要求は**0**。quality_checks_009の実文章手動判定FAILを維持し、conversation_004は実施しない。
+- 最新コードcommit: `38abb1ce3855f5843a29da7d27821cb6ee2a16fd`。CI確認はPush後に行う。PR #4はOPEN/Draft、headはPush前の旧SHA。PRはマージしない。
+- Test Matrixは219項目: PASS167 / FAIL13 / FIXED19 / BLOCKED5 / NOT_TESTED15。T216の最新Actionsが残る。
+
+
+### 2026-10-15 12:30 JST
+
+- 独立レビューで年齢の前半/後半の誤判定と、職歴15年を5年として承認する部分一致を特定。修正前の再現4ケースは失敗。修正後の年代・数値・単位境界テストは成功し、関連focused runは9 passed。
+- 最新全pytest: **583 passed in 83.39s**。Python compile、JavaScript構文、`git diff --check`、変更内容の秘密形式スキャン成功。全pytestはFirefox UIを含む。
+- Firefox単独 `tests/test_ui_firefox.py` は実行中。最新ActionsはPush前で未確認。
+- Gemini実API呼び出し0。会話004未実施。QUALITY009の実生成文評価FAILは保持。
+- 次: Firefox結果と独立レビューを確認し、報告・プロンプト仕様を更新。追跡ファイルのみcommit/pushして最新SHAのActionsを確認。PR #4はDraft維持、未マージ。
+
+
+### 2026-10-15 12:37 JST：独立監査と全体回帰
+
+- 追加レビューで、年代と数値年齢の精度、整数型の職歴年数、最近の映画/読書への感想、カフェ頻度の推測、genre-onlyから映画一般への拡張、接続助詞「し」の肯定・否定節スコープに抜けを確認。修正前14ケースを回帰として再現し、修正した。
+- 修正後focused suite: **20 passed**。最新全pytest: **599 passed in 82.63s**。Firefox単独: **6 passed in 81.18s**。Python/JavaScript構文、差分検査、秘密形式スキャン成功。
+- 実Gemini呼び出し0。quality_checks_009の手動実文章評価FAILを維持。conversation_004未実施。
+- 現在のTest MatrixはID行226項目: PASS172 / FAIL13 / FIXED22 / BLOCKED5 / NOT_TESTED14。Actionsは最新変更push後に確認する。
+- 次: 独立レビューの結果を反映し、報告とprompt_specを更新。追跡対象を限定してcommit/pushし、最新SHAのActionsとPR #4 Draft状態を確認。
+
+
+### 2026-10-15 12:52 JST：職歴範囲と安全候補の再生成保持
+
+- 独立レビューで、確認済み職歴「5年」に対する「5年未満」「5年以上」の候補が根拠確認を通る問題を確認。回帰を追加して修正前に3ケースFAILを再現し、範囲の一致と範囲付き質問を区別する検証へ修正。勤続範囲のfocused suiteとカフェ根拠境界を含む19ケース成功。
+- 安全候補保持の別レビューで、誘い候補の1回修復後に、2回目に残った安全な中立案を1回目の小さい候補群で置き換える問題を確認。2つの応答を使う再現テストで修正前FAIL。安全候補集合を重複除去して併合し、条件に合わない誘いは除外、候補不足は実数で通知するよう修正。関連12ケース成功。
+- 全pytest **612 passed in 96.69s** は、後続の安全候補併合変更より前のコードに対する結果。最新コードを含む全pytestは未実施。候補併合差分後にPython/JS構文・差分・秘密形式検査を再実行し、成功（APIキー形式一致0件）。
+- quality_checks_008の「カフェ巡り」から「静かな場所探し」への未確認嗜好拡張はモデル出力と旧根拠照合の偽陰性の両方。現行回帰は該当候補を拒否し、中立な話題反応を保持する。QUALITY009の実生成品質FAILは継続。
+- 新規Gemini実API **0**。conversation_004・会話HTMLは指示により作成しない。次は構文/差分検査、Focused regression、文書集計、追跡対象のみcommit/push。13:00 JSTで安全に区切る。PR #4はDraft・未マージ。

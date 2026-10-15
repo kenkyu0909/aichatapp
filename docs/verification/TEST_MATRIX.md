@@ -389,9 +389,65 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 
 集計: 204項目、PASS 160 / FAIL 13 / FIXED 14 / BLOCKED 5 / NOT_TESTED 12。過去のFAIL・BLOCKEDは履歴として維持する。quality_checks_009は自動ゲートがPASSでも文章品質の手動判定はFAIL。conversation_004は未実施。
 
-| T202 | 相手の否定・未経験を肯定の受け止めへ反転しない | pytest / 同一節の極性検査 | FIXED | 追加レビューで「旅行には行かなかった」「行っていなかった」「行けていない」「行ったことがない」「行くことがない」および映画館の対応表現を含む候補が通ることを再現。否定パターンを追加し、17種類の肯定反転ケースを確認。修正後17 passed。`tests/test_app.py`。自由文全体の意味検出を保証するものではない。 |
+| T202 | 相手の否定・未経験を肯定の受け止めへ反転しない | pytest / 同一節の極性検査 | FIXED | 追加レビューで「旅行には行かなかった」「行っていなかった」「行けていない」「行ったことがない」「行くことがない」および映画館の対応表現を含む候補が通ることを再現。否定パターンを追加し、後続ケースを含め旅行・映画館25形を重点確認。`tests/test_app.py`。自由文全体の意味検出を保証するものではない。 |
 | T203 | 否定表現の最終修正を含む全pytest | Windows / pytest | PASS | `python -m pytest -q`: **455 passed in 92.87s**。Firefox UIテストを含む。 |
 | T204 | Python/JavaScript構文・差分検査 | py_compile / node --check / git diff --check | PASS | `app.py`、品質009スクリプト、`tests/test_app.py`のPython構文、`app.js`構文、差分検査が成功。 |
-| T205 | 最新コミットのGitHub Actions | Push / PR workflow | NOT_TESTED | 変更をPush後に最新SHAを対象とする実行を確認する。 |
+| T205 | 最新コミットのGitHub Actions | Push workflow | PASS | SHA `2c4e0805a5d3d79b8af91c4755428422f8802445`を対象とした[run 38670690590](https://github.com/kenkyu0909/aichatapp/actions/runs/38670690590)が成功。pytest **455 passed, 1 warning**、JavaScript構文検査とFirefox準備、Artifact uploadも成功。 |
+| T206 | 「行けない/行けなくて」から正の経験を推定しない | pytest / 相手履歴の極性検査 | FIXED | 独立レビューで「最近旅行には行けない」「行けなくて」「行けなくなって」、映画館の同形を見逃す問題を再現。肯定の受け止め候補を拒否する回帰を追加。重点回帰29 passed。 |
+| T207 | 負のプロフィール記述を信頼済み事実にしない | pytest / `_trusted_fact_clauses` | FIXED | プロフィール本文の「行けない」「行けなくて」「行けなくなって」を肯定事実の根拠一覧に入れない。6つの境界を確認。`tests/test_app.py`。 |
+| T208 | 最新否定形修正を含む全pytest | Windows / pytest | PASS | `python -m pytest -q`: **467 passed in 92.31s**。Firefox UIテストを含む。 |
+| T209 | 最新否定形修正のPython/JavaScript構文・差分検査 | py_compile / node --check / git diff --check | PASS | `app.py`、`tests/test_app.py`のPython構文、`app.js`構文、差分検査成功。 |
+| T210 | 最新コードSHAのGitHub Actions | Push workflow | NOT_TESTED | 次のcommitをPushして同一SHAの成功を確認する。 |
 
-更新後集計: **208項目**。PASS 162 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 13。過去のFAIL・BLOCKEDは履歴として維持する。品質009の手動評価はFAILのまま、conversation_004は未実施のまま。
+更新後集計: **213項目**。PASS 165 / FAIL 13 / FIXED 17 / BLOCKED 5 / NOT_TESTED 13。T208とT209を含む最新コードのPush Actions確認が残る。過去のFAIL・BLOCKEDは履歴として維持する。品質009の手動評価はFAILのまま、conversation_004は未実施のまま。
+
+| T211 | 相手の過去経験・習慣と願望/予定を区別し、否定形を反転しない | pytest / 履歴・プロフィール双方の根拠検査 | FIXED | 独立監査で「好きではありません/好きじゃありません」「行く機会がない/時間がなくて/行けず」「行きたい/予定/つもり/かもしれない」から肯定の受け止めや過去経験を誤認する問題を再現。旅行は時点付きの完了形、映画館は肯定的な習慣形を共通ヘルパーで照合。旅行・映画館・場所探しの重点66件が成功。 |
+| T212 | 時制・極性境界の最終修正を含む全pytest | Windows / pytest | PASS | 最新実装commit `38abb1ce3855f5843a29da7d27821cb6ee2a16fd`で`python -m pytest -q`: **517 passed in 92.24s**。Firefox UIを含む。 |
+| T213 | 最新コミットSHAのGitHub Actions | Push workflow | NOT_TESTED | 最新コードと文書のPush後に同一SHAで確認する。 |
+
+更新後集計: **216項目**。PASS 166 / FAIL 13 / FIXED 18 / BLOCKED 5 / NOT_TESTED 14。T213は当時のActions未実施履歴として残す。品質009の手動文章判定はFAILのまま、conversation_004は未実施のまま。
+
+| T214 | 趣味の弱い否定と句読点なし口語質問を事実根拠にしない | pytest / 履歴・プロフィール根拠 | FIXED | Pythonレビューで「趣味ってほどじゃない/というほどではない」と「最近旅行行ったことあるの」「映画館によく行くの」「カフェを探すのが好きなの」等が肯定根拠として通る漏れを発見。修正前focused runは6 failures、修正後は**79 passed**。profile根拠・相手発言の両方を確認。曖昧な形は安全側に倒し候補不足となる場合がある。 |
+| T215 | 現行コードの構文・差分・キー形式検査 | py_compile / node / git diff / regex scan | PASS | `py_compile`対象Python、`node --check app.js`、`git diff --check`成功。最新コードcommit diffのAPIキー形式検索0件。 |
+| T216 | 最新コード・報告のGitHub Actions | Push workflow | NOT_TESTED | docs更新後にcommit/Pushし、Actionsが同じSHAを対象に成功したことを確認する。 |
+
+更新後集計: **219項目**。PASS 167 / FAIL 13 / FIXED 19 / BLOCKED 5 / NOT_TESTED 15。過去のFAIL・BLOCKEDは維持。実API品質009の手動評価はFAIL、今回のGemini追加呼び出しは0、conversation_004は品質ゲート未達のため未実施。
+
+
+## 2026-10-15 12:30 JST：年齢・勤務年数の具体度境界
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T217 | 年代の前半・後半と確認済み年齢の整合 | pytest / 21歳・28歳の架空プロフィール | FIXED | 修正前は21歳を「20代後半」、28歳を「20代前半」とする候補を安全と判定。確認済み年齢と前半/後半を照合し、20〜24歳を前半、25〜29歳を後半として検証。修正後4ケース成功。日本語の年代表現すべてを保証するものではない。 |
+| T218 | 勤務年数の完全一致と単位整合 | pytest / 架空の職歴情報 | FIXED | 修正前は確認済み「15年」が「5年」や「5年目」を支えた。数字の部分一致を廃止し、数値と「年／年間／年目」を照合。修正後4ケース成功。 |
+| T219 | 最新事実境界修正を含む全pytest | Windows / pytest | PASS | 2026-10-15 12:28 JST、最新作業ツリーで **583 passed in 83.39s**。Firefox UIテストを含む。Gemini実API呼び出し0。 |
+| T220 | Python/JavaScript構文・差分・秘密形式検査 | `py_compile`、`node --check app.js`、`git diff --check`、変更内容の秘密形式スキャン | PASS | 2026-10-15 12:29 JST、全コマンド成功。変更対象の秘密形式一致0件。 |
+| T221 | Firefox UI単独実行 | Selenium Firefox / `tests/test_ui_firefox.py` | PASS | 2026-10-15 12:31 JST、**6 passed in 81.18s**。Firefoxのみを使用。Chromeは使用していない。 |
+| T222 | 最新コードのGitHub Actions | Push workflow / 最新PR HEAD | NOT_TESTED | コード・報告をcommit/push後、同一SHAの実行を確認する。 |
+
+この追記直前の表には216個のID行があり、説明文の旧集計219件と3件の差があった。履歴は保持し、今回以降のID行集計を基準とする。現在222 ID行: PASS168 / FAIL13 / FIXED21 / BLOCKED5 / NOT_TESTED15。品質009実出力の手動判定FAILを維持し、Gemini実通信0回、conversation_004未実施。
+
+
+## 2026-10-15 12:45 JST以降：勤務年数の範囲と安全候補の保持
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T227 | 確認済み勤務年数と「以上／未満」等の一致 | pytest / 架空の職歴5年 | FIXED | 修正前、確認済み「5年」に対する「5年未満」「5年以上」が通る3ケースを再現。修正後は一致する範囲だけ許可し、範囲付きの質問文は本人事実として誤検出しない。関連13ケースを通過。 |
+| T228 | 全pytest・Firefox UIを含むスナップショット | Windows / pytest | PASS | 2026-10-15 12:45 JST、**612 passed in 96.69s**。ただし、後続の安全候補併合変更より前の作業ツリーを対象とする。最新変更を含む全体再実行は時間制約により未実施。 |
+| T229 | 勤続範囲とカフェ嗜好から場所探索嗜好への拡張防止 | pytest focused suite | PASS | **19 passed**。5年/5年以上/5年未満の一致・矛盾、質問形、年目区別、および「カフェ巡りが好き」だけでは「静かな場所を探すのが好き」を支えない対照を含む。 |
+| T230 | 誘い候補の再生成後も安全候補を併合 | pytest / 2応答のGeminiモック | PASS | 修正前、1回目の安全1案へ置換し2回目の安全中立案を失うことを再現。修正後、各回で独立に通過した案を重複除去して保持。句読点違反の誘い案は除外し、指定数未満なら不足を通知。関連12ケース通過。 |
+| T231 | 最新差分の構文・空白・秘密形式検査 | `py_compile` / `node --check` / `git diff --check` / 変更差分スキャン | PASS | 2026-10-15 12:53 JST、Python/JavaScript構文、差分検査成功。変更差分のAPIキー形式一致0件。GitのLF/CRLF警告は改行設定に関するもので、差分検査は成功。 |
+
+現在ID行231件。暫定集計: PASS176 / FAIL13 / FIXED23 / BLOCKED5 / NOT_TESTED14。T228の612件は候補併合変更を含まない。Gemini実API呼び出し0、quality_checks_009の生成品質FAILは継続、conversation_004および新会話HTMLは未実施。
+
+
+## 2026-10-15 12:37 JST：プロフィール具体度・肯定節・頻度の独立監査
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T223 | 年齢、職歴、映画/読書経験、カフェ頻度、ジャンル範囲、接続助詞「し」の根拠境界 | read-only監査 + pytest回帰 | FIXED | 監査で、20代だけの入力から前半/後半を推測、数値型のプロフィールを見落とす、最近観た映画/読んだ本の感想、月頻度、ジャンル情報から映画全般の好みへの拡張、肯定節と否定節を結ぶ「し」のスコープ不良を再現。全項目を固定回帰で修正。 |
+| T224 | 新規境界と安全な対照ケース | pytest focused suite | PASS | 年齢・勤務年数・最近の経験・カフェ頻度・ジャンル・肯定節の**20 passed**。数字型、年/年間の同等な期間、年目の区別、確認済み頻度の対照を含む。 |
+| T225 | 最新コードの全pytestとFirefox UI | Windows / pytest | PASS | 2026-10-15 12:37 JST、**599 passed in 82.63s**。Firefox UIテストを含む。 |
+| T226 | 最新コードの構文・差分・秘密形式検査 | Python compile、Node構文、git diff、秘密形式スキャン | PASS | Python/JavaScript構文と差分検査成功。APIキー形式の一致0件。 |
+
+T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計は226項目: PASS172 / FAIL13 / FIXED22 / BLOCKED5 / NOT_TESTED14。過去の品質009実出力FAILを保持。今回の実Gemini呼び出し0。conversation_004は指示どおり未実施。最新SHAのGitHub Actions T222は未テスト。

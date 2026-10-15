@@ -1009,6 +1009,75 @@ def test_prohibited_invite_is_filtered_while_safe_candidates_remain(client, monk
     assert len(prompts) == 1
 
 
+def test_invite_repair_keeps_safe_candidates_from_both_attempts(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空みな")
+    c.put("/api/profile", json={
+        "content": json.dumps({"facts": {
+            "hobbies": ["カフェ巡り"], "cafe_preferences": "落ち着いたお店が好き",
+        }}, ensure_ascii=False),
+    })
+    for role, body in [
+        ("them", "カフェ好きですか？"),
+        ("me", "カフェ巡りが好きです！"),
+        ("them", "落ち着いたカフェも気になります！"),
+    ]:
+        c.post(f"/api/matches/{mid}/messages", json={"role": role, "body": body})
+
+    def payload(recommended, alternatives):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": {"label": "自然", "text": recommended},
+            "alternatives": [{"label": f"別案{i}", "text": text} for i, text in enumerate(alternatives)],
+            "reason": "自然なカフェ会話", "strategy": "相手の関心に合わせる",
+            "conversation_stage": "Stage 4", "invite_decision": "invite_gently",
+            "decision_reason": "相手からカフェへの関心と質問がある",
+            "next_action": "無理のない誘いを検討する",
+        }
+
+    responses = [
+        payload("カフェの話もっと聞いてみたいです！", [
+            "カフェの話もっと聞いてみたいです！",
+            "カフェの話もっと聞いてみたいです！",
+        ]),
+        payload("落ち着いたカフェいいですね！", [
+            "おすすめのお店聞いてみたいです！",
+            "よかったら今度一緒にカフェに行きませんか、楽しそうです！",
+        ]),
+    ]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["recommended"] is not None, body
+    candidates = [body["recommended"], *body["alternatives"]]
+    texts = [candidate["text"] for candidate in candidates]
+    assert len(prompts) == 2
+    assert len(texts) == body["available_candidate_count"] >= 2, body
+    assert "カフェの話もっと聞いてみたいです！" in texts
+    assert any(text in texts for text in (
+        "落ち着いたカフェいいですね！",
+        "おすすめのお店聞いてみたいです！",
+    )), texts
+    assert all("一緒にカフェに行きませんか" not in text for text in texts)
+    assert body["candidate_notice"]
+    if len(texts) < 3:
+        assert f"表示できる候補は{len(texts)}案" in body["candidate_notice"]
+
+
 def test_clear_partner_unease_overrides_incorrect_model_invite_decision(client, monkeypatch):
     from google import genai
 
@@ -2415,6 +2484,341 @@ def test_connective_hobby_negation_is_not_partner_positive_evidence(client):
 
     assert "場所探し" in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="相手の接続形否定", text="カフェを探すのが好きなんですね！")
+    ], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"hobbies": "映画は好きではないけど映画館で観るのは好き"}, "映画が好きです！", "映画"),
+    ({"hobbies": "旅行は好きではないけど旅先のカフェ探しは好き"}, "旅行が好きです！", "旅行"),
+    ({"hobbies": "旅行は好きじゃないですが旅の計画は好きです"}, "旅行が好きです！", "旅行"),
+    ({"hobbies": "カフェは好きではないけどカフェで友達と話すのは好き"}, "カフェが好きです！", "カフェ"),
+    ({"hobbies": "本はあまり読まないですが本屋に行くのは好き"}, "読書が好きです！", "読書"),
+])
+def test_contrast_cannot_broaden_affirmed_aspect_into_general_preference(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="否定された広い嗜好", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"favorite_movie_genres": "ミステリー"}, "ミステリー映画が好きです！", "映画"),
+    ({"favorite_book_genres": "ミステリー"}, "ミステリー小説が好きです！", "読書"),
+])
+def test_explicit_genre_fact_supports_specific_genre_claim_without_broadening(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済みの具体ジャンル", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("facts", "claim", "topic"), [
+    ({"favorite_movie_genres": "ミステリー"}, "映画全般が好きです！", "映画"),
+    ({"favorite_book_genres": "ミステリー"}, "読書が好きです！", "読書"),
+])
+def test_specific_genre_does_not_support_broad_preference_claim(client, facts, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="広すぎる好み", text=claim)
+    ], context)
+
+
+def test_repeated_invite_mismatch_preserves_neutral_safe_candidates(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近カフェに行きました！"})
+
+    response_data = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然な返答", "text": "カフェいいですね！"},
+        "alternatives": [
+            {"label": "話を広げる", "text": "どんな雰囲気のお店だったんですか？"},
+            {"label": "不一致の誘い", "text": "よかったら今度一緒に行きませんか？"},
+        ],
+        "reason": "会話を続ける", "strategy": "相手の話を聞く", "conversation_stage": "Stage 2",
+        "invite_decision": "do_not_invite", "decision_reason": "まだ会話の初期", "next_action": "話題を続ける",
+    }
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(response_data, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2, "count": 3})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert len(candidates) == 2
+    assert all("一緒に行きませんか" not in item["text"] for item in candidates)
+    assert body["requested_candidate_count"] == 3
+    assert body["available_candidate_count"] == 2
+    assert "安全確認後に表示できる候補は2案" in body["candidate_notice"]
+
+
+def test_when_no_candidates_are_safe_report_zero_and_reason(client):
+    _, backend = client
+    model = backend.SuggestionsV2.model_validate({
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "誘い1", "text": "よかったら今度一緒にご飯に行きませんか？"},
+        "alternatives": [
+            {"label": "誘い2", "text": "今度一緒にカフェへ行きませんか？"},
+            {"label": "誘い3", "text": "よかったら会いませんか？"},
+        ],
+        "reason": "", "strategy": "", "conversation_stage": "Stage 1",
+        "invite_decision": "do_not_invite", "decision_reason": "まだ早い", "next_action": "会話を続ける",
+    })
+    result = backend.filter_safe_candidates(model, 3, {"history": [], "other": {}, "my_profile": {"facts": {}}})
+    assert result["generation_blocked"] is True
+    assert result["available_candidate_count"] == 0
+    assert "0案" in result["candidate_notice"]
+    assert "会話方針に合わない誘い候補は除外しました" in result["candidate_notice"]
+
+
+@pytest.mark.parametrize(("question", "topic"), [
+    ("何歳ですか？", "年齢"),
+    ("年齢はいくつですか？", "年齢"),
+    ("普段はどんなお仕事をされているんですか？", "本人情報"),
+    ("お仕事は何をされていますか？", "本人情報"),
+])
+def test_personal_age_and_occupation_questions_are_classified(client, question, topic):
+    _, backend = client
+    assert backend._topic_for_personal_question(question) == topic
+
+
+def test_known_occupation_does_not_trigger_user_question(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "食品の商品企画"}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_is_verified("本人情報", context, "普段はどんなお仕事をされていますか？")
+
+
+def test_known_occupation_does_not_answer_unverified_tenure_question(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "食品の商品企画"}},
+        "ephemeral_user_answers": [],
+    }
+    assert not backend._topic_is_verified("本人情報", context, "何年くらい働いていますか？")
+
+
+def test_known_occupation_does_not_answer_unverified_employer_question(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "食品の商品企画"}},
+        "ephemeral_user_answers": [],
+    }
+    assert not backend._topic_is_verified("本人情報", context, "どこの会社で働いていますか？")
+    context["my_profile"]["facts"]["employer"] = "架空フーズ"
+    assert backend._topic_is_verified("本人情報", context, "どこの会社で働いていますか？")
+
+
+def test_unverified_age_and_occupation_claims_are_rejected(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "食品の商品企画"}},
+        "ephemeral_user_answers": [],
+    }
+    candidates = [
+        backend.Candidate(label="年齢捏造", text="自分は28歳です！"),
+        backend.Candidate(label="職業捏造", text="自分は営業職で5年働いています！"),
+        backend.Candidate(label="既知職業と未確認年数", text="自分は食品の商品企画で5年働いています！"),
+        backend.Candidate(label="職業の言い換え", text="自分は食品メーカーで商品企画をしています！"),
+        backend.Candidate(label="年齢の言い換え", text="自分は20代です！"),
+        backend.Candidate(label="年齢の推移", text="自分は今年で30になります！"),
+        backend.Candidate(label="年齢の曖昧表現", text="自分はアラサーです！"),
+        backend.Candidate(label="年齢の別の曖昧表現", text="私はアラフォーです！"),
+        backend.Candidate(label="年数の別表現", text="自分は5年目の会社員です！"),
+        backend.Candidate(label="年数と役割", text="会社員として5年働いています！"),
+    ]
+    unsupported = backend.unsupported_personal_claim_topics(candidates, context)
+    assert "年齢" in unsupported
+    assert "職業" in unsupported
+    for candidate in candidates:
+        topics = backend.unsupported_personal_claim_topics([candidate], context)
+        expected_topic = "年齢" if "年齢" in candidate.label else "職業"
+        assert expected_topic in topics, candidate.label
+
+
+@pytest.mark.parametrize(("age", "claim", "supported"), [
+    ("21歳", "自分は20代前半です！", True),
+    ("21歳", "自分は20代後半です！", False),
+    ("28歳", "自分は20代後半です！", True),
+    ("28歳", "自分は20代前半です！", False),
+])
+def test_age_decade_subrange_must_match_confirmed_age(client, age, claim, supported):
+    _, backend = client
+    context = {"my_profile": {"facts": {"age": age}}, "ephemeral_user_answers": []}
+    topics = backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="年代と前後半", text=claim)
+    ], context)
+    assert ("年齢" not in topics) is supported
+
+
+@pytest.mark.parametrize(("confirmed_tenure", "claim", "supported"), [
+    ("15年", "会社員として15年働いています！", True),
+    ("15年", "会社員として5年働いています！", False),
+    ("5年目", "自分は5年目の会社員です！", True),
+    ("15年目", "自分は5年目の会社員です！", False),
+])
+def test_work_tenure_requires_exact_value_and_claim_type(client, confirmed_tenure, claim, supported):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "会社員", "work_experience_years": confirmed_tenure}},
+        "ephemeral_user_answers": [],
+    }
+    topics = backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="勤務年数", text=claim)
+    ], context)
+    assert ("職業" not in topics) is supported
+
+
+@pytest.mark.parametrize(("confirmed_tenure", "claim", "supported"), [
+    ("5年", "勤続5年未満です！", False),
+    ("5年", "5年以上の勤務経験があります！", False),
+    ("5年", "5年未満の勤務経験があります！", False),
+    ("5年以上", "5年以上の勤務経験があります！", True),
+    ("5年未満", "勤続5年未満です！", True),
+    ("5年", "勤続5年ですか？", True),
+    ("5年", "勤続5年未満ですか？", True),
+    ("5年", "勤続5年以上ですか？", True),
+    ("5年", "5年以上の勤務経験がありますか？", True),
+])
+def test_work_tenure_claim_qualifier_must_match_confirmed_fact(
+    client, confirmed_tenure, claim, supported
+):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "会社員", "work_experience_years": confirmed_tenure}},
+        "ephemeral_user_answers": [],
+    }
+    topics = backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="勤務年数の範囲", text=claim)
+    ], context)
+    assert ("職業" not in topics) is supported
+
+
+@pytest.mark.parametrize(("age_fact", "claim", "supported"), [
+    ("20代後半", "自分は20代後半です！", True),
+    ("20代後半", "自分は20代前半です！", False),
+    ("20代", "自分は20代前半です！", False),
+    (28, "自分は20代後半です！", True),
+    ("28", "自分は20代後半です！", True),
+])
+def test_age_profile_formats_preserve_decade_precision(client, age_fact, claim, supported):
+    _, backend = client
+    context = {"my_profile": {"facts": {"age": age_fact}}, "ephemeral_user_answers": []}
+    topics = backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="年代形式", text=claim)
+    ], context)
+    assert ("年齢" not in topics) is supported
+
+
+@pytest.mark.parametrize(("tenure", "claim", "supported"), [
+    (5, "会社員として5年働いています！", True),
+    ("5年", "会社員として5年間働いています！", True),
+    ("5年目", "会社員として5年間働いています！", False),
+])
+def test_numeric_and_elapsed_work_tenure_are_checked_by_full_value(client, tenure, claim, supported):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"occupation": "会社員", "work_experience_years": tenure}},
+        "ephemeral_user_answers": [],
+    }
+    topics = backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="勤務年数", text=claim)
+    ], context)
+    assert ("職業" not in topics) is supported
+
+
+@pytest.mark.parametrize(("claim", "topic"), [
+    ("最近観た映画が面白かったです！", "映画"),
+    ("最近読んだ本が面白かったです！", "読書"),
+])
+def test_unconfirmed_recent_movie_or_book_opinion_is_rejected(client, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の最近の経験", text=claim)
+    ], context)
+
+
+def test_cafe_hobby_does_not_support_unconfirmed_monthly_frequency(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["カフェ巡り"]}}, "ephemeral_user_answers": []}
+    assert "カフェ" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の頻度", text="カフェには月に何度か行きます！")
+    ], context)
+
+
+def test_confirmed_monthly_cafe_frequency_supports_matching_claim(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"cafe_frequency": "月に何度かカフェに行く"}}, "ephemeral_user_answers": []}
+    assert "カフェ" not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="一致する頻度", text="カフェには月に何度か行きます！")
+    ], context)
+
+
+def test_movie_genre_does_not_support_broad_movie_preference(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"favorite_movie_genres": "洋画"}}, "ephemeral_user_answers": []}
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="ジャンルから広い嗜好へ拡張", text="映画が好きです！")
+    ], context)
+
+
+@pytest.mark.parametrize(("fact_key", "fact", "claim", "topic"), [
+    ("movie_preferences", "映画は好きですし映画館は苦手です", "映画は好きです！", "映画"),
+    ("hobbies", "読書は好きですし小説は苦手です", "読書が好きです！", "読書"),
+    ("hobbies", "カフェ巡りは好きですし静かなカフェは苦手です", "カフェ巡りが好きです！", "カフェ"),
+])
+def test_positive_fact_joined_to_negative_with_shi_remains_grounded(client, fact_key, fact, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {fact_key: fact}}, "ephemeral_user_answers": []}
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="明示された肯定節", text=claim)
+    ], context)
+
+
+def test_partner_directed_recent_book_question_is_not_rejected_as_self_claim(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="相手への質問", text="最近読んだ本が面白かったですか？")
+    ], context) == []
+
+
+@pytest.mark.parametrize("claim", [
+    "営業として5年勤務しています！",
+    "勤続5年です！",
+    "5年の勤務経験があります！",
+])
+def test_unconfirmed_tenure_assertion_shapes_are_rejected(client, claim):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    assert "職業" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の勤務年数", text=claim)
+    ], context)
+
+
+def test_explicit_positive_genre_does_not_support_negative_preference_claim(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"favorite_movie_genres": "ミステリー"}}, "ephemeral_user_answers": []}
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の否定", text="ミステリー映画は好きではないです")
     ], context)
 
 
