@@ -1090,3 +1090,5 @@ focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.
 品質009の`invite_gently`判断に対応する安全な誘い文が、初回候補にも許可された1回の再生成にも存在しない場合、方針だけが誘い継続を示す不整合を修正した。安全候補は維持し、サーバー側の誘い準備判定に応じて`consider_invite`または`continue_conversation`へ降格する。修正前回帰テストでFAILを確認し、準備済み・未準備の双方を確認したfocused suite **4 passed**。最新ローカル全pytest **932 passed in 117.81s**（Firefox UI込み）。Python/JavaScript構文とdiff検査も成功。
 
 Gemini実APIは0回。修正SHAへのGitHub Actionsは未確認。保存済みQUALITY009の文章自然さ・意味的候補多様性の手動FAILは未解決であり、総合判定は**NO-GO**。Test Matrixは313項目: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。PR #4はDraft・未マージを維持する。
+
+修正SHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38729897573)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38729902486)がsuccessし、対象SHAを確認した。Actionsではpytest、Firefox確認、JavaScript構文検査が成功。T314 PASSを追加し、現在のMatrixは314項目: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。PR #4はOPEN/Draftで未マージ。

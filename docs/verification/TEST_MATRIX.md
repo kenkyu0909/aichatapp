@@ -688,3 +688,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T313 | invite_gently後に安全な誘い候補が生成されない場合の方針整合性 | 架空会話を使うFastAPIバックエンドpytest（準備済み/未準備の両条件） | FIXED | Geminiが`invite_gently`を返しても、許可された再生成後に安全な誘い候補がない場合は方針を安全候補へ合わせて降格する。誘い準備済みなら`consider_invite`、未準備なら`continue_conversation`。安全な既存候補は保持。修正前回帰FAIL、focused tests **4 passed**、全pytest **932 passed in 117.81s**（Firefox UI込み）。Gemini実通信0回。GitHub Actionsはこの修正SHAでは未確認。|
 
 最新ID行: 313。累計: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+
+| T314 | 誘い方針の安全候補同期修正に対する最新HEADのGitHub Actions | Push/PR Actionsのhead SHA・ジョブ結果を照合 | PASS | SHA `a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`のPush [38729897573](https://github.com/kenkyu0909/aichatapp/actions/runs/38729897573)・PR [38729902486](https://github.com/kenkyu0909/aichatapp/actions/runs/38729902486)がsuccess。backend pytest、Firefox確認、JavaScript構文検査、Artifactアップロードに成功。PR #4はOPEN/Draft、head SHA一致。|
+
+最新ID行: 314。累計: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。

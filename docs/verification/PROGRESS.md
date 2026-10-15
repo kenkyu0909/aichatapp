@@ -952,3 +952,10 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 今回Gemini実APIは**0回**。T313をFIXEDとして追加し、Test Matrixは313項目: PASS224 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成の自然さ・意味的候補差FAILは未解決のまま。総合NO-GO。
 - 先行コードSHA `5493781f63af31b93c7b8dd39f92ae707fbd266c` のPush Actions [38728515711](https://github.com/kenkyu0909/aichatapp/actions/runs/38728515711)・PR Actions [38728519775](https://github.com/kenkyu0909/aichatapp/actions/runs/38728519775)はsuccessだったが、T313の未コミット変更を含まない。今回の差分と最新Actionsはこれから反映・確認する。
 - 次: docsを同期して選択的にコミット・Pushし、最新SHAのPush/PR ActionsとPR #4のDraft状態を検証する。その後は保存済みQUALITY009の自然さ/意味的候補方針差をオフラインで継続する。指示用ブランチは15〜20分内に再取得する。conversation_004・新規会話HTMLと実Gemini通信は行わない。未追跡ユーザー指示3ファイルは保持・非ステージ。
+
+### 2026-10-15 20:49 JST 継続チェックポイント：最新SHAのCI成功
+
+- 修正・テスト・報告を`a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`でPushした。Push Actions [38729897573](https://github.com/kenkyu0909/aichatapp/actions/runs/38729897573)とPR Actions [38729902486](https://github.com/kenkyu0909/aichatapp/actions/runs/38729902486)はともにsuccess。対象head SHA一致。Backend tests、Firefox確認、JS構文検査、Artifact保存が完了。
+- ローカル全pytest **932 passed in 117.81s**、focused invite tests **4 passed**。Gemini API0回。T313の修正は最新Actionsで確認済み。CIのNode 20/Ubuntu runner移行に関する警告はActionsログにあるが、ジョブ成功。
+- T314をPASSとして追加。Matrixは314項目: PASS225 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質自然さ・意味的候補差FAILは未解決、総合NO-GO。
+- PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、head`a8ceaa1d5d7cb7948186812c627abc5ed930fdf7`、未マージ。今回のActions記録は未コミット。次はそれをPushし、保存済み品質009で未解決の反復・候補方針差をオフライン監査する。conversation_004/新規会話HTMLは行わず、Chrome/Gemini APIも使用しない。
