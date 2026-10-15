@@ -4793,6 +4793,215 @@ def test_purchase_answer_does_not_confirm_unstated_research_details_or_personali
     assert backend.unsupported_personal_claim_topics([candidates[2]], context) == []
 
 
+def test_saved_quality009_purchase_answer_does_not_infer_personality(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "気になる新作を見つけたらすぐ買うタイプですか？"}],
+        "my_profile": {"facts": {
+            "name": "架空の水野けい", "age": 29, "region": "東京都練馬区",
+            "occupation": "建築会社の事務", "hobbies": ["読書", "カフェ巡り"],
+        }},
+        "ephemeral_user_answers": [{
+            "question": "気になる新作を見つけたらすぐ買うタイプですか？",
+            "answer": "気になった新作は少し調べてから買うことが多いです",
+        }],
+    }
+    response = backend.SuggestionsV2(
+        needs_user_info=False,
+        recommended=backend.Candidate(
+            label="共感と性格推定",
+            text="気になる新作を見つけたときは少し調べてから買うことが多いです\nけっこう慎重なほうかもしれません",
+            reply_move="grounded_share",
+        ),
+        alternatives=[backend.Candidate(
+            label="確認済み回答の言い換え",
+            text="すぐには買わずに少し調べてから選ぶことが多いです",
+            reply_move="grounded_share",
+        )],
+        reason="架空の本人回答を使用",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+    )
+
+    filtered = backend.filter_safe_candidates(response, 3, context)
+
+    assert filtered["recommended"]["label"] == "確認済み回答の言い換え"
+    assert filtered["available_candidate_count"] == 1
+    assert any(
+        item["label"] == "共感と性格推定" and "未確認の本人事実" in item["reasons"]
+        for item in filtered["candidate_rejections"]
+    )
+    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+
+
+def test_shopping_personality_claim_needs_explicit_positive_profile_fact(client):
+    _, backend = client
+    candidate_text = "けっこう慎重なほうかもしれません"
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "新作を見つけたらすぐ買うタイプですか？",
+            "answer": "少し調べてから買うことが多いです",
+        }],
+    }
+
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+    context["my_profile"]["facts"]["shopping_habits"] = "買い物では慎重なほうです"
+    assert backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+    context["my_profile"]["facts"]["shopping_habits"] = "買い物では慎重ではありません"
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+    assert backend._shopping_personality_claim_is_verified("慎重なほうですか？", context)
+
+    context["my_profile"]["facts"]["shopping_habits"] = "買い物では慎重なほうです"
+    context["ephemeral_user_answers"][0]["answer"] = "気になったらすぐ買うことが多いです"
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+    context["my_profile"]["facts"] = {}
+    context["history"] = [{"role": "me", "body": "私は慎重なほうです"}]
+    context["ephemeral_user_answers"][0]["answer"] = "少し調べてから買うことが多いです"
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+
+@pytest.mark.parametrize("profile_value", [
+    "買い物では慎重なほうではありません",
+    "買い物では慎重なタイプではありません",
+    "買い物では慎重な性格とは言えません",
+    "買い物では慎重なタイプではなく衝動的です",
+    "買い物では慎重な方とは言いにくいです",
+    "買い物では慎重なほうでもないです",
+    "買い物では慎重なタイプでもありません",
+])
+def test_negative_shopping_personality_fact_does_not_ground_positive_label(client, profile_value):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"shopping_habits": profile_value}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._shopping_personality_claim_is_verified(
+        "けっこう慎重なほうかもしれません", context
+    )
+
+
+def test_unrelated_profile_field_does_not_ground_shopping_personality(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {
+            "occupation": "仕事では慎重に確認します",
+            "shopping_habits": "買う前に少し調べます",
+        }},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._shopping_personality_claim_is_verified(
+        "けっこう慎重なほうかもしれません", context
+    )
+
+
+def test_negated_impulsive_shopping_does_not_contradict_cautious_answer(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"shopping_habits": "買い物では慎重なほうです。衝動買いはしません"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._shopping_personality_claim_is_verified(
+        "けっこう慎重なほうかもしれません", context
+    )
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "買い物では慎重です",
+    "買い物では衝動的です",
+    "買い物では慎重派です",
+    "買い物では慎重派！",
+    "買い物では慎重なほう！",
+    "買い物では慎重",
+])
+def test_bare_shopping_personality_claim_requires_profile_evidence(client, candidate_text):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "買い物では慎重なほうではないです",
+    "買い物では慎重派ではありません",
+])
+def test_candidate_shopping_trait_negation_must_match_confirmed_polarity(client, candidate_text):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"shopping_habits": "買い物では慎重なほうです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._shopping_personality_claim_is_verified(candidate_text, context)
+
+
+def test_candidate_shopping_trait_negation_matches_explicit_negative_fact(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"shopping_habits": "買い物では慎重なほうではないです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._shopping_personality_claim_is_verified(
+        "買い物では慎重なほうではないです", context
+    )
+
+
+def test_conflicting_confirmed_shopping_traits_fail_closed(client):
+    _, backend = client
+    contexts = [
+        {
+            "my_profile": {"facts": {"shopping_habits": "慎重なほうです"}},
+            "ephemeral_user_answers": [{
+                "question": "買い物では慎重なほうですか？",
+                "answer": "慎重なほうではありません",
+            }],
+        },
+        {
+            "my_profile": {"facts": {
+                "shopping_habits": "買い物では慎重なほうです。慎重なタイプではないです",
+            }},
+            "ephemeral_user_answers": [],
+        },
+        {
+            "my_profile": {"facts": {
+                "shopping_habits": "買い物では慎重なほうですし慎重なタイプではないです",
+            }},
+            "ephemeral_user_answers": [],
+        },
+    ]
+
+    for context in contexts:
+        assert not backend._shopping_personality_claim_is_verified(
+            "買い物では慎重なほうです", context
+        )
+        assert not backend._shopping_personality_claim_is_verified(
+            "買い物では慎重なほうではありません", context
+        )
+
+
+@pytest.mark.parametrize("context", [
+    {"my_profile": {"facts": {"shopping_habits": "慎重なほうです"}}, "ephemeral_user_answers": []},
+    {"my_profile": {"facts": {}}, "ephemeral_user_answers": [{
+        "question": "新作を見つけたらすぐ買うタイプですか？",
+        "answer": "慎重なほうです",
+    }]},
+])
+def test_shopping_fact_scope_comes_from_profile_field_or_question(client, context):
+    _, backend = client
+
+    assert backend._shopping_personality_claim_is_verified(
+        "買い物では慎重なほうです", context
+    )
+
+
 def test_partner_shopping_detail_can_be_acknowledged_without_becoming_user_fact(client):
     _, backend = client
     context = {

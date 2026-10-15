@@ -34,6 +34,9 @@ def test_saved_quality009_live_candidates_replay_through_current_safety_filter(t
             "代替案1": "相手からの直接質問に未回答",
             "代替案2": "相手からの直接質問に未回答",
         },
+        "answered_purchase_fact": {
+            "調べてから買う派として答える": "未確認の本人事実",
+        },
         "known_partner_fact": {"代替2": "未確認の本人事実"},
         "respect_decline_after_fix": {"距離を置いた共感": "相手の不安を軽く扱う表現"},
     }

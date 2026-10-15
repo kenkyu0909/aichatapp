@@ -249,6 +249,14 @@ PURCHASE_NEGATION_PATTERN = re.compile(
     r"(?:衝動買い|即決(?:購入)?|即買い|すぐ.{0,4}買|迷わず買).{0,14}(?:避け|控え|しません|しない|しないです|買わない)|"
     r"すぐには買わない|衝動買いはしない|即決はしない|衝動買いを避け(?:ています|ている)|衝動買いは控え(?:ています|ている)"
 )
+SHOPPING_PERSONALITY_CLAIM_PATTERN = re.compile(
+    r"(?P<trait>慎重|計画的|衝動的|優柔不断)(?:な|の)?"
+    r"(?:ほう|方|タイプ|性格|派)?"
+    r"(?=(?:かもしれません|です|ですね|だ(?:と思います|と思う)?|"
+    r"ではない|じゃない|ではありません|じゃありません|ではなく|じゃなく|"
+    r"でもない|でもありません|とは言え|とは言い|とは思)|"
+    r"(?=[!！?？\n笑☺️😊✨]|$))"
+)
 
 
 def invite_opportunity_ready(context: dict) -> bool:
@@ -2083,6 +2091,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             if upcoming and not any(upcoming in value for value in value_texts):
                 return False
         return True
+
     if topic in {"運動習慣", "出身地", "家族", "料理習慣"}:
         evidence_sources = [
             (clause, any(term in clause for term in PERSONAL_FACT_TOPICS[topic]))
@@ -2656,6 +2665,115 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
     )
 
 
+SHOPPING_TRAIT_NEGATION_PATTERN = re.compile(
+    r"(?:ではない(?:です|よ)?|じゃない(?:です|よ)?|ではありません|じゃありません|"
+    r"ではなく(?:て)?|じゃなく(?:て)?|でもない(?:です|よ)?|でもありません|"
+    r"(?:だ)?とは言えない|(?:だ)?とは言えません|"
+    r"(?:だ)?とは言いにくい|(?:だ)?とは言い難い|"
+    r"(?:だ)?とは思わない|(?:だ)?とは思いません|"
+    r"ではないわけではない|じゃないわけではない)"
+)
+SHOPPING_TRAIT_EVIDENCE_PATTERNS = {
+    trait: re.compile(
+        re.escape(trait) + r"(?:な|の)?(?:ほう|方|タイプ|性格|派)?"
+        + r"(?=(?:かもしれません|です|ですね|だ(?:と思います|と思う)?|"
+        r"ではない|じゃない|ではありません|じゃありません|ではなく|じゃなく|"
+        r"でもない|でもありません|とは言え|とは言い|とは思)|"
+        r"(?=[!！?？\n笑☺️😊✨]|$))"
+    )
+    for trait in ("慎重", "計画的", "衝動的", "優柔不断")
+}
+SHOPPING_TRAIT_CONTRADICTIONS = {
+    "慎重": r"(?:すぐ|即|衝動|迷わず).{0,8}(?:買|購入)|(?:買|購入).{0,8}(?:すぐ|即|衝動|迷わず)",
+    "計画的": r"(?:すぐ|即|衝動|迷わず).{0,8}(?:買|購入)|(?:買|購入).{0,8}(?:すぐ|即|衝動|迷わず)",
+    "衝動的": r"(?:少し|ちょっと|時間をかけて).{0,8}(?:調べ|比較|考え|悩ん)|(?:調べ|比較|考え|悩ん).{0,8}てから(?:買|購入)",
+    "優柔不断": r"(?:すぐ|即|迷わず).{0,8}(?:決め|選|買)",
+}
+
+
+def _shopping_personality_fact_clauses(context: dict) -> list[str]:
+    """Collect only user-confirmed shopping facts, excluding unrelated fields/history."""
+    profile_facts = context.get("my_profile", {}).get("facts", {})
+    shopping_keys = {
+        "shopping_habits", "buying_habits", "purchase_habits",
+        "買い物の傾向", "購入傾向",
+    }
+    scoped_values = [
+        (value, "買い物の傾向として")
+        for key, value in profile_facts.items()
+        if key in shopping_keys
+    ]
+    for answer in context.get("ephemeral_user_answers", []):
+        question = answer.get("question", "")
+        if re.search(r"買い物|買う|購入|新作|商品", question) and re.search(
+            r"慎重|計画的|衝動的|優柔不断|タイプ|性格", question
+        ):
+            scoped_values.append((answer.get("answer", ""), "買い物について"))
+    clauses: list[str] = []
+    for value, provenance in scoped_values:
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            if isinstance(item, str):
+                clauses.extend(
+                    f"{provenance} {clause.strip()}"
+                    for clause in re.split(r"[。！？!?\n]+", item)
+                    if clause.strip()
+                )
+    return clauses
+
+
+def _shopping_trait_source_polarities(source: str, trait: str) -> set[str]:
+    """Return every polarity explicitly asserted for a shopping-scoped trait."""
+    if not re.search(r"買い物|買う|購入|新作|商品", source):
+        return set()
+    polarities: set[str] = set()
+    for evidence in SHOPPING_TRAIT_EVIDENCE_PATTERNS[trait].finditer(source):
+        remainder = source[evidence.end():evidence.end() + 24]
+        polarity = "negative" if SHOPPING_TRAIT_NEGATION_PATTERN.match(remainder) else "positive"
+        polarities.add(polarity)
+    return polarities
+
+
+def _shopping_trait_polarity(text: str, claim: re.Match[str]) -> str:
+    remainder = text[claim.end():claim.end() + 24]
+    return "negative" if SHOPPING_TRAIT_NEGATION_PATTERN.match(remainder) else "positive"
+
+
+def _shopping_trait_is_contradicted(source: str, trait: str) -> bool:
+    return bool(
+        re.search(SHOPPING_TRAIT_CONTRADICTIONS[trait], source)
+        and not _is_effectively_negative_personal_fact(source)
+        and not PURCHASE_NEGATION_PATTERN.search(source)
+    )
+
+
+def _shopping_personality_claim_is_verified(text: str, context: dict) -> bool:
+    """Require explicit, positive shopping-specific evidence for personality labels."""
+    claims = [
+        match for match in SHOPPING_PERSONALITY_CLAIM_PATTERN.finditer(text)
+        if not _candidate_claim_is_interrogative(text, match)
+    ]
+    if not claims:
+        return True
+    sources = _shopping_personality_fact_clauses(context)
+    for claim in claims:
+        trait = claim.group("trait")
+        candidate_polarity = _shopping_trait_polarity(text, claim)
+        evidence_polarities = set().union(*(
+            _shopping_trait_source_polarities(source, trait) for source in sources
+        )) if sources else set()
+        if len(evidence_polarities) > 1:
+            return False
+        if candidate_polarity not in evidence_polarities:
+            return False
+        if candidate_polarity == "positive" and any(
+            _shopping_trait_is_contradicted(source, trait)
+            for source in sources
+        ):
+            return False
+    return True
+
+
 def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict) -> list[str]:
     """Conservatively catch common first-person hobby/experience claims before display.
 
@@ -2728,6 +2846,9 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
         for topic, pattern in UNVERIFIED_PERSONAL_CLAIM_PATTERNS.items():
             # Preserve sentence boundaries for the interrogative filter. Flattening
             # punctuation here let a later question hide an earlier movie assertion.
+            if topic == "買い物" and not _shopping_personality_claim_is_verified(text, context):
+                found.append(topic)
+                continue
             claim_text = text
             matches = list(pattern.finditer(claim_text))
             matches = [match for match in matches if not _candidate_claim_is_interrogative(claim_text, match)]
