@@ -2375,6 +2375,7 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
     ("最近旅行に行ったことある", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行行ったことあるん", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行に行ってきたん", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近海外とか行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行行ったことあるか", "最近旅行に行かれたんですね！", "旅行最近"),
     ("映画館によく行くことありますか？", "映画館によく行くんですね！", "映画館頻度"),
@@ -2385,6 +2386,7 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
     ("カフェを探すのが好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェを探すのって好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェを探すの好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すの好きか", "カフェを探すのが好きなんですね！", "場所探し"),
     ("新しいお店を探すの好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行けませんでした", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けないです", "最近旅行に行かれたんですね！", "旅行最近"),
@@ -2484,9 +2486,14 @@ def test_unasserted_place_search_is_not_trusted_as_profile_fact(client, negative
     ], context)
 
 
-def test_explicit_positive_hobby_after_soft_negation_remains_trusted(client):
+@pytest.mark.parametrize("fact", [
+    "カフェを探すのは趣味ってほどでもないけど好き",
+    "カフェを探すのは趣味ではないけど好きだし嫌いじゃない",
+    "カフェを探すのは趣味ってほどでもないけど好きだし苦手じゃない",
+])
+def test_explicit_positive_hobby_after_soft_negation_remains_trusted(client, fact):
     _, backend = client
-    context = {"my_profile": {"facts": {"hobbies": ["カフェを探すのは趣味ってほどでもないけど好き"]}}}
+    context = {"my_profile": {"facts": {"hobbies": [fact]}}}
 
     assert "場所探し" not in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="後続の肯定を反映", text="カフェを探すのが好きです！")
