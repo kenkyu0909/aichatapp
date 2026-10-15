@@ -442,6 +442,21 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 
 現在ID行234件。暫定集計: PASS178 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14。T228の612件は候補併合変更を含まない。Gemini実API呼び出し0、quality_checks_009の生成品質FAILは継続、conversation_004および新会話HTMLは未実施。
 
+### 2026-10-15 14:19 JST：直接質問・頻度・誤字の再現修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T234 | カフェ頻度の表記揺れを含む根拠照合 | pytest / 「週1くらい」と確認済み頻度 | FIXED | 「月1回」根拠で「毎日」が通る既知の漏れに加え、「週1くらい」が頻度検査に入らず通る問題を修正前FAILで再現。週/月/年の数値頻度を正規化して比較し、同一頻度の対照は許可。 |
+| T235 | 分類外の本人向け直接質問と回答一致 | pytest / 得意料理・得意なこと | FIXED | 「得意料理は？」を話題そらし候補が通ることを再現。質問を本人確認へ送り、確認回答と異なる料理/技能の候補を除外。安全候補のみ残し不足を通知する既存フィルターは維持。日本語自由文全般の意味判定保証ではない。 |
+| T236 | 品質009で記録された高確度誤字 | pytest / 雰囲い | FIXED | 「どんな雰囲いのお店」「お店の雰囲い」を候補単位で除外し、正しい「雰囲気」は保持。自動置換はしない。 |
+| T237 | 今回の重点回帰 | pytest focused / frequency・直接質問・安全候補・誤字 | PASS | 最新重点ケース **29 passed**。途中の修正前FAILは履歴として維持。 |
+| T238 | バックエンド単体全体 | `python -m pytest tests/test_app.py -q` | PASS | 現行コード **634 passed in 16.51s**。 |
+| T239 | 最新差分の全pytest・Firefox UI | `python -m pytest -q` | PASS | 2026-10-15 14:21 JST、**713 passed in 98.60s**。Firefox UIを含む。Chromeは使用していない。 |
+| T240 | Python・JavaScript構文および差分検査 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 現在の差分に対して全て成功。 |
+| T241 | 最新コミットのGitHub Actions | Push workflow | NOT_TESTED | 追跡対象のみcommit/push後、同一SHAの結果を確認する。 |
+
+更新後ID行は241件: **PASS181 / FAIL13 / FIXED27 / BLOCKED5 / NOT_TESTED15**。QUALITY009の実生成文手動評価FAILは継続し、今回のGemini呼び出し0回。conversation_004と新しい会話HTMLは作成しない。
+
 
 ## 2026-10-15 12:37 JST：プロフィール具体度・肯定節・頻度の独立監査
 

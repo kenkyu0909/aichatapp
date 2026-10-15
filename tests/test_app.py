@@ -2368,6 +2368,26 @@ def test_open_vocabulary_personal_claims_require_matching_evidence(client, claim
     ], context)
 
 
+def test_confirmed_cafe_frequency_supports_matching_claim(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"cafe_frequency": "月に1回カフェに行きます"}}, "ephemeral_user_answers": []}
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="頻度を一致させた候補", text="カフェには月に1回行きます！")
+    ], context) == []
+
+
+def test_cafe_frequency_variants_are_normalized_before_evidence_comparison(client):
+    _, backend = client
+    mismatch = {"my_profile": {"facts": {"cafe_frequency": "月に1回カフェに行きます"}}, "ephemeral_user_answers": []}
+    match = {"my_profile": {"facts": {"cafe_frequency": "週に1回カフェに行きます"}}, "ephemeral_user_answers": []}
+
+    candidate = backend.Candidate(label="頻度を比較", text="カフェに週1くらい行きます！")
+
+    assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], mismatch)
+    assert backend.unsupported_personal_claim_topics([candidate], match) == []
+
+
 @pytest.mark.parametrize(("claim", "facts"), [
     ("29歳です！", {"age": 29}),
     ("鎌倉に住んでます！", {"region": "鎌倉"}),
@@ -4585,3 +4605,116 @@ def test_supported_photo_formats_are_accepted(client, fmt, mime, extension):
     assert response.status_code == 200
     stored = c.get("/api/matches").json()[0]["photo"]
     assert stored.endswith("." + extension)
+
+
+@pytest.mark.parametrize("bad_text", [
+    "どんな雰囲いのお店によく行くんですか？",
+    "お店の雰囲いが落ち着きます！",
+])
+def test_high_confidence_japanese_typo_is_rejected_without_rewriting(client, bad_text):
+    _, backend = client
+    bad = backend.Candidate(label="誤字あり", text=bad_text)
+    good = backend.Candidate(label="正しい表記", text="どんな雰囲気のお店によく行くんですか？")
+
+    assert "明らかな誤字" in backend._candidate_rejection_reasons(bad, {})
+    assert "明らかな誤字" not in backend._candidate_rejection_reasons(good, {})
+
+
+def test_typo_filter_keeps_safe_candidate_and_reports_shortage(client):
+    _, backend = client
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="誤字あり", text="どんな雰囲いのお店によく行くんですか？"),
+        alternatives=[backend.Candidate(label="安全", text="最近はどんなカフェに行きましたか？")],
+        reason="会話を広げる",
+        strategy="最近のカフェの話を聞く",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="相手の話題を続ける",
+        next_action="最近の経験を聞く",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 2, {})
+
+    assert filtered["recommended"]["label"] == "安全"
+    assert filtered["available_candidate_count"] == 1
+    assert "不足分" in filtered["candidate_notice"]
+    assert any("明らかな誤字" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
+def test_direct_question_filter_keeps_answer_and_rejects_topic_evasion(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="回答", text="最近は青い灯台を観ました！"),
+        alternatives=[
+            backend.Candidate(label="話題すり替え", text="映画館へ行くのが好きなんですか？"),
+            backend.Candidate(label="別すり替え", text="映画はときどき観るんですか？"),
+        ],
+        reason="確認済みの回答を使う",
+        strategy="直接質問に答える",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="相手の質問に答える",
+        next_action="映画の話を続ける",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 3, context)
+
+    assert filtered["recommended"]["text"] == "最近は青い灯台を観ました！"
+    assert filtered["available_candidate_count"] == 1
+    assert "1案" in filtered["candidate_notice"]
+    assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
+@pytest.mark.parametrize(("question", "evasive_reply"), [
+    ("好きな食べ物は何ですか？", "そういう話って楽しいですね！\n最近はどんな映画を観ますか？"),
+    ("好きなタイプはどんな人ですか？", "そういう話って楽しいですね！\n最近はどんな映画を観ますか？"),
+])
+def test_unverified_personal_direct_question_rejects_topic_evasion(client, question, evasive_reply):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="話題すり替え", text=evasive_reply)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(("question", "answer", "evasive"), [
+    ("得意料理はありますか？", "カレーを作るのが得意です", "パスタを作るのが得意です！"),
+    ("何か得意なことありますか？", "データ整理が得意です", "文章を書くのが得意です！"),
+])
+def test_unclassified_personal_direct_question_requires_matching_user_answer(client, question, answer, evasive):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(backend.Candidate(label="未確認", text=evasive), context)
+
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    grounded = backend.Candidate(label="回答", text=answer + "！")
+    mismatched = backend.Candidate(label="別の回答", text=evasive)
+    assert backend._answers_verified_partner_question(grounded, context)
+    assert not backend._answers_verified_partner_question(mismatched, context)

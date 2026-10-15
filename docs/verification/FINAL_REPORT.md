@@ -818,3 +818,11 @@ Gemini実API通信は0回。QUALITY009の実文章品質FAILは維持し、conve
 - PR #4はOPEN/Draft、head SHA一致。Test MatrixはID行234件（PASS178 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。
 - 勤続限定詞の修正後focused suite 21 passed。作業ツリーから追加したGemini API呼び出し0。QUALITY009の実生成品質FAILは残るためNO-GO、conversation_004未実施。
 - 引継ぎ: 実生成品質の修正には後続の許可済みAPI評価が必要。安全な候補を残して不足を通知する方針を維持する。
+
+### 2026-10-15 14:19 JST 追記
+
+最新オフライン修正で、(1) カフェ訪問頻度の表記揺れを含むプロフィール照合、(2) 分類外の本人向け直接質問を本人確認へ回し回答内容と候補を照合、(3) QUALITY009で実際に記録された「雰囲い」を候補単位で除外する検査を追加した。危険候補の自動修正や数合わせはせず、安全候補を残して不足通知する。
+
+修正前に重点FAILを再現。Focused回帰29 passed、`tests/test_app.py` 634 passed in 16.51s。Python compile、`node --check app.js`、`git diff --check`成功。全pytest（Firefox UI含む）は14:21 JSTに713 passed in 98.60s。今回Gemini API 0回。QUALITY009の実文章手動評価FAILは継続。conversation_004未実施。最新変更のGitHub Actions未確認。総合判定はNO-GO。
+
+実APIでの修正後品質、ミラーリング/意味的多様性/誘い判断の基準評価、全体回帰・Firefox・最新Actionsを残課題とする。

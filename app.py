@@ -232,6 +232,14 @@ INVITATION_PATTERN = re.compile(
     r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
     r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
 )
+REFUSAL_REINVITATION_PATTERN = re.compile(
+    r"(?:また|いつか|落ち着いたら|タイミングがあれば|タイミングが合ったら|都合がよければ).{0,20}(?:会え|会い|会おう|会いた|誘|一緒に.{0,8}(?:行|出かけ)|(?:カフェ|ご飯|ごはん|食事|お茶).{0,10}(?:行|行け))|"
+    r"(?:会えたら|会えると|誘わせて).{0,16}(?:嬉し|うれし|いいな)|"
+    r"(?:また|改めて).{0,8}誘わせて|(?:会う|誘う).{0,10}(?:機会|タイミング)があれば"
+)
+MINIMIZING_REASSURANCE_PATTERN = re.compile(
+    r"安心してください|心配しないで|気にしないで|(?:不安|心配).{0,12}大丈夫|大丈夫.{0,12}(?:不安|心配しなくて)|焦らず.{0,18}(?:やり取り|会話|話)"
+)
 PURCHASE_NEGATION_PATTERN = re.compile(
     r"(?:衝動買い|即決(?:購入)?|即買い|すぐ.{0,4}買|迷わず買).{0,14}(?:避け|控え|しません|しない|しないです|買わない)|"
     r"すぐには買わない|衝動買いはしない|即決はしない|衝動買いを避け(?:ています|ている)|衝動買いは控え(?:ています|ている)"
@@ -292,11 +300,11 @@ def partner_has_active_invitation_refusal(context: dict) -> bool:
         r"これ以上.{0,10}(?:やり取り|連絡)|連絡.{0,8}控え|行くのは.{0,8}(?:不安|難)"
     )
     hesitation_pattern = re.compile(
-        r"(?:けど|けれど|でも).{0,12}(?:まだ|不安|難|もう少し|考えたい|検討|迷|悩|今は)|"
-        r"まだ(?:会う|行く|考え)|もう少し|少し考え|考えたい|検討|不安|難しい|無理|"
-        r"今は|遠慮|ごめんなさい|急ぎたくない|ちょっと.{0,8}(?:不安|難|迷|悩)|"
-        r"会うのは.{0,8}(?:控え|待ち)|"
-        r"(?:行く|会う).{0,8}(?:迷|悩)"
+        r"(?:会う|会って|一緒に行く|誘い|会うこと).{0,18}(?:まだ|不安|難|もう少し|考えたい|検討|迷|悩|今は|遠慮|急ぎたくない)|"
+        r"(?:けど|けれど|でも).{0,12}(?:まだ会う|会うのは|一緒に行く|誘い).{0,16}(?:不安|難|もう少し|考えたい|検討|迷|悩|今は)|"
+        r"もう少し.{0,10}(?:話|やり取り).{0,10}(?:してから|したい)|"
+        r"(?:まだ|ちょっと).{0,8}(?:会う|会って|一緒に行く).{0,10}(?:不安|難|迷|悩)|"
+        r"(?:会う|行く).{0,8}(?:迷|悩)"
     )
     refusal_indexes = [index for index, text in partner_messages if refusal_pattern.search(text)]
     if not refusal_indexes:
@@ -305,7 +313,7 @@ def partner_has_active_invitation_refusal(context: dict) -> bool:
     refusal_active = True
     reopen_pattern = re.compile(
         r"(?:(?:やっぱり|ぜひ|喜んで).{0,8})?(?:(?:今度|次は)(?:あなたと|一緒に)|(?:あなたと|一緒に)).{0,20}"
-        r"(?:会いましょう|会ってみたい|行きましょう|行ってみたい|行けたら嬉しい|行けたらうれしい)|"
+        r"(?:会いましょう|会ってみたい|行きましょう|行ってみたい|行きたい(?:です)?|行けたら嬉しい|行けたらうれしい)|"
         r"(?:ぜひ|喜んで)[！! ]{0,4}(?:会いましょう|一緒に.{0,12}行きましょう|行きましょう)"
     )
     for index, text in partner_messages:
@@ -362,6 +370,9 @@ PERSONAL_FACT_TOPICS = {
     "パン": ("パン", "パン屋", "ベーカリー"),
     "休日": ("休日", "休みの日", "週末"),
     "年齢": ("年齢", "何歳", "歳"),
+    "運動習慣": ("ジム", "筋トレ", "運動", "ランニング", "スポーツ", "トレーニング"),
+    "出身地": ("実家", "地元", "出身地", "出身"),
+    "家族": ("家族", "兄弟", "兄", "姉", "弟", "妹", "きょうだい"),
 }
 
 
@@ -401,8 +412,16 @@ def _topic_for_personal_question(text: str) -> str | None:
         if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
             return "カフェ頻度"
     if any(term in text for term in PERSONAL_FACT_TOPICS["料理習慣"]):
-        if re.search(r"普段|よく|自炊|作ります|料理します|頻度", text):
+        if re.search(r"普段|よく|自炊|作ります|料理します|頻度|どのくらい|どれくらい|週末|週に|何回", text):
             return "料理習慣"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["家族"]):
+        if re.search(r"いますか|いるの|兄弟|きょうだい|家族|何人|仲が|仲良|連絡|一緒に住", text):
+            return "家族"
+    if any(term in text for term in PERSONAL_FACT_TOPICS["運動習慣"]):
+        if re.search(r"最近|この前|昨日|先週", text):
+            return "本人情報"
+        if re.search(r"頻度|何回|どのくらい|どれくらい|年|週|月|よく|普段|行きますか|していますか", text):
+            return "運動習慣"
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             # Do not mistake statements about the partner for a question about the user.
@@ -411,11 +430,76 @@ def _topic_for_personal_question(text: str) -> str | None:
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
     if re.search(
-        r"(?:普段|最近|これまで|経験|タイプ|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
+        r"(?:普段|最近|これまで|経験|タイプ|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
         return "本人情報"
     return None
+
+
+def _personal_information_scope(topic: str | None, text: str) -> tuple[str, str] | None:
+    """Keep a personal answer tied to the kind and precision of the question."""
+    if topic is None:
+        return None
+    canonical_topic = {
+        "カフェ最近": "カフェ",
+        "カフェ頻度": "カフェ",
+        "カフェ好み": "カフェ",
+        "旅行最近": "旅行",
+        "旅行頻度": "旅行",
+        "映画館頻度": "映画",
+    }.get(topic, topic)
+    if re.search(r"最近|この前|昨日|先週|観た映画|見た映画|読んだ本|行ったカフェ", text):
+        detail = "recent_experience"
+    elif re.search(r"ジャンル|何系|どんな.{0,8}(?:本|映画)|好きな.{0,8}(?:本|映画)|ミステリー|小説|漫画|マンガ|洋画|邦画|アニメ|ドキュメンタリー|アクション|恋愛|コメディ|SF", text):
+        detail = "genre"
+    elif re.search(r"頻度|どのくらい|どれくらい|何回|何度|週\s*\d+|週に|週末によく|月に|よく行|普段どのくらい|週末", text):
+        detail = "frequency"
+    elif re.search(r"好き|好み|趣味|お好き", text):
+        detail = "preference"
+    else:
+        detail = "general"
+    return canonical_topic, detail
+
+
+def _same_personal_information_scope(topic: str, requested_text: str, answered_text: str) -> bool:
+    requested_scope = _personal_information_scope(topic, requested_text)
+    # The answer side is often declarative and therefore cannot be classified as
+    # a question. Keep it in the already-established topic and compare detail only.
+    answered_scope = _personal_information_scope(topic, answered_text)
+    return requested_scope is not None and requested_scope == answered_scope
+
+
+def _japanese_integer(value: str) -> int | None:
+    """Parse small Japanese numerals used for ages/counts without guessing larger forms."""
+    if value.isdigit():
+        return int(value)
+    digits = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    if "十" in value:
+        tens, ones = value.split("十", 1)
+        if len(tens) > 1 or len(ones) > 1:
+            return None
+        return (digits.get(tens, 1) if tens else 1) * 10 + digits.get(ones, 0)
+    return digits.get(value)
+
+
+def _explicit_frequency_signature(text: str) -> set[str]:
+    signatures: set[str] = set()
+    signatures.update(re.findall(r"毎日|毎朝|毎晩|毎週|毎月|毎年", text))
+    quantified = re.finditer(
+        r"(?P<period>週(?!末)|月|年)(?:に)?\s*(?P<count>\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?",
+        text,
+    )
+    for match in quantified:
+        count = _japanese_integer(match.group("count"))
+        if count is not None:
+            signatures.add(f"{match.group('period')}{count}")
+    return signatures
+
+
+def _frequency_claim_is_supported(claim: str, evidence: str) -> bool:
+    claimed = _explicit_frequency_signature(claim)
+    return not claimed or claimed.issubset(_explicit_frequency_signature(evidence))
 
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
@@ -621,6 +705,10 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         "カフェ": ("hobbies", "interests", "favorite_cafes", "favorite_places", "cafes", "カフェ"),
         "パン": ("hobbies", "interests", "パン", "パン屋"),
         "休日": ("weekends", "weekend_activity", "休日", "休みの日", "週末"),
+        "運動習慣": ("exercise_habits", "fitness", "gym_frequency", "運動習慣", "ジム", "運動"),
+        "出身地": ("hometown", "origin", "hometown_visits", "実家", "地元", "出身地"),
+        "家族": ("siblings", "family", "siblings_relationship", "家族", "兄弟", "姉妹"),
+        "料理習慣": ("cooking_habits", "cooking_frequency", "cooking", "料理習慣", "自炊"),
     }
     explicit_field_keys = {
         "食事": ("favorite_foods", "food_preferences", "好きな食べ物", "料理"),
@@ -628,6 +716,24 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         "旅行": ("travel_experience", "recent_trips", "旅行経験", "最近の旅行"),
         "予定": ("confirmed_availability", "confirmed_schedule", "確定した予定"),
     }
+    if topic in {"運動習慣", "出身地", "家族", "料理習慣"}:
+        topic_terms = PERSONAL_FACT_TOPICS[topic]
+        requested_scope = _personal_information_scope(topic, question_text)
+        for key in topic_keys.get(topic, ()):
+            value = facts.get(key)
+            values = value if isinstance(value, list) else [value]
+            if any(
+                item and any(term in str(item) for term in topic_terms)
+                and requested_scope == _personal_information_scope(topic, str(item))
+                for item in values
+            ):
+                return True
+        return any(
+            answer.get("answer", "").strip()
+            and any(term in answer.get("question", "") for term in topic_terms)
+            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+        )
     if any(facts.get(key) for key in explicit_field_keys.get(topic, ())):
         return True
     values: list[str] = []
@@ -667,7 +773,11 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
     for answer in context.get("ephemeral_user_answers", []):
         answer_question = answer.get("question", "")
         answer_text = answer.get("answer", "").strip()
-        if answer_text and any(term in answer_question for term in topic_terms):
+        if (
+            answer_text
+            and any(term in answer_question for term in topic_terms)
+            and (not question_text or _same_personal_information_scope(topic, question_text, answer_question))
+        ):
             return True
     return False
 
@@ -761,6 +871,26 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "好きなカフェやお店の雰囲気があれば教えてください"
     elif topic == "料理習慣" and re.search(r"しますか|作りますか", source_question):
         question = "普段料理や自炊はしますか？"
+    elif topic == "運動習慣":
+        if re.search(r"頻度|何回|どのくらい|どれくらい|週|月", source_question):
+            question = "運動やジムにはどのくらいの頻度で行きますか？"
+        else:
+            question = "運動やスポーツについて相手に伝えてよい内容を教えてください"
+    elif topic == "家族":
+        if re.search(r"何人|人数", source_question):
+            question = "兄弟や姉妹が何人いるか教えてください"
+        elif re.search(r"仲が|仲良", source_question):
+            question = "兄弟や姉妹とはどのくらい仲がいいですか？"
+        elif "連絡" in source_question and re.search(r"頻度|どのくらい|どれくらい|よく|普段", source_question):
+            question = "兄弟や姉妹とはどのくらい連絡を取りますか？"
+        elif "連絡" in source_question:
+            question = "兄弟や姉妹とは連絡を取りますか？"
+        elif re.search(r"一緒に住|同居", source_question):
+            question = "兄弟や姉妹と一緒に住んでいますか？"
+        elif re.search(r"いますか|いるの", source_question):
+            question = "兄弟や姉妹はいますか？"
+        else:
+            question = "兄弟や姉妹について相手に伝えてよい内容を教えてください"
     elif topic == "料理習慣":
         question = "普段どのくらい料理や自炊をしますか？"
     elif topic == "予定":
@@ -812,8 +942,11 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
 
 
 MOVIE_OPINION_CLAIM_PATTERN = re.compile(
-    r"(?:映像|景色|音楽|ストーリー|展開|演技|内容).{0,6}(?:きれい|綺麗|美しい|素晴らしい|よかった|良かった|面白|印象的)(?:でした|です|だった|で|くて|と思|と感じ)|"
+    r"(?:映画|作品|映像|景色|音楽|ストーリー|展開|演技|内容).{0,8}(?:きれい|綺麗|美しい|素晴らしい|よかった|良かった|面白|印象的)(?:でした|です|だった|で|くて|と思|と感じ)|"
+    r"面白.{0,5}(?:です|でした|！|!|$)|(?:良かった|よかった|楽しかった|感動した|泣けた|怖かった|微妙だった|いまいちだった)(?:です|でした|！|!|$)|"
     r"(?:すごく|とても|かなり|本当に).{0,8}(?:良かった|面白かった|楽しめました|感動しました)(?:です|！|!|$)|"
+    r"(?:映画|作品|ストーリー|展開).{0,10}(?:感動しました|感動した)(?:です|！|!|$)|"
+    r"(?:最近|この前|昨日|先週)?観た映画.{0,12}(?:感動しました|感動した)(?:です|！|!|$)|"
     r"(?:映画|作品|青い灯台).{0,14}(?:印象に残って(?:います|いる|いました|いた)|印象的(?:でした|です))|"
     r"(?:観てから|見てから).{0,24}(?:読書|本を読む|趣味).{0,16}(?:楽しんでいます|楽しんでいる|好きです|好き|始めました|始めています)"
 )
@@ -835,6 +968,100 @@ def _movie_assertion_segments(text: str) -> list[str]:
             continue
         assertions.append(match.group(0))
     return assertions
+
+
+MOVIE_OPINION_MARKERS = (
+    "面白", "良かった", "よかった", "楽しかった", "感動", "泣け", "怖かった", "微妙", "いまいち",
+    "きれい", "綺麗", "美しい", "素晴らしい", "印象的", "印象に残",
+)
+
+
+def _movie_opinion_markers(text: str) -> set[str]:
+    return {marker for marker in MOVIE_OPINION_MARKERS if marker in text}
+
+
+def _movie_evidence_texts(context: dict) -> list[str]:
+    """Return movie-related facts without merging separate titles or answers."""
+    values: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            if value.strip():
+                values.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+
+    facts = context.get("my_profile", {}).get("facts", {})
+    for key in (
+        "recent_movies", "recent_films", "最近観た映画", "recent_movie_reviews", "movie_reviews",
+    ):
+        if facts.get(key):
+            collect(facts[key])
+    for answer in context.get("ephemeral_user_answers", []):
+        if re.search(r"映画|映画館|洋画|邦画|作品", str(answer.get("question", ""))):
+            collect(answer.get("answer", ""))
+    return values
+
+
+def _movie_claim_title(text: str) -> str | None:
+    quoted = re.search(r"[『「]([^』」]{1,40})[』」]", text)
+    if quoted:
+        return quoted.group(1).strip()
+    title_match = re.search(
+        r"([一-龯ぁ-んァ-ンA-Za-z0-9・ー]{2,18})(?:という映画|という作品|は|を(?:観|見)).{0,18}"
+        r"(?:面白|良かった|よかった|楽しかった|感動|泣け|怖かった|微妙|いまいち|きれい|綺麗|美しい|印象)",
+        text,
+    )
+    if not title_match:
+        return None
+    title = title_match.group(1).strip()
+    if title in {"最近観た映画", "最近見た映画", "この前観た映画", "この前見た映画", "映画", "作品"}:
+        return None
+    return title
+
+
+def _movie_opinion_polarity(text: str, marker: str) -> str | None:
+    negative_patterns = {
+        "面白": r"面白く(?:なかった|ない|ありません)|面白いとは思わなかった",
+        "良かった": r"良く(?:なかった|ない)|良かったとは思わない",
+        "よかった": r"よく(?:なかった|ない)|よかったとは思わない",
+        "楽しかった": r"楽しく(?:なかった|ない)|楽しかったとは思わない",
+        "感動": r"感動しなかった|感動しませんでした",
+        "泣け": r"泣けなかった|泣けない",
+        "怖かった": r"怖くなかった|怖くない",
+        "微妙": r"微妙ではなかった|微妙じゃなかった",
+        "いまいち": r"いまいちではなかった|いまいちじゃなかった",
+        "きれい": r"きれい.{0,5}(?:では|じゃ)(?:なかった|ない)|綺麗.{0,5}(?:では|じゃ)(?:なかった|ない)",
+        "綺麗": r"綺麗.{0,5}(?:では|じゃ)(?:なかった|ない)|きれい.{0,5}(?:では|じゃ)(?:なかった|ない)",
+        "美しい": r"美しく(?:なかった|ない)|美しいとは思わなかった",
+        "素晴らしい": r"素晴らしくなかった|素晴らしいとは思わなかった",
+        "印象的": r"印象的ではなかった|印象的じゃなかった",
+        "印象に残": r"印象に残らなかった|印象に残っていない",
+    }
+    if re.search(negative_patterns[marker], text):
+        return "negative"
+    if marker in {"微妙", "いまいち", "怖かった"}:
+        return "negative"
+    if marker in text:
+        return "positive"
+    return None
+
+
+def _movie_claim_supported_by_evidence(candidate_text: str, evidence_text: str) -> bool:
+    markers = _movie_opinion_markers(candidate_text)
+    if not markers or not markers.issubset(_movie_opinion_markers(evidence_text)):
+        return False
+    title = _movie_claim_title(candidate_text)
+    if title and title not in evidence_text:
+        return False
+    return all(
+        _movie_opinion_polarity(candidate_text, marker) == _movie_opinion_polarity(evidence_text, marker)
+        for marker in markers
+    )
 
 
 def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
@@ -883,8 +1110,18 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
         return any(_has_recent_travel_evidence(clause) for clause in partner_clauses)
     if topic == "映画館頻度":
         return any(_has_cinema_habit_evidence(clause) for clause in partner_clauses)
+    if topic == "出身地":
+        claim_place = re.search(r"([一-龯ぁ-んァ-ヶA-Za-z]{2,20})(?:出身|生まれ)", match.group(0))
+        return bool(claim_place) and any(
+            claim_place.group(1) in clause
+            and re.search(r"(?:出身|生まれ)", clause)
+            and not _is_interrogative_evidence_clause(clause)
+            for clause in partner_clauses
+        )
     return False
 
+
+AGE_NUMERAL_PATTERN = r"(?:\d{2}|[一二三四五六七八九十]{2,4})"
 
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "買い物": re.compile(
@@ -917,28 +1154,55 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
         r"最近映画.{0,8}(?:観ていません|見ていません|観てない|見てない)(?!か)|"
         r"(?:映画.{0,8}(?:ミステリー|アクション|恋愛|コメディ|SF|洋画|邦画)|(?:ミステリー|アクション|恋愛|コメディ|SF|洋画|邦画).{0,8}映画).{0,8}(?:好き|苦手|嫌い)(?:です)?"
     ),
-    "読書": re.compile(r"幅広く読む|本は幅広く読み(?:ます|ますね)|(?:読書|本を読むこと).{0,8}(?:好き|趣味)|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)|最近.{0,14}(?:読んだ|読みました|読んでいます|読んでいません).{0,10}(?:本|小説|漫画|マンガ)|最近.{0,12}(?:本|小説|漫画|マンガ).{0,12}(?:読んだ|読みました|読んでいます|読んでいません)(?!か)"),
-    "年齢": re.compile(r"(?:私|自分|僕|俺)(?:は|が)?.{0,8}(?:\d{2}歳|\d{2}代|アラサー|アラフォー|今年で?\d{2}(?:歳|になります|になる))"),
-    "職業": re.compile(r"(?:私|自分|僕|俺)(?:は|が)?.{0,28}(?:会社員|学生|大学生|フリーランス|自営業|職|仕事|働いて|勤務|学校に通|商品企画をしています|企画をしています|開発をしています|営業をしています)"),
+    "読書": re.compile(r"幅広く読む|本は幅広く読み(?:ます|ますね)|(?:読書|本を読むこと|本を読むの).{0,8}(?:好き|趣味)|(?:自分|私|僕|俺).{0,12}(?:本|読書|小説|漫画).{0,18}(?:好き|よく|幅広く|読む|読ん)|(?:幅広く|よく|普段|最近).{0,12}(?:本を読む|読書をする|読んでいます|読むことが多)|(?:小説|ミステリー|漫画).{0,12}好き(?:です|だ)|最近.{0,14}(?:読んだ|読みました|読んでいます|読んでいません).{0,10}(?:本|小説|漫画|マンガ)|最近.{0,12}(?:本|小説|漫画|マンガ).{0,12}(?:読んだ|読みました|読んでいます|読んでいません)(?!か)"),
+    "年齢": re.compile(rf"(?:(?:私|自分|僕|俺)(?:は|が)?.{{0,8}})?(?:{AGE_NUMERAL_PATTERN}歳|\d{{2}}代|アラサー|アラフォー|今年で?{AGE_NUMERAL_PATTERN}(?:歳|になります|になる))"),
+    "職業": re.compile(r"(?:私|自分|僕|俺)(?:は|が)?.{0,24}(?:会社員|学生|大学生|大学院生|フリーランス|自営業|看護師|医師|医者|教師|教員|保育士|弁護士|美容師|デザイナー|営業|エンジニア|マーケター)(?:です|をしています)?|(?:[一-龯ぁ-んァ-ヶ]{2,14})の仕事をしています|(?:大学院|大学|専門学校|学部).{0,18}(?:学んでいます|学んでます|専攻しています|専攻してます)|(?:商品企画|企画|開発|営業).{0,12}(?:をしています|しています)|(?:学校に通|働いて|勤務しています)"),
     "カフェ": re.compile(r"お気に入りのお店|お気に入りの(?:カフェ|喫茶店).{0,8}(?:あります|がある)|(?:自分|私|僕|俺).{0,12}(?:カフェ|喫茶店).{0,18}(?:好き|よく行|通って|お気に入り|月に|週に)(?!ですか|ますか|[?？])|(?:カフェ|喫茶店).{0,16}(?:好きです(?!か)|好きだ|よく行きます|お気に入りがあります|月に\d+回|月に何度か|月に何回か|週に\d+回|週に何度か|週に何回か)|(?:月に|週に)(?:\d+回|何度か|何回か|数回).{0,10}(?:カフェ|喫茶店)|(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め).{0,14}(?:雰囲気|ところ|お店|カフェ).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])|(?:雰囲気|ところ|お店|カフェ).{0,12}(?:落ち着(?:く|いた)|静か|にぎやか|騒がしい).{0,12}(?:好き|好み)(?!ですか|ますか|[?？])"),
-    "旅行最近": re.compile(r"(?:最近|この前|昨日|先週).{0,10}(?:旅行|旅|京都|北海道|沖縄|海外).{0,12}(?:行|旅行|出かけ)|(?:旅行|旅).{0,10}(?:最近|この前|昨日|先週).{0,12}(?:行|しました|した)"),
+    "旅行最近": re.compile(r"(?:最近|この前|昨日|先週|先月|先々週|先々月).{0,14}(?:旅行|旅|[一-龯ぁ-んァ-ヶ]{2,12}).{0,16}(?:行|旅行|出かけ|訪れ)|(?:旅行|旅).{0,10}(?:最近|この前|昨日|先週|先月).{0,12}(?:行|しました|した)"),
     "外出": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:お出かけ|出かけること|外出).{0,16}(?:好き|趣味|よく行)|(?:お出かけ|外出).{0,10}(?:好きです|趣味です|好きだ)(?!か)"),
-    "映画館頻度": re.compile(r"(?:映画館|シネコン).{0,14}(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,10}(?:行|通)|(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,10}(?:映画館|シネコン).{0,10}(?:行|通)"),
+    "映画館頻度": re.compile(r"(?:映画館|シネコン).{0,14}(?:よく|頻繁|月に?|週に?|年に?|毎日|毎朝|毎晩|毎週|毎月|毎年|何度|何回|たまに|時々|ときどき).{0,10}(?:行|通)|(?:よく|頻繁|月に?|週に?|年に?|毎日|毎朝|毎晩|毎週|毎月|毎年|何度|何回|たまに|時々|ときどき).{0,10}(?:映画館|シネコン).{0,10}(?:行|通)"),
+    "予定": re.compile(r"(?:来週|今週|今度|月曜|火曜|水曜|木曜|金曜|土曜|日曜|週末|平日).{0,12}(?:空いて|予定が|都合が)|(?:空いて|予定が|都合が).{0,12}(?:来週|今週|月曜|火曜|水曜|木曜|金曜|土曜|日曜|週末|平日)"),
     "場所探し": re.compile(
         r"(?:(?:私|自分|僕|俺)(?:も|は|が)?[^\n!?！？]{0,16})?"
         r"(?:ゆっくり過ごせる|落ち着いた|静かな|にぎやかな|騒がしい)?"
         r"(?:場所|お店|店|カフェ|喫茶店).{0,12}(?:探す|探して|見つける|開拓).{0,12}"
         r"(?:のが好き|ことが好き|趣味|よく|頻繁に|多い|楽しみ|います|いる|います)"
     ),
-    "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります)"),
-    "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|在住|の近くに住)|(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡).{0,8}(?:に住んでいます|在住|のほうによく行(?:きます|く)|によく行(?:きます|く))"),
+    "旅行": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:旅行|旅).{0,18}(?:好き|よく行|行ったこと|週に\d|月に\d|年に\d|毎日|毎週|毎月|毎年)|(?:旅行|旅).{0,12}(?:好きです|好きだ|よく行きます|行ったことがあります|週に\d|月に\d|年に\d|毎日|毎週|毎月|毎年)"),
+    "居住地": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:住んでいます|住んでます|住んでる|在住|の近くに住)|[一-龯ぁ-んァ-ヶ]{2,12}(?:に住んでいます|に住んでます|に住んでる|在住です)|[一-龯ぁ-んァ-ヶ]{2,12}(?:のほう)?によく行(?:きます|く)"),
     "食事": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:好きな食べ物|好物|料理).{0,16}(?:は|が).{1,16}(?:好き|です)"),
     "パン": re.compile(r"(?:自分|私|僕|俺).{0,12}(?:パン屋|パン巡り).{0,18}(?:好き|よく行|通って|趣味)|(?:パン屋|パン巡り).{0,12}(?:好きです|よく行きます|が趣味です)"),
     "休日": re.compile(
         r"(?:私も|自分も|僕も|俺も|私は|自分は|僕は|俺は).{0,12}(?:最近|昨日|先週|この前|週末|休日|休みの日).{0,30}(?:過ご|出かけ|行き|観|見|読ん|のんびり|していました|しました)"
         r"|(?:休日|週末|休みの日).{0,18}(?:映画館|映画|カフェ|喫茶店|読書|本|旅行|家|自宅|植物|美術館|買い物|友達).{0,18}(?:行き|観|見|読ん|過ご|してい|しました|でした)(?!ますか|ですか|？|\?)"
     ),
+    "運動習慣": re.compile(
+        r"(?:ジム|筋トレ|運動|ランニング|スポーツ|トレーニング).{0,18}(?:年に\d+回|年\d+回|週\s*\d|週に\d|月に\d+回|毎日|毎朝|毎晩|毎週|毎月|毎年|よく|頻繁|通って|しています|します|することが多い)|"
+        r"(?:年に\d+回|年\d+回|週\s*\d|週に\d|月に\d+回|毎日|毎朝|毎晩|毎週|毎月|毎年|よく|頻繁).{0,14}(?:ジム|筋トレ|運動|ランニング|スポーツ|トレーニング).{0,12}(?:行|通|して)"
+    ),
+    "出身地": re.compile(
+        r"(?:実家|地元).{0,18}(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|京都|沖縄|北海道).{0,18}(?:帰|出身|地元)|"
+        r"(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|京都|沖縄|北海道).{0,14}(?:出身|実家|地元).{0,16}(?:帰|です|ます)|"
+        r"(?:実家|地元|出身地).{0,20}(?:は|が|に|の|出身).{0,18}(?:です|出身|帰|帰省)|"
+        r"(?:実家|地元).{0,16}(?:よく帰|帰省|帰ることが多)|"
+        r"[一-龯ぁ-んァ-ヶA-Za-z]{2,20}(?:出身|生まれ)"
+    ),
+    "家族": re.compile(
+        r"(?:兄弟|きょうだい|兄|姉|弟|妹|家族).{0,18}(?:がいる|います|よく連絡|頻繁に連絡|仲が良|連絡を取|一緒に住)|"
+        r"(?:よく連絡|頻繁に連絡|仲が良|連絡を取).{0,18}(?:兄弟|きょうだい|兄|姉|弟|妹|家族)"
+    ),
+    "料理習慣": re.compile(
+        r"(?:料理|自炊).{0,18}(?:週末|週に\d|毎日|毎朝|毎晩|毎週|毎月|毎年|よく|頻繁|たまに|時々|しています|します|しません|しない|することが多い)|"
+        r"(?:週末|週に\d|毎日|毎朝|毎晩|毎週|毎月|毎年|よく|頻繁|たまに|時々).{0,14}(?:料理|自炊).{0,12}(?:して|作って)"
+    ),
 }
+
+
+UNVERIFIED_PERSONAL_CLAIM_PATTERNS["カフェ"] = re.compile(
+    UNVERIFIED_PERSONAL_CLAIM_PATTERNS["カフェ"].pattern
+    + r"|(?:カフェ|喫茶店).{0,16}(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:\d+|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?)"
+    + r"|(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:\d+|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?).{0,12}(?:カフェ|喫茶店)"
+)
 
 
 NEGATIVE_PERSONAL_FACT_RE = re.compile(
@@ -1003,12 +1267,13 @@ NON_ASSERTIVE_EXPERIENCE_RE = re.compile(
 
 RECENT_TRAVEL_COMPLETION_RE = re.compile(
     r"(?:最近|この前|昨日|先週).{0,18}(?:旅行|旅|京都|北海道|沖縄|海外|国内).{0,24}(?:行った|行きました|行ってき|出かけた|出かけました|訪れた|訪れました|旅行してき|旅行した|旅行しました)|"
+    r"(?:最近|この前|昨日|先週|先月|先々週|先々月).{0,18}[一-龯ぁ-んァ-ヶ]{2,12}.{0,18}(?:行った|行きました|行ってき|訪れた|訪れました)|"
     r"(?:旅行|旅).{0,12}(?:最近|この前|昨日|先週).{0,24}(?:行った|行きました|行ってき|出かけた|出かけました|訪れた|訪れました|しました)"
 )
 
 CINEMA_HABIT_RE = re.compile(
-    r"(?:映画館|シネコン).{0,22}(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)|"
-    r"(?:よく|頻繁|月に|週に|年に|何度|何回|たまに|時々|ときどき).{0,12}(?:映画館|シネコン).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)"
+    r"(?:映画館|シネコン).{0,22}(?:よく|頻繁|月に?|週に?|年に?|何度|何回|たまに|時々|ときどき).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)|"
+    r"(?:よく|頻繁|月に?|週に?|年に?|何度|何回|たまに|時々|ときどき).{0,12}(?:映画館|シネコン).{0,22}(?:行きます|行ってます|行っています|行く(?:んです|んですよ|ことが多い|ことがあります|タイプ)?|通います|通ってます|通っています)"
 )
 
 
@@ -1077,6 +1342,9 @@ def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
 def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bool:
     facts = context.get("my_profile", {}).get("facts", {})
     source = _trusted_fact_text(context, include_negated=topic == "買い物")
+    profile_source = _trusted_fact_text(
+        {**context, "ephemeral_user_answers": []}, include_negated=topic == "買い物"
+    )
     if not source and topic not in {"年齢", "職業"}:
         return False
     if topic == "年齢":
@@ -1086,7 +1354,8 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             if answer.get("answer", "").strip() and re.search(r"年齢|何歳|歳", answer.get("question", ""))
         )
         euphemisms = re.findall(r"アラサー|アラフォー", text)
-        ages = re.findall(r"(?:(\d{2})歳|(\d{2})代(前半|後半)?|今年で?(\d{2})(?:歳|になります|になる))", text)
+        age_numeral = AGE_NUMERAL_PATTERN
+        ages = re.findall(rf"(?:(?:({age_numeral})歳)|({age_numeral})代(前半|後半)?|今年で?({age_numeral})(?:歳|になります|になる))", text)
         value_texts = [str(value) for value in values]
         if euphemisms and not all(any(term in value for value in value_texts) for term in euphemisms):
             return False
@@ -1102,18 +1371,26 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             if value_text.isdigit() and 2 <= len(value_text) <= 3:
                 exact_ages.append(int(value_text))
                 continue
-            decade_match = re.search(r"(?<!\d)(\d{2})代(前半|後半)?", value_text)
-            exact_match = re.search(r"(?<!\d)(\d{2})歳", value_text)
+            decade_match = re.search(rf"(?<!\d)({age_numeral})代(前半|後半)?", value_text)
+            exact_match = re.search(rf"(?<!\d)({age_numeral})歳", value_text)
             if decade_match:
-                decade_facts.append((int(decade_match.group(1)), decade_match.group(2)))
+                decade_value = _japanese_integer(decade_match.group(1))
+                if decade_value is not None:
+                    decade_facts.append((decade_value, decade_match.group(2)))
             elif exact_match:
-                exact_ages.append(int(exact_match.group(1)))
+                exact_value = _japanese_integer(exact_match.group(1))
+                if exact_value is not None:
+                    exact_ages.append(exact_value)
         confirmed_age = exact_ages[0] if exact_ages else None
         for exact, decade, subrange, upcoming in ages:
-            if exact and int(exact) not in exact_ages:
-                return False
+            if exact:
+                parsed_exact = _japanese_integer(exact)
+                if parsed_exact is None or parsed_exact not in exact_ages:
+                    return False
             if decade:
-                target_decade = int(decade)
+                target_decade = _japanese_integer(decade)
+                if target_decade is None:
+                    return False
                 if subrange:
                     if confirmed_age is not None:
                         year_within_decade = confirmed_age % 10
@@ -1130,8 +1407,125 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             if upcoming and not any(upcoming in value for value in value_texts):
                 return False
         return True
+    if topic in {"運動習慣", "出身地", "家族", "料理習慣"}:
+        evidence_sources = [
+            (clause, any(term in clause for term in PERSONAL_FACT_TOPICS[topic]))
+            for clause in _trusted_fact_clauses(
+                {**context, "ephemeral_user_answers": []}, include_negated=True
+            )
+        ]
+        topic_terms = PERSONAL_FACT_TOPICS[topic]
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            answer_question = str(answer.get("question", ""))
+            if (
+                answer_text
+                and any(term in answer_question for term in topic_terms)
+                and _same_personal_information_scope(topic, text, answer_question)
+            ):
+                evidence_sources.append((f"{answer_question} {answer_text}", True))
+
+        def is_negative(value: str) -> bool:
+            markers = {
+                "運動習慣": r"行かない|行きません|通わない|通いません|していない|していません|しない|しません",
+                "出身地": r"帰らない|帰りません|帰っていない|帰っていません|帰ってない|帰省しない|帰省しません|あまり.{0,6}帰らない|あまり.{0,6}帰っていない",
+                "家族": r"連絡しない|連絡していない|連絡していません|連絡を取っていない|連絡を取っていません|連絡を取ってない|あまり.{0,8}連絡しない|あまり.{0,8}連絡していない|あまり.{0,8}連絡を取っていない",
+                "料理習慣": r"料理しない|料理しません|料理していない|料理していません|自炊しない|自炊しません|自炊していない|作らない|作りません|(?:料理|自炊).{0,8}(?:あまり|ほとんど).{0,8}(?:しない|していない|していません)",
+            }
+            return bool(re.search(markers[topic], value))
+
+        def supports_claim(evidence: str, topic_is_confirmed: bool) -> bool:
+            if is_negative(text) != is_negative(evidence):
+                return False
+            if topic == "運動習慣":
+                activity = re.search(r"ジム|筋トレ|運動|ランニング|スポーツ|トレーニング", text)
+                if not activity or not topic_is_confirmed:
+                    return False
+                claimed_activity = activity.group(0)
+                activity_aliases = {
+                    "ジム": ("ジム",),
+                    "筋トレ": ("筋トレ", "トレーニング"),
+                    "運動": ("ジム", "筋トレ", "運動", "ランニング", "スポーツ", "トレーニング"),
+                    "ランニング": ("ランニング",),
+                    "スポーツ": ("スポーツ",),
+                    "トレーニング": ("トレーニング", "筋トレ"),
+                }
+                if not any(term in evidence for term in activity_aliases[claimed_activity]):
+                    return False
+                claimed_frequency = re.findall(r"週\s*\d+|週に\d+|月に?\s*\d+回|年に?\s*\d+回|毎日|毎朝|毎晩|毎週|毎月|毎年|頻繁|よく|たまに|時々", text)
+                return all(marker in evidence for marker in claimed_frequency) and _frequency_claim_is_supported(text, evidence)
+            if topic == "出身地":
+                place = re.search(r"([一-龯ぁ-んァ-ヶA-Za-z]{2,20})(?:出身|生まれ)", text)
+                if place and place.group(1) not in evidence:
+                    return False
+                place = re.search(r"横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|京都|沖縄|北海道", text)
+                if place and place.group(0) not in evidence:
+                    return False
+                if re.search(r"帰|帰省", text) and not re.search(r"帰|帰省", evidence):
+                    return False
+                claimed_frequency = re.findall(r"よく|頻繁|毎日|毎週|毎月|毎年|週に?\s*\d+回|年に?\s*\d+回|月に?\s*\d+回", text)
+                if any(
+                    marker not in evidence
+                    and not (marker == "よく" and re.search(r"頻繁|多く帰", evidence))
+                    for marker in claimed_frequency
+                ):
+                    return False
+                return topic_is_confirmed
+            if topic == "家族":
+                if not any(term in text for term in PERSONAL_FACT_TOPICS["家族"]) or not topic_is_confirmed:
+                    return False
+                specific_relatives = set(re.findall(r"(?<!兄)兄(?!弟)|(?<!兄)弟|姉|妹", text))
+                evidenced_relatives = set(re.findall(r"(?<!兄)兄(?!弟)|(?<!兄)弟|姉|妹", evidence))
+                if specific_relatives and not specific_relatives.issubset(evidenced_relatives):
+                    return False
+                japanese_number_values = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+
+                def family_count(value: str) -> int | None:
+                    match = re.search(r"(?:兄弟|きょうだい|家族|兄|姉|弟|妹).{0,6}([一二三四五六七八九十\d]+)人", value)
+                    if not match:
+                        return None
+                    token = match.group(1)
+                    if token.isdigit():
+                        return int(token)
+                    if token == "十":
+                        return 10
+                    return japanese_number_values.get(token)
+
+                candidate_count = family_count(text)
+                evidence_count = family_count(evidence)
+                if candidate_count is not None and candidate_count != evidence_count:
+                    return False
+                if re.search(r"何人|[一二三四五六七八九十\d]+人", text) and evidence_count is None:
+                    return False
+                relationship_pattern = re.compile(r"仲が(?:良|いい|よい)|仲良し|仲が悪")
+                candidate_relationship = relationship_pattern.search(text)
+                evidence_relationship = relationship_pattern.search(evidence)
+                if candidate_relationship and (
+                    not evidence_relationship
+                    or bool(re.search(r"悪", candidate_relationship.group(0))) != bool(re.search(r"悪", evidence_relationship.group(0)))
+                ):
+                    return False
+                if "連絡" in text and "連絡" not in evidence:
+                    return False
+                if re.search(r"よく|頻繁|いつも|毎週|週に\d+|月に\d+", text) and not re.search(r"よく|頻繁|いつも|毎週|週に\d+|月に\d+", evidence):
+                    return False
+                if re.search(r"一緒に住|同居", text) and not re.search(r"一緒に住|同居", evidence):
+                    return False
+                return True
+            if topic == "料理習慣":
+                if not topic_is_confirmed:
+                    return False
+                cuisines = ("和食", "洋食", "中華", "イタリアン", "フレンチ", "韓国料理", "タイ料理", "カレー", "パスタ", "ラーメン")
+                claimed_cuisines = [term for term in cuisines if term in text]
+                if any(term not in evidence for term in claimed_cuisines):
+                    return False
+                claimed_frequency = re.findall(r"週末|週に\s*\d+回|月に?\s*\d+回|年に?\s*\d+回|毎日|毎朝|毎晩|毎週|毎月|毎年|よく|頻繁|たまに|時々", text)
+                return all(marker in evidence for marker in claimed_frequency) and _frequency_claim_is_supported(text, evidence)
+            return False
+
+        return any(supports_claim(evidence, topic_is_confirmed) for evidence, topic_is_confirmed in evidence_sources)
     if topic == "職業":
-        values = [str(facts.get(key)) for key in ("occupation", "job", "職業", "仕事", "school", "学校") if facts.get(key)]
+        values = [str(facts.get(key)) for key in ("occupation", "job", "職業", "仕事", "school", "学校", "education", "学歴", "専攻") if facts.get(key)]
         values.extend(
             answer.get("answer", "") for answer in context.get("ephemeral_user_answers", [])
             if answer.get("answer", "").strip() and re.search(r"仕事|職業|働いて|勤務|学校|大学", answer.get("question", ""))
@@ -1261,6 +1655,17 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
     if topic in genre_fields:
         genres = ("ミステリー", "小説", "漫画", "マンガ", "洋画", "邦画", "アニメ", "ドキュメンタリー", "アクション", "恋愛", "コメディ", "SF")
         required_category = r"映画|作品" if topic == "映画" else r"読書|本|小説|漫画|マンガ"
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", ""))
+            grounded = [genre for genre in genres if genre in answer_text and genre in text]
+            if (
+                grounded
+                and _same_personal_information_scope(topic, text, answer.get("question", ""))
+                and re.search(required_category, text)
+                and re.search(r"好き|好み|お気に入り", text)
+                and not re.search(r"好きではない(?:です)?|好きじゃない(?:です)?|苦手|嫌い|興味(?:が|は)?ない", text)
+            ):
+                return True
         for field in genre_fields[topic]:
             value = facts.get(field)
             if not value:
@@ -1285,7 +1690,10 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
     elif topic == "映画":
         opinion_claims = _movie_assertion_segments(text)
-        if any(claim not in source for claim in opinion_claims):
+        if opinion_claims and not any(
+            _movie_claim_supported_by_evidence(text, evidence)
+            for evidence in _movie_evidence_texts(context)
+        ):
             return False
         specific_markers = re.findall(r"洋画|邦画|アニメ映画|ドキュメンタリー", text)
         if specific_markers and not all(marker in source for marker in specific_markers):
@@ -1307,17 +1715,54 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
                     return True
             if not profile_preference:
                 return False
+        return True
     elif topic == "居住地":
-        places = re.findall(r"(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|東京都|大阪府)", text)
+        places = re.findall(r"([一-龯ぁ-んァ-ヶ]{2,12})(?:に住んでいます|に住んでます|に住んでる|在住です|在住)", text)
+        visiting_places = re.findall(r"([一-龯ぁ-んァ-ヶ]{2,12})(?:のほう)?によく行(?:きます|く)", text)
+        places.extend(visiting_places)
+        places.extend(re.findall(r"(?:横浜|川崎|東京|大阪|札幌|名古屋|福岡|神奈川|東京都|大阪府)", text))
         if places and not all(place in source for place in places):
             return False
         facts = context.get("my_profile", {}).get("facts", {})
         frequent_places = facts.get("frequently_visited_places", facts.get("often_visit", []))
-        if re.search(r"よく行|通って", text) and not (re.search(r"よく行|通って", source) or frequent_places):
-            return False
+        if re.search(r"よく行|通って", text):
+            frequent_values = frequent_places if isinstance(frequent_places, list) else [frequent_places]
+            frequent_values = [str(value) for value in frequent_values if value]
+            clauses_with_visit_frequency = [
+                clause for clause in _trusted_fact_clauses(context)
+                if re.search(r"よく行|頻繁に行|通って", clause)
+            ]
+            if visiting_places:
+                for place in visiting_places:
+                    field_support = any(place in value for value in frequent_values)
+                    clause_support = any(place in clause for clause in clauses_with_visit_frequency)
+                    if not field_support and not clause_support:
+                        return False
+            elif not frequent_values and not clauses_with_visit_frequency:
+                return False
+        return True
     elif topic == "カフェ":
         facts = context.get("my_profile", {}).get("facts", {})
         explicit_favorites = any(facts.get(key) for key in ("favorite_cafes", "favorite_places", "cafes", "cafe_preferences", "favorite_cafe_atmosphere"))
+        cafe_frequency_sources = [
+            str(facts.get(key, ""))
+            for key in ("cafe_frequency", "cafe_visit_frequency", "カフェに行く頻度")
+            if facts.get(key)
+        ]
+        cafe_frequency_sources.extend(
+            str(answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and re.search(r"(?:カフェ|喫茶店).{0,12}(?:頻度|どのくらい|どれくらい|何回)|(?:頻度|どのくらい|どれくらい|何回).{0,12}(?:カフェ|喫茶店)", answer.get("question", ""))
+        )
+        cafe_frequency_sources.extend(
+            clause for clause in _trusted_fact_clauses(context)
+            if re.search(r"カフェ|喫茶店", clause)
+        )
+        if _explicit_frequency_signature(text) and not any(
+            _frequency_claim_is_supported(text, source) for source in cafe_frequency_sources
+        ):
+            return False
         atmosphere = re.findall(r"落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め", text)
         if atmosphere and not all(re.sub(r"いた$", "く", marker) in source or marker in source for marker in atmosphere):
             return False
@@ -1335,8 +1780,8 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
         frequency_patterns = (
-            r"よく行|よく巡|頻繁に|毎週|通って",
-            r"(?:月|週)に(?:\d+回|何度か|何回か|数回)",
+            r"よく行|よく巡|頻繁に|毎日|毎週|毎月|毎年|通って",
+            r"(?:月|週|年)に(?:\d+回|何度か|何回か|数回)",
         )
         for frequency_pattern in frequency_patterns:
             candidate_frequency = re.findall(frequency_pattern, text)
@@ -1358,7 +1803,8 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         )
     elif topic == "旅行最近":
         clauses = _trusted_fact_clauses(context)
-        candidate_places = re.findall(r"京都|北海道|沖縄|海外|国内", text)
+        candidate_places = re.findall(r"([一-龯ぁ-んァ-ヶ]{2,12})(?:に|へ|を).{0,8}(?:行|訪れ|出かけ)", text)
+        candidate_places.extend(re.findall(r"京都|北海道|沖縄|海外|国内", text))
         return any(
             _has_recent_travel_evidence(clause)
             and all(place in clause for place in candidate_places)
@@ -1366,7 +1812,45 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         )
     elif topic == "映画館頻度":
         clauses = _trusted_fact_clauses(context)
-        return any(_has_cinema_habit_evidence(clause) for clause in clauses)
+        return any(
+            _has_cinema_habit_evidence(clause) and _frequency_claim_is_supported(text, clause)
+            for clause in clauses
+        )
+    elif topic == "旅行":
+        if _explicit_frequency_signature(text):
+            travel_frequency_values = [
+                str(facts.get(key, "")) for key in ("travel_frequency", "旅行の頻度") if facts.get(key)
+            ]
+            travel_frequency_values.extend(
+                str(answer.get("answer", ""))
+                for answer in context.get("ephemeral_user_answers", [])
+                if answer.get("answer", "").strip()
+                and re.search(r"旅行|旅", answer.get("question", ""))
+                and re.search(r"頻度|どのくらい|どれくらい|何回|週|月|年", answer.get("question", ""))
+            )
+            return bool(travel_frequency_values) and any(
+                _frequency_claim_is_supported(text, value) for value in travel_frequency_values
+            )
+        return any(
+            "旅行" in clause or "旅" in clause
+            for clause in _trusted_fact_clauses(context)
+            if not NEGATIVE_PERSONAL_FACT_RE.search(clause)
+        )
+    elif topic == "予定":
+        schedule_values = [str(facts.get(key, "")) for key in (
+            "confirmed_availability", "confirmed_schedule", "確定した予定"
+        ) if facts.get(key)]
+        schedule_values.extend(
+            str(answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and re.search(r"曜日|時間|予定|空いて|都合", answer.get("question", ""))
+        )
+        requested_slots = re.findall(r"(?:月|火|水|木|金|土|日)曜(?:日)?|週末|平日|朝|昼|午後|夕方|夜|\d{1,2}時", text)
+        return bool(schedule_values) and bool(requested_slots) and any(
+            all(slot in value or (slot.endswith("曜日") and slot[:-1] in value) for slot in requested_slots)
+            for value in schedule_values
+        )
     elif topic == "外出":
         return any(re.search(r"お出かけ|出かけ|外出", clause) for clause in _trusted_fact_clauses(context))
     elif topic == "買い物":
@@ -1469,7 +1953,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if time_markers and not all(marker in source for marker in time_markers):
             return False
     if topic not in {"カレー頻度", "カレー経験", "場所探し", "旅行最近", "映画館頻度"} and (
-        any(term in source for term in PERSONAL_FACT_TOPICS[topic])
+        any(term in profile_source for term in PERSONAL_FACT_TOPICS[topic])
         or (topic == "カフェ" and any(
             context.get("my_profile", {}).get("facts", {}).get(key)
             for key in ("cafe_preferences", "favorite_cafe_atmosphere")
@@ -1480,7 +1964,8 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
     # text omits the category word (for example, a book title answering a
     # recent-movie question). Reuse the same specificity check as preflight.
     return any(
-        _topic_is_verified(topic, context, answer.get("question", ""))
+        _same_personal_information_scope(topic, text, answer.get("question", ""))
+        and _topic_is_verified(topic, context, answer.get("question", ""))
         for answer in context.get("ephemeral_user_answers", [])
         if answer.get("answer", "").strip()
     )
@@ -2245,8 +2730,83 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         return True
     question = partner_messages[-1]
     topic = _topic_for_personal_question(question)
-    if not topic or not _topic_is_verified(topic, context, question):
+    if not topic:
         return True
+    if not _topic_is_verified(topic, context, question):
+        # A recognized personal question without a confirmed answer must not
+        # be treated as answered by an unrelated, evasive candidate. The API
+        # preflight normally asks the user first; this is the final send guard.
+        return False
+    if topic == "本人情報":
+        answer_prefix = re.split(r"\n|[!?！？]", candidate.text, maxsplit=1)[0]
+        normalized_prefix = re.sub(r"\s+|[、。！!？?]", "", answer_prefix)
+        exact_question = re.sub(r"\s+|[?？。！!]", "", question)
+        for answer in context.get("ephemeral_user_answers", []):
+            if re.sub(r"\s+|[?？。！!]", "", answer.get("question", "")) != exact_question:
+                continue
+            answer_text = str(answer.get("answer", "")).strip()
+            normalized_answer = re.sub(r"\s+|[、。！!？?]", "", answer_text)
+            if normalized_answer and normalized_answer in normalized_prefix:
+                return True
+            anchors = [
+                token for token in re.split(
+                    r"は|が|を|に|で|と|の|も|へ|から|まで|です|ます|する|します|こと|ある|あります|いる|います|よく|普段|最近|自分|私|僕|俺",
+                    answer_text,
+                )
+                if len(token.strip()) >= 2 and token.strip() not in {
+                    "得意", "好き", "苦手", "趣味", "作る", "作ります", "見る", "観る", "読む", "行く", "する", "します"
+                }
+            ]
+            if any(re.sub(r"\s+", "", anchor) in normalized_prefix for anchor in anchors):
+                return True
+        return False
+    recent_movie_question = topic == "映画" and bool(
+        re.search(r"最近|この前|昨日|先週|観た映画|見た映画", question)
+    )
+    asks_for_movie_title = recent_movie_question and bool(
+        re.search(r"何を|どんな(?:映画|作品)|どの(?:映画|作品)|作品名|タイトル|何の映画", question)
+    ) and not bool(re.search(r"どうだった|どうでした|感想|面白かった|良かった|よかった", question))
+    asks_for_movie_opinion = recent_movie_question and bool(
+        re.search(r"どうだった|どうでした|感想|面白かった|良かった|よかった", question)
+    )
+    if asks_for_movie_title:
+        answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+        normalized_prefix = re.sub(r"\s+", "", answer_prefix)
+        verified_recent_movies = [
+            str(context.get("my_profile", {}).get("facts", {}).get(key, ""))
+            for key in ("recent_movies", "recent_films", "最近観た映画")
+            if context.get("my_profile", {}).get("facts", {}).get(key)
+        ]
+        verified_recent_movies.extend(
+            str(answer.get("answer", "")).strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and re.search(r"最近|この前|昨日|先週", answer.get("question", ""))
+            and re.search(r"映画|観|見|作品", answer.get("question", ""))
+        )
+        for verified_answer in verified_recent_movies:
+            normalized_answer = re.sub(r"\s+", "", verified_answer)
+            if normalized_answer and normalized_answer in normalized_prefix:
+                return True
+            title = re.search(r"[『「]([^』」]{1,40})[』」]", verified_answer)
+            if title and re.sub(r"\s+", "", title.group(1)) in normalized_prefix:
+                return True
+        return False
+    if asks_for_movie_opinion:
+        opinion_claims = _movie_assertion_segments(candidate.text)
+        if not opinion_claims:
+            return False
+        evidence_texts = _movie_evidence_texts(context)
+        title = _movie_claim_title(candidate.text)
+        if title:
+            return any(
+                _movie_claim_supported_by_evidence(candidate.text, evidence)
+                for evidence in evidence_texts
+            )
+        opinion_evidence = {evidence for evidence in evidence_texts if _movie_opinion_markers(evidence)}
+        return len(opinion_evidence) == 1 and _movie_claim_supported_by_evidence(
+            candidate.text, next(iter(opinion_evidence))
+        )
     normalized_candidate = re.sub(r"\s+", "", candidate.text)
     for answer in context.get("ephemeral_user_answers", []):
         answer_text = str(answer.get("answer", "")).strip()
@@ -2308,6 +2868,15 @@ def candidate_has_meeting_related_question(text: str) -> bool:
     )
 
 
+def candidate_has_high_confidence_japanese_error(text: str) -> bool:
+    """Catch a narrow, high-confidence malformed word in venue descriptions.
+
+    This is intentionally a rejection check, not an automatic correction or a
+    claim of general Japanese spell-check coverage.
+    """
+    return "雰囲い" in text
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -2317,6 +2886,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("未完成プレースホルダー")
     if candidate_has_missing_sentence_break(text):
         reasons.append("文の区切り不足")
+    if candidate_has_high_confidence_japanese_error(text):
+        reasons.append("明らかな誤字")
     if any(not line.strip() for line in text.splitlines()):
         reasons.append("空行")
     if repeated_partner_question_topics([candidate], context):
@@ -2332,7 +2903,7 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
             context.get("invite_decision") in {"respect_no", "do_not_repeat_invite"}
             or partner_has_active_invitation_refusal(context)
         )
-        and INVITATION_PATTERN.search(text)
+        and (INVITATION_PATTERN.search(text) or REFUSAL_REINVITATION_PATTERN.search(text))
     ):
         reasons.append("相手の断りや慎重さに反する誘い")
     if (
@@ -2340,11 +2911,16 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
             "do_not_invite", "continue_conversation", "wait", "respect_no",
             "do_not_repeat_invite", "ask_user_info", "schedule_after_acceptance", "continue_or_close",
         }
-        and INVITATION_PATTERN.search(text)
+        and (INVITATION_PATTERN.search(text) or (
+            context.get("invite_decision") in {"respect_no", "do_not_repeat_invite"}
+            and REFUSAL_REINVITATION_PATTERN.search(text)
+        ))
     ):
         reasons.append("会話方針に反する誘い候補")
     if partner_latest_message_expresses_meeting_unease(context) and candidate_has_meeting_related_question(text):
         reasons.append("会うことへの慎重さの直後の質問")
+    if partner_latest_message_expresses_meeting_unease(context) and MINIMIZING_REASSURANCE_PATTERN.search(text):
+        reasons.append("相手の不安を軽く扱う表現")
     return reasons
 
 

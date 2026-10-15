@@ -519,3 +519,23 @@
 - PR #4はOPEN/Draft、head SHA一致。Test MatrixはID行234件（PASS178 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。
 - 勤続限定詞の修正後focused suite 21 passed。作業ツリーから追加したGemini API呼び出し0。QUALITY009の実生成品質FAILは残るためNO-GO、conversation_004未実施。
 - 引継ぎ: 実生成品質の修正には後続の許可済みAPI評価が必要。安全な候補を残して不足を通知する方針を維持する。
+
+
+### 2026-10-15 14:19 JST：直接質問・候補誤字・頻度のP0修正
+
+- `codex/directive-control` の最新版を取得し、2026-10-15 14:00 JSTの優先指示を確認。品質009の誤字、直接質問への回答、候補ごとの安全フィルターを最優先とした。`conversation_004`・新しい会話HTML・実Gemini通信は引き続き実施しない。
+- 直近の監査で、`カフェに週1くらい行きます`が「月1回」のプロフィール根拠を通過する問題を確認。週/月/年の数値頻度を正規化し、表記揺れを含めて比較するよう修正。毎日/週1/月1の矛盾ケースと一致ケースを追加。
+- 直接質問フィルターに未確認情報時のfail-openがあった。「好きな食べ物」「好きなタイプ」に話題をそらす候補が通ることを修正前2ケースFAILで再現。既知の本人質問を未回答なら候補を通さず、分類外の「得意料理」「得意なこと」も本人確認に回し、回答後に回答内容と異なる候補を落とす。
+- quality_checks_009の「どんな雰囲い」誤字を候補単位で除外。自動修正はせず、安全な別候補を残して指定数に足りない旨を通知するテストを追加。
+- 最新focused回帰 **29 passed**。`tests/test_app.py` **634 passed in 16.51s**。Python/JavaScript構文、`git diff --check`成功。全pytest/Firefox UIはこの追記時点で実行中。
+- 今回のGemini実API呼び出し0回。QUALITY009の手動出力評価FAILを保持。PR #4はDraft・未マージ。作業ブランチの未コミットの変更を保持し、ユーザーの未追跡txtファイルはステージしない。
+- 次: 全pytest/Firefoxの実行結果と差分レビューを確定し、進捗・品質目標・最終報告を追記。追跡対象のみcommit/pushして最新HEADのActionsとPR状態を確認する。その後は会話品質の未達P0/P1へ続ける。
+
+### 2026-10-15 14:21 JST：全体回帰完了
+
+- 修正後の全pytest **713 passed in 98.60s**。Firefox UIテストを含む。Chromeは使用していない。
+- `tests/test_app.py` は**634 passed**。最新重点セット**29 passed**。Python/JavaScript構文と`git diff --check`成功。
+- 本サイクルで発見したfail-openは、(a) 月1回頻度から週1くらいの誇張、(b) 未確認の直接質問に対する無関係な候補、(c) 確認回答と異なる「得意料理/技能」、(d) 品質009の「雰囲い」。各回帰を修正し、安全な候補は残して不足を通知する。
+- 最新Test Matrix ID行241: PASS181 / FAIL13 / FIXED27 / BLOCKED5 / NOT_TESTED15。過去のFAIL13は実生成品質など未解決履歴のため維持。
+- 実Gemini通信0回。品質009の実文章評価FAIL継続。会話004、新しい会話HTMLは実施しない。
+- 次: 独立レビューの追補を反映し、差分/秘密情報を点検、既知の行集計を保って文書を仕上げる。追跡ファイルのみcommit/pushし、最新SHAのGitHub Actions・PR #4 Draft状態を確認する。その後は残るコア品質へ進む。
