@@ -1039,3 +1039,23 @@ prompt変更を含む最新ローカル差分で全pytest **847 passed in 118.15
 `prompt_spec.md` に品質009の本人回答済み直接質問と候補ごとの回答要件を追記しました。仕様書のみのコミット `b76b8a3620b6c05dbc4017646268dd94c3f47f76` に対するPush [38717510713](https://github.com/kenkyu0909/aichatapp/actions/runs/38717510713) とPR [38717516553](https://github.com/kenkyu0909/aichatapp/actions/runs/38717516553) Actionsは両方successです。pytest、Firefox確認ステップ、JavaScript構文検査、結果Artifactが成功しました。コード修正SHA `532634105d9d7204aed931e36fe63b3541ad4fa3` に対するPush [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005) とPR [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421) もsuccessでした。
 
 今回はドキュメントだけの変更で、新たな実Gemini API通信はありません。保存済みQUALITY009の実生成手動FAIL、ミラーリングや意味的候補差の包括未評価が残るため、総合NO-GOを維持します。最新リポジトリHEADは仕様書追記の`b76b8a3`、最後に変更したコードは`5326341`です。PR #4はDraft・未マージです。
+
+## 2026-10-15 19:11 JST 追補：保存済み実出力の再生テスト
+
+既存の品質009 JSONを改変せず、4件の過去の不適切候補を現行バックエンドの安全候補フィルターへ再投入するオフライン回帰を追加しました。誤字「どんな雰囲い」、最近の映画作品名への直接質問を避ける代替2案、未確認の本人趣味「私もお出かけが好き」、相手の不安を軽く扱う「安心してください」が各期待理由で除外され、安全候補は各ケースで最低1案残りました。テストは現在のフィルターを確認するもので、Gemini生成品質全般を保証しません。
+
+focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.16s**（Firefox UI込み、失敗・skipなし）。Python・JavaScript構文と`git diff --check`も成功。Gemini実通信は0回。Test Matrixは305項目（PASS220 / FAIL13 / FIXED52 / BLOCKED5 / NOT_TESTED15）です。実生成の文章自然さと意味的候補多様性が未達のため総合**NO-GO**を維持します。
+
+この回帰を含む変更は未コミットです。コードレビューとPush後のCI確認を行います。
+
+### 2026-10-15 19:17 JST 追補：プロフィール好みの誤除外
+
+確認済みの自由記述プロフィールが候補フィルターに正しく伝わらず、自然な直接回答まで落とす問題を修正しました。プロフィールの雰囲気語と好みが候補の主張と一致する場合に限り通し、反対の比較・否定表現は遮断します。修正前の回帰テストFAILと修正後のfocused test **2 passed / 764 deselected** を確認しました。
+
+全pytest **850 passed in 108.52s**（Firefox UIを含み失敗・skipなし）。保存済みQUALITY009候補の再生focused suiteは**5 passed / 765 deselected**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。Test Matrixは306項目（PASS220 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15）。
+
+限定されたフィルター挙動は改善しましたが、保存済みQUALITY009の実生成日本語品質手動FAILと候補の意味的多様性は未解決です。総合判定NO-GOを維持します。今回差分は未コミットで、最新SHAのGitHub Actionsは未実行です。
+
+2026-10-15 19:20 JST時点のコード自己レビューで、確認済みの好みを根拠に候補を通す処理が未確認頻度を迂回し得る懸念も確認しました。許可判定を従来の頻度等の検査後へ移し、確定好みは通すが逆の比較好みと未確認頻度は除外する回帰を追加しました。focused cafe tests **3 passed / 763 deselected**、この最終差分の全pytest **850 passed in 110.92s**。Gemini実API0回。最新差分のActionsは未実行です。
+
+同じ差分でFirefox専用UI回帰も再実行し、`tests/test_ui_firefox.py` **6 passed in 84.73s**。ブラウザーでのConsole・first/質問・コピー/履歴改行・サーバー停止復帰・APIエラー操作を確認。Chrome不使用。最新差分Actionsはこの追補時点で未実行です。

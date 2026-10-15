@@ -4176,6 +4176,46 @@ def test_cafe_preference_polarity_is_preserved(client):
     assert "カフェ" not in backend.unsupported_personal_claim_topics([supported], context)
 
 
+def test_confirmed_cafe_atmosphere_profile_supports_direct_answer(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "どんな雰囲気のカフェが好きですか？"}],
+        "my_profile": {"facts": {"favorite_places": "落ち着いた雰囲気のお店が好きです"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="確認済みの回答", text="落ち着いた雰囲気が好きなんです！")
+
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert "カフェ" not in backend.unsupported_personal_claim_topics([candidate], context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
+    safe = backend.filter_safe_candidates(
+        backend.SuggestionsV2(
+            needs_user_info=False,
+            recommended=candidate,
+            reason="プロフィールで確認済みの好みを答える",
+            invite_decision="continue_conversation",
+        ),
+        1,
+        context,
+    )
+    assert safe["available_candidate_count"] == 1
+    assert safe["recommended"]["text"] == candidate.text
+
+    unsupported_frequency = backend.Candidate(
+        label="未確認の頻度",
+        text="落ち着いた雰囲気が好きで毎週カフェに行きます！",
+    )
+    assert "カフェ" in backend.unsupported_personal_claim_topics([unsupported_frequency], context)
+
+    comparative_profile = {
+        **context,
+        "my_profile": {"facts": {"favorite_places": "落ち着いた雰囲気よりにぎやかな店が好きです"}},
+    }
+    unsupported_opposite = backend.Candidate(label="反対の好み", text="落ち着いた雰囲気が好きなんです！")
+    assert "カフェ" in backend.unsupported_personal_claim_topics([unsupported_opposite], comparative_profile)
+
+
 def test_specific_curry_preference_does_not_verify_frequency_or_recent_experience(client):
     _, backend = client
     preference_only = {"my_profile": {"facts": {"favorite_foods": ["辛口チキンカレー"]}}, "ephemeral_user_answers": []}

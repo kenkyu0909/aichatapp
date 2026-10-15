@@ -861,3 +861,35 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 現在のHEADは仕様書のみの追記後で、コード部分はSHA `5326341` のまま。Test Matrix T304に双方のPush/PR実行URLを保存。累計304項目: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。
 - 実Gemini APIは0回。QUALITY009の保存済み実生成FAILが残るためNO-GO。会話004・新会話HTMLは行わない。PR #4はOPEN/Draft、未マージ。
 - 次: 返信方針の意味的重複と保存済みの誤字を、品質基準を下げずオフラインで調査する。ユーザー提供の未追跡指示ファイル3件は保持し、コードブランチに混ぜない。
+
+### 2026-10-15 19:11 JST 継続チェックポイント：品質009の実出力再生回帰
+
+- 既存の`quality_checks_009.json`を変更せず、保存された実Gemini候補を現在の`filter_safe_candidates`へ再投入するpytestを追加した。対象は誤字、作品名への直接質問を避ける代替案、未確認の本人趣味、相手の不安を軽視する候補。各ケースで不適切案が除外され、安全案が残ることを確認。
+- 追加テスト: `test_saved_quality009_live_candidates_replay_through_current_safety_filter`。focused suite **5 passed / 765 deselected**。全pytest **849 passed in 108.16s**（Firefox UI込み、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回。
+- 直前のSHA `7ebb81e2751441cc31c6e3643da700c8484a95fc` はPush [38717855766](https://github.com/kenkyu0909/aichatapp/actions/runs/38717855766)・PR [38717861897](https://github.com/kenkyu0909/aichatapp/actions/runs/38717861897) Actionsともsuccess。この再生回帰は未コミットで、未追跡のユーザー指示3ファイルも変更していない。
+- Test Matrixを305項目へ更新: PASS220 / FAIL13 / FIXED52 / BLOCKED5 / NOT_TESTED15。保存済みの候補安全上の既知失敗はこの限定ケースで現行フィルターが止めるが、生成そのものの日本語自然さ・意味的候補差は実APIで再確認しておらず、NO-GOを維持。
+- 次: Pythonコードレビュー結果を確認し、差分をcommit/pushして最新SHAのPush・PR Actionsを確認する。その後、QUALITY009の候補方針重複とFirefoxの手動コア導線という未評価P0へ進む。PR #4はOPEN/Draft、未マージ。
+
+### 2026-10-15 19:17 JST 継続チェックポイント：確定プロフィールの誤検出修正
+
+- 現行コードで再現した追加の候補除外不具合: `favorite_places`に「落ち着いた雰囲気のお店が好きです」と確認済みのとき、直接質問への自然な回答「落ち着いた雰囲気が好きなんです！」を「未確認の本人事実」と誤判定していた。
+- 原因はカフェ情報に分類される事実の検証が、特定フィールドの存在に偏り、自由記述の確認済み好みを使うことができなかった点。プロフィール内に同じ雰囲気・好みの肯定/否定が確認でき、比較表現の向きが一致する場合だけ通すようにした。逆の好みは引き続き遮断。
+- 修正前に回帰テストがFAILし、修正後のfocused cafe tests **2 passed / 764 deselected**。保存済み品質009候補のfocused suiteは**5 passed / 765 deselected**。全pytest **850 passed in 108.52s**（Firefox UI込み、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回。
+- Test Matrixは306項目: PASS220 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。過去のQUALITY009実生成手動FAILは限定フィルター回帰の成功では解決扱いにせず、総合NO-GO。
+- 最新チェック時の指示ブランチをfetch/showで確認。品質009の実出力再生後は、候補方針の重複とFirefoxの実UIコア導線を優先する。今回の変更は未コミット。未追跡のユーザー指示ファイル3件は保持。
+- 次: 差分を確認してコード・テスト・報告を選択的にコミットし、Push。最新SHAのPush/PR Actionsを確認後、Firefoxの実操作でプロフィール→生成→コピー→保存→履歴再表示を進める。PR #4はOPEN/Draft、未マージ。会話004/新規会話HTMLと実Gemini通信は行わない。
+
+### 2026-10-15 19:20 JST 継続チェックポイント：頻度検査を保ったプロフィール根拠の修正
+
+- コード差分の自己レビューで、先の誤検出修正がプロフィール根拠を見つけると即時許可し、未確認の頻度表現をすり抜ける可能性を発見。成功判定を後段へ遅らせ、従来の頻度・お気に入り・訪問習慣検査を通過した後にだけプロフィールの同じ雰囲気と好みを根拠として利用するようにした。
+- 追加した対照テストは、確定済みの自然な回答を通し、逆の比較好みと未確認の「毎週カフェに行く」を遮断する。focused cafe tests **3 passed / 763 deselected**。全pytestをこの最終差分で再実行して **850 passed in 110.92s**（Firefox UI込み、失敗・skipなし）。Gemini実API0回。
+- `app.py`、2つのpytestファイル、3種類の検証レポート、TEST_MATRIXを変更中。Python/JavaScript構文とdiff checkを最終確認してから選択コミット・Pushする。未追跡のユーザー指示3ファイルは保持し、commit対象に含めない。
+- Test Matrix 306項目（PASS220 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15）。限定された候補安全挙動は修正済みだが、実生成の文章品質FAILは未解決で総合NO-GO。
+- 次: 最終構文/diff確認、作業ブランチの競合のないことを確認してPushし、Actionsの最新SHAを照合。その後、Firefoxでコア導線の残る未評価項目を実操作する。PR #4はDraft未マージ、会話004/新規会話HTML/実Gemini API通信は行わない。
+
+### 2026-10-15 19:22 JST 継続チェックポイント：Firefox専用UI回帰
+
+- 最終差分で全pytest **850 passed in 110.92s**、うちFirefox UIも含む。Firefox専用の`tests/test_ui_firefox.py`も別途実行し、**6 passed in 84.73s**。Console監視、first/本人情報質問、改行表示・コピー・保存、サーバー停止/復帰、APIエラーの実ブラウザー操作が成功。Chromeは使用していない。
+- 最新変更は確定カフェ好みの候補誤除外の狭い修正、保存済み実出力の再生回帰、対照テスト、レポート。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- Test Matrix 307項目: PASS221 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。Gemini実APIは0回。保存済みQUALITY009の実生成手動FAILは未解決のため総合NO-GO。
+- 次: 差分を選択的にコミット・Pushし、Push/PR Actionsを最新SHAで確認。Actions成功後もP0の実生成出力・候補方針の未解決事項をオフラインで分析し、未評価ケースへ進む。指示は15〜20分以内に再確認。PR #4 Draft・未マージ。会話004/新規HTML/実API通信なし。

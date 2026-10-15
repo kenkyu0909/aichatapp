@@ -6,6 +6,85 @@ from scripts.run_quality_checks_009 import (
 )
 
 
+def test_saved_quality009_live_candidates_replay_through_current_safety_filter(tmp_path, monkeypatch):
+    """Preserve original live text while checking current candidate safeguards."""
+    import importlib.util
+    import json
+    from pathlib import Path
+    import sys
+
+    root = Path(__file__).parents[1]
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "empty-api"))
+    monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "0")
+    monkeypatch.delenv("MRA_API_1_KEY", raising=False)
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    spec = importlib.util.spec_from_file_location("quality009_replay_backend", root / "app.py")
+    assert spec is not None and spec.loader is not None
+    backend = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, backend)
+    spec.loader.exec_module(backend)
+    report_path = root / "docs/verification/simulations/quality_checks_009.json"
+    saved = json.loads(report_path.read_text(encoding="utf-8"))
+    cases = {item["id"]: item for item in saved["tests"]}
+    expected_rejections = {
+        "short_mirroring": {"話題の展開": "明らかな誤字"},
+        "recent_movie_answered": {
+            "代替案1": "相手からの直接質問に未回答",
+            "代替案2": "相手からの直接質問に未回答",
+        },
+        "known_partner_fact": {"代替2": "未確認の本人事実"},
+        "respect_decline_after_fix": {"距離を置いた共感": "相手の不安を軽く扱う表現"},
+    }
+
+    for case_id, rejected_labels in expected_rejections.items():
+        case = cases[case_id]
+        source_candidates = case["evaluation"]["candidates"]
+        candidate_models = [
+            backend.Candidate(label=item["label"], text=item["text"])
+            for item in source_candidates
+        ]
+        fields = case["evaluation"]["response_fields"]
+        suggestions = backend.SuggestionsV2(
+            needs_user_info=False,
+            user_questions=[],
+            user_info_reason="",
+            recommended=candidate_models[0],
+            alternatives=candidate_models[1:],
+            reason=fields.get("reason") or "保存済み実生成応答",
+            strategy=fields.get("strategy") or "",
+            conversation_stage=fields.get("conversation_stage") or "Stage 2",
+            invite_decision=fields.get("invite_decision") or "continue_conversation",
+            decision_reason=fields.get("decision_reason") or "",
+            next_action=fields.get("next_action") or "",
+        )
+        history = list(case["input"].get("history") or [])
+        history.append({"role": "them", "body": case["input"]["latest_partner_message"]})
+        context = {
+            "mode": "reply",
+            "history": history,
+            "my_profile": {"facts": case["input"].get("fictional_profile") or {}},
+            "ephemeral_user_answers": case["input"].get("fictional_user_answers") or [],
+        }
+
+        filtered = backend.filter_safe_candidates(suggestions, 3, context)
+        actual_rejections = {
+            item["label"]: item["reasons"]
+            for item in filtered["candidate_rejections"]
+        }
+        for label, reason in rejected_labels.items():
+            assert reason in actual_rejections.get(label, [])
+        assert filtered["available_candidate_count"] >= 1
+        assert filtered["generation_blocked"] is False
+
+        retained_texts = {
+            item["text"]
+            for item in [filtered["recommended"], *filtered["alternatives"]]
+        }
+        assert retained_texts <= {item["text"] for item in source_candidates}
+
+
 def test_smoke_quality_distinguishes_complete_and_safe_partial_candidate_sets():
     assert smoke_candidate_set_status(
         {"needs_user_info": False, "demo": False}, actual_count=3, requested_count=3

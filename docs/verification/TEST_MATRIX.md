@@ -651,3 +651,15 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T304 | 最新コード・仕様書コミットのGitHub Actions（Push・PR） | GitHub Actions実行ログをSHA照合 | PASS | コードSHA `532634105d9d7204aed931e36fe63b3541ad4fa3` のPush [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005)・PR [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421)、その後の仕様書のみのSHA `b76b8a3620b6c05dbc4017646268dd94c3f47f76` のPush [38717510713](https://github.com/kenkyu0909/aichatapp/actions/runs/38717510713)・PR [38717516553](https://github.com/kenkyu0909/aichatapp/actions/runs/38717516553) がすべてsuccess。各実行でpytest、Firefox確認ステップ、JavaScript構文チェック、結果Artifactアップロードが成功。|
 
 最新ID行: 304。累計: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
+
+| T305 | 品質009の保存済み実Gemini候補を現行フィルターで再生 | 架空の保存済みJSONを隔離バックエンドへ入力するオフラインpytest | FIXED | 原文を変更せず、現行`filter_safe_candidates`へ再投入。誤字、最近の映画への直接質問を避ける案、未確認の本人趣味、相手の不安を軽視する案がそれぞれ除外され、安全候補が残ることを確認。実Gemini通信は0回。focused suite **5 passed / 765 deselected**。全pytest **849 passed in 108.16s**（Firefox UIを含み失敗・skipなし）。|
+
+最新ID行: 305。累計: PASS220 / FAIL13 / FIXED52 / BLOCKED5 / NOT_TESTED15。品質009の保存済み文章品質手動FAIL・意味的候補多様性はなお未解決。|
+
+| T306 | 本人プロフィールに明記されたカフェの雰囲気を直接回答する候補 | 架空プロフィールを使うFastAPIバックエンドのpytest | FIXED | `favorite_places`に「落ち着いた雰囲気のお店が好きです」とある場合、直接回答「落ち着いた雰囲気が好きなんです！」を現行フィルターが通すことを確認。対照として、逆の比較表現とプロフィールにない週次頻度を引き続き除外。修正前は直接回答を誤って除外。focused cafe tests **3 passed / 763 deselected**。全pytest **850 passed in 110.92s**。Gemini実通信0回。|
+
+最新ID行: 306。累計: PASS220 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成手動FAIL・意味的候補多様性はなお未解決。|
+
+| T307 | Firefox実UI回帰（Console・first/質問・サーバー停止復帰・改行コピー保存・APIエラー） | `python -m pytest -q tests/test_ui_firefox.py`、Firefox上のブラウザー自動操作 | PASS | Firefoxで実画面を操作する6ケースが成功（**6 passed in 84.73s**）。表示、JavaScript例外監視、候補改行の表示・コピー・履歴保存、サーバー停止/再起動、情報確認UI、エラー状態を確認。Chrome不使用。|
+
+最新ID行: 307。累計: PASS221 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成手動FAIL・意味的候補多様性はなお未解決。|

@@ -1765,6 +1765,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
     profile_source = _trusted_fact_text(
         {**context, "ephemeral_user_answers": []}, include_negated=topic == "買い物"
     )
+    profile_scope_supported = False
     if not source and topic not in {"年齢", "職業"}:
         return False
     if topic == "年齢":
@@ -2197,6 +2198,14 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             losing_forms = {losing_descriptor, re.sub(r"いた$", "く", losing_descriptor)}
             if any(marker in losing_forms or re.sub(r"いた$", "く", marker) in losing_forms for marker in atmosphere):
                 return False
+        if atmosphere and re.search(r"好き|好み", text):
+            candidate_negative = _is_effectively_negative_personal_fact(text)
+            profile_scope_supported = any(
+                all(marker in clause for marker in atmosphere)
+                and re.search(r"好き|好み", clause)
+                and _is_effectively_negative_personal_fact(clause) == candidate_negative
+                for clause in _trusted_fact_clauses(context)
+            )
         if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
         frequency_patterns = (
@@ -2374,6 +2383,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
     if topic not in {"カレー頻度", "カレー経験", "場所探し", "旅行最近", "映画館頻度"} and (
         any(term in profile_source for term in PERSONAL_FACT_TOPICS[topic])
+        or profile_scope_supported
         or (topic == "カフェ" and any(
             context.get("my_profile", {}).get("facts", {}).get(key)
             for key in ("cafe_preferences", "favorite_cafe_atmosphere")
