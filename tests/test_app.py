@@ -2345,6 +2345,7 @@ def test_new_experience_patterns_do_not_reject_partner_questions(client, questio
     ("最近は新しいカフェを探すのが好きです", "最近は新しいカフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行きました", "最近旅行に行かれたんですね！", "旅行最近"),
     ("映画館によく行きます", "映画館によく行くんですね！", "映画館頻度"),
+    ("カフェを探すのは趣味ってほどでもないけど好き", "カフェを探すのが好きなんですね！", "場所探し"),
 ])
 def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_message, acknowledgment, topic):
     _, backend = client
@@ -2366,14 +2367,19 @@ def test_partner_attributed_acknowledgment_is_not_a_user_fact(client, partner_me
     ("カフェを探すのは趣味ではなくて", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェを探すのは趣味ってほどじゃない", "カフェを探すのが好きなんですね！", "場所探し"),
     ("カフェ探しは趣味というほどではないです", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのは趣味ってほどでもない", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェ探しは趣味というほどでもない", "カフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行ったことありますか？", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行に行ったことある", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("最近旅行行ったことあるん", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近海外とか行ったことあるの", "最近旅行に行かれたんですね！", "旅行最近"),
     ("映画館によく行くことありますか？", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館ってよく行くの", "映画館によく行くんですね！", "映画館頻度"),
     ("映画館によく行くの", "映画館によく行くんですね！", "映画館頻度"),
+    ("映画館よく行くん", "映画館によく行くんですね！", "映画館頻度"),
     ("カフェを探すのが好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
+    ("カフェを探すのって好きなの", "カフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行けませんでした", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けないです", "最近旅行に行かれたんですね！", "旅行最近"),
     ("最近旅行には行けないんです", "最近旅行に行かれたんですね！", "旅行最近"),
@@ -2458,6 +2464,8 @@ def test_hobby_negation_is_not_trusted_as_positive_place_search_fact(client):
     "カフェを探すのは趣味ではなくて",
     "カフェを探すのは趣味ってほどじゃない",
     "カフェ探しは趣味というほどではないです",
+    "カフェを探すのは趣味ってほどでもない",
+    "カフェ探しは趣味というほどでもない",
 ])
 def test_unasserted_place_search_is_not_trusted_as_profile_fact(client, negative_fact):
     _, backend = client
@@ -2465,6 +2473,15 @@ def test_unasserted_place_search_is_not_trusted_as_profile_fact(client, negative
 
     assert "場所探し" in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="否定と反対の候補", text="カフェを探すのが好きです！")
+    ], context)
+
+
+def test_explicit_positive_hobby_after_soft_negation_remains_trusted(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": ["カフェを探すのは趣味ってほどでもないけど好き"]}}}
+
+    assert "場所探し" not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="後続の肯定を反映", text="カフェを探すのが好きです！")
     ], context)
 
 
