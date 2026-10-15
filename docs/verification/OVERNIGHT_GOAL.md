@@ -652,3 +652,5 @@ prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15
 **総合判定：NO-GO。** 確定プロフィールを使う限定的な誤検出は直したが、QUALITY009の実生成手動FAILは未解決。指示上、実Gemini通信、会話004、新規会話HTMLは行っていない。今回差分は未コミット。
 
 19:20 JSTにコード差分を再確認し、プロフィールの好みが一致したとき早期returnで未確認頻度検査を飛ばす懸念を発見して修正した。頻度チェック後の根拠判定に変更し、確定好み・逆の比較・未確認頻度を区別するテスト3件が成功。focused tests **3 passed / 763 deselected**、全pytest **850 passed in 110.92s**。Firefox専用UI回帰 **6 passed in 84.73s**。Gemini実APIは0回。安定性のローカル検証は現行差分で成功したが、P0の意味的品質全般は未達。総合NO-GOを維持。
+
+コードSHA `25f365fab245e83a46bd9f4236921429f3069639` はPush [38719831848](https://github.com/kenkyu0909/aichatapp/actions/runs/38719831848)・PR [38719837338](https://github.com/kenkyu0909/aichatapp/actions/runs/38719837338) Actionsともsuccess。PR #4 OPEN/Draft・未マージ。Test Matrixは308項目: PASS222 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。

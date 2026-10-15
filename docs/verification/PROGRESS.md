@@ -893,3 +893,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 最新変更は確定カフェ好みの候補誤除外の狭い修正、保存済み実出力の再生回帰、対照テスト、レポート。`py_compile`、`node --check app.js`、`git diff --check`成功。
 - Test Matrix 307項目: PASS221 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。Gemini実APIは0回。保存済みQUALITY009の実生成手動FAILは未解決のため総合NO-GO。
 - 次: 差分を選択的にコミット・Pushし、Push/PR Actionsを最新SHAで確認。Actions成功後もP0の実生成出力・候補方針の未解決事項をオフラインで分析し、未評価ケースへ進む。指示は15〜20分以内に再確認。PR #4 Draft・未マージ。会話004/新規HTML/実API通信なし。
+
+### 2026-10-15 19:24 JST 継続チェックポイント：修正コミットのPush・CI確認
+
+- 修正コミット`25f365fab245e83a46bd9f4236921429f3069639`を既存ブランチへPush。Push Actions [38719831848](https://github.com/kenkyu0909/aichatapp/actions/runs/38719831848)とPR Actions [38719837338](https://github.com/kenkyu0909/aichatapp/actions/runs/38719837338)はともにsuccess。双方とも対象HEAD SHAが一致し、pytest、Firefox検査、JavaScript構文チェック、Artifacts保存が成功した。
+- ローカル全pytest **850 passed in 110.92s**、Firefox専用UI **6 passed in 84.73s**、Python/JavaScript構文検査成功。Test Matrixは308項目: PASS222 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。
+- 今回の修正は、確認済み自由記述プロフィールの好みに合う候補を通しつつ、逆の好みと未確認頻度を遮断するもの。保存済みGemini候補再生回帰も含む。実Gemini API0回。実生成の自然さ・候補意味多様性FAILは残るためNO-GO。会話004/新規会話HTMLはユーザー指示により未実施。
+- PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、head`25f365fab245e83a46bd9f4236921429f3069639`、未マージ。未追跡のユーザー指示ファイル3件は保持。
+- 次: 保存済み品質009の候補方針重複/反復をオフラインで再現し、候補A/B/Cの役割の整合性と不足通知を調査。15〜20分以内にdirective-controlを再fetch/showする。Chrome/実Gemini APIは使用しない。

@@ -1059,3 +1059,7 @@ focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.
 2026-10-15 19:20 JST時点のコード自己レビューで、確認済みの好みを根拠に候補を通す処理が未確認頻度を迂回し得る懸念も確認しました。許可判定を従来の頻度等の検査後へ移し、確定好みは通すが逆の比較好みと未確認頻度は除外する回帰を追加しました。focused cafe tests **3 passed / 763 deselected**、この最終差分の全pytest **850 passed in 110.92s**。Gemini実API0回。最新差分のActionsは未実行です。
 
 同じ差分でFirefox専用UI回帰も再実行し、`tests/test_ui_firefox.py` **6 passed in 84.73s**。ブラウザーでのConsole・first/質問・コピー/履歴改行・サーバー停止復帰・APIエラー操作を確認。Chrome不使用。最新差分Actionsはこの追補時点で未実行です。
+
+### GitHub Actionsの確認
+
+コード・テスト・検証報告を含むSHA `25f365fab245e83a46bd9f4236921429f3069639` のPush [38719831848](https://github.com/kenkyu0909/aichatapp/actions/runs/38719831848) とPR [38719837338](https://github.com/kenkyu0909/aichatapp/actions/runs/38719837338) Actionsはsuccess。双方でpytest、Firefoxチェック、JavaScript構文検査、Artifacts保存が完了した。PR #4はOPEN/Draft・未マージ。

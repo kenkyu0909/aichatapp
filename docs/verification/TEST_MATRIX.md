@@ -663,3 +663,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T307 | Firefox実UI回帰（Console・first/質問・サーバー停止復帰・改行コピー保存・APIエラー） | `python -m pytest -q tests/test_ui_firefox.py`、Firefox上のブラウザー自動操作 | PASS | Firefoxで実画面を操作する6ケースが成功（**6 passed in 84.73s**）。表示、JavaScript例外監視、候補改行の表示・コピー・履歴保存、サーバー停止/再起動、情報確認UI、エラー状態を確認。Chrome不使用。|
 
 最新ID行: 307。累計: PASS221 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成手動FAIL・意味的候補多様性はなお未解決。|
+
+| T308 | カフェ好み修正コミットのGitHub Actions（Push・PR） | Actionsログで対象SHAとジョブ結果を照合 | PASS | `25f365fab245e83a46bd9f4236921429f3069639`を対象とするPush [38719831848](https://github.com/kenkyu0909/aichatapp/actions/runs/38719831848)とPR [38719837338](https://github.com/kenkyu0909/aichatapp/actions/runs/38719837338)がsuccess。pytest、Firefox確認、JavaScript構文、Artifacts保存に成功。PR #4はOPEN/Draft。|
+
+最新ID行: 308。累計: PASS222 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。最新コードコミットのActionsは成功。品質009の実生成手動FAIL・意味的候補多様性はなお未解決。|
