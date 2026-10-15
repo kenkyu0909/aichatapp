@@ -440,7 +440,7 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 | T232 | 職歴「ちょっと／強／弱」の限定詞一致 | pytest回帰 / 確認済み5年 | FIXED | 独立レビューで確認済み「5年」に「5年ちょっと」「5年強」「5年弱」が通る問題を発見。追加した3件は修正前にすべてFAIL。修正後は限定詞を含めて値全体を照合。 |
 | T233 | 勤続限定詞・質問形・数値/単位境界のfocused回帰 | pytest | PASS | 2026-10-15 12:56 JST、21 passed。未知の限定詞を同一事実とみなさず、確認済み限定詞との一致と質問形の対照を確認。
 
-現在ID行233件。暫定集計: PASS177 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14。T228の612件は候補併合変更を含まない。Gemini実API呼び出し0、quality_checks_009の生成品質FAILは継続、conversation_004および新会話HTMLは未実施。
+現在ID行234件。暫定集計: PASS178 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14。T228の612件は候補併合変更を含まない。Gemini実API呼び出し0、quality_checks_009の生成品質FAILは継続、conversation_004および新会話HTMLは未実施。
 
 
 ## 2026-10-15 12:37 JST：プロフィール具体度・肯定節・頻度の独立監査
