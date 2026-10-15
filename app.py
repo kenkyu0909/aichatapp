@@ -833,7 +833,9 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
         # Keep terminal question marks attached so a question is never treated
         # as evidence that the partner actually has the stated habit or history.
         for fragment in re.split(r"(?<=[。！？!?])|\n", str(message.get("body", ""))):
-            partner_clauses.extend(re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment))
+            # Keep ``ですが`` attached so polarity after the contrast can be
+            # interpreted in its original context (e.g. 趣味ではないですが好き).
+            partner_clauses.extend(re.split(r"だけど|けれども|けれど|一方で|ただ", fragment))
     if topic == "場所探し":
         return any(
             re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)", clause)
@@ -962,7 +964,7 @@ def _is_interrogative_evidence_clause(clause: str) -> bool:
     stripped = clause.strip()
     return bool(
         re.search(r"[?？]\s*$", stripped)
-        or re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ことありますか|ことがあるの|かな)[\s]*$", stripped)
+        or re.search(r"(?:ですかね|ますかね|ませんかね|でしたかね|ましたかね|ことありますかね|ですか|ますか|ませんか|でしたか|ましたか|ことありますか|ことがあるの|かな)[\s]*$", stripped)
         # Casual Japanese chat often omits the question mark. These short
         # forms are ambiguous, so evidence checks conservatively reject them.
         or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}(?:行ったこと(?:が)?ある|行ってきた)(?:の|ん|か)?\s*$", stripped)
@@ -977,7 +979,9 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for fragment in re.split(r"[。！？!?\n,、]+", value):
-                clauses = re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment)
+                # Retain contrastive context so an explicit affirmative clause
+                # after ``ですが`` is not discarded with the preceding negation.
+                clauses = re.split(r"だけど|けれども|けれど|一方で|ただ", fragment)
                 for clause in clauses:
                     clause = clause.strip()
                     if clause and (include_negated or not _is_effectively_negative_personal_fact(clause)):
