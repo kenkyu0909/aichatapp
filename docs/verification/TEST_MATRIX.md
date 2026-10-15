@@ -668,7 +668,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 
 最新ID行: 308。累計: PASS222 / FAIL13 / FIXED53 / BLOCKED5 / NOT_TESTED15。最新コードコミットのActionsは成功。品質009の実生成手動FAIL・意味的候補多様性はなお未解決。|
 
-| T309 | 保存済み候補に`reply_move`がない場合の多様性通知 | 架空の候補を使ったバックエンドpytestと保存済みQUALITY009の再生 | FIXED | 古い応答で未記録の`reply_move`がスキーマ既定値`react`に補われ、実際に同一方針が出力されたか不明なのに重複警告を出す問題を再現・修正。すべての方針値が明示されている場合のみ同一方針警告を出し、明示的に重複した値の警告は維持。focused tests **3 passed / 769 deselected**。全pytest **851 passed in 105.01s**（Firefox UI込み）。Gemini実通信0回。|
+| T309 | 保存済み候補に`reply_move`がない場合の多様性通知 | 架空の候補を使ったバックエンドpytestと保存済みQUALITY009の再生 | FIXED | 未記録の方針を既定値`react`として重複警告に数える問題を修正。明示された方針だけを比較し、ラベル欠落は推測しない。2つ以上の明示ラベルが重複する場合は、ほかの案のラベルが欠けていても通知する。最新focused tests **2 passed / 765 deselected**。全pytest **851 passed in 103.89s**（Firefox UI込み）。Firefox専用UI **6 passed in 83.77s**。Gemini実通信0回。|
 
 最新ID行: 309。累計: PASS222 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の生成文章自然さ・意味的多様性はなお未解決。|
 

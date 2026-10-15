@@ -917,3 +917,10 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - Test Matrix 310項目: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。今回の既知状態は、欠けた`reply_move`情報を既定値から推測せず、明示された方針ラベルが重複した時だけ通知する。過去QUALITY009の実生成自然さFAILと意味的候補多様性FAILは残るためNO-GO。
 - PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、最新コードSHA`2ec2f11c51078096170a46d4543f5b6975553dad`、未マージ。未追跡の指示ファイル3件を保持。会話004/新しい会話HTML/実Gemini通信なし。
 - 次: 保存済みQUALITY009の会話停滞と候補方針差をもう一度、本文・過去文脈・既知情報の各要因に分けて見直し、オフラインの根本原因修正へ進む。15〜20分以内にdirective-controlを確認する。
+
+### 2026-10-15 19:40 JST 継続チェックポイント：部分的に記録された候補方針も正しく比較
+
+- 最新コード作業中に方針ラベルが一部欠ける応答も考慮し、ロジックを改善した。欠落ラベルを`react`と推測せず、残りの候補に明示された同一方針が2つ以上あれば重複通知する。全欠落なら通知せず、explicit duplicateの既存テストも維持。
+- 直後の全pytestでFirefoxのプロフィール保存トースト待ちが1回失敗したが、サーバーログではプロフィールPUTは成功していた。Firefox専用回帰は**6 passed in 83.77s**、全pytest再実行は**851 passed in 103.89s**（失敗・skipなし）。この1回のUIタイムアウトは診断のため記録し、全体再実行で再現しなかった。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- Test Matrix 310項目: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。Gemini実API0回。品質009の実生成手動FAILは継続。コード・テストとT309説明の更新は未コミット。未追跡ユーザー指示3ファイルは保持。
+- 次: 最新差分の構文/diff検査後に選択コミット・Pushし、最新HEADのActionsを確認。P0の品質FAILは継続調査する。会話004/新規会話HTML・実Gemini APIは行わない。指示ブランチは15〜20分以内に再確認。

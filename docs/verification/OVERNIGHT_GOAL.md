@@ -660,3 +660,7 @@ prompt追補を含む最新ローカル差分の全pytest **847 passed in 118.15
 ### 2026-10-15 19:35 JST 状態
 
 コードSHA `2ec2f11c51078096170a46d4543f5b6975553dad` のPush [38721061798](https://github.com/kenkyu0909/aichatapp/actions/runs/38721061798)とPR [38721069405](https://github.com/kenkyu0909/aichatapp/actions/runs/38721069405) Actionsがsuccess。全pytest851件（Firefox UI込み）、Firefox専用回帰6件、構文検査も成功。実Gemini API0回。本人情報の確認済み好みは候補に反映でき、未確認頻度を防ぐ対照ケースも通過。方針ラベル欠落の過去出力を一律`react`として警告していた問題も修正済み。実Gemini文章品質009の手動FAILと意味的候補多様性は未達のため総合NO-GO。Test Matrix: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15（310項目）。PR #4 OPEN/Draft・未マージ。
+
+### 2026-10-15 19:40 JST 追補
+
+部分的に存在する`reply_move`ラベルの検査を精緻化し、明示された重複だけを警告する。未知のラベルは既定値で補わない。focused tests **2 passed / 765 deselected**。Firefox UI **6 passed in 83.77s**、全pytestの再実行**851 passed in 103.89s**。最初の全pytestではプロフィール保存のUI通知待ちが単発FAILしたが、実保存APIは200応答、単独UIと再実行は成功。再現しないため不安定性として報告に残し、次のコア導線検証で監視する。Gemini実APIは0回。その他の品質009実生成FAILは未達でNO-GO。最新差分のCIは未実行。

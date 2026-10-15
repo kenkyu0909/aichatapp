@@ -4125,6 +4125,21 @@ def test_omitted_reply_moves_do_not_create_duplicate_move_warning(client):
     assert filtered["available_candidate_count"] == 2
     assert "進め方が重なっている" not in filtered["candidate_notice"]
 
+    partially_labeled = value.model_copy(update={
+        "recommended": backend.Candidate(
+            label="反応",
+            text="その話題は興味深いです！",
+            reply_move="react",
+        ),
+        "alternatives": [
+            backend.Candidate(label="既知の重複", text="どんなところが一番好きですか？", reply_move="react"),
+            backend.Candidate(label="未記録", text="もっと聞いてみたいです！"),
+        ],
+    })
+    partially_labeled_result = backend.filter_safe_candidates(partially_labeled, 3, {})
+    assert partially_labeled_result["available_candidate_count"] == 3
+    assert "進め方が重なっている" in partially_labeled_result["candidate_notice"]
+
 
 def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(client):
     _, backend = client

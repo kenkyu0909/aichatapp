@@ -3688,8 +3688,7 @@ def filter_safe_candidates(
             for candidate in accepted
             if "reply_move" in candidate.model_fields_set
         ]
-        all_moves_are_explicit = len(explicit_reply_moves) == len(accepted)
-        if all_moves_are_explicit and len(set(explicit_reply_moves)) < len(accepted):
+        if len(set(explicit_reply_moves)) < len(explicit_reply_moves):
             notices.append("候補の進め方が重なっている可能性があります。本文を確認して選んでください。")
     result["candidate_notice"] = " ".join(notices)
     return result
