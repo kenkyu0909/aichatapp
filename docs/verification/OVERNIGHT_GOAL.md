@@ -1113,7 +1113,7 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - T368をFIXEDとして追加。累計368項目: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。QUALITY009の実Gemini生成自然さ・意味多様性FAILが残るので総合NO-GO。Gemini通信0回。会話004・新HTML・PRマージは行わない。
 
 
-##### 2026-10-16 09:05 JST: T368最新HEADのPush/PR CI確認
+##### 2026-10-16 08:57 JST: T368最新HEADのPush/PR CI確認
 
 - 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush run [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR run [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) が同一SHAでsuccess。JUnit artifactは1366件 / failures 0 / errors 0 / skipped 0。
 - ゴール7のオフライン回帰とFirefox安定性はこのHEADでPASS。実Gemini自然さ・候補意味多様性の保存済みFAILが残るためゴール全体および総合判定はNO-GOのまま。Gemini通信0回。
