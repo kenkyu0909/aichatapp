@@ -7018,6 +7018,7 @@ def test_unclassified_personal_direct_question_requires_matching_user_answer(cli
     ("料理できる？", "簡単な料理なら作れます", "簡単な料理なら作れます！", "料理は得意です！", "料理はできません"),
     ("猫派？犬派？", "犬派です", "犬派です！", "猫派です！", "どちらかというと猫派です！"),
     ("何か集めてるものある？", "古い切手を集めています", "古い切手を集めています！", "漫画を集めています！", "何も集めていません"),
+    ("音楽何聴く", "最近は邦ロックをよく聴きます", "最近は邦ロックをよく聴きます！", "最近はジャズをよく聴きます！", "最近はクラシックをよく聴きます！"),
 ])
 def test_colloquial_personal_questions_require_matching_user_confirmation(
     client, question, answer, grounded_text, unsupported_text, contradiction_text
@@ -7065,6 +7066,70 @@ def test_unknown_nonpersonal_question_is_not_misclassified_as_user_fact_question
     assert backend._topic_for_personal_question("音楽って何ですか？") is None
     assert backend._topic_for_personal_question("それって何かある？") is None
     assert backend._topic_for_personal_question("甘いものってある？") is None
+    assert backend._topic_for_personal_question("最近は音楽を聴く") is None
+    assert backend._topic_for_personal_question("何でも食べる") is None
+    assert backend._topic_for_personal_question("何度も食べる") is None
+    assert backend._topic_for_personal_question("何か食べる") is None
+    assert backend._topic_for_personal_question("なにでも食べる") is None
+    assert backend._topic_for_personal_question("いつか行く") is None
+    assert backend._topic_for_personal_question("いつでも行く") is None
+    assert backend._topic_for_personal_question("誰でも行く") is None
+    assert backend._topic_for_personal_question("誰でも食べる") is None
+    assert backend._topic_for_personal_question("誰にでも話す") is None
+    assert backend._topic_for_personal_question("誰とでも話す") is None
+    assert backend._topic_for_personal_question("どこでも行く") is None
+    assert backend._topic_for_personal_question("どこか行く") is None
+    assert backend._topic_for_personal_question("どこへでも行く") is None
+    assert backend._topic_for_personal_question("どこにでも行く") is None
+    assert backend._topic_for_personal_question("どんなに遠くても行く") is None
+    assert backend._topic_for_personal_question("どんなものでも食べる") is None
+    assert backend._topic_for_personal_question("どんな本でも読む") is None
+    assert backend._topic_for_personal_question("どの店にも行く") is None
+    assert backend._topic_for_personal_question("どんな本にも目を通す") is None
+    assert backend._topic_for_personal_question("いつだって行く") is None
+    assert backend._topic_for_personal_question("いつまでも食べる") is None
+    assert backend._topic_for_personal_question("何だって食べる") is None
+    assert backend._topic_for_personal_question("何にでも対応できる") is None
+    assert backend._topic_for_personal_question("どこだって行く") is None
+    assert backend._topic_for_personal_question("どの店だって行く") is None
+    assert backend._topic_for_personal_question("誰だって行く") is None
+    assert backend._topic_for_personal_question("どんな本だって読む") is None
+    assert backend._topic_for_personal_question("どこにだって行く") is None
+    assert backend._topic_for_personal_question("どこへだって行く") is None
+    assert backend._topic_for_personal_question("誰からでも話を聞く") is None
+    assert backend._topic_for_personal_question("いつ行く") == "本人情報"
+
+
+def test_unpunctuated_movie_question_keeps_watch_content_scope(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "映画何観る"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question("映画何観る") == "映画"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert clarification.question == "普段どんな映画を観ますか？"
+
+
+@pytest.mark.parametrize("question", ["映画何観た", "どんな映画観た"])
+def test_unpunctuated_movie_past_question_checks_the_movie_not_movie_preference(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "映画"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "映画はお好きですか" not in clarification.question
+    assert "作品" in clarification.question
 
 
 def test_generic_confirmed_answer_does_not_ground_later_personal_claims(client):

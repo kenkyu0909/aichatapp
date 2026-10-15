@@ -393,7 +393,28 @@ PERSONAL_FACT_TOPICS = {
 }
 
 
+UNPUNCTUATED_CASUAL_PERSONAL_QUESTION = re.compile(
+    r"(?:何(?!でも|度も|回も|か|だって|にでも)|(?<!どん)なに(?!でも|か|だって|にでも)|"
+    r"どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも|だって))|"
+    r"どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも|だって))|"
+    r"どこ(?![へにとからまで]?(?:でも|も|だって)|か)|"
+    r"いつ(?!か|も|でも|までも|だって)|"
+    r"誰(?!でも|にでも|とでも|からでも|だって)|だれ(?!でも|にでも|とでも|からでも|だって)|どれくらい|どのくらい).{0,24}"
+    r"(?:いける|食べる|飲む|聴く|聞く|見る|観る|読む|できる|作れる|行く|"
+    r"食べた|飲んだ|聴いた|聞いた|見た|観た|読んだ|行った|空いてる|空いてます)$"
+)
+UNPUNCTUATED_INTERROGATIVE_ASSERTION = re.compile(
+    r"(?:何|なに|どんな|どの|どこ|いつ|誰|だれ)[^?？!！\r\n]{0,16}(?:でも|にも|へも|とも|からでも|からも|までも|だって)"
+)
+
+
 def _topic_for_personal_question(text: str) -> str | None:
+    if (
+        UNPUNCTUATED_INTERROGATIVE_ASSERTION.search(text)
+        and not re.search(r"[?？!！]|ですか|ますか|でしょうか|ませんか|んですか", text)
+        and not UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text)
+    ):
+        return None
     if re.search(
         r"(?:予約|営業時間|営業状況|アクセス|駐車|入店|入場|利用条件).{0,16}(?:いける|行ける|できます|できますか)|"
         r"(?:予約なし|予約不要).{0,10}(?:いける|行ける|入れる)",
@@ -412,7 +433,7 @@ def _topic_for_personal_question(text: str) -> str | None:
     if not explicit_movie_request and not re.search(
         r"[?？]|ですか|ますか|どんな|どの|何を|どこ|いつ|頻度|食べること|何歳|年齢|\d{2}歳|いくつ",
         text,
-    ):
+    ) and not UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text):
         return None
     invitation_free_text = INVITATION_PATTERN.sub("", text).strip(" \t\r\n?？!！か")
     if invitation_free_text != text.strip(" \t\r\n?？!！か"):
@@ -482,7 +503,7 @@ def _topic_for_personal_question(text: str) -> str | None:
                 # Avoid treating broad modifiers in declarative statements as
                 # direct questions. Requests without punctuation are allowed
                 # only when they explicitly ask for an answer or recommendation.
-                if not explicit_movie_request and not re.search(
+                if not explicit_movie_request and not UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text) and not re.search(
                     r"[?？]|ですか|ますか|ましたか|でしょうか|ませんか|んですか|教えて(?:ください)?",
                     text,
                 ):
@@ -494,10 +515,13 @@ def _topic_for_personal_question(text: str) -> str | None:
                     r"どの映画|何の映画|(?:最近|この前|昨日|先週)?観た映画.{0,10}(?:何|どれ|タイトル|作品名)|"
                     r"最近観た映画.{0,6}(?:何|どれ)(?:でした|です)|"
                     r"好きな映画.{0,8}(?:何|どれ|教えて|作品名|タイトル)|"
-                    r"どんな映画.{0,8}(?:観|見)た(?:んですか|のですか|[?？])|"
+                    r"どんな映画.{0,8}(?:観|見)た(?:んですか|のですか|[?？]|$)|"
+                    r"映画.{0,8}(?:何|なに).{0,8}(?:観|見)た|"
                     r"映画.{0,8}(?:作品名|タイトル)|(?:面白かった|良かった|よかった)映画.{0,8}何",
                     text,
                 ):
+                    return "映画"
+                if UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text):
                     return "映画"
                 if re.search(
                     r"映画.{0,12}(?:何|どこ|どんなところ|どういうところ|どの部分|どのあたり)が(?:好き|面白)|"
@@ -506,12 +530,12 @@ def _topic_for_personal_question(text: str) -> str | None:
                     text,
                 ):
                     return "映画"
-                if re.search(r"観たこと|見たこと|観た経験|見た経験|観たんですか|見たんですか|観ましたか|見ましたか|(?:観|見)た[?？]|観る[?？]|見る[?？]|見ていませんか|観ていませんか", text):
+                if re.search(r"観たこと|見たこと|観た経験|見た経験|観たんですか|見たんですか|観ましたか|見ましたか|(?:観|見)た[?？]|観る[?？]|見る[?？]|見ていませんか|観ていませんか|見てない|観てない|見ないんですか|観ないんですか", text):
                     return "映画"
                 if re.search(r"映画.{0,10}(?:観ますか|見ますか|観るんですか|見るんですか|観ることありますか|見ることありますか)", text):
                     return "映画"
             # Do not mistake statements about the partner for a question about the user.
-            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|観|見|読|行|住|空い|予定|買|購入|タイプ|頻度|経験|何系|どんな|どの|どこ|何が|何ですか|教えて|おすすめ|週末|いつ|地域|どのあたり)", text):
+            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|予定|タイプ|頻度|経験|何系|どんな(?!に|.{0,12}でも)|どの(?![^?？!！\r\n]{0,12}でも)|どこ(?![へにとからまで]?でも|か)|何が|何ですか|教えて|おすすめ|週末|いつ|地域|どのあたり)", text):
                 return topic
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
@@ -521,7 +545,7 @@ def _topic_for_personal_question(text: str) -> str | None:
     ):
         return None
     if re.search(
-        r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな|何を|どこに|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|いつ|性格|予定|空い|趣味|おすすめ)",
+        r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも))|何を|どこ(?![へにとからまで]?(?:でも|も)|か)|どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも))|住ん|地域|食べた|買|観た|見た|読んだ|仕事|学校|休日|週末|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
         return "本人情報"
@@ -534,6 +558,8 @@ def _topic_for_personal_question(text: str) -> str | None:
             r"(?:って|は|なら)?.{0,24}(?:いける|食べる|飲む|聴く|聞く|見る|観る|読む|できる|作れる)(?:ん|の)?[?？]$",
             text,
         )
+        # Casual questions can omit both the subject and question mark.
+        or UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text)
         or re.search(r"集めてる.{0,12}(?:ある|いる)[?？]$", text)
     ):
         return "本人情報"
@@ -1205,9 +1231,9 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
     elif topic == "映画" and not re.search(r"ジャンル|何系", source_question) and re.search(
         r"どの映画|何の映画|(?:最近|この前|昨日|先週)?観た映画.{0,10}(?:何|どれ|タイトル|作品名)|"
         r"最近観た映画(?:は)?(?:何|どれ)(?:(?:でした|です)(?:か)?)?[?？]?$|"
-        r"どんな映画.{0,8}(?:観|見)た(?:んですか|のですか|[?？])|"
+        r"どんな映画.{0,8}(?:観|見)た(?:んですか|のですか|[?？]|$)|"
         r"どんな映画.{0,8}(?:観|見)ました|好きな映画.{0,8}(?:何|どれ|教えて|作品名|タイトル|あります)|"
-        r"映画.{0,8}(?:何を(?:観|見)|何の作品|どの作品|作品名)|"
+        r"映画.{0,8}(?:(?:何|なに).{0,8}(?:観|見)た|何を(?:観|見)|何の作品|どの作品|作品名)|"
         r"(?:面白かった|良かった|よかった)映画(?:は|が)?(?:何(?:ですか|でしたか|でしょうか)|どれ|どの作品|タイトル|作品名|を教えて)",
         source_question,
     ):
@@ -1259,6 +1285,8 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "映画を観た経験があるか教えてください"
     elif topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", source_question):
         question = "最近観た映画があれば作品名を教えてください"
+    elif topic == "映画" and re.search(r"(?:何|なに|どんな).{0,10}(?:観る|見る)|(?:観る|見る).{0,10}(?:何|なに|どんな)", source_question):
+        question = "普段どんな映画を観ますか？"
     elif topic == "映画" and re.search(r"ジャンル|何系|どんな.*好き|好きな.*映画", source_question):
         question = "好きな映画のジャンルを教えてください"
     elif topic == "カフェ最近":
