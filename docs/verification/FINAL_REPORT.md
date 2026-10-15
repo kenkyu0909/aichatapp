@@ -1033,3 +1033,9 @@ prompt変更を含む最新ローカル差分で全pytest **847 passed in 118.15
 - 全pytestは`848 passed in 113.98s`（Firefox UIを含み失敗・skipなし）。Python構文、JavaScript構文、`git diff --check`も成功。Gemini実API通信は0回。
 - TEST_MATRIXは304項目: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成文面には誤字・候補の意味的重複等の手動FAILが残る。最新コードのオフライン安全ゲートとActions成功だけでは、それらが実モデル上で解決したとは言えないため総合判定は**NO-GO**。
 - PR #4はOPEN/Draft・未マージ。次は品質009の実出力を基に、誤字と返信方針の重複をオフラインで追加評価する。会話004や新しい会話HTMLは実施しない。
+
+## 2026-10-15 19:09 JST 追補：仕様書更新後のCI
+
+`prompt_spec.md` に品質009の本人回答済み直接質問と候補ごとの回答要件を追記しました。仕様書のみのコミット `b76b8a3620b6c05dbc4017646268dd94c3f47f76` に対するPush [38717510713](https://github.com/kenkyu0909/aichatapp/actions/runs/38717510713) とPR [38717516553](https://github.com/kenkyu0909/aichatapp/actions/runs/38717516553) Actionsは両方successです。pytest、Firefox確認ステップ、JavaScript構文検査、結果Artifactが成功しました。コード修正SHA `532634105d9d7204aed931e36fe63b3541ad4fa3` に対するPush [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005) とPR [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421) もsuccessでした。
+
+今回はドキュメントだけの変更で、新たな実Gemini API通信はありません。保存済みQUALITY009の実生成手動FAIL、ミラーリングや意味的候補差の包括未評価が残るため、総合NO-GOを維持します。最新リポジトリHEADは仕様書追記の`b76b8a3`、最後に変更したコードは`5326341`です。PR #4はDraft・未マージです。

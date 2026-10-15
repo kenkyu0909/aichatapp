@@ -853,3 +853,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - `quality_checks_009` の直接質問失敗を再現するT303は、確認済みの映画回答候補を残し、質問を回避した代替2案を除外して不足を通知する。focused test **1 passed / 764 deselected**。全pytest **848 passed in 113.98s**（Firefox UIを含み失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。
 - Test Matrixを304件へ更新: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成手動FAILは残るため、総合NO-GO。
 - 次: 保存済み品質009の誤字・候補方針重複を、既存出力を改変せずオフラインで引き続き再現・評価する。危険候補を数合わせで残さず、本人回答を守る候補フィルターを保つ。PR #4はDraft・未マージ。次回の指示fetchは15〜20分以内。
+
+### 2026-10-15 19:09 JST 継続チェックポイント：仕様書とCIの追記
+
+- `prompt_spec.md` に、QUALITY009の映画直接質問で本人が回答した作品名を各候補が使うこと、質問を避ける候補を除外し安全案の不足を知らせることを追記。実Gemini品質の再評価ではない点も明記。
+- 仕様書コミット `b76b8a3620b6c05dbc4017646268dd94c3f47f76` のPush Actions [38717510713](https://github.com/kenkyu0909/aichatapp/actions/runs/38717510713) とPR Actions [38717516553](https://github.com/kenkyu0909/aichatapp/actions/runs/38717516553) はsuccess。pytest、Firefox確認ステップ、JavaScript構文検査、Artifactアップロードが成功。コードを含む親SHA `532634105d9d7204aed931e36fe63b3541ad4fa3` の両Actionsもsuccess。
+- 現在のHEADは仕様書のみの追記後で、コード部分はSHA `5326341` のまま。Test Matrix T304に双方のPush/PR実行URLを保存。累計304項目: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。
+- 実Gemini APIは0回。QUALITY009の保存済み実生成FAILが残るためNO-GO。会話004・新会話HTMLは行わない。PR #4はOPEN/Draft、未マージ。
+- 次: 返信方針の意味的重複と保存済みの誤字を、品質基準を下げずオフラインで調査する。ユーザー提供の未追跡指示ファイル3件は保持し、コードブランチに混ぜない。

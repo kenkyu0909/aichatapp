@@ -648,6 +648,6 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 
 最新ID行: 303。累計: PASS219 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
 
-| T304 | 最新コミットのGitHub Actions（Push・PR） | GitHub Actions実行ログをSHA照合 | PASS | 対象SHA `532634105d9d7204aed931e36fe63b3541ad4fa3`。Push [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005) とPR [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421) がともにsuccess。両runでpytest、Firefox確認ステップ、JavaScript構文チェック、結果Artifactアップロードが成功。|
+| T304 | 最新コード・仕様書コミットのGitHub Actions（Push・PR） | GitHub Actions実行ログをSHA照合 | PASS | コードSHA `532634105d9d7204aed931e36fe63b3541ad4fa3` のPush [38716723005](https://github.com/kenkyu0909/aichatapp/actions/runs/38716723005)・PR [38716730421](https://github.com/kenkyu0909/aichatapp/actions/runs/38716730421)、その後の仕様書のみのSHA `b76b8a3620b6c05dbc4017646268dd94c3f47f76` のPush [38717510713](https://github.com/kenkyu0909/aichatapp/actions/runs/38717510713)・PR [38717516553](https://github.com/kenkyu0909/aichatapp/actions/runs/38717516553) がすべてsuccess。各実行でpytest、Firefox確認ステップ、JavaScript構文チェック、結果Artifactアップロードが成功。|
 
 最新ID行: 304。累計: PASS220 / FAIL13 / FIXED51 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
