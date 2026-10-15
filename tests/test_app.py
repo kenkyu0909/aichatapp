@@ -2396,6 +2396,28 @@ def test_contrast_does_not_promote_noun_modifier_to_affirmative_fact(client, irr
     ], context)
 
 
+def test_connective_hobby_negation_is_not_trusted_as_profile_fact(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": "カフェを探すのは好きじゃなくてあまりしません"}}}
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="接続形の否定", text="カフェを探すのが好きです！")
+    ], context)
+
+
+def test_connective_hobby_negation_is_not_partner_positive_evidence(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": "カフェを探すのは好きじゃなくてあまりしません"}],
+        "ephemeral_user_answers": [],
+    }
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="相手の接続形否定", text="カフェを探すのが好きなんですね！")
+    ], context)
+
+
 @pytest.mark.parametrize(("fact", "expected_claim"), [
     ("カフェを探すのは趣味ではないですが、好きです", "カフェを探すのが好きです！"),
     ("カフェを探すのは趣味ではないけど、楽しいです", "カフェを探すのが楽しいです！"),
