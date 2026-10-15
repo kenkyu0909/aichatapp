@@ -2341,6 +2341,52 @@ def test_new_experience_patterns_do_not_reject_partner_questions(client, questio
     assert topic not in backend.unsupported_personal_claim_topics([candidate], context)
 
 
+@pytest.mark.parametrize(("partner_message", "candidate_text", "topic"), [
+    ("映画館によく行くんですかね", "映画館によく行くんですね！", "映画館頻度"),
+    ("最近旅行に行ったんですかね", "最近旅行に行かれたんですね！", "旅行最近"),
+    ("カフェを探すのが好きですかね", "カフェを探すのが好きなんですね！", "場所探し"),
+])
+def test_indirect_polite_questions_do_not_count_as_partner_facts(client, partner_message, candidate_text, topic):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": partner_message}],
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="質問を事実と誤認", text=candidate_text)
+
+    assert topic in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("fact", "claim", "topic"), [
+    ("カフェを探すのは趣味ではないですが好きです", "カフェを探すのが好きです！", "場所探し"),
+    ("カフェを探すのは趣味ではないですが楽しいです", "カフェを探すのが好きです！", "場所探し"),
+])
+def test_affirmative_fact_after_desuga_contrast_remains_trusted(client, fact, claim, topic):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": fact}}, "ephemeral_user_answers": []}
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="後半の肯定を保持", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "カフェを探すのは趣味ではないですが好きです",
+    "カフェを探すのは趣味ではないですが楽しいです",
+])
+def test_partner_attribution_preserves_affirmative_desuga_contrast(client, partner_message):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": partner_message}],
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="相手の後半肯定への反応", text="カフェを探すのが好きなんですね！")
+
+    assert "場所探し" not in backend.unsupported_personal_claim_topics([candidate], context)
+
+
 @pytest.mark.parametrize(("partner_message", "acknowledgment", "topic"), [
     ("最近は新しいカフェを探すのが好きです", "最近は新しいカフェを探すのが好きなんですね！", "場所探し"),
     ("最近旅行に行きました", "最近旅行に行かれたんですね！", "旅行最近"),
