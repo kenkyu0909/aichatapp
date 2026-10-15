@@ -1198,6 +1198,35 @@ def test_explicit_acceptance_with_excitement_reopens_refused_invite(client):
     assert not backend.partner_has_active_invitation_refusal(context)
 
 
+@pytest.mark.parametrize("message", [
+    "落ち着いたら会えると嬉しいです！",
+    "また会えるタイミングがあれば嬉しいです",
+    "よかったらまた誘わせてください！",
+])
+def test_soft_reinvitation_after_refusal_is_rejected(client, message):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+        ],
+        "invite_decision": "continue_conversation",
+    }
+    candidate = backend.Candidate(label="soft invite", text=message)
+
+    assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_unrelated_now_statement_does_not_reactivate_reopened_invitation(client):
+    _, backend = client
+    context = {"history": [
+        {"role": "them", "body": "まだ会うのはちょっと不安です"},
+        {"role": "them", "body": "やっぱり今度一緒にカフェへ行ってみたいです"},
+        {"role": "them", "body": "今はミステリーを読んでいます"},
+    ]}
+
+    assert not backend.partner_has_active_invitation_refusal(context)
+
+
 @pytest.mark.parametrize("invite", [
     "ご飯行きませんか？",
     "今度ご飯でもどうですか？",
