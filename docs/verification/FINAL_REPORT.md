@@ -1427,3 +1427,9 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 確認できた動作: 回答済みの直接質問に答えない代替候補を除外し、安全な回答候補を保持。候補が不足する場合は通知。類似した安全候補も消さずに修復を1回まで試し、なお重なる場合は注意を表示。相手の断り/保留後の再勧誘候補を拒否し、中立候補は条件を満たせば保持。
 - 今回新しい回帰は見つからなかった。ただし過去QUALITY009の実Gemini文章品質・候補多様性FAILは過去出力の実評価であり、修正後の実生成を再確認していないため未解決扱いを維持する。Gemini API通信0回。
 - PR #4は引き続きDraft・未マージ。既存指示によりconversation_004と新しい会話HTMLは未実施。次の作業はこの確認結果の記録、最新HEAD CIの確認、未達P0の継続監査。
+
+## 2026-10-16 08:13 JST 最新HEADのActions証拠
+
+- `f832bd0529970d1bd6fddfc34169b67a17002b47`を対象とするPush Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706)とPR Actions [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。
+- Push runから取得したJUnit artifactは1365 tests、0 failures、0 errors、0 skipped。JavaScript構文検査、Firefox準備、結果Artifact保存も成功。
+- Actionsはオフライン回帰の成功を示す。過去のQUALITY009実Gemini自然さ・候補意味多様性FAILは未解決であり、総合NO-GOを維持する。PR #4はDraft・未マージ。

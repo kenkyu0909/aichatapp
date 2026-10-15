@@ -1367,3 +1367,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 今回の読み取り監査で新しい回帰は見つからなかった。既存QUALITY009の実生成自然さ・候補多様性FAILは、当時の実Gemini出力の評価として引き続き残す。修正後の本物のGemini出力は現行指示に従い再確認していない。API通信0回。
 - 直前HEAD `0dad91852210cdb1100dd7dd2cf341aa13e4bebe`のPush/PR Actions [38821349520](https://github.com/kenkyu0909/aichatapp/actions/runs/38821349520) / [38821354811](https://github.com/kenkyu0909/aichatapp/actions/runs/38821354811)は同一SHAでsuccess。詳細を追記するdocs-only更新後、最終HEADのActionsを再確認する。
 - 次: 現在の回答整合性・候補フィルターで残る限定範囲を確認し、実生成品質FAILを偽ってPASSにしない。PR #4はOPEN/Draft・未マージ、Firefoxのみ、会話004・新しい会話HTML・Gemini通信なし。
+
+### 2026-10-16 08:13 JST 最新HEAD CI確認
+
+- 最新HEAD `f832bd0529970d1bd6fddfc34169b67a17002b47`に対するPush Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706)とPR Actions [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。
+- Push runのJUnit artifact `offline-test-results/pytest.xml`で`tests=1365`, `failures=0`, `errors=0`, `skipped=0`を確認。JavaScript syntax check、Firefox準備、artifact uploadも成功。
+- PR #4はOPEN/Draft、最新head `f832bd0529970d1bd6fddfc34169b67a17002b47`、base `feat/ui-local-backend-v1`。未マージ。作業ツリーは保護対象の未追跡指示ファイル3件以外クリーン。
+- これはCI/回帰成功の証拠であり、QUALITY009に残る実Gemini文章自然さ・候補意味多様性FAILを解消しない。Gemini実通信0回、総合NO-GOを維持する。
