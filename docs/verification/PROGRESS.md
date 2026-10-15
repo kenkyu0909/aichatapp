@@ -657,3 +657,12 @@
 - この修正で、未分類の二択質問、確認済みカフェ情報を使った回答回避、招待承諾との分類衝突を安全側に処理する。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、マージなし。
 - Test Matrixは285項目: PASS209 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。Gemini実APIは今回0回。保存済みQUALITY009の手動生成品質FAILと包括的品質基準の未達は継続しており、総合判定NO-GO。
 - 次の作業: QUALITY009の保存出力で直接質問への回答・確認済み事実・拒否対応に残る未対処がないか監査し、別の高優先課題へ進む。ユーザー提供の未追跡txtはステージしない。
+
+### 2026-10-15 16:15 JST 継続チェックポイント：Windows start.batとFirefoxの隔離UI確認
+
+- 16:10 JSTにcodex/directive-controlの最新版（commit de38556ee55096b330ff5e81638bcad40586f442）を再取得。P0は直接質問・事実根拠・拒否尊重・通常利用の品質。実Gemini通信、会話004、新しい会話HTMLは実施しない。
+- 8765番ポートはPID 39504のPython 3.12プロセスがlisten。GET / は200、/api/statusも応答するがapp_idが空で今回の起動スクリプトが所有するアプリだと確認できない。停止せず、T02はBLOCKEDのまま。
+- Windowsのstart.batを一時DB・空API設定・別ポート8767で実行。127.0.0.1で起動後にFirefoxを開くことを確認。Firefox/Seleniumで架空の相手と受信メッセージをUIから登録し、ページ再読込後も保存され、監視したJS例外は0件。アプリの固定デモ生成は実行せず、Gemini API通信は0回。試験サーバーを停止し8767を解放した。
+- 追加結果はTEST_MATRIX T286 PASS。既定ポートのBLOCKEDと別ポート成功を分けて記録。今回のWindows試験は一時DBのためユーザーデータへ触れていない。
+- 総合NO-GOは維持。品質009の過去実生成FAILと包括的な意味品質基準の未達が残る。PR #4はOPEN/Draft、base feat/ui-local-backend-v1、未マージ。
+- 次: 記録をPushし最新Actionsを確認。その後、品質009の候補別直接回答性・意味的多様性のオフライン検証で未解決のP0を続ける。ユーザー提供の未追跡txtはステージしない。

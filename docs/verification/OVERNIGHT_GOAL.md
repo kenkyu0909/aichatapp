@@ -389,3 +389,9 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 | アプリ全体の安定性 | CONDITIONAL | 最新SHAのActions成功、761件成功、Firefox UIと構文検査成功。Windows 8765起動制約など既存のBLOCKED事項は残る。|
 
 Gemini実APIは今回0回。会話004および新規会話HTMLは未実施。PR #4はOPEN/Draft、未マージ。総合判定は**NO-GO**。次は保存済みQUALITY009の残存P0を確認し、実出力のFAILを隠さずオフラインで継続する。
+
+### 2026-10-15 16:15 JST 更新：Windows起動確認
+
+- アプリ全体の安定性: CONDITIONAL — Windows 11で一時データ・空API設定・8767番ポートを使いstart.batが127.0.0.1で起動し、準備後にFirefoxが開いた。Firefox/Seleniumで架空の相手とメッセージを登録し、再読込後の保持とJS例外0件を確認。試験プロセスは停止しポートを解放した。8765番はPID 39504のPython 3.12が占有し、statusのapp_idが空で実アプリと確認できないため停止・再起動していない。Windows既定ポートの起動は引き続きBLOCKED。
+- 実APIは0回。会話004/新規HTMLなし。TEST_MATRIXは286項目: PASS210 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。実生成品質009の手動FAILが残るため総合NO-GO。
+- 最新のコードSHA 199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00 と記録SHA 50029173083f069bb33373bbab623e1a07da3818 のPush/PR Actionsは成功。記録SHA artifactは761 tests / 0 failure / 0 error / 0 skipped。PR #4 OPEN/Draft、未マージ。

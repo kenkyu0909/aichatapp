@@ -5,7 +5,7 @@
 | ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
 |---|---|---|---|---|
 | T01 | アプリ起動（Python） | Python 3.12.10、Uvicorn | PASS | `127.0.0.1:8767`で起動。再起動も実施。 |
-| T02 | Windows `start.bat`起動 | 実機で実行 | BLOCKED | 2026-10-14の再確認では127.0.0.1:8765を既存の`python3.12`プロセスが占有しており、バッチ内UvicornはWinError 10048で起動できなかった。既存プロセスには触れていない。前回成功の履歴は下記の旧報告を参照。 |
+| T02 | Windows `start.bat`起動（既定ポート8765） | 実機で実行 | BLOCKED | 2026-10-14に加え、2026-10-15も127.0.0.1:8765をPID 39504のPython 3.12プロセスが占有。HTTP 200だが`/api/status`の`app_id`が空で、今回のアプリか確認できないため停止せず、既定ポートの起動は未実施。別ポートでの実機起動はT286を参照。 |
 | T03 | ローカルURL HTTP 200 | HTTP確認 | PASS | `/`が200。 |
 | T04 | HTML・CSS・JavaScript配信 | HTTP確認 | PASS | `/`、`/style.css`、`/app.js`が200。 |
 | T05 | ブラウザーJavaScript Console | Windows 11、Python 3.12.10、Selenium Firefox。アプリ起動・プロフィール・相手追加/切替・メッセージ追加/編集/削除・返信・いいね・設定・再読込を操作し、ページへ例外・未処理Promise拒否・console.error監視を追加 | PASS | Firefox UI自動操作でruntime/console errorsはいずれも空。直接の開発者ツールConsole採取ではなく、ページ側監視。ログ・スクリーンショットはActions [38518482078](https://github.com/kenkyu0909/aichatapp/actions/runs/38518482078) の`offline-test-results` artifact（実行SHA `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`）。テスト: `tests/test_ui_firefox.py`。 |
@@ -578,3 +578,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T285 | 直接質問・カフェ嗜好の安全ゲートを含む最新GitHub Actions | Push / PR workflow、artifactのpytest.xml | PASS | SHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00`でPush [run 38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR [run 38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) が成功。Push artifactは761 tests / 0 failures / 0 errors / 0 skipped。Firefox UIとJavaScript構文検査も成功。|
 
 最新ID行: 285。累計: PASS209 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。対象SHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00` のPush/PR Actionsを確認。過去のQUALITY009実生成品質FAILは維持し、今回のGemini実API呼び出しは0回。 |
+
+| T286 | Windows `start.bat`別ポート起動とFirefoxの架空データUI確認 | Windows 11、`MRA_PORT=8767`、一時`APP_DATA_DIR`、空`MRA_API_DIR`、Firefox/Selenium | PASS | `start.bat`が127.0.0.1:8767で起動し、準備完了後Firefoxを開いた。HTML/CSS/JSとAPIを読み込み、架空の相手・相手発言をUIから登録し、再読込後もSQLiteに保持。JS例外0件。テスト用サーバーは終了し8767を解放。Gemini通信なし。既定8765は別PIDのため変更していない。|
+
+最新ID行: 286。累計: PASS210 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。T02は既定ポートを特定できない既存プロセスが占有するためBLOCKEDのまま。T286は一時データと8767でのWindows/Firefox実機確認に成功。 |
