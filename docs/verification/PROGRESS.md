@@ -409,7 +409,7 @@
 - `app.py`を修正し、直接質問と無関係な未確認候補を本人質問へ変換しない。1回の再生成後も残る候補は質問も送信候補も返さず停止する。不要なモデル本人質問には安全な返信を1回だけ再生成し、再度不適切なら停止。
 - 追加3テストを含め全pytest**375 passed, 1 warning**。Firefox単独`tests/test_ui_firefox.py`は**5 passed**。後続で`node --check app.js`、Python構文、`git diff --check`、秘密情報スキャンを最終確認する。
 - `44fbe733e00652774d942109fe2a2411fb67029d`のPush Actions [38658096934](https://github.com/kenkyu0909/aichatapp/actions/runs/38658096934)とPR Actions [38658104233](https://github.com/kenkyu0909/aichatapp/actions/runs/38658104233)は同SHAで成功。両方375 passed, 1 warning。Firefox準備、JavaScript構文検査、Artifact保存も成功。
-- 次: 最終報告追記後のHEADに対するActionsを確認し、PR本文へ最終SHAとrun URLを記録する。PR #4はDraft維持、未マージ。
+- PR #4の本文へ品質007の実API結果、会話004を行わなかった理由、レポートリンク、最終報告SHAとActions URLを反映済み。PR #4はOPEN/Draftで、マージしていない。最終進捗記録のHEAD向けActionsも完了後にPR本文へ追記する。
 
 
 ### 2026-10-15 品質007の最終CI
