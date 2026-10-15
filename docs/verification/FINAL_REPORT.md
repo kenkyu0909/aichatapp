@@ -1075,3 +1075,12 @@ focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.
 ### 2026-10-15 19:40 JST 追補：方針ラベルの一部欠落
 
 明示ラベルが2つ以上重複する場合は警告し、欠落分を既定値から推測しないようにした。全pytest **851 passed in 103.89s**（Firefox UI込み）。Firefox単独UIは**6 passed in 83.77s**。この差分を含む全pytestの1回目はプロフィール保存後の通知待ちで1件FAILしたが、記録上プロフィールPUTは200。Firefox単独と全pytest再実行は成功し、当該UI失敗は再現しなかった。最新コード差分のActionsは未実行。
+
+
+## 2026-10-15 20:35 JST 追補
+
+映画館についての本人確認質問を、利用経験・頻度・雰囲気・行きつけの場所に分け、相手の質問の範囲に合わせる修正を`app.py`へ加えました。映画館そのものの所在地を尋ねる文は、本人の嗜好確認へ誤誘導しないようにしました。回帰テストは`tests/test_app.py`に追加しました。
+
+重点テスト65件、関連テスト199件、全pytest930件が成功しました。Python構文検査、JavaScript構文検査、`git diff --check`も成功しました。全pytestにはFirefox UIテストが含まれます。Chromeは使用していません。Gemini実APIは使用していません。
+
+この結果はローカル質問判定の修正を示すもので、保存済みQUALITY009の文章自然さ・意味的な候補差のFAILは未解決です。総合判定は**NO-GO**を維持します。PR #4はOPEN/Draftで未マージです。今回の差分はまだコミット・Pushしておらず、GitHub Actionsは未実行です。

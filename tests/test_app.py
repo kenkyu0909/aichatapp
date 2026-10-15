@@ -2128,6 +2128,155 @@ def test_generic_reading_hobby_does_not_confirm_recent_book_or_genre(client):
     assert backend.missing_personal_fact_question(context) is not None
 
 
+@pytest.mark.parametrize(("partner_question", "expected_user_question"), [
+    ("最近観た映画どうでしたか？", "最近観た映画についてどんな感想でしたか？"),
+    ("映画を観たことありますか？", "映画を観た経験があるか教えてください"),
+    ("最近映画を観ましたか？", "最近映画を観たか教えてください"),
+    ("最近面白かった映画は何ですか？", "最近観た映画があれば作品名を教えてください"),
+    ("最近どの映画が良かったですか？", "最近観た映画があれば作品名を教えてください"),
+    ("どの映画が良かったですか？", "映画の作品名を教えてください"),
+    ("映画は何が面白かったですか？", "映画についてどんな感想でしたか？"),
+    ("映画の何が好きですか？", "映画のどんなところが好きか教えてください"),
+    ("面白い映画の何が好きですか？", "映画のどんなところが好きか教えてください"),
+    ("好きな映画は何ですか？", "好きな映画の作品名を教えてください"),
+    ("好きな映画を教えてください", "好きな映画の作品名を教えてください"),
+    ("映画のどこが好きですか？", "映画のどんなところが好きか教えてください"),
+    ("映画のどの部分が好きですか？", "映画のどんなところが好きか教えてください"),
+    ("面白かった映画は何ですか？", "映画の作品名を教えてください"),
+    ("どんな映画が好きですか？", "好きな映画のジャンルを教えてください"),
+    ("映画のジャンルは何が好きですか？", "好きな映画のジャンルを教えてください"),
+    ("映画のどこが面白いですか？", "映画のどんなところが面白いか教えてください"),
+    ("映画をよく観るんですか？", "普段どのくらい映画を観ますか？"),
+    ("映画はどのくらい観ますか？", "普段どのくらい映画を観ますか？"),
+    ("昨日映画を観たんですか？", "昨日映画を観たか教えてください"),
+    ("最近映画を観ていませんか？", "最近映画を観たか教えてください"),
+    ("映画館のどの部分が好きですか？", "映画館のどんなところが好きか教えてください"),
+    ("映画館に行ったことありますか？", "映画館に行った経験があるか教えてください"),
+    ("映画館に最近行きましたか？", "最近映画館に行ったか教えてください"),
+    ("映画館って行きますか？", "映画館に行くことがあるか教えてください"),
+    ("映画館に通っていますか？", "映画館に通うことがあるか教えてください"),
+    ("映画館で観るのが好きですか？", "映画館で映画を観るのは好きですか？"),
+    ("どの映画館に行きますか？", "普段行く映画館の名前や場所を教えてください"),
+    ("どの映画館によく行きますか？", "普段行く映画館の名前や場所を教えてください"),
+    ("いつもどこの映画館に行きますか？", "普段行く映画館の名前や場所を教えてください"),
+    ("よく行く映画館はどこですか？", "普段行く映画館の名前や場所を教えてください"),
+    ("行きつけの映画館はありますか？", "行きつけの映画館があるか教えてください"),
+    ("行きつけの映画館はどこですか？", "普段行く映画館の名前や場所を教えてください"),
+    ("映画館の雰囲気は好きですか？", "映画館の雰囲気が好きか教えてください"),
+    ("映画が好きならおすすめ教えてください", "おすすめできる映画があれば作品名を教えてください"),
+    ("映画館好きですか？", "映画館は好きですか？"),
+    ("映画館って好きですか？", "映画館は好きですか？"),
+    ("映画は観ますか？", "映画を観るか教えてください"),
+    ("どんな映画を観ましたか？", "観た映画の作品名を教えてください"),
+    ("最近映画を観た？", "最近映画を観たか教えてください"),
+    ("おすすめ映画教えてください", "おすすめできる映画があれば作品名を教えてください"),
+    ("おすすめの映画ありますか？", "おすすめできる映画があれば作品名を教えてください"),
+    ("最近観た映画何でしたか？", "最近観た映画の作品名を教えてください"),
+    ("どんな映画を見たんですか？", "観た映画の作品名を教えてください"),
+    ("映画観る？", "映画を観るか教えてください"),
+    ("どこが映画の面白いところですか？", "映画のどんなところが面白いか教えてください"),
+    ("最近観た映画のどこが面白かったですか？", "最近観た映画のどんなところが面白かったか教えてください"),
+    ("映画観た？", "映画を観た経験があるか教えてください"),
+    ("最近観た映画は何？", "最近観た映画の作品名を教えてください"),
+    ("映画おすすめして", "おすすめできる映画があれば作品名を教えてください"),
+    ("映画館はどんな雰囲気ですか？", "映画館の雰囲気をどう感じるか教えてください"),
+    ("最近観た映画のタイトルは？", "最近観た映画の作品名を教えてください"),
+    ("昨日観た映画何でした？", "昨日観た映画の作品名を教えてください"),
+    ("先週観た映画はどれですか？", "先週観た映画の作品名を教えてください"),
+    ("映画を観たんですか？", "映画を観た経験があるか教えてください"),
+    ("映画観てない？", "映画を観た経験があるか教えてください"),
+    ("映画を観ていませんか？", "映画を観た経験があるか教えてください"),
+    ("映画は観ないんですか？", "普段映画を観るか教えてください"),
+])
+def test_movie_user_question_matches_asked_experience_scope(client, partner_question, expected_user_question):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+
+    clarification = backend.missing_personal_fact_question(context)
+
+    assert clarification is not None
+    assert clarification.question == expected_user_question
+
+
+@pytest.mark.parametrize("partner_message", [
+    "昨日は映画を観ました",
+    "映画館に行ってきました！",
+    "映画って面白いですよね",
+    "どんな映画も好きです",
+    "どの映画も面白いです",
+])
+def test_movie_statements_do_not_trigger_personal_fact_question(client, partner_message):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_message})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_movie_theater_location_question_does_not_ask_for_personal_preference(client):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画館はどこにありますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("partner_question", ["映画館はどこですか？", "近くの映画館どこですか？"])
+def test_factual_movie_theater_location_does_not_trigger_personal_question(client, partner_question):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("habit_key", ["cinema_visit_habits", "cinema_visits", "movie_theater_visits", "映画館に行く習慣"])
+def test_confirmed_cinema_attendance_habit_prevents_duplicate_question(client, habit_key):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画館って行きますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    context["my_profile"].setdefault("facts", {})[habit_key] = "月に1回ほど行きます"
+
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("habit_key", ["cinema_visit_habits", "cinema_visits", "movie_theater_visits", "movie_theater_frequency", "cinema_visit_frequency", "映画館に行く習慣", "映画館に行く頻度"])
+def test_confirmed_cinema_frequency_prevents_duplicate_question(client, habit_key):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画館にはどのくらいの頻度で行きますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    context["my_profile"].setdefault("facts", {})[habit_key] = "月に1回ほど行きます"
+
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_general_cinema_preference_does_not_verify_which_theater_the_user_visits(client):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "よく行く映画館はどこですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    context["my_profile"].setdefault("facts", {})["cinema_preferences"] = "映画館が好き"
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_general_cinema_preference_does_not_verify_cinema_atmosphere(client):
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画館の雰囲気は好きですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    context["my_profile"].setdefault("facts", {})["cinema_preferences"] = "映画館が好き"
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+
 @pytest.mark.parametrize(("profile_facts", "partner_question", "expected_topic"), [
     ({"hobbies": ["読書", "カフェ巡り"]}, "気になる新作を見つけたらすぐ買うタイプですか？", "買い物"),
     ({"hobbies": ["読書", "カフェ巡り"]}, "カレーだと何が好きですか？", "カレー"),

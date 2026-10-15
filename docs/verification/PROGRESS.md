@@ -933,3 +933,13 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 直後の全pytestでFirefoxのプロフィール保存トースト待ちが1回失敗したが、サーバーログではプロフィールPUTは成功していた。Firefox専用回帰は**6 passed in 83.77s**、全pytest再実行は**851 passed in 103.89s**（失敗・skipなし）。この1回のUIタイムアウトは診断のため記録し、全体再実行で再現しなかった。`py_compile`、`node --check app.js`、`git diff --check`成功。
 - Test Matrix 310項目: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。Gemini実API0回。品質009の実生成手動FAILは継続。コード・テストとT309説明の更新は未コミット。未追跡ユーザー指示3ファイルは保持。
 - 次: 最新差分の構文/diff検査後に選択コミット・Pushし、最新HEADのActionsを確認。P0の品質FAILは継続調査する。会話004/新規会話HTML・実Gemini APIは行わない。指示ブランチは15〜20分以内に再確認。
+
+
+### 2026-10-15 20:35 JST チェックポイント：映画館に関する本人確認の質問範囲を修正
+
+- 映画館について「最近行ったか」「行く頻度」「雰囲気」「行きつけの場所」などを尋ねられたとき、質問された範囲に沿って本人へ確認するようにした。映画館の一般的な場所を尋ねる質問は、本人情報の確認へ誤誘導しない。確認済み情報の範囲も質問内容と照合する。
+- 修正対象は`app.py`と`tests/test_app.py`。修正前に再現ケースを固定し、頻度・場所・経験・雰囲気および誤判定の対照例を追加した。
+- 重点テスト **65 passed / 774 deselected**、関連テスト **199 passed / 647 deselected**、全pytest **930 passed**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`も成功。Firefox UIテストは全pytest内で実行した。Chromeは使用していない。
+- Gemini実APIは**0回**。この変更は確認質問のローカル判定を修正するもので、保存済みQUALITY009の実生成品質FAILを解決した証拠ではない。総合判定は**NO-GO**。
+- Test Matrixは312項目: PASS224 / FAIL13 / FIXED55 / BLOCKED5 / NOT_TESTED15。新規T312を追加した。現在のコード修正と報告更新は未コミット。Push後のGitHub Actionsも未確認。
+- 次は品質009の保存済み会話から「直接質問に答えない」「意味の似た共感が続く」失敗を別々に分析し、候補選別と返信方針生成の既存テストを基にP0を修正する。15〜20分以内に指示ブランチを再取得する。会話004・新しい会話HTMLは指示により作成しない。PR #4はDraft・未マージを維持する。

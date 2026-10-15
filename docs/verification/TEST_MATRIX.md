@@ -679,3 +679,8 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T311 | 部分的な`reply_move`重複修正のGitHub Actions（Push・PR） | Actionsログで最新SHA・Push・PR結果を照合 | PASS | SHA `18c29a6d35705e392bb7258ef218f6960c505257`のPush [38722645521](https://github.com/kenkyu0909/aichatapp/actions/runs/38722645521)・PR [38722651123](https://github.com/kenkyu0909/aichatapp/actions/runs/38722651123)がsuccess。両方でpytest、Firefoxチェック、JavaScript構文検査、Artifacts保存に成功。PR #4 OPEN/Draft。|
 
 最新ID行: 311。累計: PASS224 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質FAILは継続。|
+
+
+| T312 | 映画館に関する本人確認質問の意図・範囲 | 架空の質問文を使ったpytest（正常系と誤判定対照） | FIXED | 映画館の利用経験・頻度・雰囲気・行きつけ場所を区別し、対応する一時確認質問を返す。映画館自体の所在地を尋ねる質問を本人情報確認に誤分類しない。本人情報の確認範囲も一致させる。重点65 passed / 774 deselected、関連199 passed / 647 deselected、全pytest930 passed。Python/JavaScript構文検査とdiff check成功。Firefox UIは全pytest内で実行。モック・ローカル検証のみ、Gemini実通信0回。Actionsは未実行。|
+
+最新ID行: 312。累計: PASS224 / FAIL13 / FIXED55 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成品質FAILは継続。
