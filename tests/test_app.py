@@ -1202,6 +1202,8 @@ def test_explicit_acceptance_with_excitement_reopens_refused_invite(client):
     "落ち着いたら会えると嬉しいです！",
     "また会えるタイミングがあれば嬉しいです",
     "よかったらまた誘わせてください！",
+    "タイミングが合ったらカフェ行きましょう！",
+    "落ち着いたらご飯でも行けたら嬉しいです",
 ])
 def test_soft_reinvitation_after_refusal_is_rejected(client, message):
     _, backend = client
@@ -2225,6 +2227,38 @@ def test_hometown_visit_frequency_requires_matching_evidence(client):
     context = {"my_profile": {"facts": {"hometown_visits": "実家は横浜で年に数回帰省します"}}}
 
     assert "出身地" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("claim", "topic", "facts"), [
+    ("ジムには週3回は行きません！", "運動習慣", {"exercise_habits": "ジムに週3回行きます"}),
+    ("実家が横浜なのでよく帰りません！", "出身地", {"hometown_visits": "実家は横浜でよく帰ります"}),
+    ("兄弟がいますが普段あまり連絡していません！", "家族", {"siblings": "兄弟がいてよく連絡します"}),
+    ("週末はよく料理しません！", "料理習慣", {"cooking_habits": "週末によく料理します"}),
+])
+def test_uncovered_personal_fact_domains_reject_opposite_polarity(client, claim, topic, facts):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済み事実と逆", text=claim)
+    ], context)
+
+
+@pytest.mark.parametrize(("question", "answer", "claim", "topic"), [
+    ("週に何回ジムに行きますか？", "週3回です", "ジムには週3回行きます！", "運動習慣"),
+    ("兄弟はいますか？", "妹がいます", "妹がいます！", "家族"),
+    ("週末はどのくらい料理しますか？", "週末によくします", "週末はよく料理します！", "料理習慣"),
+])
+def test_ephemeral_answer_supports_matching_new_personal_fact_scope(client, question, answer, claim, topic):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="本人確認済み回答", text=claim)
+    ], context)
 
 
 @pytest.mark.parametrize(("answered_question", "answer", "new_question"), [
