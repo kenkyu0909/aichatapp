@@ -1088,3 +1088,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - PR #4: OPEN/Draft、base `feat/ui-local-backend-v1`、head `af1038c636341595c1d0eedbf443d72568fd0a6c`、未マージ。
 - T331をPASS追加。Test Matrix **331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15**。過去QUALITY009の実生成自然さ・候補意味多様性FAILが残るため総合**NO-GO**。
 - 現在の差分はT331の記録だけで、ユーザー提供の未追跡指示txt3点をステージしていない。次はこの記録をPushし、docs-only HEADのCIも確認する。その後、保存済み品質ログに関連する次の未達課題をオフラインで確認する。
+
+### 2026-10-16 01:23 JST 継続チェックポイント：句読点なし口語質問と相手切替後の古い候補
+
+- 指示ブランチを再取得。最新HEADは `0e96dc5002a9d73676420d623aefa073728bd8e5`。会話004・新しい会話HTML・Gemini実通信は現行指示で実施しない。
+- 「音楽何聴く」のような句読点なし質問を本人情報確認へ誘導する分岐を補強。レビューで見つかった平叙文「誰でも行く」「どんな本でも読む」「どこにだって行く」等は確認質問に誤分類しないよう、一般的な助詞・副助詞形をテストして絞った。既存の映画質問範囲テストで否定疑問が確認されなくなる回帰2件も再現・修正。
+- 別件として、Firefoxで相手Aの候補確認中に相手Bへ切り替えた後も、古い候補を誤記録できないUI回帰テストを追加。切替後の描画待ちを明示し、画面とAPI履歴両方でA/Bの分離を確認。
+- 変更前のレビュー指摘は修正前テストで再現。Focused質問/映画テスト **70 passed, 861 deselected**、stale候補Firefoxテスト **1 passed**。最終全pytest **1017 passed in 137.53s**（Firefox込み）。過去のフル実行では既存プロフィールtoast待ち1件が一度タイムアウトしたが、単独テストと後続の全pytestで成功。Pythonコードレビューは追加した平叙形と映画否定疑問に明確な問題なし。
+- `python -m py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。変更はまだ未コミット・未Push、Actionsは未実行。TEST_MATRIXを333項目（PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15）へ更新。QUALITY009の実Gemini自然さ/候補意味多様性FAILが残るためNO-GO。
+- 次: `app.py` / `tests/test_app.py` / `tests/test_ui_firefox.py`と検証資料だけを選択的にコミット・Pushし、最新SHAのPush/PR ActionsとPR #4 OPEN/Draftを確認する。ユーザー提供の未追跡指示ファイル3件を保持する。次のP0としてFirefoxでのfollowup/likeのコピー→手動記録→再読込導線が未確認か調べ、残差を続ける。

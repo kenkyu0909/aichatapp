@@ -1177,3 +1177,16 @@ T329の旧SHA`9d64e15990d83fec52477d9934450644214c69b6`を対象とするPush Ac
 ### 2026-10-16 00:46 JST 最新CI
 
 延期表現境界修正SHA`af1038c636341595c1d0eedbf443d72568fd0a6c`を対象に、Push Actions 38763118050およびPR Actions 38763126584が両方successし、head SHA一致。pytest 1012 passed、Firefox 157確認、JavaScript構文検査とartifact upload成功。PR #4はOPEN/Draft・未マージ。T331 PASSを追加し、Test Matrixは331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。過去QUALITY009の実生成品質FAILが残るためNO-GO。|
+
+### 2026-10-16 01:23 JST 追加レビュー後の最終テスト
+
+**判定は引き続きNO-GO。** 実Geminiの品質009に記録された不自然さ・意味的に似た候補・回答済み本人情報の未活用は、今回のオフライン修正では解決済みと見なしていない。
+
+- `app.py`の本人確認質問判定で、句読点を省いた直接質問（例: 「音楽何聴く」）を確認フローへ送る一方、疑問語を含む自然な平叙文を質問扱いしないようにした。レビューで報告された「誰でも行く」「どんな本でも読む」「どこにだって行く」「誰からでも話を聞く」等を負例に固定した。映画については「映画観てない？」等の否定疑問が本人確認へ正しく進むことも維持した。
+- `tests/test_ui_firefox.py`のFirefoxテストで、相手Aの生成済み候補を確認中にBへ切り替えても、古い候補を送信済みとして記録できないことを画面とAPI/SQLite履歴で確認した。
+- Focused本人質問・映画範囲テスト: **70 passed, 861 deselected**。Focused Firefox相手切替テスト: **1 passed**。最新変更後の全pytest: **1017 passed in 137.53s**（Firefox UI込み）。Python構文、`node --check app.js`、`git diff --check`成功。コードレビューで今回の境界に明確な誤分類は見つからなかった。
+- 1回前の全体実行では既存Firefoxプロフィール保存toast待ちが単独でタイムアウトしたが、単独再実行と後続の全pytestでは通過した。フレークの可能性を隠さず記録する。
+- この差分のGemini実通信は**0回**。過去の品質009 FAILは残る。会話004・新しい会話HTMLも指示に従い未実施。
+- Test Matrix: **333項目**（PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15）。この差分はまだ未コミット・未Pushのため、最新SHAのActionsは未確認。PR #4はOPEN/Draft・未マージ。
+
+次: 変更とレポートを既存PR #4の作業ブランチへコミット・Pushし、同じHEADのPush/PR Actionsを確認する。続けて、Firefoxでfollowup/likeのコピー・手動記録・再読込のコア導線を確認する。

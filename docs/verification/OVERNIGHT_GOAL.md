@@ -816,3 +816,9 @@ QUALITY009保存出力の休息・慰労共感重複ペアを`/api/generate`経�
 T329 SHAのPush/PR Actions [38762044607](https://github.com/kenkyu0909/aichatapp/actions/runs/38762044607) / [38762147748](https://github.com/kenkyu0909/aichatapp/actions/runs/38762147748)は両方success・SHA一致。後続のT330で過剰判定を見つけて修正したため、このCIは最新状態の検証ではない。
 
 修正SHA `af1038c636341595c1d0eedbf443d72568fd0a6c`のPush/PR Actionsは両方success（[38763118050](https://github.com/kenkyu0909/aichatapp/actions/runs/38763118050) / [38763126584](https://github.com/kenkyu0909/aichatapp/actions/runs/38763126584)）、同一SHA、pytest 1012 passed、Firefox 157、JS構文・artifact保存成功。Test Matrix331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。品質009の実生成自然さFAILを解決していないのでNO-GO。次は検証記録をPushしてdocs-only HEADのCIを確認し、別の未解決P0を続ける。
+
+### 2026-10-16 01:23 JST 継続記録
+
+本人情報の口語質問判定へ誤検知を防ぐ条件を追加し、映画の否定疑問の回帰も修正した。確認ケースは、直接質問「音楽何聴く」の確認誘導と、平叙文「何でも食べる」「誰にでも話す」「どんな本でも読む」「どこにだって行く」「誰からでも話を聞く」等。本人質問/映画のfocused 70 passed、最終全pytest 1017 passed、Firefox stale-candidateテスト1 passed。Python/JS構文・diff検査成功。今回の新規Gemini通信は0回。T332 FIXED、T333 PASS、累計333項目: PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15。
+
+今の判定はNO-GO。過去品質009の実Gemini自然さ・意味的候補多様性FAILは解決されていない。会話004と新規会話HTMLは現行指示で禁止。差分は未コミット・未Pushで、Actionsは未確認。次はコード/testと4つの検証資料を選択的にPushし、最新SHAのPush/PR Actionsを確認。その後、Firefoxのfollowup/like送信記録導線の不足を調べる。ユーザー提供の未追跡指示ファイル3件は保持する。
