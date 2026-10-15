@@ -575,3 +575,15 @@
 - focused回帰 **3 passed**。全pytest・Firefox UI **721 passed in 98.90s**。Python compile、`node --check app.js`、`git diff --check`成功。独立レビュー指摘0件。
 - この追補の最新SHA Actionsは未実施。今回Gemini API 0回。PR #4 OPEN/Draft、未マージ。過去QUALITY009の実生成品質FAILを保持し、総合判定NO-GO。
 - 次: 追跡対象の修正・検証ログをcommit/pushし、同一SHAのPush/PR Actionsを確認する。続けてQUALITY009の回答保留と相槌反復を監査し、安全候補の保持と候補不足通知を維持する。会話004と新しいHTMLは作成しない。未追跡のユーザー指示ファイルはステージしない。
+
+
+### 2026-10-15 15:10 JST：本のジャンル確認回答と候補の直接回答性
+
+- `codex/directive-control` を15:10 JSTに再取得。今日の優先は品質009の実生成FAIL、各候補が相手の直接質問へ答えること、返信の安全性・候補不足通知を維持すること。新しいGemini通信・`conversation_004`・新規会話HTMLは行わない。
+- 監査で、確認済み回答「小説を読むことが多いです」に対して広い聞き返し「本は好きですか？」が直接回答として通る穴を修正。候補に確認済みの内容アンカーを要求し、候補数不足時も安全候補を保持して不足を通知する。
+- 本人への複合確認回答では、最近の作品を普段の習慣へ拡張する、別ジャンルの頻度を流用する、プロフィールの好みから読書頻度まで創作する問題を個別テストで再現し、節ごとにジャンル・時期・頻度を照合するよう修正。`くて`/`し`/`が`/`けど`/改行などの節境界を扱い、質問だけの候補を自己回答とみなさない。
+- 修正過程では、コードレビューが複合回答の範囲漏れ、時々/頻度の矛盾、質問だけの候補通過を順次発見。各指摘を回帰テストで再現し、修正後重点セットは **17 passed**。最終レビューは残指摘なし。
+- 最新コードの全pytestとFirefox UIは **740 passed in 99.63s**。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。
+- Test Matrixは268項目: PASS198 / FAIL13 / FIXED37 / BLOCKED5 / NOT_TESTED15。既存の品質009実生成品質FAILは未解決のまま保持。今回Gemini実API 0回。
+- 現状: `app.py`と`tests/test_app.py`に未コミット修正。進捗レポート追記中。基準コミット `0555c48e4d4fe0c5fb87e1fe4139d01b03d4c60d`、作業ブランチ `codex/full-system-verification`。PR #4はOPEN/Draft、マージなし。ユーザー提供の未追跡txtはステージしない。
+- 次: レポートを揃え、追跡対象だけをコミット・Push。最新SHAを対象とするPush/PR ActionsとPR Draft状態を確認する。その後はQUALITY009の実生成候補に残る不自然な共感反復/候補方針の差を次のP0として再現し、オフラインで継続。未登録の多様な日本語表現への完全な意味理解は主張しない。

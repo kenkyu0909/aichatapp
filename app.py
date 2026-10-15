@@ -8,6 +8,7 @@ import re
 import sqlite3
 import threading
 import time
+import unicodedata
 import uuid
 import warnings
 from difflib import SequenceMatcher
@@ -2730,6 +2731,84 @@ def _unsupported_partner_claim(candidate: Candidate, context: dict) -> bool:
     return False
 
 
+def _candidate_uses_specific_answer_detail(candidate_text: str, evidence: str) -> bool:
+    """Require a direct answer to retain at least one user-confirmed content detail."""
+    candidate_prefix = re.split(r"\n|[?？]", candidate_text, maxsplit=1)[0]
+    normalize = lambda value: re.sub(r"\s+|[、。！!？?]", "", value)
+    normalized_candidate = normalize(candidate_prefix)
+    normalized_evidence = normalize(evidence)
+    if normalized_evidence and normalized_evidence in normalized_candidate:
+        return True
+
+    generic_terms = {
+        "本", "読書", "読む", "読み", "読ん", "ジャンル", "普段", "最近",
+        "よく", "多い", "です", "ます", "こと", "好き", "お好き",
+        "たまに", "時々", "ときどき", "月に数回", "年に数回",
+    }
+    anchors = [
+        normalize(token)
+        for token in re.split(
+            r"(?:は|が|を|に|で|と|の|も|へ|から|まで|です|でした|ます|ません|"
+            r"読むことが多い|読むことがあります|読むことが|読む|読みます|読み|普段|最近|よく|"
+            r"たまに|時々|ときどき|月に数回|年に数回)",
+            evidence,
+        )
+        if len(normalize(token)) >= 2 and normalize(token) not in generic_terms
+    ]
+    return any(anchor in normalized_candidate for anchor in anchors)
+
+
+def _reading_genre_polarity(text: str) -> bool | None:
+    if re.search(r"(?:あまり|ほとんど|全然)?(?:読まない|読みません|読めない|読むのが苦手)|(?:好きではない|好きじゃない|嫌い|苦手)", text):
+        return False
+    if re.search(
+        r"(?:普段|日頃|ふだん).{0,16}(?:が多い|が多く|多い|多く|よく読む|読むことが多い|読みます|読んでいます|好き)"
+        r"|(?:よく)?(?:読むことが多い|よく読む|読んでいる|読んでいます|読みます|好き|好んで読む)",
+        text,
+    ):
+        return True
+    return None
+
+
+def _reading_genre_frequency(text: str) -> str | None:
+    if re.search(
+        r"(?:たまに|時々|ときどき|月に数回|年に数回).{0,12}(?:読む|読み|読んで|ことがあります?)"
+        r"|(?:読む|読み|読んで).{0,12}(?:たまに|時々|ときどき|ことがあります?)"
+        r"|読むこと(?:も)?があります?",
+        text,
+    ):
+        return "occasional"
+    if re.search(r"(?:毎日|毎週|毎月|普段|日頃|いつも|よく|頻繁に|読むことが多い).{0,16}(?:読む|読み|読んで|本|小説|漫画)?|(?:読むことが多い|よく読む|頻繁に読む)", text):
+        return "habitual"
+    return None
+
+
+def _reading_genre_evidence_segments(text: str) -> list[str]:
+    """Keep recency and frequency claims scoped to their own answer clauses."""
+    segments = re.split(
+        r"(?=最近|この前|昨日|先週|先日|今日)"
+        r"|(?<=です)が|(?<=ます)が|(?<=多い)が"
+        r"|(?<=です)けど|(?<=ます)けど|けれども|けれど|けど|一方で|一方|でも"
+        r"|(?<=多く)て|(?<=読む)し|(?<=ます)し|(?<=です)し|(?<=好き)で"
+        r"|(?<=[。！？!?])|\n+"
+        r"|(?<=です)\s+|(?<=ます)\s+|(?<=でした)\s+|(?<=ました)\s+|(?<=ません)\s+",
+        text,
+    )
+    return [segment.strip() for segment in segments if segment.strip()]
+
+
+def _reading_genre_segment_is_question_only(text: str) -> bool:
+    if re.search(r"[?？]", text):
+        return True
+    normalized = text.rstrip()
+    while normalized and (
+        unicodedata.category(normalized[-1])[0] in {"P", "S", "Z", "M"}
+        or normalized[-1] == "笑"
+    ):
+        normalized = normalized[:-1].rstrip()
+    return bool(re.search(r"(?:かね|かな|か|でしょう)$", normalized))
+
+
 def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
@@ -2750,6 +2829,53 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         # A recognized personal question without a confirmed answer must not
         # be treated as answered by an unrelated, evasive candidate. The API
         # preflight normally asks the user first; this is the final send guard.
+        return False
+    if topic == "読書" and _personal_information_scope(topic, question) == ("読書", "genre"):
+        facts = context.get("my_profile", {}).get("facts", {})
+        evidence: list[tuple[str, bool | None]] = []
+        for key in ("favorite_book_genres", "book_genres", "reading_genres"):
+            value = facts.get(key)
+            values = value if isinstance(value, (list, tuple, set)) else [value]
+            evidence.extend((str(item), True) for item in values if item)
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            answer_question = str(answer.get("question", ""))
+            if not answer_text:
+                continue
+            explicit_genre_scope = bool(re.search(r"ジャンル|何系|本の種類|本の系統", answer_question))
+            same_scope = _same_personal_information_scope(topic, question, answer_question)
+            for segment in _reading_genre_evidence_segments(answer_text):
+                is_recent_experience = bool(re.search(r"最近|この前|昨日|先週|先日|今日", segment))
+                if is_recent_experience:
+                    # A recent title cannot establish the habitual genre asked
+                    # for, even when another clause names a habitual genre.
+                    continue
+                evidence_polarity = _reading_genre_polarity(segment)
+                if same_scope or explicit_genre_scope and (
+                    evidence_polarity is True
+                    or not re.search(r"最近|この前|昨日|先週|先日|今日", segment)
+                ):
+                    evidence.append((segment, True if evidence_polarity is None else evidence_polarity))
+        candidate_polarity = _reading_genre_polarity(candidate.text)
+        candidate_segments = _reading_genre_evidence_segments(candidate.text)
+        for item, evidence_polarity in evidence:
+            matching_candidate_segments = [
+                segment for segment in candidate_segments
+                if not _reading_genre_segment_is_question_only(segment)
+                if _candidate_uses_specific_answer_detail(segment, item)
+            ]
+            if not matching_candidate_segments:
+                continue
+            if evidence_polarity is not None and candidate_polarity is not None and evidence_polarity != candidate_polarity:
+                continue
+            evidence_frequency = _reading_genre_frequency(item)
+            candidate_frequencies = {
+                frequency for segment in matching_candidate_segments
+                if (frequency := _reading_genre_frequency(segment)) is not None
+            }
+            if any(frequency != evidence_frequency for frequency in candidate_frequencies):
+                continue
+            return True
         return False
     if topic == "本人情報":
         answer_prefix = re.split(r"\n|[!?！？]", candidate.text, maxsplit=1)[0]

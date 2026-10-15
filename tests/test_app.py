@@ -4748,6 +4748,254 @@ def test_direct_question_filter_keeps_answer_and_rejects_topic_evasion(client):
     assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
 
 
+def test_verified_book_genre_answer_rejects_broad_requestion_and_keeps_grounded_reply(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段どんなジャンルの本を読みますか？",
+            "answer": "小説を読むことが多いです",
+        }],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="回答して広げる",
+            text="小説を読むことが多いです！\n最近読んだ作品ありますか？",
+            reply_move="grounded_share",
+        ),
+        alternatives=[
+            backend.Candidate(
+                label="広い質問へ戻る",
+                text="本は好きですか？",
+                reply_move="expand",
+            ),
+            backend.Candidate(
+                label="確認回答と反対",
+                text="小説はあまり読みません！",
+                reply_move="react",
+            ),
+        ],
+        reason="ジャンルの質問に回答する",
+        strategy="確認済みのジャンルを伝える",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="直接質問に答える",
+        next_action="読書の話題を続ける",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 3, context)
+
+    assert filtered["recommended"]["text"] == "小説を読むことが多いです！\n最近読んだ作品ありますか？"
+    assert filtered["available_candidate_count"] == 1
+    assert "不足分" in filtered["candidate_notice"]
+    assert any(
+        rejection["label"] == "広い質問へ戻る"
+        and "相手からの直接質問に未回答" in rejection["reasons"]
+        for rejection in filtered["candidate_rejections"]
+    )
+    assert any(
+        rejection["label"] == "確認回答と反対"
+        and "相手からの直接質問に未回答" in rejection["reasons"]
+        for rejection in filtered["candidate_rejections"]
+    )
+
+    profile_context = {
+        "mode": "reply",
+        "history": context["history"],
+        "my_profile": {"facts": {"favorite_book_genres": ["ミステリー"]}},
+        "ephemeral_user_answers": [],
+    }
+    profile_grounded = backend.Candidate(label="確認済みジャンル", text="ミステリー小説を読むのが好きです！")
+    profile_evasive = backend.Candidate(label="広い聞き返し", text="本は好きですか？")
+    assert backend._answers_verified_partner_question(profile_grounded, profile_context)
+    assert not backend._answers_verified_partner_question(profile_evasive, profile_context)
+
+
+def test_recent_book_answer_does_not_support_habitual_genre_claim(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近どんな本を読んだか教えてください",
+            "answer": "最近はミステリーの本を読みました",
+        }],
+    }
+    candidate = backend.Candidate(label="最近の経験を習慣へ拡張", text="ミステリーを読むことが多いです！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_recent_only_answer_to_mixed_genre_clarification_does_not_verify_habit(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段読む本のジャンルや最近読んだ本を教えてください",
+            "answer": "最近はミステリーの本を読みました",
+        }],
+    }
+    candidate = backend.Candidate(label="最近の一冊から習慣を推測", text="ミステリーを読むことが多いです！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_mixed_genre_answer_accepts_explicit_habit_and_ignores_recent_title(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段読む本のジャンルや最近読んだ本を教えてください",
+            "answer": "普段は漫画が多いです 最近はミステリーの本を読みました",
+        }],
+    }
+    candidate = backend.Candidate(label="習慣回答", text="漫画を読むことが多いです！")
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(("answer", "candidate_text", "expected"), [
+    (
+        "普段は漫画が多いです 最近はミステリーの本を読みました",
+        "ミステリーを読むことが多いです！",
+        False,
+    ),
+    (
+        "普段は漫画が多いですがミステリーも読むことがあります",
+        "ミステリーを読むことが多いです！",
+        False,
+    ),
+    (
+        "漫画はたまに読みます 小説を読むことが多いです",
+        "小説を読むことが多いです！",
+        True,
+    ),
+    (
+        "漫画はたまに読みますが小説を読むことが多いです",
+        "小説はたまに読みます！",
+        False,
+    ),
+    (
+        "普段は漫画が多くてミステリーはたまに読みます",
+        "漫画はたまに読みます！",
+        False,
+    ),
+    (
+        "普段は漫画が多くてミステリーはたまに読みます",
+        "ミステリーはたまに読みます！",
+        True,
+    ),
+    (
+        "漫画はたまに読むし小説はよく読みます",
+        "小説を読むことが多いです！",
+        True,
+    ),
+    (
+        "漫画はたまに読みます\n小説を読むことが多いです",
+        "小説を読むことが多いです！",
+        True,
+    ),
+])
+def test_book_genre_evidence_keeps_frequency_attached_to_its_clause(client, answer, candidate_text, expected):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段読む本のジャンルや最近読んだ本を教えてください",
+            "answer": answer,
+        }],
+    }
+    candidate = backend.Candidate(label="頻度付き回答", text=candidate_text)
+
+    assert backend._answers_verified_partner_question(candidate, context) is expected
+
+
+def test_favorite_book_genre_rejects_candidate_with_opposite_preference(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {"favorite_book_genres": ["ミステリー"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="好みと矛盾", text="ミステリーは嫌いです！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_verified_reading_habit_rejects_candidate_that_claims_rare_reading(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段どんなジャンルの本を読みますか？",
+            "answer": "小説を読むことが多いです",
+        }],
+    }
+    candidate = backend.Candidate(label="頻度のすり替え", text="小説はたまに読みます！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_verified_reading_frequency_rejects_self_contradictory_candidate(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "普段どんなジャンルの本を読みますか？",
+            "answer": "小説はたまに読みます",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="候補内で頻度が矛盾",
+        text="小説はたまに読みます！\nでも小説は読むことが多いです！",
+    )
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(("evidence", "candidate_text"), [
+    ("小説を読むことが多いです", "小説って普段読みますか？"),
+    ("小説を読むことが多いです", "小説って普段読みますかね"),
+    ("小説を読むことが多いです", "小説って普段読みますか！"),
+    ("ミステリー", "ミステリー好きなんですか？"),
+])
+def test_book_genre_question_only_does_not_count_as_self_answer(client, evidence, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんなジャンルの本を読みますか？"}],
+        "my_profile": {"facts": {"favorite_book_genres": [evidence]}} if evidence == "ミステリー" else {"facts": {}},
+        "ephemeral_user_answers": [] if evidence == "ミステリー" else [{
+            "question": "普段どんなジャンルの本を読みますか？",
+            "answer": evidence,
+        }],
+    }
+    candidate = backend.Candidate(label="質問だけの候補", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
 @pytest.mark.parametrize(("question", "evasive_reply"), [
     ("好きな食べ物は何ですか？", "そういう話って楽しいですね！\n最近はどんな映画を観ますか？"),
     ("好きなタイプはどんな人ですか？", "そういう話って楽しいですね！\n最近はどんな映画を観ますか？"),

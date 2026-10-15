@@ -518,3 +518,18 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T260 | 構文・差分検査・独立レビュー | Python compile、Node構文、`git diff --check`、code reviewer | PASS | Python/JavaScript構文・空白検査成功。レビュー指摘0件。|
 
 最新ID行は260件。累計: PASS195 / FAIL13 / FIXED32 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。
+
+### 2026-10-15 15:09 JST：直接質問への読書ジャンル回答の根拠範囲
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T261 | 確認済みジャンルへの広い聞き返しを拒否 | pytest / 候補フィルター | FIXED | 「小説を読むことが多いです」の回答後に「本は好きですか？」だけを出す候補が通る既存穴を再現。候補内容アンカーを求め、安全な回答候補は保持し不足数を通知。|
+| T262 | 最近の作品と習慣ジャンルの混同 | pytest / 本人確認回答 | FIXED | 最近読んだ一作品だけから「普段読むジャンル」を断定しない。複合質問でも最近の節を別扱い。習慣が明示された別節は利用可能。|
+| T263 | 頻度・好みの矛盾検査 | pytest / 節別照合 | FIXED | 「読むことが多い」を「たまに読む」へ変える候補を拒否。プロフィールの好きなジャンルだけから頻度を創作しない。候補内の頻度矛盾も拒否。|
+| T264 | 複合回答のジャンル・頻度分離 | pytest / 節の境界と根拠アンカー | FIXED | 「普段は漫画が多くてミステリーはたまに」「漫画はたまに読むし小説はよく読む」、接続助詞・改行で区切られる回答を検証。異なるジャンルの頻度を相互に流用しない。|
+| T265 | 本人への質問だけで直接回答を装う候補を拒否 | pytest / 候補フィルター | FIXED | 「小説って普段読みますか？」「…読みますかね」「…読みますか！」等の疑問だけの候補を拒否。回答文＋追加質問の候補は許可。|
+| T266 | 読書ジャンル・回答範囲focused回帰 | `python -m pytest tests/test_app.py -q -k 'book_genre or reading_habit or recent_book_answer or recent_only_answer_to_mixed_genre or verified_book_genre'` | PASS | 17 passed, 644 deselected。修正前に主要な漏れ・誤拒否を再現。|
+| T267 | 最新全体pytestとFirefox UI回帰 | `python -m pytest -q` | PASS | 2026-10-15 15:10 JST、**740 passed in 99.63s**。Firefox UIを含む。Chrome未使用。|
+| T268 | Python/JavaScript構文・差分検査・独立レビュー | `py_compile`、`node --check app.js`、`git diff --check`、Python reviewer | PASS | 構文/差分検査成功。レビュー指摘を反映後に再レビューされ、新たな指摘なし。|
+
+最新ID行は268件。累計: PASS198 / FAIL13 / FIXED37 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。規則ベースの日本語根拠照合であり、未登録のあらゆる言い換えを理解できる保証はない。最新差分のGitHub ActionsはPush後に確認する。|
