@@ -879,8 +879,10 @@ T357追補: コミット 3a2dadd1437b47cbce20a66a119776ac426da665のPush Actions
 
 T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` のPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)がsuccess。同SHAのPushログは1302 passed / 1 warningとJavaScript構文検査成功を確認。
 
-| T359 | 意味的に重なる候補の再生成失敗後の安全な縮退 | pytest（FastAPI/TestClient、Gemini SDKモック） | PASS | 架空の休日メッセージを使い、同義の共感候補が初回・修正リクエストで繰り返される応答を固定。再生成は合計1回で止まり、安全な2案を維持し不足数と類似通知を返す。focused 2 passed、全pytest 1303 passed in 183.71s。モックのみ、Gemini実通信なし。T359/T360コード変更を含むGitHub ActionsはPush後に記録する。|
+| T359 | 意味的に重なる候補の再生成失敗後の安全な縮退 | pytest（FastAPI/TestClient、Gemini SDKモック） | PASS | 架空の休日メッセージを使い、同義の共感候補が初回・修正リクエストで繰り返される応答を固定。再生成は合計1回で止まり、安全な2案を維持し不足数と類似通知を返す。focused 2 passed、全pytest 1303 passed in 183.71s。モックのみ、Gemini実通信なし。コミット`27c1ea252a976b3394ee877e96c926d32e9064b8`のPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)がsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。|
 
-| T360 | Firefox追いメッセージの対象相手・コピー/送信記録・編集後改行の永続化 | Firefox UI（空の一時SQLite、API履歴照合） | PASS | 架空相手を使用。生成payloadの`match_id`が選択相手IDと一致。コピー前後でDOM/API履歴不変。送信記録ダイアログで編集した複数行本文はSQLite/API履歴と再読み込み後の表示に完全一致。Firefox focused 1 passed。Gemini生成はUIモック。T359/T360コード変更を含むGitHub ActionsはPush後に記録する。|
+| T360 | Firefox追いメッセージの対象相手・コピー/送信記録・編集後改行の永続化 | Firefox UI（空の一時SQLite、API履歴照合） | PASS | 架空相手を使用。生成payloadの`match_id`が選択相手IDと一致。コピー前後でDOM/API履歴不変。送信記録ダイアログで編集した複数行本文はSQLite/API履歴と再読み込み後の表示に完全一致。Firefox focused 1 passed。Gemini生成はUIモック。上記同一SHAのPush/PR Actionsもsuccess。|
 
 最新ID行: 360。累計: PASS253 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。
+
+T359/T360 CI追補: 同一SHA `27c1ea252a976b3394ee877e96c926d32e9064b8` を対象とするPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)はsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft・未マージ。

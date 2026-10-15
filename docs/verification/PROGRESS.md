@@ -1311,3 +1311,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T359/T360のGitHub Actionsは該当変更をPush後に確認する。先行docs SHA `b6553b81ec79da9e69d360d5c9137be1f812fdc4` のPush/PR Actions [38809771834](https://github.com/kenkyu0909/aichatapp/actions/runs/38809771834) / [38809778162](https://github.com/kenkyu0909/aichatapp/actions/runs/38809778162)はsuccessだが、今回のテスト差分は含まれない。
 - Test Matrix 360項目: PASS253 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成自然さ・意味的候補多様性FAILが残るため総合NO-GO。Gemini実通信0回。会話004と新会話HTMLは実施しない。
 - 次: 選択コミット・Push後に同一SHAのPush/PR Actionsを確認する。未追跡のユーザー指示ファイル3件は保持し、コミットしない。
+
+### T359/T360 CI確認
+
+- テストコミット `27c1ea252a976b3394ee877e96c926d32e9064b8` のPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)が同じSHAでsuccess。
+- GitHub Actionsログは各**1303 passed / 1 warning**、JavaScript構文検査成功、Firefox確認、test result Artifact upload完了。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `27c1ea252a976b3394ee877e96c926d32e9064b8`。マージしていない。今回のGemini通信0回。
+- 品質009の実生成自然さ・候補意味多様性FAILを再監査。T358で扱った複数質問範囲、T359で扱った再生成上限、短文ミラーリングの誤字拒否のほかに、新しいP0安全不一致は見つからなかった。残る冗談返信の平板さ、候補の意味的類似は品質課題として記録を維持する。
+- これから証拠URLを含む最終記録をコミットするため、そのdocs-only HEADにもPush/PR Actionsを実行する。
