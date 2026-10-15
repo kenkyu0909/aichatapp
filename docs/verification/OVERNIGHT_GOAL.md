@@ -800,3 +800,7 @@ Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。Gemini�
 | 7. アプリ全体の安定性 | ローカル合格 / CI確認待ち | 全pytest 980 passed in 116.15s、Python/JS構文とdiff検査成功。コードSHA `3df1847fcadf8f1ea811d84176ca275861310a6c`を対象にPush Actions [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR Actions [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)がsuccessし、head SHA一致。|
 
 この更新時点の総合判定は**NO-GO**。Test Matrix322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。Gemini実API0回。既存生成品質FAILを成功へ変更していない。コミット `3df1847fcadf8f1ea811d84176ca275861310a6c`。次はActions確認後、保存済み品質009の直接質問に答えない候補と会話前進の未解決P0をオフラインで続ける。会話004/新しいHTMLはユーザー指示まで実施しない。
+
+### 2026-10-16 00:28 JST 継続結果
+
+QUALITY009保存出力の休息・慰労共感重複ペアを`/api/generate`経路で再現し、候補多様性修復が一度だけ走り、新しい安全候補を返すモック回帰を追加した。focused tests 2 passed、全pytest 1003 passed in 130.78s（Firefox UI込み）。Python/JavaScript構文とdiff確認は成功。実Gemini 0回。Matrix328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15。生成された文章の自然さ・意味的な候補差を示す実Gemini証拠ではないため、総合NO-GO。今回の差分はまだ未コミット・未Pushで、最新Actions未確認。次は差分とPR状態を保ちながら選択的にコミットし、ActionsのSHAを確認する。会話004・新HTML・実Gemini通信は引き続き保留。

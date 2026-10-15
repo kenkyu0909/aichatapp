@@ -1157,3 +1157,7 @@ Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。
 この変更を含む最新全テストは成功したが、保存済みGemini QUALITY009の文章自然さと意味的な候補多様性の手動FAILを解消した新規実API証拠はない。Gemini実通信は**0回**。総合判定は**NO-GO**を維持する。GitHub Actionsはコミット/Push後に最新SHAで確認する。会話004と新しい会話HTMLは指示どおり未実施。
 
 コミット `518d1a7fc6d6d7bf35cea667ae11e5de5fd992ef`のPush Actions [38758432156](https://github.com/kenkyu0909/aichatapp/actions/runs/38758432156)とPR Actions [38758438161](https://github.com/kenkyu0909/aichatapp/actions/runs/38758438161)は両方successし、head SHA一致を確認した。PR #4はOPEN/Draft・未マージ。ActionsがNode.jsランタイムとUbuntuイメージの移行通知を表示したが、失敗はない。
+
+### 2026-10-16 00:28 JST追補
+
+保存済みQUALITY009の休息・慰労共感ペアを使った`/api/generate`のモック回帰を追加した。類似候補検知時の専用再生成が1回に限られ、安全な新候補を返すことを確認した。focused tests 2 passed、全pytest 1003 passed in 130.78s（Firefox UI込み）。Gemini実通信0回。これは安全な再生成経路の検証であり、保存済みの文章自然さ・意味的候補多様性に関する実生成FAILを解決した証拠ではない。Test Matrixは328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持する。今回のテスト/docs差分はコミット・Push前で、最新SHAのActionsも未確認。会話004・新しい会話HTML・実Gemini通信は最新指示により未実施。

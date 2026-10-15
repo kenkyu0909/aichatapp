@@ -736,3 +736,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T327 | ペット根拠修正のPush/PR GitHub Actions | `gh run view`でPush/PRの実行SHAと結果を照合 | PASS | HEAD `518d1a7fc6d6d7bf35cea667ae11e5de5fd992ef`を対象とするPush [38758432156](https://github.com/kenkyu0909/aichatapp/actions/runs/38758432156)とPR [38758438161](https://github.com/kenkyu0909/aichatapp/actions/runs/38758438161)がsuccessし、両方のhead SHA一致。pytest・JavaScript構文検査・テストArtifact保存成功。警告: ActionsがNode.js 20互換に関する通知と、`ubuntu-latest`の今後のイメージ移行通知を表示。|
 
 最新ID行: 327。累計: PASS231 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補間の意味的多様性は一部未解決で、総合判定NO-GO。
+
+| T328 | 保存済みQUALITY009の休息共感重複ペアを返信生成APIで一度だけ再修復 | `python -m pytest -q tests/test_app.py -k 'repeated_rest_empathy_from_quality009 or quality009_rest_empathy_pair_triggers_one_diversity_repair'` と全pytest | FIXED | Windows / Python 3.12 / FastAPI TestClient / Gemini SDKモック。QUALITY009の実出力2候補を再現入力として使用。重複候補検知後に専用指示を付けた再生成が1回だけ行われ、異なる安全候補3案を返し、旧2案を再利用しないことを確認。focused **2 passed, 916 deselected**。全pytest **1003 passed in 130.78s**（Firefox UI込み）。Gemini実通信0回。これは修復経路のオフライン確認であり、生成品質の改善を実証しない。変更SHAはコミット後に追記。|
+
+最新ID行: 328。累計: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・意味的候補多様性FAILは残り、総合判定NO-GO。

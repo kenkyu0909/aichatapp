@@ -1051,3 +1051,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - PR #4を確認: OPEN、Draft、base=`feat/ui-local-backend-v1`、head SHAはコミットと一致。マージしていない。
 - T327をPASSとして追加。Matrix 327項目: PASS231 / FAIL13 / FIXED63 / BLOCKED5 / NOT_TESTED15。
 - 次はCI再確認の待ち時間に品質009の保存済み直接質問・誘いケースを監査し、実際に再現するP0がある場合だけ追加修正する。Gemini実通信とconversation_004/新しい会話HTMLは行わない。
+
+### 2026-10-16 00:28 JST 継続チェックポイント：QUALITY009重複案のAPI経路回帰
+
+- 00:25 JSTに指示用`codex/directive-control`をfetch/showし、P0優先、Gemini実通信・会話004・新しい会話HTMLを保留する方針に変更がないことを確認した。作業ブランチは`codex/full-system-verification`。
+- 保存済みQUALITY009の休息・共感候補ペアを、単体の多様性警告にとどめず`/api/generate`経路で再現。意味の重複を検出し、再生成指示を1回だけ送ること、安全な新候補を返して旧重複候補を再利用しないことをモックで検証した。追加ファイルは`tests/test_app.py`のみ。
+- focused tests **2 passed, 916 deselected**。全pytest **1003 passed in 130.78s**（Firefox UIテストを含む）。前回の全体実行時にPython構文検査、`node --check app.js`、`git diff --check`も成功。今回Gemini実APIは0回。Chromeは使用していない。
+- T328をFIXEDとして追加。Test Matrix **328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15**。QUALITY009の保存済み実生成自然さ・意味的候補多様性FAILは解決扱いにせず、総合**NO-GO**を維持する。
+- このチェックポイントのコード/test変更は未コミット。Push・Actionsは未確認。PR #4は前回確認時OPEN/Draft、未マージ。ユーザーの未追跡指示ファイル3点を保持し、ステージしない。
+- 次: T328と検証結果を選択的にコミット・Pushし、新SHAのPush/PR ActionsとPR #4の状態を確認する。その後、品質009の残るP0を最新指示の範囲でオフライン監査する。15〜20分内または毎時10分に指示ブランチを再取得する。

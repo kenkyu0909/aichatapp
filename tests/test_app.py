@@ -4870,6 +4870,82 @@ def test_repeated_rest_empathy_from_quality009_is_reported_as_low_diversity(clie
     assert "中心的な反応が似ている可能性" in filtered["candidate_notice"]
 
 
+def test_quality009_rest_empathy_pair_triggers_one_diversity_repair(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の休日会話")
+    c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "休日ほぼ寝て終わりました笑",
+    })
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {
+            "label": "共感と軽い反応",
+            "text": "そういう日もありますよね笑\nゆっくり休めましたか？",
+        },
+        "alternatives": [{
+            "label": "話題の展開",
+            "text": "お疲れ様です\nしっかり体を休めるのも大事ですね",
+        }],
+        "reason": "休日の話を受け止めます",
+        "strategy": "会話を続けます",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "会話を始めたところです",
+        "next_action": "休日の話を続けます",
+    }
+    diverse = {
+        **repeated,
+        "recommended": {
+            "label": "自然な反応",
+            "text": "それも最高の休日ですね笑",
+            "reply_move": "react",
+        },
+        "alternatives": [
+            {
+                "label": "話題を広げる",
+                "text": "最近ハマってることとかありますか？",
+                "reply_move": "expand",
+            },
+            {
+                "label": "別の話題へつなぐ",
+                "text": "休日に友達と出かけるとしたらどんなところが好きですか？",
+            },
+        ],
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(repeated if len(calls) == 1 else diverse, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "offline-placeholder-key", "model-one"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(calls) == 2
+    assert "候補の進め方が重なる場合の1回限りの再生成" in calls[1]["config"].system_instruction
+    assert body["available_candidate_count"] == 3
+    assert not any(
+        item["text"] in {
+            repeated["recommended"]["text"],
+            repeated["alternatives"][0]["text"],
+        }
+        for item in [body["recommended"], *body["alternatives"]]
+    )
+    assert body["recommended"]["text"] == diverse["recommended"]["text"]
+
+
 def test_cafe_preference_polarity_is_preserved(client):
     _, backend = client
     context = {
