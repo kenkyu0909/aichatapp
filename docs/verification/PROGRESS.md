@@ -1060,3 +1060,14 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - T328をFIXEDとして追加。Test Matrix **328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15**。QUALITY009の保存済み実生成自然さ・意味的候補多様性FAILは解決扱いにせず、総合**NO-GO**を維持する。
 - このチェックポイントのコード/test変更は未コミット。Push・Actionsは未確認。PR #4は前回確認時OPEN/Draft、未マージ。ユーザーの未追跡指示ファイル3点を保持し、ステージしない。
 - 次: T328と検証結果を選択的にコミット・Pushし、新SHAのPush/PR ActionsとPR #4の状態を確認する。その後、品質009の残るP0を最新指示の範囲でオフライン監査する。15〜20分内または毎時10分に指示ブランチを再取得する。
+### 2026-10-16 00:40 JST 継続チェックポイント：会う時期を保留する口語表現
+
+- 拒否安全性の確認中、相手が「もう少し仲良くなってから」「まずはもう少しメッセージしてから」と伝えても、再勧誘を拒否状態にしない抜けを発見。修正前に新しい3ケースがすべて失敗することを確認した。
+- `app.py`の拒否/慎重さ判定を狭く補強。保留・条件付き前向き表現は即時再勧誘を止め、一般的な好意表現は誤って拒否扱いしない対照を追加。独立Pythonレビューは今回の境界に具体的な回帰なしと判断。
+- Focused **17 passed, 906 deselected**。全pytest **1007 passed in 126.68s**は条件付き対照の最終追加前に同じコードで完了している。最終追加テストを含む全pytestはこれから再実行する。Python compile・`node --check app.js`・`git diff --check`成功。実Gemini 0回。
+- T329をFIXEDとして追加。Test Matrix **329項目: PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15**。QUALITY009の実生成文章自然さ・候補意味多様性FAILは未解決、総合**NO-GO**。
+- T328のコミット`8f18f2a364b5fa579938190d219e21d7beea6078`ではPush [Actions 38760638954](https://github.com/kenkyu0909/aichatapp/actions/runs/38760638954)、PR [Actions 38760649322](https://github.com/kenkyu0909/aichatapp/actions/runs/38760649322)が両方success、SHA一致。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。今回の新しいT329差分は未コミット・未Pushで、最新SHAのActionsは未確認。
+- 次: 条件付き延期ケースを含む全pytestを再実行し、結果に合わせて記録を確定する。差分を選択的にコミット・Pushし、Push/PR ActionsとPR状態を確認した後、残るP0を続ける。ユーザーの未追跡指示3ファイルは保持する。Gemini・会話004・新HTMLは最新指示により実施しない。
+
+- 最後に追加した条件付き前向き表現の対照を含む全pytest **1008 passed in 131.85s**（Firefox UI込み）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。
+- T329の全体結果を確認済み。コード/test/資料をコミット・Pushして最新SHA Actionsを確認する。

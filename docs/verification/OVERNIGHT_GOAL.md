@@ -804,3 +804,9 @@ Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。Gemini�
 ### 2026-10-16 00:28 JST 継続結果
 
 QUALITY009保存出力の休息・慰労共感重複ペアを`/api/generate`経路で再現し、候補多様性修復が一度だけ走り、新しい安全候補を返すモック回帰を追加した。focused tests 2 passed、全pytest 1003 passed in 130.78s（Firefox UI込み）。Python/JavaScript構文とdiff確認は成功。実Gemini 0回。Matrix328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15。生成された文章の自然さ・意味的な候補差を示す実Gemini証拠ではないため、総合NO-GO。今回の差分はまだ未コミット・未Pushで、最新Actions未確認。次は差分とPR状態を保ちながら選択的にコミットし、ActionsのSHAを確認する。会話004・新HTML・実Gemini通信は引き続き保留。
+
+### 2026-10-16 00:40 JST 継続結果
+
+会う誘いの後に「もう少し仲良くなってから」「まずはもう少しメッセージしてから」と伝えるケースが拒否・延期として認識されず、直後の再勧誘を許す問題を修正前テスト3件の失敗で再現した。延期と条件付きの前向き表現では今すぐの再勧誘を止め、一般的な好意は誤って拒否扱いしないようにした。Focused 17 passed。条件付き表現の最終ケースを含む全pytestは実行中。T328 SHAのPush/PR Actionsは両方success。T329差分は未Push。Test Matrix 329項目 PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実生成FAILが残るのでNO-GO。Gemini通信・会話004・新規HTMLなし。
+
+最終の条件付き前向き延期ケースを含む全pytestは **1008 passed in 131.85s**（Firefox UI込み）。Python/JavaScript構文検査とdiff検査も成功。コード・テストはローカル検証済み。T329の差分をPushして最新SHA CIを確認する。実Gemini0回、過去QUALITY009の実生成自然さFAILによりNO-GO。

@@ -1169,6 +1169,34 @@ def test_explicit_wait_before_meeting_keeps_invite_closed(client, hesitation):
     assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
 
 
+@pytest.mark.parametrize("hesitation", [
+    "もう少し仲良くなってからでもいいかな？",
+    "もうちょっと仲良くなってからがいいです",
+    "まずはもう少しメッセージしてからがいいな",
+    "もう少し仲良くなってから一緒に行けたらうれしいです",
+])
+def test_wants_more_conversation_before_meeting_keeps_immediate_invite_closed(client, hesitation):
+    _, backend = client
+    context = {"history": [
+        {"role": "me", "body": "今度一緒にご飯行きませんか？"},
+        {"role": "them", "body": hesitation},
+    ]}
+    candidate = backend.Candidate(label="再勧誘", text="よかったら今度一緒にカフェに行きませんか？")
+
+    assert backend.partner_has_active_invitation_refusal(context)
+    assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_general_positive_message_about_getting_along_is_not_a_meeting_refusal(client):
+    _, backend = client
+    context = {"history": [
+        {"role": "me", "body": "今度一緒にご飯行きませんか？"},
+        {"role": "them", "body": "もっと仲良くなれたらうれしいです！"},
+    ]}
+
+    assert not backend.partner_has_active_invitation_refusal(context)
+
+
 def test_unrelated_solo_trip_does_not_reopen_refused_invite(client):
     _, backend = client
     context = {

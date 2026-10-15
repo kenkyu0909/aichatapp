@@ -1161,3 +1161,9 @@ Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。
 ### 2026-10-16 00:28 JST追補
 
 保存済みQUALITY009の休息・慰労共感ペアを使った`/api/generate`のモック回帰を追加した。類似候補検知時の専用再生成が1回に限られ、安全な新候補を返すことを確認した。focused tests 2 passed、全pytest 1003 passed in 130.78s（Firefox UI込み）。Gemini実通信0回。これは安全な再生成経路の検証であり、保存済みの文章自然さ・意味的候補多様性に関する実生成FAILを解決した証拠ではない。Test Matrixは328項目: PASS231 / FAIL13 / FIXED64 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持する。今回のテスト/docs差分はコミット・Push前で、最新SHAのActionsも未確認。会話004・新しい会話HTML・実Gemini通信は最新指示により未実施。
+
+### 2026-10-16 00:40 JST追補
+
+拒否安全性の監査で、「もう少し仲良くなってから」「もう少しメッセージしてから」という延期意思を現行コードが認識せず、直後の誘い候補を阻止できない問題を修正。修正前は3ケースすべて失敗し、追加した延期/条件付き前向き4ケースと一般的肯定の対照を含むfocused tests **17 passed**。全pytest 1007 passed in 126.68sは条件付きケースの最終追加前に実行したため、全体結果を更新するため再実行中。独立Pythonレビューで、条件付きの前向き表現を即時延期とし一般肯定は拒否扱いしない境界に具体的な懸念なしとの確認を得た。T329 FIXED、最新集計329項目: PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。総合NO-GO。T328 SHA`8f18f2a364b5fa579938190d219e21d7beea6078`のPush/PR Actionsはsuccess・SHA一致。T329は未Push、実Gemini0回。
+
+追試の全pytestは、条件付きの前向き延期ケースも含めて **1008 passed in 131.85s**（Firefox UI込み）。Python compile、JavaScript構文検査、`git diff --check`も成功した。T329を含むTest Matrixは329項目: PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持する。
