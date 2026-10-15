@@ -8278,6 +8278,116 @@ def test_nonpersonal_fact_question_does_not_trigger_personal_confirmation(client
     assert backend.missing_personal_fact_question(context) is None
 
 
+@pytest.mark.parametrize(("question", "confirmed_answer", "matching_claim", "out_of_scope_claim"), [
+    (
+        "何のスポーツをしているんですか？",
+        "サッカーをしています",
+        "サッカーをしています！",
+        "英語も話せます！",
+    ),
+    (
+        "何語を話せますか？",
+        "英語を話せます",
+        "英語を話せます！",
+        "英語と韓国語を話せます！",
+    ),
+    ("タバコ吸う？", "タバコは吸いません", "タバコは吸いません！", "毎日タバコを吸います！"),
+    ("魚食べられる？", "魚は食べられます", "魚は食べられます！", "魚は苦手です！"),
+    ("犬飼ってる？", "犬を飼っています", "犬を飼っています！", "猫も飼っています！"),
+    ("車持ってる？", "車は持っていません", "車は持っていません！", "車を持っています！"),
+    ("料理する？", "料理はあまりしません", "料理はあまりしません！", "毎日料理しています！"),
+    ("一人暮らし？", "実家で家族と暮らしています", "実家で家族と暮らしています！", "一人暮らしです！"),
+    ("彼氏いる？", "今はいません", "今はいません！", "彼氏がいます！"),
+    ("彼氏はいる？", "今はいません", "今はいません！", "彼氏がいます！"),
+    ("結婚してる？", "結婚していません", "結婚していません！", "結婚しています！"),
+    ("休み何してる？", "休みは家で読書しています", "休みは家で読書しています！", "休みは旅行しています！"),
+    ("車ありますか？", "車は持っていません", "車は持っていません！", "車を持っています！"),
+    ("犬は飼っていますか？", "犬を飼っています", "犬を飼っています！", "猫も飼っています！"),
+    ("お酒は飲みますか？", "お酒は飲みません", "お酒は飲みません！", "毎日お酒を飲みます！"),
+    ("結婚していますか？", "結婚していません", "結婚していません！", "結婚しています！"),
+    ("子どもの頃は何になりたかった？", "宇宙飛行士になりたかったです", "宇宙飛行士になりたかったです！", "漫画家になりたかったです！"),
+    ("日本語話せますか？", "日本語を話せます", "日本語を話せます！", "日本語と中国語を話せます！"),
+    ("猫はいますか？", "猫を飼っています", "猫を飼っています！", "猫は飼っていません！"),
+    ("子どもの頃に何に憧れていましたか？", "宇宙飛行士に憧れていました", "宇宙飛行士に憧れていました！", "漫画家に憧れていました！"),
+])
+def test_unsupported_direct_personal_questions_require_scoped_user_confirmation(
+    client, monkeypatch, question, confirmed_answer, matching_claim, out_of_scope_claim
+):
+    c, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert question in clarification.question
+
+    from google import genai
+    match_id = add_match(c, "架空の相手・個人質問")
+    assert c.post(f"/api/matches/{match_id}/messages", json={
+        "role": "them", "body": question,
+    }).status_code == 201
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("confirmation must precede Gemini"))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 3,
+    })
+    assert response.status_code == 200
+    response_body = response.json()
+    assert response_body["needs_user_info"] is True
+    assert question in response_body["user_questions"][0]["question"]
+    assert response_body["recommended"] is None
+    assert response_body["alternatives"] == []
+
+    evasive = backend.Candidate(label="回避", text="そうなんですね！最近はどんなことをしていますか？")
+    assert not backend._answers_verified_partner_question(evasive, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": confirmed_answer,
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="回答範囲内", text=matching_claim), context
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="回答範囲外の追加事実", text=out_of_scope_claim), context
+    )
+
+
+@pytest.mark.parametrize("question", [
+    "水泳はどう練習するのがいいですか？",
+    "世界では何語が使われていますか？",
+    "世界で何語を話す国が一番多いですか？",
+    "いろんな国では何のスポーツをしている人が多いですか？",
+    "スポーツのルールを教えてください",
+    "横浜駅ってどこ？",
+    "水族館はどこにある？",
+    "水族館に猫はいますか？",
+    "友達ってどんな人？",
+    "彼女の趣味って何？",
+    "子どもの頃の夢はどうやって見つけるといいですか？",
+    "子どもの頃の妹は何になりたかったですか？",
+    "友達と何のスポーツをしているんですか？",
+    "友達と何語を話せますか？",
+])
+def test_general_sports_and_language_questions_do_not_trigger_personal_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
 def test_same_day_business_hours_question_is_not_a_personal_activity_question(client):
     _, backend = client
     question = "このお店は今日何時まで営業ですか？"

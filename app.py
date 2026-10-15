@@ -600,10 +600,50 @@ def _topic_for_personal_question(text: str) -> str | None:
         r"同僚|上司|先輩|後輩|先生|教師|知り合い"
     )
     if re.match(
+        r"^(?:子どもの頃|子供の頃|小さい頃|小学生の頃)(?:の|にいた|にいる)?"
+        r"(?:妹|弟|姉|兄|友達|友人|いとこ|子ども|子供)(?:は|が|の)",
+        text,
+    ):
+        return None
+    if re.search(
+        r"^(?:子どもの頃|子供の頃|小さい頃|小学生の頃)(?:は|に|って)?"
+        r"(?:何になりたかった|何に憧れて(?:いた|いました)|(?:将来の)?夢は何(?:だった|でした)|"
+        r"どんな夢(?:を持って|があり))|"
+        r"^(?:子どもの頃|子供の頃|小さい頃|小学生の頃)の夢は何(?:だった|でした)",
+        text,
+    ):
+        return "本人情報"
+    # In a matching conversation, an unpossessed boyfriend/girlfriend
+    # existence question is about the user. Handle it before the third-party
+    # subject guard, which also recognizes the same words in questions about
+    # someone else's hobbies or plans.
+    if re.match(r"^(?:彼氏|彼女)(?:は)?いる(?:の|んですか|ん)?[?？]?$", third_party_subject):
+        return "本人情報"
+    if re.match(
         rf"^(?:(?:私|僕|俺|自分)の\s*)?(?:(?:彼|彼女|夫|妻|旦那)の\s*)?"
         rf"(?:あの|その|この|うちの)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が)\s*|"
         rf"^(?:あの|その)?(?:{third_party})(?:さん|くん|ちゃん)?の.{{0,14}}(?:予定|スケジュール|何(?:して|する|をする)|どう過ご)",
         third_party_subject,
+    ):
+        return None
+    if re.match(
+        rf"^(?:{third_party})(?:の.{{0,18}}|って|とは).{{0,20}}(?:何|なに|どんな|どの|誰|だれ|趣味|好き|予定)",
+        third_party_subject,
+    ):
+        return None
+    if re.match(
+        rf"^(?:{third_party})(?:と|とは).{{0,12}}(?:何の|どんな|どの)?スポーツ|"
+        rf"^(?:{third_party})(?:と|とは).{{0,12}}何語",
+        third_party_subject,
+    ):
+        return None
+    if (
+        re.match(
+            r"^[^?？\n]{0,16}(?:駅|水族館|美術館|博物館|公園|施設)(?:って|は|が)?"
+            r"(?:どこ(?:にある|にあります)?|どこらへん)",
+            text,
+        )
+        and not re.search(r"普段|よく行|いつも|行きつけ|おすすめ|近くの", text)
     ):
         return None
     if (
@@ -667,12 +707,37 @@ def _topic_for_personal_question(text: str) -> str | None:
     ):
         return "本人情報"
     if re.search(r"子どもの頃|子供の頃|小さい頃|小学生の頃", text) and re.search(
-        r"何になりたかった|夢|なりたい|憧れ|[?？]", text
+        r"何になりたかった|何に憧れて(?:いた|いました)|(?:将来の)?夢は何(?:だった|でした)|どんな夢(?:を持って|があり)",
+        text,
     ):
         return "本人情報"
     if re.search(
         r"(?:大学|大学院|学校|専門学校).{0,14}(?:何を学|何を勉強|何を専攻)|"
         r"専攻.{0,12}(?:何|どんな|ですか|でしょうか|[?？])",
+        text,
+    ):
+        return "本人情報"
+    # Some direct personal questions have no entry in PERSONAL_FACT_TOPICS.
+    # Keep this fallback tightly tied to an explicit subject matter and a
+    # first-person ability/activity predicate so general sports or language
+    # questions (rules, advice, population facts) stay outside the gate.
+    if re.search(
+        r"(?:何の|どんな|どの)?スポーツ.{0,16}(?:している|してます|してる|やっている|やってます|やってる)"
+        r"(?:んですか|んです|ん|の)?[?？]?$|"
+        r"何語(?:を)?(?:話せる|話せますか|話せます|話せるんですか|話す|話します|使える|使えます)"
+        r"(?:んですか|んです|ん|の)?[?？]?$|"
+        r"(?:日本語|英語|韓国語|中国語|スペイン語|フランス語|ドイツ語|イタリア語|ポルトガル語|タイ語|ベトナム語|インドネシア語)"
+        r"(?:を|が|は)?(?:話せる|話せます|話す|話します|使える|使えます)(?:んですか|んです|ん|の|か)?[?？]?$|"
+        r"(?:タバコ|煙草|お酒|アルコール).{0,10}(?:吸う|吸います|飲む|飲みます|吸わない|吸いません|飲まない|飲みません|吸える|吸えます|飲める|飲めます)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:魚|肉|生もの).{0,8}(?:食べられる|食べられます|食べれる|食べれます|食べる|食べます|苦手|好き)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:犬|猫).{0,8}飼って(?:る|いる|ます|います)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"^(?:犬|猫)(?:は|って)?いますか[?？]?$|"
+        r"車.{0,5}(?:あります|持ってる|持っている|持ってます|持っています)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:料理|自炊)(?:って)?(?:する|します|してる|している|しています)(?:の|ん)?(?:ですか|ますか|か)?[?？]$|"
+        r"一人暮らし(?:ですか|してる|している|しています|してます)?(?:か)?[?？]$|"
+        r"(?:彼氏|彼女)(?:は)?いる(?:の|んですか|ん)?[?？]$|"
+        r"結婚して(?:る|いる|ます|います)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"休み(?:の日)?(?:は)?何(?:を)?してる(?:の|んですか|ん)?[?？]$",
         text,
     ):
         return "本人情報"

@@ -1034,6 +1034,14 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 品質009の監査では新しいP0の安全不一致は特定されず。実生成における冗談返信の平板さと候補意味類似は残っている。実APIなしで実品質を再検証できないためNO-GO。
 - 次はこのCI根拠を含むdocs-onlyコミットをPushし、その最新HEADのActionsとPR #4 Draft状態を確認する。
 
+##### 2026-10-16 06:59 JST 継続確認: 本人質問の未分類境界
+
+- ゴール1「本人情報の正確性」: 部分達成を継続。空プロフィールで未分類の直接質問から話題を逸らす候補が通る問題を再現し修正した。スポーツ/語学、飲酒・喫煙、食事制限、ペット、車、料理、住居、交際/婚姻、休日、幼少期の希望の一部の定型を確認分岐し、確認回答と同じ範囲だけを許可する。一般情報・公共施設・第三者質問の対照も追加。有限の文型判定であり、日本語全体の事実検査を保証しない。
+- 修正前は「子どもの頃は何になりたかった？」が本人確認へ分岐せず既存テストが1件失敗。修正後focused 34 passed、全pytest 1337 passed in 187.91s。`py_compile`、JavaScript構文、`git diff --check`成功。独立レビュー指摘を反映し、再レビューでは今回の境界ケースに追加指摘なし。
+- ゴール7「安定性」: 全pytest 1337 passedに加えFirefox専用UI 11 passed in 135.13s。最新変更のGitHub ActionsはPush後に確認する。
+- Gemini API論理要求0 / provider attempts 0。保存済みQUALITY009の自然さ・意味的候補多様性の実生成FAILは未解決なので総合NO-GO。会話004と新規会話HTMLは未実施。
+- 次: Firefox専用UIを完了し、コードとT361記録を選択的にPush、最新同一SHAのPush/PR Actionsを確認。その後、未解決P0の実用コア動作と履歴品質を引き続き監査する。
+
 ##### 2026-10-16 06:24 JST T358 CI
 
 - 最新SHA `9389aa937df569a2aa7c2e683544fe8101e92766` のPush/PR Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895) / [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)成功。同じSHAのPushログ: 1302 passed / 1 warning、JS構文PASS。

@@ -1385,3 +1385,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - コミット `27c1ea252a976b3394ee877e96c926d32e9064b8` の[Push Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)と[PR Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)が同一SHAでsuccess。各ログは1303 passed / 1 warning、JavaScript構文検査と結果Artifact uploadの成功を示す。
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `27c1ea252a976b3394ee877e96c926d32e9064b8`、未マージ。
 - 実Gemini通信0回。保存済みQUALITY009の自然さ・候補意味多様性の実生成FAILは未解決のため、総合NO-GOを維持する。
+
+## 2026-10-16 06:59 JST 追補: 未分類の直接本人質問
+
+- 保存済み品質入力と分類境界の監査で、本人プロフィールが空のとき「何のスポーツをしている？」「何語を話せますか？」が未分類になり、回避的な候補を許可し得るP0を発見した。丁寧形、ペット、住居、交際/婚姻、休日、幼少期の希望でも類似の取りこぼしを確認した。
+- `app.py`に限定的な分類を追加し、本人の一時確認を経るまで候補を作らず、回答と同じ情報範囲だけを許可する。第三者（友達・妹）、公共施設の場所、一般的な助言質問を本人確認へ誤誘導しない回帰テストを加えた。これは有限文型の防御であり、全ての日本語質問を分類する保証ではない。
+- 最初の全テストでは幼少期の夢質問1件が失敗。条件を狭めた後のfocused 34件、全pytest 1337件、Firefox専用UI 11件は成功。Python compile、JavaScript構文、diff検査成功。コードレビューで後続指摘を反映し、最終レビューの該当境界は問題なし。
+- この差分のGemini実API利用は0回。QUALITY009の過去の自然さ・候補意味多様性FAILは残り、実生成品質を新たにPASSとはしない。総合判定NO-GOを維持する。本変更の最新GitHub ActionsはPush後に確認する。
