@@ -1218,6 +1218,24 @@ def test_soft_reinvitation_after_refusal_is_rejected(client, message):
     assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
 
 
+def test_meeting_when_schedule_matches_is_soft_reinvitation_after_refusal(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
+    candidate = backend.Candidate(label="婉曲な再勧誘", text="また予定が合えば会いましょう")
+
+    assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_clear_partner_reconsideration_with_want_to_go_reopens_refusal(client):
+    _, backend = client
+    context = {"history": [
+        {"role": "them", "body": "まだ会うのはちょっと不安です"},
+        {"role": "them", "body": "今度一緒にカフェへ行きたいです！"},
+    ]}
+
+    assert not backend.partner_has_active_invitation_refusal(context)
+
+
 def test_unrelated_now_statement_does_not_reactivate_reopened_invitation(client):
     _, backend = client
     context = {"history": [
@@ -2185,12 +2203,25 @@ def test_recent_movie_opinion_question_accepts_verified_opinion_without_requirin
     _, backend = client
     context = {
         "history": [{"role": "them", "body": partner_question}],
-        "my_profile": {"facts": {"recent_movies": "青い灯台", "movie_preferences": "映画は好きです"}},
+        "my_profile": {"facts": {"recent_movies": "青い灯台を観て面白かったです", "movie_preferences": "映画は好きです"}},
         "ephemeral_user_answers": [],
     }
 
     assert backend._answers_verified_partner_question(
         backend.Candidate(label="感想への回答", text="面白かったです！"), context
+    )
+
+
+def test_recent_movie_title_and_general_preference_do_not_support_unconfirmed_opinion(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近観た映画はどうでしたか？"}],
+        "my_profile": {"facts": {"recent_movies": "青い灯台", "movie_preferences": "映画は好きです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="未確認の感想", text="面白かったです！"), context
     )
 
 
