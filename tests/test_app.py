@@ -2399,6 +2399,9 @@ def test_contrast_does_not_promote_noun_modifier_to_affirmative_fact(client, irr
 @pytest.mark.parametrize(("fact", "expected_claim"), [
     ("カフェを探すのは趣味ではないですが、好きです", "カフェを探すのが好きです！"),
     ("カフェを探すのは趣味ではないけど、楽しいです", "カフェを探すのが楽しいです！"),
+    ("カフェを探すのは趣味ではないですが好きなんです", "カフェを探すのが好きです！"),
+    ("カフェを探すのは趣味ではないですが楽しいんです", "カフェを探すのが楽しいです！"),
+    ("カフェを探すのは趣味ではない、でも好きです", "カフェを探すのが好きです！"),
 ])
 def test_comma_after_contrast_keeps_elliptical_positive_grounded(client, fact, expected_claim):
     _, backend = client
