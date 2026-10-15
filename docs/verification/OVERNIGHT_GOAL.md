@@ -810,3 +810,7 @@ QUALITY009保存出力の休息・慰労共感重複ペアを`/api/generate`経�
 会う誘いの後に「もう少し仲良くなってから」「まずはもう少しメッセージしてから」と伝えるケースが拒否・延期として認識されず、直後の再勧誘を許す問題を修正前テスト3件の失敗で再現した。延期と条件付きの前向き表現では今すぐの再勧誘を止め、一般的な好意は誤って拒否扱いしないようにした。Focused 17 passed。条件付き表現の最終ケースを含む全pytestは実行中。T328 SHAのPush/PR Actionsは両方success。T329差分は未Push。Test Matrix 329項目 PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実生成FAILが残るのでNO-GO。Gemini通信・会話004・新規HTMLなし。
 
 最終の条件付き前向き延期ケースを含む全pytestは **1008 passed in 131.85s**（Firefox UI込み）。Python/JavaScript構文検査とdiff検査も成功。コード・テストはローカル検証済み。T329の差分をPushして最新SHA CIを確認する。実Gemini0回、過去QUALITY009の実生成自然さFAILによりNO-GO。
+
+延期表現の会話希望との境界を明示し、「もうちょっと話してから」等の再勧誘を止める一方、「もう少し話したいことがある」等を拒否扱いしないよう修正した。過剰判定の再現を確認してからパターンを絞った。Focused 21 passed、全pytest 1012 passed in 131.45s（Firefox UI込み）、構文・差分検査成功、Pythonレビューに具体的指摘なし。T330 FIXED。過去品質009の実生成自然さFAILが残るためNO-GO。Gemini通信0回、T330は未Push。
+
+T329 SHAのPush/PR Actions [38762044607](https://github.com/kenkyu0909/aichatapp/actions/runs/38762044607) / [38762147748](https://github.com/kenkyu0909/aichatapp/actions/runs/38762147748)は両方success・SHA一致。後続のT330で過剰判定を見つけて修正したため、このCIは最新状態の検証ではない。

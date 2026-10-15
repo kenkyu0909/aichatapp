@@ -1167,3 +1167,9 @@ Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。
 拒否安全性の監査で、「もう少し仲良くなってから」「もう少しメッセージしてから」という延期意思を現行コードが認識せず、直後の誘い候補を阻止できない問題を修正。修正前は3ケースすべて失敗し、追加した延期/条件付き前向き4ケースと一般的肯定の対照を含むfocused tests **17 passed**。全pytest 1007 passed in 126.68sは条件付きケースの最終追加前に実行したため、全体結果を更新するため再実行中。独立Pythonレビューで、条件付きの前向き表現を即時延期とし一般肯定は拒否扱いしない境界に具体的な懸念なしとの確認を得た。T329 FIXED、最新集計329項目: PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。総合NO-GO。T328 SHA`8f18f2a364b5fa579938190d219e21d7beea6078`のPush/PR Actionsはsuccess・SHA一致。T329は未Push、実Gemini0回。
 
 追試の全pytestは、条件付きの前向き延期ケースも含めて **1008 passed in 131.85s**（Firefox UI込み）。Python compile、JavaScript構文検査、`git diff --check`も成功した。T329を含むTest Matrixは329項目: PASS231 / FAIL13 / FIXED65 / BLOCKED5 / NOT_TESTED15。総合NO-GOを維持する。
+
+### 2026-10-16 00:43 JST追補
+
+拒否後の再勧誘ガードを再監査し、「もうちょっと話してから」「もうちょっとやり取りしてから」という保留の口語表現が未検出だった点を修正した。最初の拡張では「もう少し仲良くしたい」「もう少し話したいことがある」も拒否扱いする過剰判定が回帰テストで見つかったため、延期の「してから／なってから」に絞った。条件付き延期で即時の再勧誘を防ぎ、一般的な会話希望は拒否扱いしない。Focused 21 passed、全pytest 1012 passed in 131.45s（Firefox UI込み）、Python/JS構文検査・diff検査成功。独立Pythonレビューで残存する具体的誤判定なし。T330 FIXED、累計330項目: PASS231 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。総合NO-GO。Gemini実通信0回、T330未Push。
+
+T329の旧SHA`9d64e15990d83fec52477d9934450644214c69b6`を対象とするPush Actions 38762044607とPR Actions 38762147748はsuccessし、SHA一致を確認した。このコードには後続の対照テストで見つかった過剰判定が含まれ、T330で修正したため、最新コードの成功根拠にはしない。

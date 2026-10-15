@@ -1173,6 +1173,8 @@ def test_explicit_wait_before_meeting_keeps_invite_closed(client, hesitation):
     "もう少し仲良くなってからでもいいかな？",
     "もうちょっと仲良くなってからがいいです",
     "まずはもう少しメッセージしてからがいいな",
+    "もうちょっと話してからがいいかな",
+    "もうちょっとやり取りしてからがいいです",
     "もう少し仲良くなってから一緒に行けたらうれしいです",
 ])
 def test_wants_more_conversation_before_meeting_keeps_immediate_invite_closed(client, hesitation):
@@ -1187,11 +1189,16 @@ def test_wants_more_conversation_before_meeting_keeps_immediate_invite_closed(cl
     assert "相手の断りや慎重さに反する誘い" in backend._candidate_rejection_reasons(candidate, context)
 
 
-def test_general_positive_message_about_getting_along_is_not_a_meeting_refusal(client):
+@pytest.mark.parametrize("positive_message", [
+    "もっと仲良くなれたらうれしいです！",
+    "もう少し仲良くしたいです",
+    "もう少し話したいことがあります",
+])
+def test_general_positive_message_about_getting_along_is_not_a_meeting_refusal(client, positive_message):
     _, backend = client
     context = {"history": [
         {"role": "me", "body": "今度一緒にご飯行きませんか？"},
-        {"role": "them", "body": "もっと仲良くなれたらうれしいです！"},
+        {"role": "them", "body": positive_message},
     ]}
 
     assert not backend.partner_has_active_invitation_refusal(context)

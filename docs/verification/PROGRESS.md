@@ -1071,3 +1071,13 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 
 - 最後に追加した条件付き前向き表現の対照を含む全pytest **1008 passed in 131.85s**（Firefox UI込み）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。
 - T329の全体結果を確認済み。コード/test/資料をコミット・Pushして最新SHA Actionsを確認する。
+
+### 2026-10-16 00:43 JST 継続チェックポイント：延期表現の境界を絞る
+
+- 00:43 JSTに指示用ブランチをfetch/show。最新版SHA `14582f9e2171705c1489b4081b72d16396533b8a`で、P0優先・Gemini/会話004/新しい会話HTMLの保留に変更なし。
+- 「もうちょっと話してから」「もうちょっとやり取りしてから」の延期を拒否として認識できないことを修正前テストで再現。最初の拡張案は「もう少し仲良くしたい」「もう少し話したいことがある」を誤って拒否扱いした。検出を明示的な「してから／なってから」へ絞り、条件付き延期では再勧誘を止め、一般的な会話希望は許容する対照テストを追加。
+- Focused refusal tests **21 passed, 906 deselected**。全pytest **1012 passed in 131.45s**（Firefox UI込み）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立Pythonレビューは絞り込み後に具体的な誤判定なしと報告。Gemini実通信0回。
+- T330をFIXEDとして追加。Test Matrix **330項目: PASS231 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15**。QUALITY009の実生成自然さ・意味的候補多様性FAILが残るため総合**NO-GO**。
+- T329のコード/test SHA `9d64e15990d83fec52477d9934450644214c69b6`を対象とするActionsは確認待ち。T330の差分は未コミット・未Push。PR #4は前回確認時OPEN/Draft、未マージ。ユーザーの指示txt3点を保持しステージしない。
+- 次: 構文と差分を再確認し、T330のコード/test/docsを選択的にコミット・Pushする。Push/PR Actionsのhead SHAが一致し成功することとPRのDraft状態を確認する。次のP0は最新指示から選び、オフラインで継続する。
+- T329の旧SHA `9d64e15990d83fec52477d9934450644214c69b6`を対象にしたPush [Actions 38762044607](https://github.com/kenkyu0909/aichatapp/actions/runs/38762044607)とPR [Actions 38762147748](https://github.com/kenkyu0909/aichatapp/actions/runs/38762147748)がsuccessし、head SHA一致を確認。ただし、誤判定対照を追加する前の版でありT330の最新コード検証としては扱わない。
