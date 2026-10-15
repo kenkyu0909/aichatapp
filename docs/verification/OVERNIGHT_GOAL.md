@@ -1111,3 +1111,10 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - ゴール7「安定性」: SHA `1d2f909` Push runで相手切替中のFirefox DOM更新競合が表面化し、stale element例外で失敗。同SHAのPR runは成功したためCIで揺れる状態と判断。待機処理が一時的な参照切れを再試行し、相手名と履歴が一致するまで確認する修正を加えた。
 - 修正後focused Firefox 3 passed。対象テストを単独3回連続で通過。全pytest 1366 passed in 224.18s。レビューapprove、Python/JS構文とdiff検査成功。Actionsは新commit後に確認する。
 - T368をFIXEDとして追加。累計368項目: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。QUALITY009の実Gemini生成自然さ・意味多様性FAILが残るので総合NO-GO。Gemini通信0回。会話004・新HTML・PRマージは行わない。
+
+
+##### 2026-10-16 09:05 JST: T368最新HEADのPush/PR CI確認
+
+- 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush run [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR run [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) が同一SHAでsuccess。JUnit artifactは1366件 / failures 0 / errors 0 / skipped 0。
+- ゴール7のオフライン回帰とFirefox安定性はこのHEADでPASS。実Gemini自然さ・候補意味多様性の保存済みFAILが残るためゴール全体および総合判定はNO-GOのまま。Gemini通信0回。
+- PR #4はOPEN/Draft・未マージ。次の作業は品質009保存出力を使った安全なオフライン分析。conversation_004 / 新しい会話HTMLは禁止。

@@ -926,3 +926,6 @@ T367のレビュー後最終回帰: 全pytest **1366 passed in 223.60s**（Firef
 T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一head SHAでsuccess。両workflowでpytestとJavaScript syntax check、Firefox準備、artifact uploadが成功。ローカル全pytestは1365 passed in 198.20s。T366を含む次のdocs-only HEADについては別途CIを確認する。
 
 最新HEAD CI: `f832bd0529970d1bd6fddfc34169b67a17002b47`のPush Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706)とPR Actions [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。Push run artifactのJUnit記録は1365 tests / 0 failures / 0 errors / 0 skipped。JavaScript syntax、Firefox準備、Artifact保存もsuccess。Gemini実通信0回。過去QUALITY009の生成自然さ・意味的多様性FAILは維持し、総合NO-GO。
+
+
+T368最終CI追補: 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush Actions [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR Actions [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) は同一head SHAでsuccess。Push artifactのJUnitは1366件 / 失敗0 / error0 / skipped0。PR #4はOPEN/Draft・未マージ。これはオフライン検証であり、QUALITY009実Gemini自然さ・意味的多様性FAILは未解決。

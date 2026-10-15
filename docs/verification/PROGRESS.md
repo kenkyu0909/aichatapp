@@ -1399,3 +1399,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 修正後: focused T365/T367/T368 **3 passed in 38.32s**。T368単独は**3回連続成功**（12.84s、12.07s、11.73s）。全pytest **1366 passed in 224.18s**。`py_compile`、JS構文、diff検査成功。コードレビューApprove。Gemini通信0回。
 - 修正前SHA `1d2f909`のPush run 38825261770はT368テストで失敗し、PR run 38825266165は同SHAでsuccess。修正後Actionsは新commitをPushして確認する。
 - Matrixは368項目: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。QUALITY009保存済み実Gemini自然さ・候補意味多様性FAILは残るため総合NO-GO。PR #4はDraft・未マージ。
+
+
+### 2026-10-16 09:05 JST T368最終CI・PR確認
+
+- 最新コードSHA `a941ac478dd443bb525928e2e17f473acb774575` のPush Actions [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR Actions [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) は、同一SHAでともにsuccess。
+- Push runのJUnit artifactは**1366 tests / 0 failures / 0 errors / 0 skipped**。Firefox準備、JS構文確認、artifact保存も成功。ローカル全pytestも1366 passed。実Gemini API通信0回。
+- PR #4はOPEN/Draft、head `a941ac478dd443bb525928e2e17f473acb774575`、base `feat/ui-local-backend-v1`。マージなし。
+- T368の修正後安定性は確認済み。一方、QUALITY009に保存された実Gemini出力の自然さ・候補の意味的多様性FAILは未解決で、総合判定NO-GOを維持する。モック/UI/CI成功で実生成品質をPASSへ変更しない。
+- 次: 最新検証結果を他の報告書とPR本文へ反映し、そのあと保存済みFAILへのオフライン分析を継続する。会話004と新しい会話HTMLは実施しない。
