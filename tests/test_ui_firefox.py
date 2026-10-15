@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
@@ -1103,6 +1104,20 @@ def test_firefox_keeps_safe_candidate_visible_with_shortage_notice(local_app, fi
     assert errors["console"] == []
 
 
+def _conversation_loaded(driver, expected_name, expected_message):
+    try:
+        name = driver.find_element(By.ID, "current-name").text
+        messages = [
+            message.text
+            for message in driver.find_elements(
+                By.CSS_SELECTOR, "article.chat-message.them .bubble"
+            )
+        ]
+    except StaleElementReferenceException:
+        return False
+    return name == expected_name and messages == [expected_message]
+
+
 def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_app, firefox):
     app = local_app
     driver = firefox
@@ -1130,9 +1145,9 @@ def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_
     )
     contact_a.click()
     WebDriverWait(driver, 8).until(
-        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のあおい"
-        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
-        == ["休日は友達とカフェに行きました！"]
+        lambda browser: _conversation_loaded(
+            browser, "架空のあおい", "休日は友達とカフェに行きました！"
+        )
     )
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
 
@@ -1151,9 +1166,9 @@ def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_
       item.click();
     """)
     WebDriverWait(driver, 8).until(
-        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のゆき"
-        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
-        == ["最近は美術館に行きました！"]
+        lambda browser: _conversation_loaded(
+            browser, "架空のゆき", "最近は美術館に行きました！"
+        )
     )
 
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
@@ -1172,9 +1187,9 @@ def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_
     )
     contact_a.click()
     WebDriverWait(driver, 8).until(
-        lambda browser: browser.find_element(By.ID, "current-name").text == "架空のあおい"
-        and [message.text for message in browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them .bubble")]
-        == ["休日は友達とカフェに行きました！"]
+        lambda browser: _conversation_loaded(
+            browser, "架空のあおい", "休日は友達とカフェに行きました！"
+        )
     )
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
     assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.them .bubble").text == "休日は友達とカフェに行きました！"

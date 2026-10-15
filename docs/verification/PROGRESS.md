@@ -1391,3 +1391,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T367追加後は367項目: PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実Gemini文面の自然さ・候補意味多様性FAILは未解決で、総合NO-GO。
 - 現在のコード・記録変更は未コミット。次に最終コードで全pytest、GitHub Actions、PR #4のOPEN/Draft・最新headを確認する。会話004と新しい会話HTMLは未実施。
 - レビュー修正を含む最新差分で全pytestを再実行し**1366 passed in 223.60s**。続いてfocused Firefox T365/T367は**2 passed in 26.46s**。`py_compile`、`node --check app.js`、`git diff --check`も成功。最新コミットのActionsはまだ未確認。
+
+### 2026-10-16 08:52 JST T368 CIのFirefox一時stale DOMを修正
+
+- SHA `1d2f909`のPush Actionsで、既存の別相手切替・古い候補拒否テストがFirefoxの`StaleElementReferenceException`により失敗。DB保存と画面更新の間で要素を取得し直す際、wait lambdaが一時参照を許容しなかった。
+- 相手名と表示中の相手履歴の両方が期待値に一致するwait helperを追加。一時的な`StaleElementReferenceException`だけを再試行し、他の例外は隠さない。候補の相手ID検査と送信防止assertionは維持。
+- 修正後: focused T365/T367/T368 **3 passed in 38.32s**。T368単独は**3回連続成功**（12.84s、12.07s、11.73s）。全pytest **1366 passed in 224.18s**。`py_compile`、JS構文、diff検査成功。コードレビューApprove。Gemini通信0回。
+- 修正前SHA `1d2f909`のPush run 38825261770はT368テストで失敗し、PR run 38825266165は同SHAでsuccess。修正後Actionsは新commitをPushして確認する。
+- Matrixは368項目: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。QUALITY009保存済み実Gemini自然さ・候補意味多様性FAILは残るため総合NO-GO。PR #4はDraft・未マージ。

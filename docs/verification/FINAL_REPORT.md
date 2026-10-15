@@ -1448,3 +1448,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - Test Matrix: 367項目、PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
 - 実生成品質の保存済みFAILは解消していないため総合NO-GO。PR #4はDraft・未マージ。会話004と新会話HTMLは未実施。
 - レビュー指摘修正後に全pytestを再実行し**1366 passed in 223.60s**。T365/T367 focused Firefoxは**2 passed in 26.46s**。最新変更を含むGitHub Actionsは未確認。
+
+## 2026-10-16 08:52 JST 追補：CIで見つかったFirefox切替テストの不安定さ
+
+- `1d2f909`のPush runは、Firefoxの別相手切替中にDOM要素が更新される競合で`StaleElementReferenceException`となり失敗。同SHAのPR runは成功しており、実行間で揺れていた。
+- テストの待機処理で一時的なstale要素参照だけを捕捉し、相手名と会話履歴が一致するまで再確認するよう修正。候補送信を拒否する検査の期待値は維持。
+- T368修正後にfocused Firefox 3 passed、T368単独3回成功、全pytest 1366 passed in 224.18s。独立レビューapprove。Python/JS構文とdiff検査成功。実Gemini通信0回。
+- 新コミットのPush/PR Actionsはこれから確認する。Test Matrixは368項目（PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15）。生成品質の過去FAILは未解決、総合NO-GO。

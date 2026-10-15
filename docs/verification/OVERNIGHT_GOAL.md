@@ -1105,3 +1105,9 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - T367累計: 367項目、PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。新HEAD ActionsはPush後に未確認。Gemini実通信0回。
 - 実Gemini生成文の自然さ・候補意味多様性FAILが残るため総合NO-GO。次: 最終差分の全体テストとActions確認、PR Draft状態確認。会話004、新HTML、PRマージは行わない。
 - レビュー修正後の全pytestは**1366 passed in 223.60s**、T365/T367 focused Firefoxは**2 passed in 26.46s**。ActionsはPush後に最新SHAで確認する。
+
+##### 2026-10-16 08:52 JST: CIで見つかった相手切替E2Eの競合を修正
+
+- ゴール7「安定性」: SHA `1d2f909` Push runで相手切替中のFirefox DOM更新競合が表面化し、stale element例外で失敗。同SHAのPR runは成功したためCIで揺れる状態と判断。待機処理が一時的な参照切れを再試行し、相手名と履歴が一致するまで確認する修正を加えた。
+- 修正後focused Firefox 3 passed。対象テストを単独3回連続で通過。全pytest 1366 passed in 224.18s。レビューapprove、Python/JS構文とdiff検査成功。Actionsは新commit後に確認する。
+- T368をFIXEDとして追加。累計368項目: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。QUALITY009の実Gemini生成自然さ・意味多様性FAILが残るので総合NO-GO。Gemini通信0回。会話004・新HTML・PRマージは行わない。

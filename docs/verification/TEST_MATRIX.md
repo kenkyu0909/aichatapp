@@ -913,9 +913,15 @@ T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` の
 
 最新ID行: 367。累計: PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
 
-T365のPR Actions [38822714041](https://github.com/kenkyu0909/aichatapp/actions/runs/38822714041)は、DB保存直後にUIの追いメッセージボタンを即時検査して非表示だったため失敗。可視性を待つ`WebDriverWait`を追加し、対象Firefoxテストを3回連続で通過（13.32秒、13.58秒、13.31秒）。T367コードを含むPush後Actionsは未確認。
+T365のPR Actions [38822714041](https://github.com/kenkyu0909/aichatapp/actions/runs/38822714041)は、DB保存直後にUIの追いメッセージボタンを即時検査して非表示だったため失敗。可視性を待つ`WebDriverWait`を追加し、対象Firefoxテストを3回連続で通過（13.32秒、13.58秒、13.31秒）。
 
 T367のレビュー後最終回帰: 全pytest **1366 passed in 223.60s**（Firefoxを含む）、focused T365/T367 **2 passed in 26.46s**。回答の一致確認・startup cleanup修正を含む。新HEAD Actionsは未確認。
+
+| T368 | Firefox相手切替中の一時stale DOMを待機し、別相手の候補記録を防ぐ | Firefox E2E、隔離SQLite | FIXED | 最新SHA `1d2f909`のPush Actionsで既存テストが`StaleElementReferenceException`により失敗、同SHAのPR Actionsはsuccess。画面切替中の古いDOM参照を再試行可能な一時状態として扱い、相手名と会話履歴が同時に一致するまで待つ。送信対象検査は維持。focused T365/T367/T368 3 passed、T368単独3回連続成功（12.84s / 12.07s / 11.73s）、全pytest 1366 passed in 224.18s。レビューapprove。Gemini実通信0回。 |
+
+最新ID行: 368。累計: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。
+
+最新変更を含むActionsは次のPush後に確認する。1d2f909のPush run [38825261770](https://github.com/kenkyu0909/aichatapp/actions/runs/38825261770)は1 failed / 1365 passed（失敗箇所T368の修正前テスト）、PR run [38825266165](https://github.com/kenkyu0909/aichatapp/actions/runs/38825266165)は同一HEADでsuccess。T368修正後の最新HEAD Actionsを別途確認する。
 
 T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一head SHAでsuccess。両workflowでpytestとJavaScript syntax check、Firefox準備、artifact uploadが成功。ローカル全pytestは1365 passed in 198.20s。T366を含む次のdocs-only HEADについては別途CIを確認する。
 
