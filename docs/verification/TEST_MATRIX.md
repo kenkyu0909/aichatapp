@@ -592,3 +592,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T289 | 確認済みの本人回答を直接質問の各候補に含める指示 | reply prompt静的検査とpytest | PASS | reply用指示に「各候補が確認済み回答を含み、別質問だけですり替えない」と明記。`test_v2_user_info_question_is_separate_and_answers_are_ephemeral`を拡張し、`python -m pytest -q tests/test_app.py -k "v2_user_info_question or answers_verified_partner_question or recent_movie_answer or test_prompt"`で**8 passed**。実Geminiでの文章品質は未検証。|
 
 最新ID行: 289。累計: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|
+
+| T290 | 直接質問への回答済み候補を残し、すり替え案を返さず不足を通知 | FastAPI TestClient + Gemini SDKモック | PASS | 架空の最近観た映画に対し、確認回答を含む候補1案と直接回答を避ける候補2案をモック応答。API経路は確認済み候補だけを返し、代替欄を空にし、3案中1案しか安全に表示できない旨を通知。プロンプトにも各案で回答する指示が渡ることを検証。pytest **3 passed**。実Geminiの追従性は未検証。初回テストではレスポンスに内部`candidate_rejections`が露出すると誤想定して失敗。アプリはその内部情報を返さない設計であり、公開契約（候補の除外・不足通知）を確認するassertに直して再実行した。|
+
+最新ID行: 290。累計: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|

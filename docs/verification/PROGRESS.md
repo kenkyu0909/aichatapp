@@ -689,3 +689,11 @@
 - `prompts/reply.txt`に、本人の回答が確認できる直接質問では返信候補の各案にその回答を含め、回答を省いて別の質問だけにしない指示を追加。`prompt_spec.md`へ同じ仕様を記録し、既存のV2情報質問テストに静的な確認を追加。
 - 関連pytest **8 passed, 674 deselected**。これはプロンプト内容と既存ローカル判定の確認であり、Gemini実生成品質は未確認。Gemini実API 0回。T288/T289を含むTest Matrix 289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。NO-GOを維持。
 - 次: 変更差分をコミット・Pushし、同一SHAのPush/PR Actionsを確認。実API禁止は維持し、返信候補の品質FAILは再開後に限定許可内で確認する。15〜20分ごとに指示ブランチを再取得し、PR #4はOPEN/Draftで保持。
+
+### 2026-10-15 16:33 JST 継続チェックポイント：回答済みケースのAPIモック回帰
+
+- 独立レビューで、前回追加した静的プロンプトassertだけでは回答後に各候補を作る経路を検証していないと指摘された。新しいTestClientモックを追加し、最近観た映画を本人が回答済みのケースで、回答を含む1案と質問をすり替える2案を返す応答を再現。
+- API経路は回答済みの安全候補1案だけを返し、代替候補を表示せず、指定3案に対する安全候補不足を明示。プロンプト指示がモデル要求へ含まれることと一時回答が渡ることも確認。これは安全フィルターと要求構成のモック試験であり、Geminiが指示に従うかは未検証。
+- 初回focusedテストは内部フィールド`candidate_rejections`がレスポンスにあると想定して失敗。内部判定をAPIに公開する仕様ではないため、公開される候補数・代替なし・不足通知を確認するassertへ修正。最終focused回帰は**3 passed**。実Gemini 0回。
+- 直前プロンプト変更SHA `305b919401b1163f9ea69cae1764b26359c68073` のPush Actions [38699147020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020) とPR Actions [38699152928](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928) は成功。これらは今回追加したT290テストを含まない。
+- Test Matrix 290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。保存済み品質009の手動FAILと意味的多様性の課題は残るためNO-GO。次は差分をコミットし、最新SHAのPush/PR Actionsを確認する。会話004/新規HTMLは行わない。PR #4 Draft・未マージ。

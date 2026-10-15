@@ -951,3 +951,7 @@ Windowsのstart.batは一時DBを用いた8767番で起動し、Firefoxから架
 ## 2026-10-15 16:31 JST プロンプト追補
 
 本人への直接質問に対する確認回答がある場合、各返信候補が回答内容を明示するよう`prompts/reply.txt`を補強した。回答を省いて別の質問だけで返す代替案は作らない。静的プロンプト確認を含む関連pytestは8 passed。実Geminiの新しい生成は行っていないため、実際の文章品質は未判定。Test Matrixは289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。今回差分のActionsはPush/PRとも進行中。総合NO-GOを維持する。
+
+回答済み映画質問のFastAPIモック回帰では、Geminiモックが質問を避ける候補2案を返しても、API経路は回答を含む安全候補だけを残して不足を伝えた（focused pytest 3 passed）。これは候補ゲートとプロンプト送信の確認であり、実Geminiの追従性の証拠ではない。Test Matrixは290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。先行した誤assertの失敗と修正も追跡記録に残した。
+
+直前コミット`305b919401b1163f9ea69cae1764b26359c68073`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928)は成功（pytest 761件）。T290を追加した次のコミットのActionsは別途確認する。

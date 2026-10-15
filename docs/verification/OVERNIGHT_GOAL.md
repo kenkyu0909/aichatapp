@@ -422,3 +422,11 @@ Gemini実APIは今回0回。会話004・新会話HTMLなし。過去QUALITY009�
 本人情報の正確性と候補の多様性は引き続きNOT_MET。保存済み映画質問ケースでは、現行ゲートが直接質問に答えない代替2案を安全側に除外し、確認済み回答を含む1案だけを残した。このため、返信プロンプトに「確認済みの直接回答は各候補に含める」指示を追加し、`prompt_spec.md`とプロンプト回帰テストへ反映した。関係するpytestは8 passed。新しいGemini生成はなく、実用文面の改善は未確認のため各ゴールをPASSへ変更しない。
 
 Test Matrixは289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。今回SHAのActionsはPush/PRとも進行中で、結果確認後に更新する。実API 0回。会話004/新HTMLなし。総合NO-GO。
+
+### 2026-10-15 16:33 JST：本人回答後のAPIモック経路を確認
+
+本人情報の正確性と候補多様性はNOT_METのまま。回答済み映画質問について、回答を含む候補1案と質問を避けた候補2案を返すGemini SDKモックを使い、TestClient経由の実際の安全ゲートを通した。安全な1案だけを返し、2案を表示せず、指定数に足りない通知が出ることを確認した。focused pytest 3 passed。最初のassertは内部診断フィールドをAPI応答に要求して失敗したが、公開仕様に合わせて直し、再実行で通過した。新しいGemini生成は行っていない。
+
+更新後Test Matrixは290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。実生成指示へのモデル追従は未検証。過去FAILと総合NO-GOを維持する。
+
+T290を追加する前のプロンプト変更コミット`305b919401b1163f9ea69cae1764b26359c68073`はPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928)で成功し、pytest 761件を確認した。今回の新しいモックテストを含むSHAのCI結果は未確認。

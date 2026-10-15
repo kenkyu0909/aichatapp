@@ -4855,6 +4855,66 @@ def test_direct_question_filter_keeps_answer_and_rejects_topic_evasion(client):
     assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
 
 
+def test_answered_direct_question_keeps_answering_option_and_reports_unsafe_shortage(
+    client, monkeypatch
+):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": "最近どんな映画を観ましたか？",
+    })
+    captured = {}
+    payload = {
+        "needs_user_info": False,
+        "user_questions": [],
+        "user_info_reason": "",
+        "recommended": {"label": "回答", "text": "最近は『青い灯台』を観ました！"},
+        "alternatives": [
+            {"label": "質問への未回答", "text": "映画館へ行くのが好きなんですか？"},
+            {"label": "質問への未回答", "text": "映画はときどき観るんですか？"},
+        ],
+        "reason": "本人の確認回答を使う",
+        "strategy": "直接質問へ答える",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "本人の回答が確認できた",
+        "next_action": "映画の話題を続ける",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            context = json.loads(kwargs["contents"])
+            assert context["ephemeral_user_answers"] == [{
+                "question": "最近観た映画の作品名を教えてください",
+                "answer": "最近は『青い灯台』を観ました",
+            }]
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "count": 3,
+        "user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["recommended"]["text"] == "最近は『青い灯台』を観ました！"
+    assert body["available_candidate_count"] == 1
+    assert body["alternatives"] == []
+    assert "安全確認後に表示できる候補は1案です（指定は3案）" in body["candidate_notice"]
+    assert "返信候補の各案にその回答を明確に含めます" in captured["config"].system_instruction
+
+
 def test_verified_book_genre_answer_rejects_broad_requestion_and_keeps_grounded_reply(client):
     _, backend = client
     context = {
