@@ -587,3 +587,16 @@
 - Test Matrixは268項目: PASS198 / FAIL13 / FIXED37 / BLOCKED5 / NOT_TESTED15。既存の品質009実生成品質FAILは未解決のまま保持。今回Gemini実API 0回。
 - 現状: `app.py`と`tests/test_app.py`に未コミット修正。進捗レポート追記中。基準コミット `0555c48e4d4fe0c5fb87e1fe4139d01b03d4c60d`、作業ブランチ `codex/full-system-verification`。PR #4はOPEN/Draft、マージなし。ユーザー提供の未追跡txtはステージしない。
 - 次: レポートを揃え、追跡対象だけをコミット・Push。最新SHAを対象とするPush/PR ActionsとPR Draft状態を確認する。その後はQUALITY009の実生成候補に残る不自然な共感反復/候補方針の差を次のP0として再現し、オフラインで継続。未登録の多様な日本語表現への完全な意味理解は主張しない。
+
+
+### 2026-10-15 15:24 JST 継続チェックポイント：映画作品名を含む質問形の誤通過を修正
+
+- 最新の `codex/directive-control` を15:24 JSTに再取得。P0の本人回答の根拠確認・直接質問への回答を継続。会話004、新しい会話HTML、実Gemini通信は行わない。
+- QUALITY009の保存済み実出力に関係する映画の直接質問経路を監査。本人の確認回答に作品名が含まれている場合、「青い灯台を観ましたか？」等の疑問候補が `filter_safe_candidates` を通ることを修正前テストで再現した。
+- 作品名の存在だけを回答根拠にせず、候補本文の同じ節に肯定的な視聴表現がある場合に限るよう修正。質問・希望/予定・伝聞/推量・否定・未視聴表現を除外し、「観終わりました」「見終えました」や、希望の後で実際に視聴した対比文は扱う。危険候補を落とした後も安全な回答を残し不足数を通知する。
+- 独立レビューで、意向形、伝聞、視聴否定、記憶否定の追加漏れが見つかった。各指摘を候補フィルター経由の回帰テストに追加して修正。最終レビューでは残指摘なし。
+- 直接映画回答のfocused suite **21 passed**。全pytest **756 passed in 100.64s**（Firefox UI込み）。`py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実API 0回。
+- 直前のコミット `fece04510e91fe19110e0781fd94c32e130c06ed` に対するGitHub Actionsは成功: [run 38690998981](https://github.com/kenkyu0909/aichatapp/actions/runs/38690998981)。今回の未コミット差分を含む最新SHAのActionsは、コミット・Push後に確認する。
+- Test Matrixは274項目: **PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15**。QUALITY009の過去実生成品質FAILを消さず、実API文章の改善確認済みとは扱わない。PR #4はOPEN/Draft、未マージ。
+- 変更中: `app.py` と `tests/test_app.py`。ユーザー提供の未追跡指示txt 3点は保護しており、ステージしない。
+- 次: 最新差分を追跡対象のみコミット・Pushし、同一SHAのPush/PR ActionsとPR #4 Draft状態を確認。その後は品質009の残る意味的候補重複・会話前進の不足をオフラインで検証する。

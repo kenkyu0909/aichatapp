@@ -1039,6 +1039,35 @@ def _movie_claim_title(text: str) -> str | None:
     return title
 
 
+def _asserts_movie_viewing(segment: str) -> bool:
+    """Require an affirmative viewing claim rather than a title-only mention."""
+    clauses = re.split(
+        r"(?<=でした)が|(?<=ました)が|(?<=です)が|(?<=ます)が|"
+        r"けれども|けれど|けど|でも|ただ",
+        segment,
+    )
+    for clause in clauses:
+        negative_or_uncertain = re.search(
+            r"(?:観|見)(?:たかった|たく(?:ない|なかった|ありません|な(?:る|り|った|りました))|"
+            r"たそう|たらしい|たかも|たと思う|たよう|たみたい|たい|よう|る予定|るつもり|るかも|ると思う|"
+            r"たこと(?:(?:が|は)?)(?:ない|ありません|なかった|ありませんでした|なく)|"
+            r"た(?:記憶|覚え)(?:が|は)?(?:ない|ありません|なかった|ありませんでした)|"
+            r"たわけでは(?:ない|ありません|なかった|ありませんでした)|"
+            r"てい(?:ない|ません)|ませんでした|なかった|ない(?:です)?)|"
+            r"鑑賞(?:したく|したい|する予定)",
+            clause,
+        )
+        if negative_or_uncertain:
+            continue
+        if re.search(
+            r"(?:観|見)(?:終わり(?:ました|た)|終え(?:ました|た)|切り(?:ました|た)|"
+            r"ました|た|てきました|てきた)|鑑賞(?:しました|した)",
+            clause,
+        ):
+            return True
+    return False
+
+
 def _movie_opinion_polarity(text: str, marker: str) -> str | None:
     negative_patterns = {
         "面白": r"面白く(?:なかった|ない|ありません)|面白いとは思わなかった",
@@ -2911,8 +2940,13 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         re.search(r"どうだった|どうでした|感想|面白かった|良かった|よかった", question)
     )
     if asks_for_movie_title:
-        answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
-        normalized_prefix = re.sub(r"\s+", "", answer_prefix)
+        answer_segments = [
+            segment
+            for segment in _reading_genre_evidence_segments(candidate.text)
+            if not _reading_genre_segment_is_question_only(segment)
+            and _asserts_movie_viewing(segment)
+        ]
+        normalized_answer_segments = [re.sub(r"\s+", "", segment) for segment in answer_segments]
         verified_recent_movies = [
             str(context.get("my_profile", {}).get("facts", {}).get(key, ""))
             for key in ("recent_movies", "recent_films", "最近観た映画")
@@ -2927,10 +2961,11 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         )
         for verified_answer in verified_recent_movies:
             normalized_answer = re.sub(r"\s+", "", verified_answer)
-            if normalized_answer and normalized_answer in normalized_prefix:
+            if normalized_answer and any(normalized_answer in segment for segment in normalized_answer_segments):
                 return True
             title = re.search(r"[『「]([^』」]{1,40})[』」]", verified_answer)
-            if title and re.sub(r"\s+", "", title.group(1)) in normalized_prefix:
+            normalized_title = re.sub(r"\s+", "", title.group(1)) if title else ""
+            if normalized_title and any(normalized_title in segment for segment in normalized_answer_segments):
                 return True
         return False
     if asks_for_movie_opinion:

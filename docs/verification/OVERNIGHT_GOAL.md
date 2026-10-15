@@ -312,3 +312,20 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 | アプリ全体の安定性 | CONDITIONAL | 最新pytest+Firefox UI 740 passed in 99.63s、Python/JavaScript構文・差分検査成功。今回差分のGitHub Actions待ち。|
 
 この作業単位でGemini実APIは0回。`conversation_004`・新会話HTMLは指示により未実施。修正差分は未コミット、Test Matrix 268行（PASS198 / FAIL13 / FIXED37 / BLOCKED5 / NOT_TESTED15）。既存の品質009生成品質FAILのため総合判定NO-GO。次にレポートを確定して追跡差分をPushし、最新Actionsを確認後、QUALITY009の残る意味反復/候補方針P0をオフラインで監査する。
+
+
+### 2026-10-15 15:24 JST 継続状況
+
+| ゴール | 判定 | 確認状況 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 最近観た映画の直接質問で、確認済みタイトルだけを疑問形・否定・希望・伝聞に含めた候補が通る穴を修正。関連focused suite 21 passed。30ケース以上の包括的な意味評価は未完了。|
+| 句読点・改行 | NOT_MET | 全pytest 756 passed（Firefox UI込み）だが、包括的な文体ベンチマークは未実施。|
+| ミラーリング | NOT_MET | 20ケース・90%基準は未評価。|
+| 共感の反復防止 | NOT_MET | QUALITY009の過去実生成品質FAILを維持。連続会話の意味反復評価は未完了。|
+| 返信候補の多様性 | NOT_MET | 同じreply_moveを持つ候補の通知は実装済み。15ケースの意味的方針差評価は未完了。|
+| 食事への誘い判断 | NOT_MET | 既存の誘い/拒否ガードを維持。誘う/誘わない各5ケースの基準は未達。|
+| アプリ全体の安定性 | CONDITIONAL | 全pytest/Firefox UI 756 passed、Python/JavaScript構文・差分検査・独立レビュー成功。修正後最新SHAのGitHub Actionsはコミット・Push後に実行予定。|
+
+修正内容: 作品名が一致するだけで直接質問への回答扱いにせず、肯定的な視聴表現を候補と節単位で照合。修正前に疑問・意図・否定・伝聞の候補通過を再現し、修正後に拒否と肯定的な完了/対比文の双方を検証した。Gemini実API 0回。変更中は `app.py` と `tests/test_app.py`。直前HEAD `fece04510e91fe19110e0781fd94c32e130c06ed` のActionsは[成功](https://github.com/kenkyu0909/aichatapp/actions/runs/38690998981)だが、本差分のActions証拠ではない。Test Matrix 274件: PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15。総合NO-GO。PR #4 Draft・未マージ。会話004と新規会話HTMLは実施しない。
+
+次の作業: 追跡ファイルのみコミット・Pushし、最新SHAのActionsを確認。その後、QUALITY009に残る相槌・候補方針の意味重複をオフラインで監査する。

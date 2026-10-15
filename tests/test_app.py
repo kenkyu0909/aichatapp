@@ -2186,6 +2186,9 @@ def test_recent_movie_answer_does_not_accept_topical_followup_as_answer(client, 
 @pytest.mark.parametrize("candidate_text", [
     "最近は青い灯台を観ました！",
     "最近は青い灯台を観ました！\nどんなジャンルが好きですか？",
+    "青い灯台を観終わりました！",
+    "青い灯台を見終えました！",
+    "青い灯台を観るつもりでしたが実際に観ました！",
 ])
 def test_recent_movie_answer_can_include_verified_title_and_followup(client, candidate_text):
     _, backend = client
@@ -2201,6 +2204,52 @@ def test_recent_movie_answer_can_include_verified_title_and_followup(client, can
     assert backend._answers_verified_partner_question(
         backend.Candidate(label="確認済み作品に回答", text=candidate_text), context
     )
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "青い灯台を観ましたか？",
+    "最近『青い灯台』を観たんですか？",
+    "青い灯台を観ましたかね",
+    "映画は見ました！\n青い灯台を観たんですか？",
+    "青い灯台は観たいです！",
+    "青い灯台は観たことないです！",
+    "青い灯台は観たくなかったです！",
+    "青い灯台を観たくなりました！",
+    "青い灯台を観たそうです！",
+    "青い灯台を観たことがなかったです！",
+    "青い灯台を観た記憶がないです！",
+    "青い灯台を観た覚えがないです！",
+    "青い灯台を観たわけではないです！",
+])
+def test_recent_movie_title_in_question_does_not_count_as_answer_or_reach_send_controls(
+    client, candidate_text
+):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        recommended=backend.Candidate(label="質問だけ", text=candidate_text),
+        alternatives=[backend.Candidate(label="確認済みの回答", text="最近は青い灯台を観ました！")],
+        reason="確認済み回答を使う",
+        invite_decision="continue_conversation",
+    )
+
+    assert not backend._answers_verified_partner_question(value.recommended, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(value.recommended, context)
+
+    filtered = backend.filter_safe_candidates(value, 2, context)
+
+    visible_texts = [filtered["recommended"]["text"], *(item["text"] for item in filtered["alternatives"])]
+    assert visible_texts == ["最近は青い灯台を観ました！"]
+    assert filtered["available_candidate_count"] == 1
+    assert "不足分" in filtered["candidate_notice"]
 
 
 @pytest.mark.parametrize("partner_question", [

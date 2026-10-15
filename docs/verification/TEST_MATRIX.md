@@ -532,4 +532,15 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T267 | 最新全体pytestとFirefox UI回帰 | `python -m pytest -q` | PASS | 2026-10-15 15:10 JST、**740 passed in 99.63s**。Firefox UIを含む。Chrome未使用。|
 | T268 | Python/JavaScript構文・差分検査・独立レビュー | `py_compile`、`node --check app.js`、`git diff --check`、Python reviewer | PASS | 構文/差分検査成功。レビュー指摘を反映後に再レビューされ、新たな指摘なし。|
 
-最新ID行は268件。累計: PASS198 / FAIL13 / FIXED37 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。規則ベースの日本語根拠照合であり、未登録のあらゆる言い換えを理解できる保証はない。最新差分のGitHub ActionsはPush後に確認する。|
+最新ID行は274件。累計: PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。規則ベースの日本語根拠照合であり、未登録のあらゆる言い換えを理解できる保証はない。最新差分のGitHub ActionsはPush後に確認する。|
+
+### 2026-10-15 15:24 JST：最近観た映画の直接質問に対する回答候補の検査
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T269 | 確認済み作品名だけを疑問形で返す穴の再現と修正 | 修正前 pytest / `filter_safe_candidates` | FIXED | 「最近どんな映画を観ましたか？」への本人回答に作品名があると、「青い灯台を観ましたか？」等が送信候補に残ることを修正前テストで再現。作品名が疑問・伝聞・希望・否定にだけ含まれる場合は直接回答として認めない。 |
+| T270 | 作品名入りの質問・未視聴・否定候補を送信前に除外 | pytest / 候補安全フィルター | PASS | 13種類の疑問・意図・伝聞・否定表現を拒否。安全な視聴回答を保持し、3案要求時は1案と不足通知を返す。架空作品「青い灯台」を使用。 |
+| T271 | 視聴完了表現と対比節を含む回答 | pytest / 候補安全フィルター | PASS | 「観終わりました」「見終えました」と「観るつもりでしたが実際に観ました」は受け入れる。確認回答に続く改行付き追加質問も保持。 |
+| T272 | 最近観た映画への回答関連ケース | `python -m pytest tests/test_app.py -q -k 'recent_movie_title_in_question or recent_movie_answer_can_include_verified_title or recent_movie_answer_does_not_accept_topical_followup or direct_question_filter_keeps_answer'` | PASS | **21 passed**。直接回答、疑問形回避、矛盾候補、改行付き追質問と安全候補の不足通知を確認。モック/ローカル試験。 |
+| T273 | 全pytestとFirefox UI回帰 | `python -m pytest -q` | PASS | **756 passed in 100.64s**。Firefox UIテストを含む。Chromeは使用していない。 |
+| T274 | 構文検査・差分検査・独立レビュー | Python `py_compile`、`node --check app.js`、`git diff --check`、code reviewer | PASS | 構文・差分検査成功。独立レビュー指摘を順次テストに追加し、最終差分レビューで未解決指摘なし。 |

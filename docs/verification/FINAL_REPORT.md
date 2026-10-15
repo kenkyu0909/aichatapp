@@ -856,6 +856,14 @@ V2候補でreply_moveが重なる場合、候補を捨てずに進め方の重�
 
 この作業差分はコミット・Push前で、同一SHAのGitHub Actionsは未実施。QUALITY009の実際の生成品質FAILは解消済みとみなさず、総合判定はNO-GOを維持する。TEST_MATRIXは260項目（PASS195 / FAIL13 / FIXED32 / BLOCKED5 / NOT_TESTED15）。conversation_004と新しい会話HTMLはユーザー指示により未実施。
 
+## 2026-10-15 15:24 JST：映画作品名の確認回答と直接質問の矛盾候補を遮断
+
+本人が最近観た作品名を確認回答した後、作品名の文字列だけを含む疑問文や「観たい」「観たことがない」「観たそうです」などが、相手の「最近どんな映画を観ましたか？」への回答として送信可能になる穴を修正した。候補本文を節ごとに見て、確認済み作品名と肯定的な視聴表現が同じ節にある場合だけを回答として受け入れる。安全な宣言候補は残し、指定数に満たない場合は不足通知を出す。
+
+修正前は疑問形4種と後続の否定・希望形が候補フィルターを通過することを回帰テストで再現した。修正後は、直接映画回答関連のfocused suite **21 passed**、全pytest/Firefox UI **756 passed in 100.64s**。Python構文、JavaScript構文、`git diff --check`、独立レビューは成功。今回のGemini実API通信は0回。実際のGemini文章品質そのものを再測定したわけではない。
+
+直前HEAD `fece04510e91fe19110e0781fd94c32e130c06ed` のActionsは成功（[run 38690998981](https://github.com/kenkyu0909/aichatapp/actions/runs/38690998981)）。本修正のコミット後に最新SHAのPush/PR Actionsを実行する。未コミット時点のTEST_MATRIXは274項目（PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15）。過去QUALITY009の実生成品質FAILと総合NO-GOを維持。PR #4はDraft・未マージ。conversation_004と新規会話HTMLは指示に従い未実施。
+
 
 ## 2026-10-15 15:10 JST 本人確認済み読書ジャンルへの直接回答チェック
 
