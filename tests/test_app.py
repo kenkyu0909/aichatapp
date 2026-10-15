@@ -2343,6 +2343,24 @@ def test_unlisted_origin_city_can_be_acknowledged_as_partner_fact(client):
     ], context)
 
 
+@pytest.mark.parametrize(("claim", "topic", "facts"), [
+    ("鎌倉に住んでます！", "居住地", {}),
+    ("私は看護師です！", "職業", {}),
+    ("今は大学院で心理学を学んでいます！", "職業", {}),
+    ("先月金沢に行きました！", "旅行最近", {}),
+    ("映画館に月2回行きます！", "映画館頻度", {}),
+    ("土曜の夜は空いてます！", "予定", {}),
+    ("三十歳です！", "年齢", {"age": 29}),
+])
+def test_open_vocabulary_personal_claims_require_matching_evidence(client, claim, topic, facts):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の本人事実", text=claim)
+    ], context)
+
+
 @pytest.mark.parametrize(("source_question", "expected_question"), [
     ("兄弟とは仲がいいですか？", "兄弟や姉妹とはどのくらい仲がいいですか？"),
     ("家族は何人ですか？", "兄弟や姉妹が何人いるか教えてください"),
