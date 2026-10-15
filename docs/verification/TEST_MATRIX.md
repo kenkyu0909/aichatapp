@@ -767,3 +767,8 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 現在の集計: **339項目**（PASS238 / FAIL13 / FIXED68 / BLOCKED5 / NOT_TESTED15）。過去のQUALITY009実生成品質FAILは維持し、総合判定はNO-GO。|
 
 最新ID行: **339**。累計: PASS238 / FAIL13 / FIXED68 / BLOCKED5 / NOT_TESTED15。最新ローカル全pytestは1089 passed。未コミット差分のActionsは未実行。過去QUALITY009の実生成品質FAILは維持し、総合NO-GO。
+
+| T340 | 確認済みの最近の映画回答に時期・作品名の矛盾を含む候補を遮断 | 映画回答/候補フィルターpytestと全pytest | FIXED | Windows 11 / Python 3.12 / FastAPIのオフライン回帰、架空の相手質問と一時回答を使用。修正前に「前に観た」「最近ではない」等の候補が回答として通過することを再現。15種の矛盾候補（過去時期、最近ではない、作品名の否定、別作品、以外/とは別/除いて）を拒否し、同じ作品の明示的な最近の再視聴を許容、別作品の再視聴は拒否。Focused 25 passed。最終全pytest 1105 passed in 171.74s。Gemini実通信0回。全日本語意味表現を網羅する保証ではない。|
+| T341 | Firefoxプロフィール保存E2Eのtoast待機フレーク修正 | 2件のFirefoxプロフィール保存E2Eと全pytest | FIXED | 同SHA cb04a58c8e9cb53d6dd5abf97de947462525f3adのPush Actions 38777573869でFirefox保存テストがtoastの一時表示を取りこぼしfailure（1 failed / 1088 passed）。同SHAのPR Actions 38777582476はsuccess。関連する二つのプロフィール保存UIテストは保存成功後に閉じるモーダル状態を待ち、APIから保存値も確認するよう変更。Firefox focused 2 passed in 20.56s。最終全pytest 1105 passed。修正HEADのGitHub Actionsは未確認。|
+
+最新ID行: 341。累計: PASS238 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。既存QUALITY009の実生成自然さ・意味的候補多様性FAILは継続。|

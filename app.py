@@ -4383,13 +4383,6 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         re.search(r"どうだった|どうでした|感想|面白かった|良かった|よかった", question)
     )
     if asks_for_movie_title:
-        answer_segments = [
-            segment
-            for segment in _reading_genre_evidence_segments(candidate.text)
-            if not _reading_genre_segment_is_question_only(segment)
-            and _asserts_movie_viewing(segment)
-        ]
-        normalized_answer_segments = [re.sub(r"\s+", "", segment) for segment in answer_segments]
         verified_recent_movies = [
             str(context.get("my_profile", {}).get("facts", {}).get(key, ""))
             for key in ("recent_movies", "recent_films", "最近観た映画")
@@ -4402,12 +4395,67 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
             and re.search(r"最近|この前|昨日|先週", answer.get("question", ""))
             and re.search(r"映画|観|見|作品", answer.get("question", ""))
         )
+        compact_candidate = re.sub(r"\s+", "", candidate.text)
+        recent_rewatch_pattern = re.compile(
+            r"(?:最近|この前|昨日|先週).{0,18}(?:また|もう一度).{0,18}(?:観|見)(?:た|ました)|"
+            r"(?:また|もう一度).{0,18}(?:最近|この前|昨日|先週).{0,18}(?:観|見)(?:た|ました)"
+        )
+        alternate_movie_pattern = re.compile(r"(?:別|他|違う)(?:の)?(?:映画|作品)")
+        recent_rewatch_titles: set[str] = set()
+        for answer in verified_recent_movies:
+            quoted_title = re.search(r"[『「]([^』」]{1,40})[』」]", answer)
+            title = re.sub(r"\s+", "", quoted_title.group(1)) if quoted_title else ""
+            if not title:
+                continue
+            for rewatch in recent_rewatch_pattern.finditer(compact_candidate):
+                rewatch_span = rewatch.group(0)
+                preceding_context = compact_candidate[max(0, rewatch.start() - 48):rewatch.start()]
+                if title in rewatch_span or (
+                    title in preceding_context and not alternate_movie_pattern.search(rewatch_span)
+                ):
+                    recent_rewatch_titles.add(title)
+                    break
+        explicit_recent_rewatch = bool(recent_rewatch_titles)
+        denies_recent_viewing = re.search(
+            r"(?:最近|この前|昨日|先週)(?:は|に)?[^\n!?！？]{0,12}(?:ではない|じゃない|ではありません|じゃありません|ないです|なかった)",
+            candidate.text,
+        )
+        claims_only_past_viewing = re.search(
+            r"(?:かなり|だいぶ|ずいぶん|結構)?前に(?:映画を)?(?:観|見)(?:た|ました)|"
+            r"(?:昔|去年|一昨年|以前)(?:に)?(?:映画を)?(?:観|見)(?:た|ました)|"
+            r"(?:でも|ただ|実は).{0,24}(?:昔|去年|一昨年|以前).{0,12}(?:観|見)(?:た|ました)",
+            candidate.text,
+        )
+        if denies_recent_viewing or (claims_only_past_viewing and not explicit_recent_rewatch):
+            return False
+        answer_segments = [
+            segment
+            for segment in _reading_genre_evidence_segments(candidate.text)
+            if not _reading_genre_segment_is_question_only(segment)
+            and _asserts_movie_viewing(segment)
+        ]
+        normalized_answer_segments = [re.sub(r"\s+", "", segment) for segment in answer_segments]
         for verified_answer in verified_recent_movies:
             normalized_answer = re.sub(r"\s+", "", verified_answer)
-            if normalized_answer and any(normalized_answer in segment for segment in normalized_answer_segments):
-                return True
             title = re.search(r"[『「]([^』」]{1,40})[』」]", verified_answer)
             normalized_title = re.sub(r"\s+", "", title.group(1)) if title else ""
+            if normalized_title:
+                quoted_title = re.escape(normalized_title)
+                clause_gap = r"[^!?！？\n]{0,14}"
+                denies_title = re.search(
+                    rf"{quoted_title}{clause_gap}(?:ではなく|じゃなくて?|でなく|以外(?:の(?:映画|作品))?|とは別の(?:映画|作品)?|とは違う(?:映画|作品)?|除いて|抜きで)|"
+                    rf"(?:ではなく|じゃなくて?|でなく){clause_gap}{quoted_title}",
+                    re.sub(r"\s+", "", candidate.text),
+                )
+                claims_past_for_title = re.search(
+                    rf"{quoted_title}{clause_gap}(?:昔|去年|一昨年|以前|(?:かなり|だいぶ|ずいぶん|結構)?前に)|"
+                    rf"(?:昔|去年|一昨年|以前|(?:かなり|だいぶ|ずいぶん|結構)?前に){clause_gap}{quoted_title}",
+                    re.sub(r"\s+", "", candidate.text),
+                )
+                if denies_title or (claims_past_for_title and normalized_title not in recent_rewatch_titles):
+                    return False
+            if normalized_answer and any(normalized_answer in segment for segment in normalized_answer_segments):
+                return True
             if normalized_title and any(normalized_title in segment for segment in normalized_answer_segments):
                 return True
         return False

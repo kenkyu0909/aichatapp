@@ -858,3 +858,12 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 | アプリ全体の安定性 | ローカルPASS / CI未確認 | 全pytest 1089 passed、Python・JavaScript構文と差分検査が成功。最新差分のActionsはPush後に確認する。 |
 
 次は資料を最終SHAと整合させてPushし、最新コミットのPush/PR Actionsを確認する。QUALITY009に関する次の修正をオフラインで続ける。PR #4はDraft・未マージ。Gemini、会話004、新しい会話HTMLは現行指示に従って実施しない。
+
+### 2026-10-16 02:57 JST 継続チェックポイント
+
+- 最近観た映画として本人が確認した作品について、過去時期・時期の否定・別作品への置換・以外/とは別/除いて表現を含む送信候補が通る経路を再現テストで遮断した。対象focused 25 passed。直近レビューで確認した範囲では同作品の最近の再視聴を許可し、別作品の再視聴は確認済み作品への回答として扱わない。
+- Firefoxのプロフィール保存テストが一時toastを取りこぼす問題を確認。該当する二つのテストを保存完了後のモーダル状態とAPI保存値で判定するよう変更し、Firefox focused 2 passed。
+- 最終コード全pytest 1105 passed in 171.74s（Firefox UI含む）。Python compile、JavaScript構文検査、diff check成功。Gemini実通信0回。
+- cb04a58のPush Actions 38777573869は一時toast待機でfailure、同SHAのPR Actions 38777582476はsuccess。今回変更のActionsは未確認。
+- 総合判定NO-GO。QUALITY009実Geminiの自然さ・候補意味多様性FAILは未解決。会話004、新しい会話HTML、Gemini実通信は現行指示で実施しない。
+- 次: コードと資料を選択的にコミット・Pushし、最新SHAでPush/PR Actionsを照合。PR #4 OPEN/Draft・未マージ。ユーザーの未追跡指示txt3件はステージしない。

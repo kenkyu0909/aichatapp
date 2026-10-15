@@ -2465,6 +2465,59 @@ def test_recent_movie_answer_can_include_verified_title_and_followup(client, can
     )
 
 
+@pytest.mark.parametrize("candidate_text", [
+    "青い灯台は前に観ました！\n最近ではないです",
+    "前に観た青い灯台です！",
+    "青い灯台はだいぶ前に観ました！",
+    "青い灯台は昔観た作品です！",
+    "青い灯台は去年観ました！",
+    "最近は青い灯台ではなく昔の映画を観ました！",
+    "最近観たのは青い灯台じゃなくて別の映画です！",
+    "最近は青い灯台を観ました！でも実は去年観た映画です",
+    "最近また観たのは青い灯台ではなく別の映画です！",
+    "最近また青い灯台を観ました！最近ではないです",
+    "青い灯台は前に観ましたが最近は別の映画をまた観ました！",
+    "青い灯台は前に観ました！最近は青い灯台以外をまた観ました！",
+    "青い灯台は前に観ました！最近は青い灯台以外の作品をまた観ました！",
+    "青い灯台は前に観ました！最近は青い灯台とは別の映画をまた観ました！",
+    "青い灯台は前に観ましたが青い灯台を除いて最近また観ました！",
+])
+def test_recent_movie_answer_rejects_claim_that_verified_viewing_is_not_recent(
+    client, candidate_text
+):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(label="時期が矛盾", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_recent_movie_answer_allows_historical_viewing_with_explicit_recent_rewatch(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="最近再視聴した作品",
+        text="青い灯台は前に観たことがある作品ですが最近また観ました！",
+    )
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
 def test_recent_movie_filter_keeps_answer_and_drops_evasive_alternatives(client):
     _, backend = client
     context = {

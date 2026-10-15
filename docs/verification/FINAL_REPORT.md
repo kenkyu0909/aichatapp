@@ -1220,3 +1220,13 @@ Firefox E2Eを2件追加し、既存の会話004・新規HTML・実Gemini通信�
 - 独立Pythonレビュー **37 passed**。独立セキュリティ確認で今回の具体例に残るfail-openは見つからなかった。完全な意味検査の保証ではない。
 - Gemini実通信0回。保存済みQUALITY009にある実生成の自然さ・候補多様性FAILは未解決。従って総合判定は**NO-GO**。
 - 現行コードは未Pushのため、最新コミットでのGitHub Actionsは未確認。PR #4はOPEN/Draft・未マージを維持し、ユーザー指示txt3点はステージしない。
+
+### 2026-10-16 02:57 JST 最新チェックポイント追補
+
+**総合判定: NO-GO。** 過去QUALITY009の実Gemini候補に記録された自然さ・本人回答の活用・意味的候補多様性のFAILは未解消です。今回の修正はオフライン回帰であり、実生成品質PASSを示しません。
+
+- 最近観た映画について確認済みの本人回答と候補の時期/作品名が矛盾する問題を再現・修正。過去時期、最近の否定、作品名の置換、別作品、以外、とは別、除いてを含む15種の不一致候補を拒否し、同作品の明示的な最近の再視聴は許容。Focused 25 passed。
+- Firefoxのプロフィール保存E2Eで一時toastを待つために発生したフレークを修正。該当Firefoxテスト2 passed in 20.56s。
+- 最終コードの全pytest 1105 passed in 171.74s（Windows Firefox UI込み）。Python compile、JavaScript構文、git diff check成功。Gemini実通信0回。
+- 同一の旧HEAD cb04a58のPush run 38777573869は一時toast待機により失敗（1 failed / 1088 passed）、PR run 38777582476は成功。最新修正HEADのActionsは未確認。
+- 次は差分と検証資料をコミット・Pushし、最新Push/PR Actionsのhead SHAと成功結果を確認する。PR #4はDraft・未マージ。conversation_004、新しい会話HTML、Gemini実APIは現行指示の範囲外として未実施。

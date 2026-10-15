@@ -226,7 +226,11 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
     modal(driver).find_elements(By.CSS_SELECTOR, "#modal-body input")[0].send_keys("架空の学生")
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "自分のプロフィールを保存しました")
+    WebDriverWait(driver, 8).until(
+        lambda browser: modal(browser).get_attribute("open") is None
+    )
+    with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+        assert json.load(response)["content"]
 
     add_fictional_contact(driver)
     search = driver.find_element(By.ID, "search")
@@ -358,7 +362,9 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     visible_toast(driver, "相手の情報を保存しました")
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "自分のプロフィールを保存しました")
+    WebDriverWait(driver, 8).until(
+        lambda browser: modal(browser).get_attribute("open") is None
+    )
     next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のゆき" in item.text).click()
     driver.find_element(By.ID, "send-them").click()
     visible_toast(driver, "相手の発言を履歴に登録しました")
@@ -1025,7 +1031,12 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
         "memo": "休日は本屋やカフェへ行きます",
     }, ensure_ascii=False, separators=(",", ":"))
     profile_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "自分のプロフィールを保存しました")
+    # This test verifies persistence and availability during generation. The
+    # toast disappears after four seconds and can be missed if Firefox is
+    # briefly busy on a shared CI runner, so wait on the durable modal state.
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.find_element(By.ID, "modal").get_attribute("open") is None
+    )
 
     with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
         saved_profile = json.load(response)
