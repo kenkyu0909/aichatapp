@@ -395,3 +395,10 @@ Gemini実APIは今回0回。会話004および新規会話HTMLは未実施。PR 
 - アプリ全体の安定性: CONDITIONAL — Windows 11で一時データ・空API設定・8767番ポートを使いstart.batが127.0.0.1で起動し、準備後にFirefoxが開いた。Firefox/Seleniumで架空の相手とメッセージを登録し、再読込後の保持とJS例外0件を確認。試験プロセスは停止しポートを解放した。8765番はPID 39504のPython 3.12が占有し、statusのapp_idが空で実アプリと確認できないため停止・再起動していない。Windows既定ポートの起動は引き続きBLOCKED。
 - 実APIは0回。会話004/新規HTMLなし。TEST_MATRIXは286項目: PASS210 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。実生成品質009の手動FAILが残るため総合NO-GO。
 - 最新のコードSHA 199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00 と記録SHA 50029173083f069bb33373bbab623e1a07da3818 のPush/PR Actionsは成功。記録SHA artifactは761 tests / 0 failure / 0 error / 0 skipped。PR #4 OPEN/Draft、未マージ。
+
+### 2026-10-15 16:22 JST 更新：Windowsポート競合と起動UI
+
+- アプリ全体の安定性: CONDITIONAL — 隔離したHTTPサーバーが8767を使用している場合、起動スクリプトはexit 2と競合メッセージを返し、そのPIDを停止しなかった。テスト後に自分のテスト用listenerだけ終了し、ポート解放を確認。Windows Firefox UIの別ポート起動と架空データ再読込も成功。
+- 8765番のPID 39504はstatusのapp_idが空で、今回のアプリと確認できないため手を触れていない。既定ポートの再起動はBLOCKED。対話コンソールからのCtrl+C終了は統合実行環境の制約で未検証。
+- Test Matrix 287項目: PASS211 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。実APIは0回。品質009の実生成品質FAILが残るためNO-GO。PR #4はOPEN/Draft、未マージ。
+- 最新テスト証拠: Push [38697551957](https://github.com/kenkyu0909/aichatapp/actions/runs/38697551957) / PR [38697556561](https://github.com/kenkyu0909/aichatapp/actions/runs/38697556561)、SHA 77eb7d12ab01e78a84fc102a8784f02937aff0c1、pytest 761 / failures 0 / errors 0 / skipped 0。

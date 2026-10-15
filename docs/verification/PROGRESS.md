@@ -666,3 +666,11 @@
 - 追加結果はTEST_MATRIX T286 PASS。既定ポートのBLOCKEDと別ポート成功を分けて記録。今回のWindows試験は一時DBのためユーザーデータへ触れていない。
 - 総合NO-GOは維持。品質009の過去実生成FAILと包括的な意味品質基準の未達が残る。PR #4はOPEN/Draft、base feat/ui-local-backend-v1、未マージ。
 - 次: 記録をPushし最新Actionsを確認。その後、品質009の候補別直接回答性・意味的多様性のオフライン検証で未解決のP0を続ける。ユーザー提供の未追跡txtはステージしない。
+
+### 2026-10-15 16:22 JST 継続チェックポイント：ポート競合時の安全確認
+
+- 隔離したHTTPテストサーバーを127.0.0.1:8767で起動し、Windows起動スクリプトの競合処理を確認。スクリプトはexit 2と「occupied by another process」を返し、listener PIDが稼働し続けた。確認後はテスト用プロセスのみ終了し、8767の解放を確認。T287 PASS。
+- T286のWindows実機Firefox確認では、UI登録・再読込後の一時SQLite保持・JS例外0件を確認。通常の対話コンソールでCtrl+C終了する確認は、統合実行環境から子プロセスへControl+Cを送れなかったため未検証。8765番の既存プロセスは触れていない。
+- コードは直近のSHA 199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00から変更なし。最新コードActionsはPush [run 38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR [run 38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) が成功、761/0 failures。ドキュメント・T286追補を含むSHA 77eb7d12ab01e78a84fc102a8784f02937aff0c1のPush [run 38697551957](https://github.com/kenkyu0909/aichatapp/actions/runs/38697551957) とPR [run 38697556561](https://github.com/kenkyu0909/aichatapp/actions/runs/38697556561) も成功、artifactで761/0 failures/0 errors/0 skippedを確認。
+- 実Gemini APIは0回。過去品質009の手動生成品質FAILは未解決記録のまま。TEST_MATRIX 287項目: PASS211 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。PR #4 OPEN/Draft、未マージ。ユーザー提供の未追跡txtは未ステージ。
+- 次: T287とCtrl+C未検証事項を記録・PushしActions確認。その後は直接質問や候補品質のP0を保存済み出力とオフラインテストで継続する。

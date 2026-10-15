@@ -579,6 +579,8 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 
 最新ID行: 285。累計: PASS209 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。対象SHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00` のPush/PR Actionsを確認。過去のQUALITY009実生成品質FAILは維持し、今回のGemini実API呼び出しは0回。 |
 
-| T286 | Windows `start.bat`別ポート起動とFirefoxの架空データUI確認 | Windows 11、`MRA_PORT=8767`、一時`APP_DATA_DIR`、空`MRA_API_DIR`、Firefox/Selenium | PASS | `start.bat`が127.0.0.1:8767で起動し、準備完了後Firefoxを開いた。HTML/CSS/JSとAPIを読み込み、架空の相手・相手発言をUIから登録し、再読込後もSQLiteに保持。JS例外0件。テスト用サーバーは終了し8767を解放。Gemini通信なし。既定8765は別PIDのため変更していない。|
+| T286 | Windows `start.bat`別ポート起動とFirefoxの架空データUI確認 | Windows 11、`MRA_PORT=8767`、一時`APP_DATA_DIR`、空`MRA_API_DIR`、Firefox/Selenium | PASS | `start.bat`が127.0.0.1:8767で起動し、準備完了後Firefoxを開いた。HTML/CSS/JSとAPIを読み込み、架空の相手・相手発言をUIから登録し、再読込後もSQLiteに保持。JS例外0件。テスト用サーバーは終了し8767を解放。Gemini通信なし。既定8765は別PIDのため変更していない。統合実行環境からCtrl+Cを子プロセスへ送れず、対話コンソールでのCtrl+C終了はNOT_TESTED。|
 
-最新ID行: 286。累計: PASS210 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。T02は既定ポートを特定できない既存プロセスが占有するためBLOCKEDのまま。T286は一時データと8767でのWindows/Firefox実機確認に成功。 |
+| T287 | Windows起動スクリプトのポート競合時に既存プロセスを維持 | Windows 11、8767番で隔離HTTPテストサーバーを起動して競合を再現 | PASS | 起動スクリプトはexit 2と「Port 8767 is occupied by another process」を返し、テストサーバーのPIDが引き続きlistenしていることを確認。既存プロセスは停止しない。確認後は起動したテストサーバーだけを終了し8767解放を確認。|
+
+最新ID行: 287。累計: PASS211 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。T02は既定ポートを特定できない既存プロセスが占有するためBLOCKEDのまま。T286は一時データと8767でのWindows/Firefox実機確認に成功。対話コンソールでのCtrl+C終了は未検証。 |
