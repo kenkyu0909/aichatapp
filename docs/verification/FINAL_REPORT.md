@@ -1406,3 +1406,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - Firefox UIから隔離FastAPIの実 `/api/generate` ルートへ到達する統合テストを追加。Google Gemini SDKだけを子サーバー内で置換し、外部API通信は0回。候補の画面表示、コピーだけでは記録されないこと、手動送信記録、再読込後の改行保持を確認した。focused Firefox test 1 passed。独立コードレビューで指摘なし。
 - 対象コードコミット `4c5c8158efa7f0b8340c0d0fd68f98406828b879` のPush Actions [38817355447](https://github.com/kenkyu0909/aichatapp/actions/runs/38817355447) とPR Actions [38817359698](https://github.com/kenkyu0909/aichatapp/actions/runs/38817359698) は同じSHAでsuccess。対象コードの全pytest 1363 passed / 1 warning。これらのActionsには後続T364 Firefox統合テストは含まれない。
 - T364を含む今回の全pytestは **1364 passed in 202.96s**。Firefox専用UI suiteは **12 passed in 157.28s**。Python構文検査、JavaScript構文検査、`git diff --check`成功。Gemini実通信0回。保存済みQUALITY009の実生成自然さ・意味的候補多様性FAILが残るため判定はNO-GOのまま。
+
+### 2026-10-16 07:45 JST Firefox four-mode route follow-up
+
+- Firefoxから実FastAPI生成ルートを通す検査をfirst / reply / followup / likeの全モードへ拡張。replyのT364は既に検証済み。T365 focused FirefoxはT364と合わせ2 passed in 26.16s。
+- T365ではfirstの生成のみでDBが変わらないことと明示的な手動記録、followupのコピーのみでは履歴が変わらず手動記録後に保存されること、likeに保存操作がなく送信履歴を変えないことを確認した。
+- firstモードのモック3案のうち、アプリの候補検証が安全な1案だけを通した。これは実生成品質のPASSを意味しない。候補不足は維持され、検査を弱めていない。
+- 外部Gemini通信0回。独立コードレビューで指摘なし。T365を含む全pytest **1365 passed in 199.68s**（Firefox UIテスト13件を含む）。Python/JavaScript構文とdiff検査も成功。T365を含むGitHub ActionsはPush後に確認する。

@@ -897,6 +897,10 @@ T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` の
 
 | T362–T364 集計 | 短文ミラーリング、回答競合、Firefox生成経路統合 | ローカルpytest / Firefox | PASS・FIXED | 364項目: PASS254 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。全pytest 1364 passed in 202.96s、Firefox専用UI 12 passed in 157.28s。最新同一HEADのActions結果は後続追補へ記録する。 |
 
+| T365 | Firefoxから実FastAPI first / followup / like 生成ルート | Firefox E2E、空の一時SQLite、FastAPI実サーバー、Gemini SDKモック | PASS | 3モードのFirefox操作を実 `/api/generate` に到達させ、サーバー内SDKモックログで mode・モデル・system instructionを確認。firstは候補だけではDBを変えず、手動記録後に保存。followupはコピーのみで履歴を変えず、明示記録後に保存。likeは保存ボタンがなく履歴に影響しない。firstモードでは候補検証がfixture候補のうち安全な1案だけを残したため、候補不足状態を含めて確認（安全性検証は緩和していない）。focused T364/T365 2 passed、全pytest 1365 passed in 199.68s（Firefox UIを含む）、外部Gemini通信0回。独立レビュー指摘なし。最新SHA Actionsは後続追補。|
+
+最新ID行: 365。累計（T365 focused結果を追加）: PASS255 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
+
 T359/T360 CI追補: 同一SHA `27c1ea252a976b3394ee877e96c926d32e9064b8` を対象とするPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)はsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft・未マージ。
 
 T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` のPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)は同一SHAでsuccess。Pushログで1337 passed / 1 warning、JavaScript構文検査とArtifact upload成功を確認。PR #4はOPEN/Draft・未マージ。

@@ -1063,3 +1063,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - ゴール7「安定性」: Firefoxのブラウザー操作から実FastAPI `/api/generate` ルートまで通る隔離E2Eを追加。SDKはテストサーバー内モックで外部通信0回。コピー非記録・手動記録・再読込後の複数行履歴を確認。focused 1 passed、独立レビュー指摘なし。全pytest追加分を含め1364 passed in 202.96s。Firefox専用UI suite 12 passed in 157.28s。
 - 4c5c815のPush/PR Actionsは同SHAでsuccess（各1363 passed / 1 warning）。T364を含む新しいActionsは未実施。
 - 総合判定はNO-GO。Gemini API 0回、conversation_004と新HTMLは未実施。次: 全pytestの結果を記録し、T362–T364を含むテスト・報告をコミット、Push、最新SHAの両Actions成功とPR Draft状態を確認する。
+
+##### 2026-10-16 07:45 JST T365: four-mode FastAPI route coverage
+
+- Firefoxから `/api/generate` を通るSDKモックE2Eをfirst・reply・followup・likeへ広げた。T365 focused runでは追加3モードとreplyを2 passed in 26.16s。
+- firstの生成候補はDBへ未記録、手動記録で保存。followupはコピーのみでは未記録、手動記録後に保存。likeは送信記録なしで、既存match履歴を変えない。
+- firstのmock候補は候補安全検証により1案だけ表示された。安全候補不足を許容し、検証を弱めず、不足状態も確認した。
+- 独立コードレビュー指摘なし。Gemini通信0回、user data不使用、Firefoxのみ。T365を含む全pytest 1365 passed in 199.68s（Firefox UI tests 13件含む）。専用focused Firefox 2 passed、Actions確認中。
+- 判定はNO-GOのまま。保存済みGemini生成の自然さと意味的候補多様性が未解決で、offline route E2Eは実Gemini品質を証明しない。

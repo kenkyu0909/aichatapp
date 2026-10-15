@@ -1344,3 +1344,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T364: Firefoxが空の一時DBで実FastAPI `/api/generate` ルートまで到達するE2Eを追加。サーバープロセス内でGemini SDKクライアントのみを置換し、Googleへの外部通信は0回。API1/model/input/system instructionを呼び出しログで確認し、候補表示、コピー非記録、手動保存、リロード後の改行を検証した。focused 1 passed。独立コードレビューでは指摘なし。
 - 追加Firefox E2Eを含めた全pytestは **1364 passed in 202.96s**。Firefox専用UI suiteも **12 passed in 157.28s**。Python構文、JavaScript構文、`git diff --check`は成功。Gemini API 0回、会話004・新規会話HTMLは実施しない。
 - 品質009に記録された実Gemini文章の自然さ・候補意味多様性FAILは未解決のため総合NO-GOを維持。次: 全pytest結果確定後、最終テスト数・実行証拠を報告へ追記し、テストとレポートを選択的にコミット・Pushして最新同一HEADのPush/PR Actionsを確認する。未追跡のユーザー指示ファイル3件は保持し、コミットしない。
+
+### 2026-10-16 07:45 JST T364/T365 CI・生成モード統合
+
+- T364コミット `3dbb93aac5f498d40dcce86464f1a656ccde0b37` はPush Actions [38818598288](https://github.com/kenkyu0909/aichatapp/actions/runs/38818598288)とPR Actions [38818605345](https://github.com/kenkyu0909/aichatapp/actions/runs/38818605345)で同じhead SHAを対象にsuccess。ActionsにはFirefox reply統合までを含み、1364 passed / 1 warning、JS syntax、Firefox setup、Artifact upload成功。
+- 読み取り監査によりfirst/followup/likeの既存Firefoxテストも `/api/generate` をfetch mockに置き換えており、実FastAPI生成経路を通っていないと分かった。T365で3モードを同じloopback一時サーバーとGemini SDKモック経由に拡張した。
+- T365 focused FirefoxはT364と合わせて2 passed in 26.16s。firstの未送信候補はDBを変更せず、手動記録後に保存。followupはcopy-onlyで履歴不変、手動記録後に保存。likeは候補コピーのみで送信履歴を変えない。firstモードは安全検証でmock候補のうち1案のみ通過し、不足候補をそのまま確認。検証基準を下げていない。
+- 独立コードレビューは指摘なし。T365を含む全pytest **1365 passed in 199.68s**。既存Firefoxテスト13件を含む。T364/T365 focused Firefoxは2 passed in 26.16s。Python/JavaScript構文とdiff検査PASS。実Gemini APIは0回。T365コードは未コミットでActions未確認。QUALITY009の実生成自然さ・候補意味多様性FAILにより総合NO-GOは維持。次: T365をコミット・Pushし、最新HEADの両Actionsを確認してPR #4のDraft状態を維持する。

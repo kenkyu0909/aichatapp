@@ -702,6 +702,155 @@ def test_firefox_uses_real_fastapi_generate_route_with_only_gemini_sdk_mocked(
     assert errors["console"] == []
 
 
+def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
+    local_app_with_mocked_gemini, firefox
+):
+    """Exercise each remaining generation mode through FastAPI with no provider traffic."""
+    app = local_app_with_mocked_gemini
+    driver = firefox
+    driver.get(app.url)
+    add_fictional_contact(driver, "架空のりお")
+
+    with urllib.request.urlopen(app.url + "api/matches", timeout=3) as response:
+        matches = json.load(response)
+    match_id = next(item["id"] for item in matches if item["name"] == "架空のりお")
+
+    def saved_history():
+        with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
+            return json.load(response)
+
+    driver.execute_script("""
+      window.__modeGenerateResponses = [];
+      window.__copiedText = undefined;
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {writeText: async text => {window.__copiedText = text;}}
+      });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        const response = await originalFetch(url, options);
+        if (String(url) === '/api/generate') {
+          window.__modeGenerateResponses.push(await response.clone().json());
+        }
+        return response;
+      };
+    """)
+
+    # First mode is available with an empty conversation. Generation alone
+    # must not create a self message in SQLite.
+    assert driver.find_element(By.ID, "first-message").is_displayed()
+    assert saved_history() == []
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 15).until(
+        lambda browser: browser.execute_script("return window.__modeGenerateResponses.length") == 1
+        and browser.find_elements(By.CSS_SELECTOR, ".candidate")
+    )
+    first_response = driver.execute_script("return window.__modeGenerateResponses.at(-1)")
+    assert first_response["demo"] is False
+    assert first_response["conversation_stage"] == "Stage 1"
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == first_response["available_candidate_count"]
+    assert first_response["recommended"]["text"].startswith("はじめまして！")
+    assert saved_history() == []
+
+    first_card = driver.find_elements(By.CSS_SELECTOR, ".candidate")[0]
+    first_record = first_card.find_elements(By.CSS_SELECTOR, ".candidate-actions button")[1]
+    first_record.click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda _: len(saved_history()) == 1)
+    first_history = saved_history()
+    assert first_history[0]["role"] == "me"
+    assert first_history[0]["body"] == first_response["recommended"]["text"]
+
+    # Follow-up is generated from actual stored self history. It remains only
+    # a suggestion until its explicit manual-record action is confirmed.
+    followup_button = driver.find_element(By.ID, "follow-up")
+    assert followup_button.is_displayed()
+    followup_button.click()
+    WebDriverWait(driver, 15).until(
+        lambda browser: browser.execute_script("return window.__modeGenerateResponses.length") == 2
+        and browser.find_elements(By.CSS_SELECTOR, ".candidate")
+    )
+    followup_response = driver.execute_script("return window.__modeGenerateResponses.at(-1)")
+    assert followup_response["demo"] is False
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == followup_response["available_candidate_count"]
+    assert "追いメッセージ" in driver.find_element(By.CSS_SELECTOR, "#suggestion-list .suggestion-heading").text
+    assert saved_history() == first_history
+    followup_card = driver.find_elements(By.CSS_SELECTOR, ".candidate")[0]
+    followup_buttons = followup_card.find_elements(By.CSS_SELECTOR, ".candidate-actions button")
+    assert len(followup_buttons) == 2
+    followup_buttons[0].click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+    )
+    assert driver.execute_script("return window.__copiedText") == followup_response["recommended"]["text"]
+    assert saved_history() == first_history
+    followup_buttons[1].click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda _: len(saved_history()) == 2)
+    followup_history = saved_history()
+    assert followup_history[-1]["role"] == "me"
+    assert followup_history[-1]["body"] == followup_response["recommended"]["text"]
+
+    # Like mode is pre-match: its independent modal permits copying but never
+    # offers a record action or changes the selected match's sent history.
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="like"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    like_modal = modal(driver)
+    like_modal.find_element(By.CSS_SELECTOR, "#modal-body input").send_keys("架空のりお")
+    like_modal.find_element(By.CSS_SELECTOR, "#modal-body textarea").send_keys(
+        "カフェ巡りと美術館が好きです。"
+    )
+    like_modal.find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 15).until(
+        lambda browser: browser.execute_script("return window.__modeGenerateResponses.length") == 3
+        and browser.find_elements(By.CSS_SELECTOR, "#modal .candidate")
+    )
+    like_response = driver.execute_script("return window.__modeGenerateResponses.at(-1)")
+    assert like_response["demo"] is False
+    assert len(like_modal.find_elements(By.CSS_SELECTOR, ".candidate")) == like_response["available_candidate_count"]
+    assert not like_modal.find_elements(By.CSS_SELECTOR, ".candidate-actions button:nth-child(2)")
+    like_modal.find_element(By.CSS_SELECTOR, ".candidate-actions button:first-child").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+    )
+    assert driver.execute_script("return window.__copiedText") == like_response["recommended"]["text"]
+    assert saved_history() == followup_history
+    driver.find_element(By.ID, "close-modal").click()
+    driver.refresh()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 2
+    )
+    assert saved_history() == followup_history
+
+    WebDriverWait(driver, 5).until(lambda _: app.mock_calls_path.exists())
+    provider_calls = [
+        json.loads(line)
+        for line in app.mock_calls_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [call["mode"] for call in provider_calls] == ["first", "followup", "like"]
+    assert all(call["system_instruction_present"] for call in provider_calls)
+    assert all(call["model"] == "gemini-3.5-flash-lite" for call in provider_calls)
+    assert all("test-only-key-not-a-credential" not in json.dumps(call) for call in provider_calls)
+
+    errors = record_artifact(
+        "firefox-real-generate-first-followup-like-sdk-mocked",
+        driver,
+        {
+            "routes": ["/api/generate"] * 3,
+            "modes": ["first", "followup", "like"],
+            "provider_calls": len(provider_calls),
+            "external_gemini_calls": 0,
+            "first_and_followup_manual_recorded": True,
+            "like_copy_did_not_change_history": True,
+            "binding": "127.0.0.1",
+        },
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
 def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)
