@@ -767,10 +767,10 @@ def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monk
         "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
     }, {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "新しいお店探すのいいですね！\n最近行ってよかったところありますか？"},
+        "recommended": {"label": "自然", "text": "新しいお店を探すのって楽しそうですね！", "reply_move": "react"},
         "alternatives": [
-            {"label": "広げる", "text": "カフェ巡り楽しそうですね！\n落ち着いたお店が好きですか？"},
-            {"label": "短め", "text": "新しいお店いいですね！"},
+            {"label": "広げる", "text": "最近見つけたお店で印象に残ったところありますか？", "reply_move": "expand"},
+            {"label": "話題転換", "text": "友達と出かけるときはカフェ以外だと何をすることが多いですか？", "reply_move": "grounded_share"},
         ],
         "reason": "相手の話題に反応", "strategy": "相手のカフェの話を続ける", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
@@ -787,7 +787,7 @@ def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monk
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200
     assert response.json()["needs_user_info"] is False
-    assert response.json()["recommended"]["text"].startswith("新しいお店探すのいいですね")
+    assert response.json()["recommended"]["text"].startswith("新しいお店を探すのって楽しそうですね")
     assert len(prompts) == 2
     assert "任意の追加情報を本人へ求めない" in prompts[1]
 
@@ -4321,6 +4321,442 @@ def test_duplicate_reply_moves_keep_safe_candidates_and_show_diversity_notice(cl
     assert "進め方が重なっている" in partially_repeated_filtered["candidate_notice"]
 
 
+def test_v2_generation_repairs_redundant_reply_purposes_once_and_keeps_safe_results(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["カフェ巡り"]}, ensure_ascii=False)})
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    duplicate = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    diverse = {
+        **duplicate,
+        "recommended": {"label": "反応", "text": "新しいお店を探すの楽しそうですね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "話題展開", "text": "最近見つけたお店で印象に残ったところはありますか？", "reply_move": "expand"},
+            {"label": "本人情報の共有", "text": "自分もカフェ巡りが好きです！", "reply_move": "grounded_share"},
+        ],
+    }
+    assert backend._candidate_set_needs_diversity_repair([
+        backend.Candidate.model_validate(duplicate["recommended"]),
+        *(backend.Candidate.model_validate(item) for item in duplicate["alternatives"]),
+    ])
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            payload = duplicate if len(calls) == 1 else diverse
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "3")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "offline-placeholder-key", "model-test-a"),
+        ("API2", "offline-placeholder-key", "model-test-b"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(calls) == 2
+    assert "候補の進め方が重なる場合の1回限りの再生成" in calls[1]["config"].system_instruction
+    assert body["available_candidate_count"] == 3
+    assert len([body["recommended"], *body["alternatives"]]) == 3
+    assert "先に確認した安全候補を加えています" in body["candidate_notice"]
+
+
+def test_v2_diversity_retry_attempt_limit_returns_initial_safe_candidates(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(repeated, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "1")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(calls) == 1
+    assert body["available_candidate_count"] == 3
+    assert len([body["recommended"], *body["alternatives"]]) == 3
+    assert body["api_attempt_count"] == 1
+    assert "安全試行上限に達したため" in body["candidate_notice"]
+
+
+def test_v2_diversity_does_not_treat_default_reply_moves_as_explicit(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空あかり")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を探すの楽しそうですね！"},
+        "alternatives": [
+            {"label": "話題展開", "text": "最近行って印象に残ったお店はありますか？"},
+            {"label": "短め", "text": "どんな雰囲気のお店が好きですか？"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1
+    assert response.json()["available_candidate_count"] == 3
+
+
+def test_v2_diversity_repair_still_runs_after_rate_limit_fallback(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の429後多様性修正")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    diverse = {
+        **repeated,
+        "recommended": {"label": "反応", "text": "新しいお店を探すの楽しそうですね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "話題展開", "text": "最近見つけたお店で印象に残ったところはありますか？", "reply_move": "expand"},
+            {"label": "本人情報の共有", "text": "自分もカフェ巡りが好きです！", "reply_move": "grounded_share"},
+        ],
+    }
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs))
+            if self.key == "api1":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            payload = repeated if len([call for call in calls if call[0] == "api2"]) == 1 else diverse
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "api1")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "3")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "api1", "model-one"), ("API2", "api2", "model-two"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [key for key, _ in calls] == ["api1", "api2", "api2"]
+    assert "候補の進め方が重なる場合の1回限りの再生成" in calls[2][1]["config"].system_instruction
+    assert body["api_alias"] == "API2"
+    assert body["model"] == "model-two"
+    assert body["available_candidate_count"] == 3
+
+
+def test_v2_diversity_fallback_reports_source_model_after_later_provider_limit(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の安全候補モデル記録")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            if len(calls) == 1:
+                return SimpleNamespace(text=json.dumps(repeated, ensure_ascii=False))
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+    monkeypatch.setenv("MRA_API_1_KEY", "api1")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "3")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "api1", "model-one"), ("API2", "api2", "model-two"),
+        ("API1", "api1", "model-three"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert calls == [("api1", "model-one"), ("api1", "model-one"), ("api2", "model-two")]
+    assert body["api_alias"] == "API1"
+    assert body["model"] == "model-one"
+    assert body["attempted_models"] == [
+        {"api_alias": "API1", "model": "model-one"},
+        {"api_alias": "API1", "model": "model-one"},
+        {"api_alias": "API2", "model": "model-two"},
+    ]
+
+
+def test_v2_partial_diversity_retry_warns_when_safe_fallback_reintroduces_repetition(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の部分候補多様性")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    initial = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    partial_retry = {
+        **initial,
+        "recommended": {"label": "反応", "text": "新しいお店を探すのって楽しいですよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "話題展開", "text": "最近見つけたお店で印象に残ったところはありますか？", "reply_move": "expand"},
+            {"label": "未確認の共有", "text": "自分もお気に入りのお店があるんです！", "reply_move": "grounded_share"},
+        ],
+    }
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs))
+            if self.key == "api1" and len([key for key, _ in calls if key == "api1"]) == 2:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            payload = initial if self.key == "api1" else partial_retry
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "3")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "api1", "model-one"), ("API2", "api2", "model-two"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [(key, kwargs["model"]) for key, kwargs in calls] == [
+        ("api1", "model-one"), ("api1", "model-one"), ("api2", "model-two"),
+    ]
+    assert body["available_candidate_count"] == 3
+    assert "似た候補を含みます" in body["candidate_notice"]
+    assert "安全候補を保持した結果" in body["candidate_notice"]
+    assert all("お気に入りのお店" not in item["text"] for item in [body["recommended"], *body["alternatives"]])
+    assert body["candidate_provenance"] == [
+        {"candidate_index": 0, "api_alias": "API2", "model": "model-two"},
+        {"candidate_index": 1, "api_alias": "API2", "model": "model-two"},
+        {"candidate_index": 2, "api_alias": "API1", "model": "model-one"},
+    ]
+
+
+def test_v2_all_unsafe_retry_reports_saved_candidate_provenance(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の不安全再生成")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    safe_repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    unsafe_retry = {
+        **safe_repeated,
+        "recommended": {"label": "未確認1", "text": "自分も毎週新しいお店に行っています！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "未確認2", "text": "最近お気に入りのお店を見つけました！", "reply_move": "expand"},
+            {"label": "未確認3", "text": "自分もカフェによく行きます！", "reply_move": "grounded_share"},
+        ],
+    }
+    calls = []
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            if self.key == "api1" and len([key for key, _ in calls if key == "api1"]) == 2:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            payload = safe_repeated if self.key == "api1" else unsafe_retry
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "api1")
+    monkeypatch.setenv("MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE", "3")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [
+        ("API1", "api1", "model-one"), ("API2", "api2", "model-two"),
+    ])
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])))
+    original_filter = backend.filter_safe_candidates
+
+    def reject_retry_candidates(value, requested_count, context):
+        if value.recommended.text == "自分も毎週新しいお店に行っています！":
+            return {
+                "recommended": None, "alternatives": [], "available_candidate_count": 0,
+                "generation_blocked": True, "candidate_notice": "retry candidates rejected",
+            }
+        return original_filter(value, requested_count, context)
+
+    monkeypatch.setattr(backend, "filter_safe_candidates", reject_retry_candidates)
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert calls == [("api1", "model-one"), ("api1", "model-one"), ("api2", "model-two")]
+    assert body["api_alias"] == "API1"
+    assert body["model"] == "model-one"
+    assert body["candidate_provenance"] == [
+        {"candidate_index": 0, "api_alias": "API1", "model": "model-one"},
+        {"candidate_index": 1, "api_alias": "API1", "model": "model-one"},
+        {"candidate_index": 2, "api_alias": "API1", "model": "model-one"},
+    ]
+
+
+def test_v2_diversity_repair_counts_candidate_responses_not_unnecessary_questions(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の不要質問後多様性")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "新しいお店を開拓するのが好きです！"})
+    unnecessary_question = {
+        "needs_user_info": True, "user_questions": [{"question": "どんなカフェが好きですか？", "purpose": "好みを知るため"}],
+        "user_info_reason": "好みが分からないため", "recommended": None, "alternatives": [],
+        "reason": "本人へ確認", "strategy": "確認",
+        "conversation_stage": "Stage 2", "invite_decision": "ask_user_info",
+        "decision_reason": "確認が必要", "next_action": "回答を待つ",
+    }
+    repeated = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "反応", "text": "新しいお店を見つけるのワクワクしますよね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "別の反応", "text": "新しいお店を開拓するの楽しいですよね！", "reply_move": "react"},
+            {"label": "第三案", "text": "新しいお店っていいですよね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題に反応", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続ける", "next_action": "話題を広げる",
+    }
+    diverse = {
+        **repeated,
+        "recommended": {"label": "反応", "text": "新しいお店を探すの楽しそうですね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "話題展開", "text": "最近見つけたお店で印象に残ったところはありますか？", "reply_move": "expand"},
+            {"label": "本人情報の共有", "text": "自分もカフェ巡りが好きです！", "reply_move": "grounded_share"},
+        ],
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            payload = [unnecessary_question, unnecessary_question, repeated, diverse][len(calls) - 1]
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-placeholder-key", "model-one")])
+    monkeypatch.setattr(backend, "model_user_info_questions_are_necessary", lambda context, questions: False)
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    assert len(calls) == 4
+    assert "不要な本人確認質問の修正" in calls[2]["config"].system_instruction
+    assert "候補の進め方が重なる場合の1回限りの再生成" in calls[3]["config"].system_instruction
+
+
 def test_omitted_reply_moves_do_not_create_duplicate_move_warning(client):
     _, backend = client
     value = backend.SuggestionsV2(
@@ -5525,10 +5961,10 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
     }
     invite_response = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然な誘い", "text": "中野のカフェ気になります！\nよかったら今度一緒に行きませんか？"},
+        "recommended": {"label": "自然な誘い", "text": "中野のカフェ気になります！\nよかったら今度一緒に行きませんか？", "reply_move": "invite"},
         "alternatives": [
-            {"label": "会話を広げる", "text": "中野のカフェ気になります！\nどんな雰囲気のお店なんですか？"},
-            {"label": "話題を続ける", "text": "カフェ巡り楽しそうですね！\n中野にはよく行くんですか？"},
+            {"label": "会話を広げる", "text": "お店はどんな雰囲気なんですか？", "reply_move": "expand"},
+            {"label": "話題を続ける", "text": "ケーキもおいしそうですね！\n何がおすすめなんですか？", "reply_move": "react"},
         ],
         "reason": "相手が興味を示す店の話題に自然につなぐ", "strategy": "相手の反応を尊重する",
         "conversation_stage": "Stage 4", "invite_decision": "invite_gently",

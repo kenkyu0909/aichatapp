@@ -4079,6 +4079,37 @@ def _has_redundant_positive_reaction(left: Candidate, right: Candidate) -> bool:
     return common.size >= 5
 
 
+def _candidate_set_needs_diversity_repair(
+    candidates: list[Candidate | dict[str, Any]],
+    *,
+    provenance_candidates: list[Candidate] | None = None,
+) -> bool:
+    """Signal a single generation repair when labeled choices share a purpose or reaction."""
+    candidates = [
+        candidate if isinstance(candidate, Candidate) else Candidate.model_validate(candidate)
+        for candidate in candidates
+    ]
+    provenance_by_text = {
+        re.sub(r"\s+", "", candidate.text): candidate
+        for candidate in provenance_candidates or []
+    }
+    explicit_moves = [
+        source.reply_move
+        for candidate in candidates
+        if (
+            (source := provenance_by_text.get(re.sub(r"\s+", "", candidate.text)))
+            and "reply_move" in source.model_fields_set
+        )
+    ]
+    if len(explicit_moves) > 1 and len(set(explicit_moves)) < len(explicit_moves):
+        return True
+    return any(
+        _has_redundant_positive_reaction(left, right)
+        for index, left in enumerate(candidates)
+        for right in candidates[index + 1:]
+    )
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -4387,6 +4418,10 @@ def generate(data: GenerateInput):
     candidate_repair_used = False
     safe_candidate_fallback: SuggestionsV2 | None = None
     safe_candidate_fallback_notice = ""
+    safe_candidate_fallback_provider: dict[str, str] | None = None
+    safe_candidate_fallback_sources: dict[str, dict[str, str]] = {}
+    result_candidate_sources: dict[str, dict[str, str]] = {}
+    eligible_candidate_responses = 0
     question_repair_used = False
     unnecessary_question_repair_used = False
     try:
@@ -4426,6 +4461,7 @@ def generate(data: GenerateInput):
                     if not response.text:
                         raise ValueError("AIから応答がありません")
                     parsed = response_model.model_validate_json(response.text)
+                    parsed_from_safe_fallback = False
                     candidate_notice = ""
                     if (
                         data.response_version == 2
@@ -4444,6 +4480,7 @@ def generate(data: GenerateInput):
                         and safe_candidate_fallback is not None
                     ):
                         parsed = safe_candidate_fallback.model_copy(deep=True)
+                        parsed_from_safe_fallback = True
                         candidate_notice = " ".join(filter(None, [
                             safe_candidate_fallback_notice,
                             "追加確認を経ても新しい安全候補を得られなかったため、先に確認済みの安全な候補を表示します。",
@@ -4518,10 +4555,26 @@ def generate(data: GenerateInput):
                     if data.response_version == 2 and (len(parsed.user_questions) > 0 or parsed.recommended is None):
                         raise ValueError("生成結果の形式が不正です")
                     if data.response_version == 2:
+                        eligible_candidate_responses += 1
+                        provider_candidates = [parsed.recommended, *parsed.alternatives]
+                        current_candidate_source = {"api_alias": account, "model": model}
+                        current_candidate_sources = {
+                            re.sub(r"\s+", "", candidate.text): current_candidate_source
+                            for candidate in provider_candidates
+                        }
+                        result_candidate_sources = {}
+                        if parsed_from_safe_fallback:
+                            current_candidate_source = safe_candidate_fallback_provider or current_candidate_source
+                            current_candidate_sources = safe_candidate_fallback_sources or current_candidate_sources
+                            result_candidate_sources = current_candidate_sources.copy()
+                        had_safe_candidate_fallback = safe_candidate_fallback is not None
                         filtered_result = filter_safe_candidates(parsed, data.count, context)
                         if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
                             parsed = safe_candidate_fallback.model_copy(deep=True)
                             filtered_result = filter_safe_candidates(parsed, data.count, context)
+                            current_candidate_source = safe_candidate_fallback_provider or current_candidate_source
+                            current_candidate_sources = safe_candidate_fallback_sources or current_candidate_sources
+                            result_candidate_sources = current_candidate_sources.copy()
                             candidate_notice = " ".join(filter(None, [
                                 safe_candidate_fallback_notice,
                                 "再生成で安全な候補を得られなかったため、先に確認済みの安全な候補を表示します。",
@@ -4592,10 +4645,7 @@ def generate(data: GenerateInput):
                                 }),
                             })
                             return blocked_result
-                        candidate_notice = " ".join(filter(None, [
-                            candidate_notice,
-                            filtered_result.get("candidate_notice", ""),
-                        ]))
+                        filtered_candidate_notice = filtered_result.get("candidate_notice", "")
                         safe_candidates = [
                             filtered_result["recommended"],
                             *filtered_result.get("alternatives", []),
@@ -4614,6 +4664,49 @@ def generate(data: GenerateInput):
                                     *safe_candidates[:invitation_index],
                                     *safe_candidates[invitation_index + 1:],
                                 ]
+                        if had_safe_candidate_fallback and len(safe_candidates) < data.count:
+                            fallback_candidates = [
+                                safe_candidate_fallback.recommended,
+                                *safe_candidate_fallback.alternatives,
+                            ]
+                            safe_candidates = merge_safe_candidate_sets(
+                                [Candidate.model_validate(item) for item in safe_candidates],
+                                fallback_candidates,
+                                data.count,
+                            )
+                            result_candidate_sources = {
+                                re.sub(r"\s+", "", candidate.text): (
+                                    current_candidate_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or safe_candidate_fallback_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or current_candidate_source
+                                )
+                                for candidate in safe_candidates
+                            }
+                            if len(safe_candidates) >= data.count:
+                                filtered_candidate_notice = re.sub(
+                                    r"安全確認後に表示できる候補は\d+案です（指定は\d+案）。不足分を不自然な候補で補っていません。",
+                                    "",
+                                    filtered_candidate_notice,
+                                ).strip()
+                                filtered_candidate_notice = " ".join(filter(None, [
+                                    filtered_candidate_notice,
+                                    "再生成の候補が一部だったため、先に確認した安全候補を加えています。",
+                                ]))
+                            if _candidate_set_needs_diversity_repair(
+                                safe_candidates,
+                                provenance_candidates=[
+                                    *provider_candidates,
+                                    *fallback_candidates,
+                                ],
+                            ):
+                                filtered_candidate_notice = " ".join(filter(None, [
+                                    filtered_candidate_notice,
+                                    "安全候補を保持した結果、返信の進め方が似た候補を含みます。内容を確認して選んでください。",
+                                ]))
+                        candidate_notice = " ".join(filter(None, [
+                            candidate_notice,
+                            filtered_candidate_notice,
+                        ]))
                         parsed = parsed.model_copy(update={
                             "recommended": Candidate.model_validate(safe_candidates[0]),
                             "alternatives": [Candidate.model_validate(item) for item in safe_candidates[1:]],
@@ -4621,6 +4714,27 @@ def generate(data: GenerateInput):
                         if safe_candidate_fallback is None:
                             safe_candidate_fallback = parsed.model_copy(deep=True)
                             safe_candidate_fallback_notice = candidate_notice
+                            safe_candidate_fallback_provider = current_candidate_source
+                            safe_candidate_fallback_sources = current_candidate_sources
+                        if (
+                            data.response_version == 2
+                            and data.count == 3
+                            and data.mode in {"reply", "followup"}
+                            and eligible_candidate_responses == 1
+                            and not candidate_repair_used
+                            and _candidate_set_needs_diversity_repair(
+                                safe_candidates,
+                                provenance_candidates=provider_candidates,
+                            )
+                        ):
+                            candidate_repair_used = True
+                            system_instruction += (
+                                "\n【候補の進め方が重なる場合の1回限りの再生成】安全に残った候補は破棄せず、"
+                                "3案の返信方針をそれぞれ素直な反応・新しい具体的な話題への展開・確認済み情報に基づく短い共有として作り直してください。"
+                                "会話方針がinvite_gentlyの場合だけ、必要なら共有候補の代わりに断りやすい誘いを1案含めてください。"
+                                "方針名だけでなく本文の発話内容を変え、未確認の事実は追加しないでください。"
+                            )
+                            continue
                     else:
                         safe_candidates = [parsed.recommended, *parsed.alternatives]
                     unsupported_topics = unsupported_personal_claim_topics(
@@ -4743,6 +4857,10 @@ def generate(data: GenerateInput):
                             invite_repair_used = True
                             safe_candidate_fallback = parsed.model_copy(deep=True)
                             safe_candidate_fallback_notice = candidate_notice
+                            safe_candidate_fallback_sources = result_candidate_sources or current_candidate_sources
+                            safe_candidate_fallback_provider = safe_candidate_fallback_sources.get(
+                                re.sub(r"\s+", "", parsed.recommended.text), current_candidate_source
+                            )
                             system_instruction += (
                                 "\n会話方針はinvite_gentlyです。安全で自然な候補がすでにある場合も保持した上で、"
                                 "相手が断りやすく、未確認の日時や場所を含まない誘い候補を最低1案追加してください。"
@@ -4758,6 +4876,14 @@ def generate(data: GenerateInput):
                                 fallback_candidates,
                                 data.count,
                             )
+                            result_candidate_sources = {
+                                re.sub(r"\s+", "", candidate.text): (
+                                    current_candidate_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or safe_candidate_fallback_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or current_candidate_source
+                                )
+                                for candidate in safe_candidates
+                            }
                             invite_opportunity_exists = invite_opportunity_ready(context)
                             parsed = parsed.model_copy(update={
                                 "recommended": safe_candidates[0],
@@ -4798,6 +4924,10 @@ def generate(data: GenerateInput):
                             invite_repair_used = True
                             safe_candidate_fallback = parsed.model_copy(deep=True)
                             safe_candidate_fallback_notice = candidate_notice
+                            safe_candidate_fallback_sources = result_candidate_sources or current_candidate_sources
+                            safe_candidate_fallback_provider = safe_candidate_fallback_sources.get(
+                                re.sub(r"\s+", "", parsed.recommended.text), current_candidate_source
+                            )
                             system_instruction += (
                                 "\n会話方針はconsider_inviteで誘いを検討できる根拠があります。"
                                 "安全で自然な候補を保持しつつ、無理がなければ軽い誘い候補を1案含めてください。"
@@ -4814,6 +4944,14 @@ def generate(data: GenerateInput):
                                 fallback_candidates,
                                 data.count,
                             )
+                            result_candidate_sources = {
+                                re.sub(r"\s+", "", candidate.text): (
+                                    current_candidate_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or safe_candidate_fallback_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or current_candidate_source
+                                )
+                                for candidate in safe_candidates
+                            }
                             parsed = parsed.model_copy(update={
                                 "recommended": safe_candidates[0],
                                 "alternatives": safe_candidates[1:],
@@ -4891,7 +5029,24 @@ def generate(data: GenerateInput):
                         "candidate_notice": candidate_notice,
                     })
                     if data.response_version == 2:
-                        result.update({"skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models})
+                        result_candidates = [result["recommended"], *result.get("alternatives", [])]
+                        if not result_candidate_sources:
+                            result_candidate_sources = current_candidate_sources
+                        primary_candidate_source = result_candidate_sources.get(
+                            re.sub(r"\s+", "", result_candidates[0].get("text", "")),
+                            current_candidate_source,
+                        )
+                        result["candidate_provenance"] = [
+                            {
+                                "candidate_index": index,
+                                **result_candidate_sources.get(
+                                    re.sub(r"\s+", "", candidate.get("text", "")),
+                                    current_candidate_source,
+                                ),
+                            }
+                            for index, candidate in enumerate(result_candidates)
+                        ]
+                        result.update({"skipped_user_info": False, "generation_blocked": False, "api_alias": primary_candidate_source.get("api_alias"), "model": primary_candidate_source.get("model"), "api_attempt_count": len(attempted_models), "attempted_models": attempted_models})
                     return result
             except Exception as exc:
                 if _is_rate_limit_error(exc):
@@ -4902,6 +5057,40 @@ def generate(data: GenerateInput):
             raise last_rate_limit
         raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
+        if isinstance(exc, ProviderAttemptLimitError) and safe_candidate_fallback is not None:
+            safe_fallback_result = filter_safe_candidates(
+                safe_candidate_fallback,
+                data.count,
+                context,
+            )
+            fallback_provider = safe_candidate_fallback_provider or {}
+            safe_fallback_result.update({
+                "demo": False,
+                "requested_candidate_count": data.count,
+                "skipped_user_info": False,
+                "generation_blocked": False,
+                "api_alias": fallback_provider.get("api_alias"),
+                "model": fallback_provider.get("model"),
+                "api_attempt_count": len(attempted_models),
+                "attempted_models": attempted_models,
+                "candidate_notice": " ".join(filter(None, [
+                    safe_fallback_result.get("candidate_notice", ""),
+                    "候補の多様性を改善する再生成は安全試行上限に達したため、先に確認した安全候補を表示しています。",
+                ])),
+                "candidate_provenance": [
+                    {
+                        "candidate_index": index,
+                        **safe_candidate_fallback_sources.get(
+                            re.sub(r"\s+", "", candidate.get("text", "")), fallback_provider
+                        ),
+                    }
+                    for index, candidate in enumerate([
+                        safe_fallback_result["recommended"],
+                        *safe_fallback_result.get("alternatives", []),
+                    ])
+                ],
+            })
+            return safe_fallback_result
         if isinstance(exc, ProviderAttemptLimitError):
             message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
             error_code = "request_attempt_limit"
