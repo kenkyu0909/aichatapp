@@ -1335,3 +1335,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - GitHub上の最新指示を再取得。P0の本人事実・質問回答・拒否・句読点/改行とFirefox導線を継続し、Gemini追加通信0、conversation_004と新規HTMLは実施しない。
 - PR #4はOPEN/Draft・未マージ。累計TEST_MATRIX 361項目: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成自然さ・候補意味多様性FAILにより総合NO-GO。
 - 次: CI根拠を検証報告へ記録してdocs-only更新をPushし、その最新HEADのActionsを確認する。その後、独立監査で確認中の既知回答の再質問・安全候補と不足通知・Firefoxの生成経路結合を優先度順に続ける。ユーザー提供の未追跡指示3点は維持しコミットしない。
+
+### 2026-10-16 07:35 JST T362–T364: 返信分量・一時回答の競合・Firefox生成経路
+
+- 最新コードHEAD `4c5c8158efa7f0b8340c0d0fd68f98406828b879` のPush Actions [38817355447](https://github.com/kenkyu0909/aichatapp/actions/runs/38817355447) とPR Actions [38817359698](https://github.com/kenkyu0909/aichatapp/actions/runs/38817359698) は両方success、両方のhead SHAは同一。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。
+- T362: 短い相手発言に対し4文の候補を許可する過長返信を修正。通常返信の候補文数を直近相手発言から保守的に上限化し、安全候補が不足する場合は残せる候補と不足通知を返す。初回モードは対象外。反復監査と回帰テストで、深刻な話題が上限を無制限に外す問題や2文の相手への過剰な制限も調整した。
+- T363: 同じ情報範囲への矛盾した一時回答をプロバイダー呼び出し前に拒否し、数値レンジを連結した値と混同しないよう正規化を修正（「週1〜2回」と「週12回」は別値）。
+- T364: Firefoxが空の一時DBで実FastAPI `/api/generate` ルートまで到達するE2Eを追加。サーバープロセス内でGemini SDKクライアントのみを置換し、Googleへの外部通信は0回。API1/model/input/system instructionを呼び出しログで確認し、候補表示、コピー非記録、手動保存、リロード後の改行を検証した。focused 1 passed。独立コードレビューでは指摘なし。
+- 追加Firefox E2Eを含めた全pytestは **1364 passed in 202.96s**。Firefox専用UI suiteも **12 passed in 157.28s**。Python構文、JavaScript構文、`git diff --check`は成功。Gemini API 0回、会話004・新規会話HTMLは実施しない。
+- 品質009に記録された実Gemini文章の自然さ・候補意味多様性FAILは未解決のため総合NO-GOを維持。次: 全pytest結果確定後、最終テスト数・実行証拠を報告へ追記し、テストとレポートを選択的にコミット・Pushして最新同一HEADのPush/PR Actionsを確認する。未追跡のユーザー指示ファイル3件は保持し、コミットしない。

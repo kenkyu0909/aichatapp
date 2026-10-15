@@ -1053,3 +1053,13 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 本人情報の正確性は限定オフライン文型ケースで部分達成。自由文全体と実Gemini出力は未確認。品質009の実生成自然さ・意味的候補多様性FAILが残るため総合NO-GO。
 - Gemini API 0回。conversation_004と新会話HTMLは継続指示により未実施。PR #4はDraft・未マージ。
 - 次: CI証拠の記録をPushして同一HEADのCIを確認し、P0の既知回答・自然な回答・Firefox生成導線を続ける。
+
+##### 2026-10-16 07:35 JST T362–T364 継続記録
+
+- ゴール1「本人情報の正確性」: 矛盾する一時回答をGemini要求前に拒否し、頻度の数値範囲を誤結合しないオフライン修正を追加。限定テストでPASS。日本語自由文全体の捏造を検出できる保証ではなく、保存済みQUALITY009の生成品質FAILも残る。
+- ゴール2「句読点・改行」: 今回変更なし。最新保存済み実生成の品質FAILを覆す新しい実Gemini根拠なし。総合PASSとは扱わない。
+- ゴール3「ミラーリング」: 短い相手発言の返信候補を保守的な文数上限で制限。オフライン回帰は通過。実Geminiのミラーリングは未検証。
+- ゴール4「共感反復」/ゴール5「候補多様性」/ゴール6「誘い判断」: 今回の更新だけでは実生成品質の解決を確認していない。QUALITY009の既存FAILは維持し、3ゴールとも未達。
+- ゴール7「安定性」: Firefoxのブラウザー操作から実FastAPI `/api/generate` ルートまで通る隔離E2Eを追加。SDKはテストサーバー内モックで外部通信0回。コピー非記録・手動記録・再読込後の複数行履歴を確認。focused 1 passed、独立レビュー指摘なし。全pytest追加分を含め1364 passed in 202.96s。Firefox専用UI suite 12 passed in 157.28s。
+- 4c5c815のPush/PR Actionsは同SHAでsuccess（各1363 passed / 1 warning）。T364を含む新しいActionsは未実施。
+- 総合判定はNO-GO。Gemini API 0回、conversation_004と新HTMLは未実施。次: 全pytestの結果を記録し、T362–T364を含むテスト・報告をコミット、Push、最新SHAの両Actions成功とPR Draft状態を確認する。

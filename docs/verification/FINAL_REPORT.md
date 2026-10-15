@@ -1398,3 +1398,11 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 作業HEAD `43a214dcaa4657aaf21094ddb7b311299f7567df`を対象にPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)が成功。PR runのhead SHAは対象コミットと一致し、pytest **1337 passed / 1 warning**、JavaScript構文検査、Firefox準備、Artifact uploadを確認した。
 - T361は有限パターンによる本人確認分岐のオフライン修正であり、全ての日本語表現を判定する保証ではない。Gemini実通信は0回。
 - Test Matrixは361項目: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。QUALITY009に保存済みの実生成自然さと候補意味多様性のFAILは残るため総合NO-GO。PR #4はDraft・未マージ。
+
+## 2026-10-16 07:35 JST 追加検証（T362–T364）
+
+- 返信分量の新しいガードで、短い相手発言に対する長文候補を制限し、確認済みの安全候補が足りない場合は不足を通知する。重い話題を理由に上限を無制限解除しない。
+- 矛盾する同一スコープの一時回答はプロバイダー呼び出し前に拒否。頻度レンジ表記は区切り記号だけを同一化し、「週1〜2回」と「週12回」は区別する。
+- Firefox UIから隔離FastAPIの実 `/api/generate` ルートへ到達する統合テストを追加。Google Gemini SDKだけを子サーバー内で置換し、外部API通信は0回。候補の画面表示、コピーだけでは記録されないこと、手動送信記録、再読込後の改行保持を確認した。focused Firefox test 1 passed。独立コードレビューで指摘なし。
+- 対象コードコミット `4c5c8158efa7f0b8340c0d0fd68f98406828b879` のPush Actions [38817355447](https://github.com/kenkyu0909/aichatapp/actions/runs/38817355447) とPR Actions [38817359698](https://github.com/kenkyu0909/aichatapp/actions/runs/38817359698) は同じSHAでsuccess。対象コードの全pytest 1363 passed / 1 warning。これらのActionsには後続T364 Firefox統合テストは含まれない。
+- T364を含む今回の全pytestは **1364 passed in 202.96s**。Firefox専用UI suiteは **12 passed in 157.28s**。Python構文検査、JavaScript構文検査、`git diff --check`成功。Gemini実通信0回。保存済みQUALITY009の実生成自然さ・意味的候補多様性FAILが残るため判定はNO-GOのまま。

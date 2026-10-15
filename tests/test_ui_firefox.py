@@ -48,12 +48,16 @@ class LocalApp:
         for name in ("app.py", "app.js", "index.html", "style.css"):
             shutil.copy2(ROOT / name, self.app_dir / name)
         shutil.copytree(ROOT / "prompts", self.app_dir / "prompts", dirs_exist_ok=True)
+        shutil.copy2(
+            ROOT / "tests" / "firefox_mocked_gemini_server.py",
+            self.app_dir / "firefox_mocked_gemini_server.py",
+        )
         index_path = self.app_dir / "index.html"
         html = index_path.read_text(encoding="utf-8")
         html = html.replace('<script src="./app.js" defer></script>', ERROR_MONITOR + '\n  <script src="./app.js" defer></script>')
         index_path.write_text(html, encoding="utf-8")
 
-    def start(self):
+    def start(self, *, mocked_gemini=False):
         self.data_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["APP_DATA_DIR"] = str(self.data_dir)
@@ -61,10 +65,21 @@ class LocalApp:
         env.pop("MRA_API_1_KEY", None)
         env.pop("MRA_API_2_KEY", None)
         env.pop("GEMINI_API_KEY", None)
+        command = [sys.executable, "-m", "uvicorn", "app:app"]
+        if mocked_gemini:
+            # The local server sees a fake key only to enter the normal provider
+            # path. The test launcher replaces google.genai.Client in-process,
+            # so no Gemini SDK client or network request can be created.
+            self.mock_calls_path = self.data_dir / "mock-provider-calls.jsonl"
+            env["MRA_API_1_KEY"] = "test-only-key-not-a-credential"
+            env["MRA_PROVIDER_MIN_INTERVAL_SECONDS"] = "0"
+            env["MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE"] = "1"
+            env["MRA_TEST_GEMINI_CALL_LOG"] = str(self.mock_calls_path)
+            command = [sys.executable, "firefox_mocked_gemini_server.py"]
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = self.log_path.open("ab")
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(self.port)],
+            [*command, "--host", "127.0.0.1", "--port", str(self.port)],
             cwd=self.app_dir,
             env=env,
             stdout=self._log,
@@ -107,6 +122,20 @@ def local_app(tmp_path):
     app = LocalApp(tmp_path / "empty-test-database", tmp_path / "app-copy", ARTIFACTS / "server.log")
     try:
         app.start()
+        yield app
+    finally:
+        app.stop()
+
+
+@pytest.fixture
+def local_app_with_mocked_gemini(tmp_path):
+    app = LocalApp(
+        tmp_path / "empty-provider-test-database",
+        tmp_path / "provider-mocked-app-copy",
+        ARTIFACTS / "server-mocked-gemini.log",
+    )
+    try:
+        app.start(mocked_gemini=True)
         yield app
     finally:
         app.stop()
@@ -564,6 +593,111 @@ def test_firefox_first_to_reply_copy_manual_record_and_history_flow(local_app, f
         "manually_recorded_messages": 2,
         "history_survived_reload": True,
     })
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_uses_real_fastapi_generate_route_with_only_gemini_sdk_mocked(
+    local_app_with_mocked_gemini, firefox
+):
+    """Exercise browser -> FastAPI -> Gemini SDK seam without external traffic."""
+    local_app = local_app_with_mocked_gemini
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のあおい")
+
+    incoming = "休日は友達とカフェに行ってきました！"
+    driver.find_element(By.ID, "message-input").send_keys(incoming)
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+    driver.execute_script("""
+      window.__copiedText = undefined;
+      window.__actualGenerateResponses = [];
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {writeText: async text => {window.__copiedText = text;}}
+      });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        const response = await originalFetch(url, options);
+        if (String(url) === '/api/generate') {
+          window.__actualGenerateResponses.push(await response.clone().json());
+        }
+        return response;
+      };
+    """)
+
+    # No fetch interception is installed: this click reaches the temporary,
+    # loopback-only FastAPI process and its normal /api/generate implementation.
+    driver.find_element(By.ID, "generate").click()
+    expected = "えーいいですね！\nどんなカフェだったんですか？"
+    WebDriverWait(driver, 15).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3
+    )
+    first_candidate = driver.find_elements(By.CSS_SELECTOR, ".candidate")[0]
+    assert first_candidate.find_element(By.CSS_SELECTOR, ".candidate-text").text == expected
+    assert not driver.find_elements(By.CSS_SELECTOR, ".demo-warning")
+    actual_response = driver.execute_script("return window.__actualGenerateResponses.at(-1)")
+    assert actual_response["demo"] is False
+    assert actual_response["api_alias"] == "API1"
+    assert actual_response["model"] == "gemini-3.5-flash-lite"
+
+    # The real browser response and in-process SDK replacement together prove
+    # that the route entered its provider path, not app.py's fixed demo path.
+    # The placeholder credential is never recorded.
+    WebDriverWait(driver, 5).until(lambda _: local_app.mock_calls_path.exists())
+    calls = [
+        json.loads(line)
+        for line in local_app.mock_calls_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(calls) == 1
+    assert calls[0]["model"] == "gemini-3.5-flash-lite"
+    assert calls[0]["input_contains_incoming_message"] is True
+    assert calls[0]["system_instruction_present"] is True
+
+    first_candidate.find_element(By.CSS_SELECTOR, ".candidate-actions button:first-child").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+    )
+    assert driver.execute_script("return window.__copiedText") == expected
+    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
+
+    record_button = first_candidate.find_elements(By.CSS_SELECTOR, ".candidate-actions button")[1]
+    record_button.click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble").text == expected
+
+    driver.refresh()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 2
+    )
+    restored = [
+        ("me" if "me" in item.get_attribute("class").split() else "them",
+         item.find_element(By.CSS_SELECTOR, ".bubble").text)
+        for item in driver.find_elements(By.CSS_SELECTOR, "article.chat-message")
+    ]
+    assert restored == [("them", incoming), ("me", expected)]
+    errors = record_artifact(
+        "firefox-real-generate-route-sdk-mocked",
+        driver,
+        {
+            "route": "/api/generate",
+            "provider": "google.genai.Client replaced inside test server process",
+            "provider_calls": len(calls),
+            "external_gemini_calls": 0,
+            "api_alias": actual_response["api_alias"],
+            "model": actual_response["model"],
+            "copied_without_recording": True,
+            "manual_record_and_reload_persisted": True,
+            "binding": "127.0.0.1",
+        },
+    )
     assert errors["runtime"] == []
     assert errors["console"] == []
 

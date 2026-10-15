@@ -889,6 +889,14 @@ T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` の
 
 最新ID行: 361。累計: PASS253 / FAIL13 / FIXED75 / BLOCKED5 / NOT_TESTED15。
 
+| T362 | 短い相手発言に対する返信文量の上限と安全な候補縮退 | pytest（FastAPI/TestClient、Gemini SDKモック） | FIXED | 1〜2文の短い相手発言が4文の長い候補を許可する問題を再現。返信モードの相手側文数を上限に候補を保持し、安全候補数が不足したら不足通知を返す。初回メッセージは別扱い。重大話題でも上限を無制限解除しない。回帰群・全pytestを実行中。Gemini実通信なし。変更SHA `4c5c8158efa7f0b8340c0d0fd68f98406828b879`。|
+
+| T363 | 競合する一時回答と頻度レンジ正規化 | pytest（FastAPI/TestClient、オフライン） | FIXED | 「週1〜2回」と「週12回」を同一視しないよう数値範囲を保持し、区切り記号の表記揺れだけを正規化。矛盾する同一スコープの一時回答はGemini呼び出し前にHTTP 400で拒否し、意味的に同じ回答の重複登録を抑止。focused・全pytest成功（最終件数を下記T364追補に記録）。実API 0回。変更SHA `4c5c8158efa7f0b8340c0d0fd68f98406828b879`。|
+
+| T364 | Firefox UIから実FastAPI生成ルートを通る統合確認 | Firefox E2E、空の一時SQLite、FastAPI実サーバー、Gemini SDKのみサーバープロセス内モック | PASS | 架空の相手を使用。ブラウザーfetchの差し替えは行わず `/api/generate` まで実通信。API1・`gemini-3.5-flash-lite`・入力会話・system instructionの到達をテストログで確認。外部Gemini通信0回。候補表示、コピー時の未記録、手動記録、再読み込み後の複数行履歴保持を確認。focused 1 passed、全pytest 1364 passed in 202.96s、Firefox専用UI 12 passed in 157.28s、Python/JS構文とdiff検査PASS。コードレビュー指摘なし。テストは `tests/test_ui_firefox.py` と `tests/firefox_mocked_gemini_server.py`。変更コミットとActionsは後続追補。|
+
+| T362–T364 集計 | 短文ミラーリング、回答競合、Firefox生成経路統合 | ローカルpytest / Firefox | PASS・FIXED | 364項目: PASS254 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。全pytest 1364 passed in 202.96s、Firefox専用UI 12 passed in 157.28s。最新同一HEADのActions結果は後続追補へ記録する。 |
+
 T359/T360 CI追補: 同一SHA `27c1ea252a976b3394ee877e96c926d32e9064b8` を対象とするPush Actions [38810579428](https://github.com/kenkyu0909/aichatapp/actions/runs/38810579428)とPR Actions [38810585298](https://github.com/kenkyu0909/aichatapp/actions/runs/38810585298)はsuccess。各1303 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft・未マージ。
 
 T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` のPush Actions [38814001025](https://github.com/kenkyu0909/aichatapp/actions/runs/38814001025)とPR Actions [38814006313](https://github.com/kenkyu0909/aichatapp/actions/runs/38814006313)は同一SHAでsuccess。Pushログで1337 passed / 1 warning、JavaScript構文検査とArtifact upload成功を確認。PR #4はOPEN/Draft・未マージ。
