@@ -921,3 +921,11 @@ Firefoxの改行保持テストを強化し、候補コピー直後には本人�
 最新作業では、本人の二択嗜好質問が未分類のまま候補を通すケースと、確認済みカフェ情報だけで質問回避候補が通るケースを修正。誘い承諾を誤って拒否しないこと、招待と個人質問が同一発言に含まれる場合も本人質問を落とさないことを回帰確認した。カフェの話題への好み、否定形、自然な肯定形も区別する。
 
 最新ローカル検証は **761 passed in 97.39s**（Firefox UI含む）。focused suite 5 passed、Python/JavaScript構文と`git diff --check`成功、独立レビューの最終指摘なし。Gemini実APIは0回。これはオフライン検証であり、過去QUALITY009の実生成文章品質FAILを解消した証拠ではない。総合NO-GOを維持し、最新コードActions未実行の状態を記録する。
+
+## 2026-10-15 16:04 JST 最新検証追補
+
+最新コードSHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00` に対するPush [Actions 38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR [Actions 38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) は成功。Push artifactのpytest.xmlは761 tests / 0 failures / 0 errors / 0 skipped。Firefox UIとJavaScript構文検査も成功し、ローカル全pytestは761 passed in 97.39s。
+
+今回のオフライン修正では、未分類の二択個人質問を確認フローへ送り、本人が確認済みのカフェ情報だけで質問への回答をすり替えた候補を拒否する。単独の誘い承諾は誤ブロックせず、誘いと別の個人質問が同じ発言にあれば個人質問を保持する。Gemini実APIは0回。
+
+この結果はAPI経由の文章品質を再確認したものではない。保存済みQUALITY009の実生成には誤字・候補方針の重複などの手動品質FAILが残るため、総合判定は引き続き**NO-GO**。会話004および新しい会話HTMLは指示により未実施。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。

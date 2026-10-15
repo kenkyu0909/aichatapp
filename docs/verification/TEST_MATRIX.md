@@ -574,3 +574,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T284 | 個人質問と誘いが同じ文にある場合の分離 | pytest / 直接質問と招待分類 | FIXED | 映画館/自宅の二択と映画への誘いが同居する入力で、誘い部分を除いて本人質問を検出。回答確認前の承諾候補は送信可能にしない。|
 
 この追補後のTEST_MATRIXは284件: PASS208 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。最新コードの全pytest **761 passed in 97.39s**（Firefox UI含む）、直接質問 focused suite **5 passed**。`py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実API 0回。独立レビューの指摘を修正し再レビューで未解決指摘なし。最新Push済み `9e2b8fd3ba8e917f8aa51dc3ccb43009d58ebdb9` のPush/PR Actions成功は確認済みだが、現在の未コミットコード差分を含まない。 |
+
+| T285 | 直接質問・カフェ嗜好の安全ゲートを含む最新GitHub Actions | Push / PR workflow、artifactのpytest.xml | PASS | SHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00`でPush [run 38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR [run 38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) が成功。Push artifactは761 tests / 0 failures / 0 errors / 0 skipped。Firefox UIとJavaScript構文検査も成功。|
+
+最新ID行: 285。累計: PASS209 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。対象SHA `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00` のPush/PR Actionsを確認。過去のQUALITY009実生成品質FAILは維持し、今回のGemini実API呼び出しは0回。 |

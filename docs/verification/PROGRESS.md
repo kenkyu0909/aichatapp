@@ -649,3 +649,11 @@
 - Test Matrix 284項目: PASS208 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実生成品質FAILを維持、総合NO-GO。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。未追跡のユーザー提供txt 3点は保持し、ステージしない。
 - 最新の既存Actions `9e2b8fd3ba8e917f8aa51dc3ccb43009d58ebdb9` のPush [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38694419437) とPR [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38694423729) は成功。ただし現在の `app.py`/`tests/test_app.py` 差分には適用されない。最新差分をコミット・Pushし同一HEADのActionsを確認する。
 - 次: この修正と検証をコミット・Pushし、最新SHAのPush/PR Actionsを確認。続いて品質009の会話停滞・候補の意味重複を、APIなしで既存の実例と未見の対照ケースから監査する。
+
+### 2026-10-15 16:04 JST 継続チェックポイント：最新SHAのGitHub Actions確認
+
+- `codex/directive-control` の最新版を取得し、P0の直接質問への回答、確認済み事実の照合、拒否の尊重、返信の自然さを優先する指示を再確認。会話004・新しい会話HTML・Gemini実通信は実施しない。
+- `199d6b6c6b3caa6799f4ac5e0a61eb28237cfb00` のPush Actions [38696117197](https://github.com/kenkyu0909/aichatapp/actions/runs/38696117197) とPR Actions [38696124835](https://github.com/kenkyu0909/aichatapp/actions/runs/38696124835) は両方成功。Push artifactのpytest.xmlは **761 tests / 0 failures / 0 errors / 0 skipped**。Firefox UIとJavaScript構文検査も成功。ローカル全pytestは **761 passed in 97.39s**。
+- この修正で、未分類の二択質問、確認済みカフェ情報を使った回答回避、招待承諾との分類衝突を安全側に処理する。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、マージなし。
+- Test Matrixは285項目: PASS209 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。Gemini実APIは今回0回。保存済みQUALITY009の手動生成品質FAILと包括的品質基準の未達は継続しており、総合判定NO-GO。
+- 次の作業: QUALITY009の保存出力で直接質問への回答・確認済み事実・拒否対応に残る未対処がないか監査し、別の高優先課題へ進む。ユーザー提供の未追跡txtはステージしない。
