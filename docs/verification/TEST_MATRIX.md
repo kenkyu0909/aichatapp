@@ -620,3 +620,22 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T296 | QUALITY009の映画回答フィクスチャからテスト注記を除去 | pytest / 架空データフィクスチャ検査 | PASS | 本人の架空回答を「最近は『青い灯台』を観ました」に整え、会話文にメタ注記「架空作品」が混入しないことを検査。修正前の回帰テストは失敗し、修正後focused suite **4 passed**、全pytest **766 passed in 104.03s**。これはテストデータの品質確認であり、Geminiの生成品質を確認したものではない。|
 
 最新ID行: 296。累計: PASS218 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。QUALITY009の文章手動FAILは未解決。|
+
+| T297 | 最近の旅行回答の場所・行動・時期・確実性を照合 | Windows 11 / pytest、旅行回答スコープのユニット・TestClient検証 | FIXED | 架空の回答で修正前の誤認「東京が好きです 先週映画に行きました」を再現。地名と移動動作が離れた回答、数年前・学生時代・幼少期の旅行、疑問形、推量、後置否定、記憶の曖昧さ、映画/会議/ハイキングへの外出、旅行についての会話や計画を未確認として扱い、先週の北海道旅行・最近の沖縄旅行・金沢への旅行・札幌への帰省・北海道からの帰着は確認できることを検証。過去会話の根拠経路は、確実な旅行行動と時期が同じ叙述にある場合のみ有効。focused pytest **35 passed**。Gemini実APIは0回。|
+
+| T298 | 旅行回答の誤認修正後の全pytest・構文確認 | Windows 11 / pytest、Firefox UIテストを含む全回帰 | PASS | 最終作業コードで`python -m pytest -q`: **797 passed in 105.70s**。失敗・skipなし。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`も成功。実Gemini APIは0回。PR ActionsはPush後に確認。|
+
+最新ID行: 298。暫定累計: PASS219 / FAIL13 / FIXED46 / BLOCKED5 / NOT_TESTED15。QUALITY009実生成の手動品質FAILは未解決。|
+
+| T299 | 別イベント時期・過去/否定経験形・第三者旅行を本人の最近の旅行に誤帰属しない | Windows 11 / pytest、架空の本人回答でユニット・TestClient検証 | FIXED | 別イベント時期の誤結合、`ことあります`/`経験はありません`等の経験形、友人・上司・先生・氏名の第三者旅行を再現。修正前FAILを確認。述語境界、過去経験形、第三者主語と直結する既知の旅行先＋行動を検証し、関係節（住む/働く/紹介する/勧める）と本人も同行した明記を有効対照として保持。focused suite **52 passed**。最新コードの全pytest実行中。Gemini 0回。|
+
+最新ID行: 299。暫定累計: PASS219 / FAIL13 / FIXED47 / BLOCKED5 / NOT_TESTED15。QUALITY009実生成の手動品質FAILは未解決。|
+
+| T300 | 旅行実績の本人帰属・時期引き継ぎ・目的地表現の誤判定を防ぐ | Windows 11 / pytest、架空プロフィール回答による単体・TestClient検証 | FIXED | 修正前に第三者の後置主語、伝聞、第三者旅行への本人の誤結合、同日旅行の取りこぼし、目的地補助表現の取りこぼしを再現。後置帰属・伝聞を未確認扱いにし、直近の同日表現は先行する最近の旅行に限って引き継ぐ。本人の別旅行を後続の第三者旅行が打ち消さない。旅行関連focused suite **73 passed**。最新全pytest **844 passed in 114.10s**、Firefox UIテストを含む。py_compile、
+ode --check app.js、git diff --check成功。実Gemini API 0回。|
+
+最新ID行: 300。累計: PASS219 / FAIL13 / FIXED48 / BLOCKED5 / NOT_TESTED15。品質009の実生成文面FAILは未解決のため総合NO-GO。|
+
+| T301 | カフェの一般的な好みと雰囲気の好みを区別し、直接質問へ本人の回答を返す | Windows 11 / pytest、架空プロフィールと一時回答の単体検証 | FIXED | 「カフェは好き」という回答だけで「どんな雰囲気のカフェが好きか」が確認済みになる失敗を修正前に再現。否定極性の矛盾、相手の好みへのすり替え、反応だけ、質問だけ、希望・興味を確定好みに拡張する候補を拒否。二重否定・「好きというより」比較表現を曖昧として確認へ回し、並列スタイルの極性を分離し、同一スタイルの相反する限定は未確定にする。丁寧な否定「好みではありません」「好きではありません」と同系統表現も確認。focused **5 passed / 758 deselected**。最新全pytest **846 passed in 112.64s**（Firefox UI込み、失敗・skipなし）。py_compile、node --check app.js、git diff --check成功。Gemini実API 0回。|
+
+最新ID行: 301。累計: PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15。QUALITY009実生成の手動品質FAILは未解決。|

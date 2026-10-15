@@ -2593,6 +2593,354 @@ def test_ephemeral_answer_does_not_cover_different_direct_question_scope(
     assert backend.missing_personal_fact_question(context) is not None
 
 
+def test_recent_movie_answer_does_not_confirm_recent_travel_experience(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どこか旅行しましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近どんな映画を観ましたか？",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"] = [{
+        "question": "最近どこか旅行しましたか？",
+        "answer": "旅行が好きです",
+    }]
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"] = [{
+        "question": "最近どこか旅行しましたか？",
+        "answer": "台湾です",
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+
+    context["ephemeral_user_answers"] = [{
+        "question": "最近どこか旅行しましたか？",
+        "answer": "特にないです",
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_cafe_area_answer_does_not_verify_recent_visit_and_matching_area_answer_does(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近はどの辺のカフェによく行きますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近どこのカフェに行きましたか？",
+            "answer": "新宿駅近くの店です",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"] = [{
+        "question": "最近よく行くカフェの地域やエリアを教えてください",
+        "answer": "カフェは好きです",
+    }]
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"] = [{
+        "question": "最近よく行くカフェの地域やエリアを教えてください",
+        "answer": "中野によく行きます",
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_recent_travel_region_answer_keeps_matching_location_scope(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近はどの地域に旅行しましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "地域" in clarification.question or "場所" in clarification.question
+
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": "沖縄です",
+    }]
+    assert backend.missing_personal_fact_question(context) is None
+
+
+def test_recent_travel_clarification_rejects_unrelated_answer_but_accepts_destination(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どこか旅行しましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近行った旅行先やお出かけ先があれば教えてください",
+            "answer": "会社です",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"][0]["answer"] = "沖縄です"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "イタリアです"
+    assert backend.missing_personal_fact_question(context) is None
+
+    context["ephemeral_user_answers"][0]["answer"] = "北海道に行きました"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "先週友達と北海道に行きました"
+    assert backend.missing_personal_fact_question(context) is None
+    for unrelated in (
+        "北海道に行く予定です",
+        "沖縄に行きたいです",
+        "昔北海道に行きました",
+        "数年前に沖縄へ行きました",
+        "北海道に行きましたが旅行ではないです",
+        "ガンダムです",
+    ):
+        context["ephemeral_user_answers"][0]["answer"] = unrelated
+        assert backend.missing_personal_fact_question(context) is not None, unrelated
+
+    context["ephemeral_user_answers"][0]["answer"] = "元気です"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "会社に行きました"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "会議に行きました"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "行ってないです"
+    assert backend.missing_personal_fact_question(context) is None
+    for ambiguous_no_trip_answer in ("旅行には行ってないですか？", "最近は行ってないかもしれません"):
+        context["ephemeral_user_answers"][0]["answer"] = ambiguous_no_trip_answer
+        assert backend.missing_personal_fact_question(context) is not None, ambiguous_no_trip_answer
+
+
+def test_recent_travel_answer_requires_destination_to_be_the_place_actually_visited(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どこか旅行しましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近行った旅行先やお出かけ先があれば教えてください",
+            "answer": "東京が好きです 先週映画に行きました",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"][0]["answer"] = "東京に住んでいて先週映画に行きました"
+    assert backend.missing_personal_fact_question(context) is not None
+
+    for unverified_recent_trip in (
+        "3年前に北海道へ行きました",
+        "三年前に沖縄へ旅行しました",
+        "学生の頃に北海道へ行きました",
+        "小さい頃に北海道へ行きました",
+        "幼い頃に沖縄へ行きました",
+        "東京に行きましたか？",
+        "北海道に行ったかもしれません",
+        "先週北海道に行ったわけではないです",
+        "先週北海道に行ったかどうか覚えていません",
+        "先週北海道に行ったことあります",
+        "先週北海道に行った経験があります",
+        "先週北海道へ旅行に行った経験があります",
+        "先週北海道に行ったことない",
+        "先週北海道に行ったことありません",
+        "先週北海道に行ったことなかった",
+        "先週北海道に行ったことがなかった",
+        "先週北海道に行った経験はありません",
+        "先週北海道に行った経験はないです",
+        "先週北海道へ旅行に行った経験はありません",
+        "最近友達が沖縄に行きました",
+        "先週母が北海道に行きました",
+        "最近田中さんが京都へ旅行しました",
+        "先週鈴木が北海道へ旅行しました",
+        "先週大谷選手が北海道に行きました",
+        "先週友達が沖縄に行きましたが私は映画に行きました",
+        "先週母が北海道へ旅行しましたが僕は会社に行きました",
+        "先週母が北海道に行ったので私は映画に行きました",
+        "先週母が北海道に行きましたが先週友達が沖縄に行きました 私も行きました",
+        "最近北海道に行ったのは友達です",
+        "先週沖縄に行ったのは母です",
+        "先週北海道に行ったのは私の友達です",
+        "先週北海道に行ったのは彼です",
+        "先週北海道旅行したのは母だった",
+        "先週北海道に行ったと友達が言っていました",
+        "私は先週友達が沖縄に行きました",
+        "私は先週母が北海道へ旅行しましたが会社に行きました",
+    ):
+        context["ephemeral_user_answers"][0]["answer"] = unverified_recent_trip
+        assert backend.missing_personal_fact_question(context) is not None, unverified_recent_trip
+
+    context["ephemeral_user_answers"][0]["answer"] = "先週友達と北海道に行きました"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "沖縄へ旅行してきました"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "札幌に帰省しました"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "先週北海道から帰ってきました"
+    assert backend.missing_personal_fact_question(context) is None
+    for explicitly_personal_trip in (
+        "先週友達がいる沖縄へ旅行に行きました",
+        "先週友達が住んでいる北海道へ行きました",
+        "先週友達が住む北海道に行きました",
+        "先週友達が働く横浜に行きました",
+        "先週友達が通う京都に行きました",
+        "先週母が北海道に行ったので私も行きました",
+        "先週母が北海道に行ったので私も北海道に行きました",
+        "先週友達が沖縄に行きましたが私も北海道に行きました",
+        "先週友達が沖縄に行きましたが私も一緒に行きました",
+        "先週友達が沖縄に行きましたが私も同じ日に行きました",
+        "先週友達が沖縄に行きましたが私も北海道から帰ってきました",
+        "先週母が北海道に行きましたが私も札幌に滞在しました",
+        "先週友達が沖縄に行きましたが私も東京を訪れました",
+        "先週友達が沖縄に行きましたが私も北海道へ出かけました",
+        "先週友達が沖縄に行きましたが私も札幌に帰省しました",
+        "先週友達が沖縄に行きましたが私も北海道を観光しました",
+        "最近北海道に行ったのは自分です",
+        "私も先週東京に行きましたが友達が沖縄に行きました",
+        "私は先週東京に行きましたが友達も沖縄に行きました",
+        "先週私が東京に行きましたが友達が沖縄に行きました",
+        "先週友達が沖縄に行きました。私も同じ日に北海道へ行きました",
+        "先週友達が沖縄に行きました 私も同じ日に北海道へ行きました",
+        "先週沖縄のほうに行きました",
+        "最近京都の方に行ってきました",
+        "先週大阪方面に行きました",
+        "先週北海道まで行きました",
+        "先週北海道にも行きました",
+    ):
+        context["ephemeral_user_answers"][0]["answer"] = explicitly_personal_trip
+        assert backend.missing_personal_fact_question(context) is None, explicitly_personal_trip
+
+
+@pytest.mark.parametrize("answer", [
+    "先週映画に行きました",
+    "先週会議に行きました",
+    "先週北海道に行ったかもしれません",
+    "3年前に北海道へ行きました",
+    "学生の頃に北海道へ行きました",
+    "東京に行きましたか？",
+    "先週北海道に行ったわけではないです",
+    "先週北海道に行ったかどうか覚えていません",
+    "先週北海道へ行きましたが旅行ではないです",
+    "先週北海道に行ったか覚えてないです",
+        "最近旅行の話をしました",
+        "最近旅行の計画をしました",
+        "昨日映画に行きましたが3年前旅行しました",
+    "先週ハイキングに行きました",
+    "先週会議に行きました",
+    "先週映画を観ました 北海道に行ったことがあります",
+    "昨日仕事でした 北海道へ旅行したことがあります",
+    "先週北海道へ旅行したことがあります",
+    "先週北海道に行ったことあります",
+    "先週北海道に行った経験があります",
+    "先週北海道へ旅行に行った経験があります",
+    "先週北海道に行ったことない",
+    "先週北海道に行ったことありません",
+    "先週北海道に行ったことなかった",
+    "先週北海道に行ったことがなかった",
+    "先週北海道に行った経験はありません",
+    "先週北海道に行った経験はないです",
+    "先週北海道へ旅行に行った経験はありません",
+    "最近友達が沖縄に行きました",
+    "先週母が北海道に行きました",
+    "先週上司が沖縄に行きました",
+    "最近知人は沖縄に行きました",
+    "最近先生が北海道へ旅行しました",
+    "最近田中さんが京都へ旅行しました",
+    "先週鈴木が北海道へ旅行しました",
+    "先週大谷選手が北海道に行きました",
+    "先週友達が沖縄に行きましたが私は映画に行きました",
+    "先週母が北海道へ旅行しましたが僕は会社に行きました",
+    "先週母が北海道に行ったので私は映画に行きました",
+    "先週母が北海道に行きましたが先週友達が沖縄に行きました 私も行きました",
+])
+def test_recent_travel_evidence_requires_recent_certain_destination_trip(client, answer):
+    _, backend = client
+
+    assert not backend._has_recent_travel_evidence(answer)
+
+
+@pytest.mark.parametrize("answer", [
+    "先週友達と北海道に行きました",
+    "最近沖縄へ旅行してきました",
+    "最近札幌に帰省しました",
+    "先週北海道から帰ってきました",
+    "先月金沢に行きました",
+    "先週北海道に遊びに行きました",
+    "先週北海道へ出かけました",
+    "先週友達がいる沖縄へ旅行に行きました",
+    "先週友達が住んでいる北海道へ行きました",
+    "先週友達が住む北海道に行きました",
+    "先週友達が働く横浜に行きました",
+    "先週友達が通う京都に行きました",
+    "先週田中さんが勧めてくれた沖縄に行きました",
+    "最近山田さんが紹介してくれた京都へ行きました",
+    "先週母が北海道に行ったので私も行きました",
+    "先週友達が沖縄に行きましたが私も北海道に行きました",
+    "先週友達が沖縄に行きましたが私も一緒に行きました",
+    "先週友達が沖縄に行きましたが私も同じ日に行きました",
+    "先週友達が沖縄に行きました。私も同じ日に北海道へ行きました",
+    "先週友達が沖縄に行きました 私も同じ日に北海道へ行きました",
+    "先週沖縄のほうに行きました",
+    "最近京都の方に行ってきました",
+    "先週大阪方面に行きました",
+    "先週北海道まで行きました",
+    "先週北海道にも行きました",
+    "最近北海道に行ったのは自分です",
+    "私も先週東京に行きましたが友達が沖縄に行きました",
+    "私は先週東京に行きましたが友達も沖縄に行きました",
+    "先週私が東京に行きましたが友達が沖縄に行きました",
+])
+def test_recent_travel_evidence_accepts_explicit_recent_trip(client, answer):
+    _, backend = client
+
+    assert backend._has_recent_travel_evidence(answer)
+
+
+def test_cafe_area_answer_rejects_unrelated_destination_but_accepts_habitual_area(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どの辺のカフェによく行きますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近よく行くカフェの地域やエリアを教えてください",
+            "answer": "会社に行きます",
+        }],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"][0]["answer"] = "中野によく行きます"
+    assert backend.missing_personal_fact_question(context) is None
+
+    context["ephemeral_user_answers"][0]["answer"] = "旅行によく行きます"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "元気です"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "会議です"
+    assert backend.missing_personal_fact_question(context) is not None
+    context["ephemeral_user_answers"][0]["answer"] = "イタリアです"
+    assert backend.missing_personal_fact_question(context) is None
+    context["ephemeral_user_answers"][0]["answer"] = "ガンダムです"
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_recent_cafe_visit_question_is_not_reclassified_as_habitual_area(client):
+    _, backend = client
+    question = "最近どの辺のカフェに行きましたか？"
+
+    assert backend._topic_for_personal_question(question) == "カフェ最近"
+    assert backend.personal_fact_question("カフェ最近", question).question.startswith("最近行ったカフェ")
+
+
 def test_known_specific_curry_fact_does_not_trigger_user_question(client):
     _, backend = client
     context = {
@@ -4357,6 +4705,7 @@ OVERNIGHT_DIRECT_QUESTION_CASES = [
     ("最近カレーを食べましたか？", "最近カレーを食べたことがあれば教えてください。なければそう答えてください"),
     ("カフェにはよく行きますか？", "カフェにはどのくらいの頻度で行きますか？"),
     ("最近どこのカフェに行きましたか？", "最近行ったカフェがあればお店の名前や場所を教えてください。行っていなければそう答えてください"),
+    ("最近はどの辺のカフェによく行きますか？", "最近よく行くカフェの地域やエリアを教えてください"),
     ("好きなカフェはありますか？", "好きなカフェやお店の雰囲気があれば教えてください"),
     ("映画館にはどのくらい行きますか？", "映画館にはどのくらいの頻度で行きますか？"),
     ("旅行は好きですか？", "旅行はお好きですか？"),
@@ -4446,6 +4795,44 @@ def test_overnight_deeper_partner_cafe_questions_are_not_treated_as_repeats(clie
     candidate = backend.Candidate(label="架空候補", text=candidate_text)
 
     assert backend.repeated_partner_question_topics([candidate], context) == []
+
+
+def test_overnight_partner_exercise_frequency_is_not_reasked_but_deeper_question_is_allowed(client):
+    _, backend = client
+    context = {"history": [
+        {"role": "them", "body": "ジムに週2回通っています"},
+    ]}
+    repeated = backend.Candidate(label="架空候補", text="ジムには週2回通ってるんですか？")
+    deeper = backend.Candidate(label="架空候補", text="ジムではどんな運動をしてるんですか？")
+
+    assert backend.repeated_partner_question_topics([repeated], context) == ["運動の頻度"]
+    assert backend.repeated_partner_question_topics([deeper], context) == []
+
+
+def test_overnight_exercise_frequency_guard_preserves_current_status_and_deeper_followups(client):
+    _, backend = client
+    past_context = {"history": [
+        {"role": "them", "body": "以前は週2回ジムに通っていました"},
+    ]}
+    current_status = backend.Candidate(label="現在を確認", text="今も週2回ジムに通っていますか？")
+    deeper_with_acknowledgement = backend.Candidate(
+        label="深掘り", text="週2回通ってるんですね！\nジムではどんな運動をしてるんですか？"
+    )
+
+    assert backend.repeated_partner_question_topics([current_status], past_context) == []
+    assert backend.repeated_partner_question_topics([deeper_with_acknowledgement], past_context) == []
+
+    mixed_context = {"history": [
+        {"role": "them", "body": "以前は週2回ジムに通っていましたが今は週1回です"},
+    ]}
+    contradictory_current_question = backend.Candidate(
+        label="架空候補", text="今も週2回ジムに通っていますか？"
+    )
+    unrelated_current_clause = backend.Candidate(
+        label="架空候補", text="今もお仕事を頑張ってるんですね！\nジムには週2回通ってるんですか？"
+    )
+    assert backend.repeated_partner_question_topics([contradictory_current_question], mixed_context) == ["運動の頻度"]
+    assert backend.repeated_partner_question_topics([unrelated_current_clause], past_context) == ["運動の頻度"]
 
 
 def test_legacy_response_cannot_return_unsupported_first_person_claim(client, monkeypatch):
@@ -5235,6 +5622,226 @@ def test_verified_cafe_preference_does_not_allow_evasion_of_yes_no_question(clie
     ):
         affirmative = backend.Candidate(label="自然な肯定回答", text=affirmative_text)
         assert backend._answers_verified_partner_question(affirmative, context)
+
+
+def test_generic_cafe_preference_does_not_answer_atmosphere_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "どんな雰囲気のカフェが好きですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "カフェは好きですか？", "answer": "好きです"}],
+    }
+
+    assert backend._topic_for_personal_question(context["history"][-1]["body"]) == "カフェ好み"
+    assert not backend._topic_is_verified("カフェ好み", context, context["history"][-1]["body"])
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "雰囲気" in clarification.question
+
+    context["ephemeral_user_answers"] = [{
+        "question": "どんな雰囲気のカフェが好きですか？",
+        "answer": "落ち着いた雰囲気のお店が好きです",
+    }]
+    assert backend._topic_is_verified("カフェ好み", context, context["history"][-1]["body"])
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="回答済み", text="落ち着いた雰囲気のお店が好きです！"),
+        context,
+    )
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="同じ意味の具体回答", text="静かなカフェが好きです！"),
+        context,
+    )
+    for natural_assertion in (
+        "落ち着いた雰囲気が好きなんです！",
+        "私は落ち着いた雰囲気が好きなんです！",
+        "落ち着いた雰囲気が好みなんです！",
+    ):
+        assert backend._answers_verified_partner_question(
+            backend.Candidate(label="自然な好みの回答", text=natural_assertion),
+            context,
+        )
+    generic_reply = backend.Candidate(label="一般論のみ", text="カフェは好きです！")
+    contradictory_reply = backend.Candidate(label="別の好み", text="にぎやかなお店が好きです！")
+    negative_matching_reply = backend.Candidate(label="同じ好みを否定", text="落ち着いた雰囲気のお店は好きではないです")
+    question_only = backend.Candidate(label="回答せず聞き返す", text="落ち着いた雰囲気のお店が好きですか？")
+    partner_attribution = backend.Candidate(label="相手の好みへすり替え", text="相手は落ち着いた雰囲気が好きなんですね！")
+    reaction_only = backend.Candidate(label="反応だけ", text="落ち着いた雰囲気もいいですね！")
+    assert not backend._answers_verified_partner_question(generic_reply, context)
+    assert not backend._answers_verified_partner_question(contradictory_reply, context)
+    assert not backend._answers_verified_partner_question(negative_matching_reply, context)
+    assert not backend._answers_verified_partner_question(question_only, context)
+    assert not backend._answers_verified_partner_question(partner_attribution, context)
+    assert not backend._answers_verified_partner_question(reaction_only, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(partner_attribution, context)
+
+    context["ephemeral_user_answers"] = [{
+        "question": "どんな雰囲気のカフェが好きですか？",
+        "answer": "にぎやかなお店は苦手です",
+    }]
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="否定回答", text="にぎやかなお店は苦手です！"),
+        context,
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="否定と矛盾", text="にぎやかなお店が好きです！"),
+        context,
+    )
+    context["ephemeral_user_answers"] = [{
+        "question": "どんな雰囲気のカフェが好きですか？",
+        "answer": "静かな雰囲気はあまり好きではないです",
+    }]
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="自然な否定回答", text="静かな雰囲気はあまり好きではないです"),
+        context,
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="否定を肯定へ反転", text="静かな雰囲気が好きです！"),
+        context,
+    )
+
+
+def test_cafe_atmosphere_contrast_and_interest_are_not_overstated_as_preferences(client):
+    _, backend = client
+    question = "どんな雰囲気のカフェが好きですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": question,
+            "answer": "落ち着いた雰囲気ではなくにぎやかな店の方が好きです",
+        }],
+    }
+    assert backend._topic_is_verified("カフェ好み", context, question)
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="本人の実際の好み", text="にぎやかなお店が好きです！"),
+        context,
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="対照側を好みと誤認", text="落ち着いた雰囲気のお店が好きです！"),
+        context,
+    )
+
+    for answer in (
+        "落ち着いたカフェに行ってみたいです",
+        "落ち着いた雰囲気のカフェが気になります",
+    ):
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        assert not backend._topic_is_verified("カフェ好み", context, question)
+        assert backend.missing_personal_fact_question(context) is not None
+        assert not backend._answers_verified_partner_question(
+            backend.Candidate(label="意向を好みへ拡張", text="落ち着いた雰囲気のお店が好きです！"),
+            context,
+        )
+
+    context["ephemeral_user_answers"] = [{
+        "question": question,
+        "answer": "落ち着いたカフェに行ってみたいですし、にぎやかな店が好きです",
+    }]
+    assert backend._topic_is_verified("カフェ好み", context, question)
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="別節の好みを借用", text="落ち着いた雰囲気のお店が好きです！"),
+        context,
+    )
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="同じ節の好み", text="にぎやかな店が好きです！"),
+        context,
+    )
+
+    for ambiguous_answer in (
+        "落ち着いた雰囲気が苦手ではないです",
+        "落ち着いた雰囲気が嫌いではないです",
+        "落ち着いた雰囲気が好きではないわけではありません",
+        "落ち着いた雰囲気は嫌いというわけではありません",
+        "落ち着いた雰囲気は好みじゃないわけではないです",
+    ):
+        context["ephemeral_user_answers"] = [{"question": question, "answer": ambiguous_answer}]
+        assert not backend._topic_is_verified("カフェ好み", context, question)
+        assert backend.missing_personal_fact_question(context) is not None
+
+    context["ephemeral_user_answers"] = [{
+        "question": question,
+        "answer": "落ち着いた雰囲気が好きでにぎやかな店は苦手です",
+    }]
+    assert backend._cafe_atmosphere_style_polarities(
+        context["ephemeral_user_answers"][0]["answer"]
+    ) == {"calm": True, "lively": False}
+    assert backend._topic_is_verified("カフェ好み", context, question)
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="前半の好み", text="落ち着いた雰囲気のお店が好きです！"),
+        context,
+    )
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="後半の苦手", text="にぎやかな店は苦手です"),
+        context,
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="前半と反対", text="落ち着いた雰囲気のお店は好みではありません"),
+        context,
+    )
+
+    for contrast_answer, overstated_style, verified_style in (
+        (
+            "静かな店が好きというより、にぎやかな店が好きです",
+            "静かな店",
+            "にぎやかな店",
+        ),
+        (
+            "落ち着いた店が好みというより、レトロな店が好きです",
+            "落ち着いた店",
+            "レトロな店",
+        ),
+    ):
+        context["ephemeral_user_answers"] = [{"question": question, "answer": contrast_answer}]
+        assert not backend._answers_verified_partner_question(
+            backend.Candidate(label="比較で弱められた好み", text=f"{overstated_style}が好きです！"),
+            context,
+        )
+        assert backend._answers_verified_partner_question(
+            backend.Candidate(label="比較の後半の好み", text=f"{verified_style}が好きです！"),
+            context,
+        )
+
+    for qualified_answer in (
+        "落ち着いたお店は好きだけど落ち着きすぎるのは苦手です",
+        "落ち着いた雰囲気は好きですが静かすぎるのは苦手です",
+    ):
+        context["ephemeral_user_answers"] = [{"question": question, "answer": qualified_answer}]
+        assert "calm" not in backend._cafe_atmosphere_style_polarities(qualified_answer)
+        assert not backend._topic_is_verified("カフェ好み", context, question)
+        assert backend.missing_personal_fact_question(context) is not None
+        for claim in (
+            "落ち着いた雰囲気のお店が好きです！",
+            "落ち着いた雰囲気のお店が苦手です！",
+        ):
+            assert not backend._answers_verified_partner_question(
+                backend.Candidate(label="曖昧な範囲を断定", text=claim),
+                context,
+            )
+
+    context["ephemeral_user_answers"] = [{
+        "question": question,
+        "answer": "落ち着いた店は好みではありません",
+    }]
+    assert backend._topic_is_verified("カフェ好み", context, question)
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="丁寧な否定回答", text="落ち着いた雰囲気のお店は好みではありません"),
+        context,
+    )
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="丁寧な否定と矛盾", text="落ち着いた雰囲気のお店が好きです！"),
+        context,
+    )
+
+    context["ephemeral_user_answers"] = [{
+        "question": question,
+        "answer": "静かな店は好きではありません",
+    }]
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="好きではありませんの回答", text="静かな雰囲気のお店は好きではありません"),
+        context,
+    )
 
 
 def test_invitation_acceptance_is_not_misclassified_as_cafe_preference_question(client):

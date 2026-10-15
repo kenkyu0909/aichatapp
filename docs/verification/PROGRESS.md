@@ -640,6 +640,38 @@
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`。Gemini実API 0回。総合NO-GO（保存済みQUALITY009の生成品質FAILと包括基準未達）。ユーザー提供の未追跡txt 3点はステージしない。
 - 次: この小さなテスト/記録差分だけをコミット・Pushし、同一HEADのPush/PR Actionsを確認する。その後は品質009に関連する直接質問回答の網羅性をオフラインで監査する。
 
+### 2026-10-15 17:36 JST 継続チェックポイント：旅行回答の根拠範囲を絞る
+
+- `codex/directive-control`を再取得して最新版を確認。優先事項は本人事実の根拠、直接質問への回答、断りの尊重と自然な出力。Gemini実通信・conversation_004・新しい会話HTMLは行わない。
+- 独立レビューで、地名と言及された外出行動が離れていても最近の旅行と誤認すること、数年前・学生時代・質問形・不確かな回答を確認済み扱いする経路、映画・会議・ハイキングなどの活動を場所と誤認する経路を再現。
+- `app.py`では旅行先と移動動作の結び付きを必須にし、古い時期、疑問、推量、後置否定、記憶不確かの文を拒否。最近の会話根拠にも時期と確実な旅行行動を要求し、未知の一般名詞を地名として受け入れる fallback を削除。金沢など既知の都市と、地域 suffix の地名は引き続き扱う。札幌への帰省や北海道から帰着した回答も認識。
+- `tests/test_app.py`へ映画・会議・ハイキング、数年前・学生時代・幼少期、肯定と否定の混在、記憶の不確かさ、質問、最近の旅行・帰省の正負ケースを追加。旅行・事実根拠のfocused suite **28 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。全pytestを最終差分で再実行中。以前の中間全pytestは **781 passed / 2 failed** であり、その2件は開語彙の金沢と相手発言の最近旅行を証拠扱いしない回帰。双方を修正し今回のfocused suiteで確認した。
+- Gemini API 0回。Firefox/Chromeは今回未起動。最新ローカル差分は未コミット。PR #4はDraft未マージ。Test Matrixは297項目（暫定: PASS218 / FAIL13 / FIXED46 / BLOCKED5 / NOT_TESTED15）。保存済みQUALITY009の生成文品質FAILは未解決のため総合NO-GO。
+- 次: 最新全pytestの最終結果を確認し、必要なら失敗を修正して再実行。最終結果・Actions・SHAを記録して対象ファイルのみコミット・Pushし、PR #4のDraft状態と最新SHAのActionsを確認。ユーザー提供の未追跡txtはステージしない。
+
+### 2026-10-15 17:37 JST 追補：旅行根拠の否定・曖昧表現
+
+- 追加レビューで、地名に続く肯定形の後に「旅行ではない」「行ったか覚えていない」と続く回答も、前半だけを拾って旅行済み扱いするリスクを確認。後置否定と短縮形の記憶不確かをブロックする回帰を追加した。
+- 未知の名詞を広く場所とみなす判定は、ハイキングなどの活動を旅行先として誤認するため削除。地名の既知語・行政区分の接尾辞・明示的な旅行表現を使う。未知の地名と活動名を規則だけで安全に判別できない場合は確認未完了として扱う。既知の架空地名「金沢」は受理する。
+- 最新focused suite **30 passed**、Python構文・JavaScript構文・差分検査成功。今回の最後の判定変更前に完了した全pytestは**790 passed**。それ以前の中間全試験は**781 passed / 2 failed**だったが、両件（開語彙の金沢、相手の「最近旅行した」の帰属確認）を回帰として修正。最終差分での全pytestは再実行中。
+- 実Gemini 0回。Firefox/Chromeはこの追補で起動していない。実用生成品質の過去FAILは未解決で総合NO-GO。会話004・新規HTMLは実施しない。Test Matrixは297項目、暫定 PASS218 / FAIL13 / FIXED46 / BLOCKED5 / NOT_TESTED15。未追跡ユーザー指示ファイルはステージ対象外。
+- 次: 最終全pytest完了後、レビュー指摘があれば追加対処して再実行。報告・コミット・Push後にPR #4の状態と最新SHAのPush/PR Actionsを確認する。
+
+### 2026-10-15 17:39 JST 追補：旅行の話題と旅行経験を区別
+
+- Pythonコードレビューで「旅行の話をした」「旅行を計画した」だけの表現を実旅行と誤認する可能性、地名に結び付いた「遊びに行った」を取りこぼすことを指摘された。
+- 実際の移動・旅行行動を表す肯定形に限定し、最近性の時刻表現を同じ文節で確認するよう変更。「旅行の話をしました」「旅行の計画をしました」、時期が別の出来事に係る文は旅行根拠にしない。「北海道に遊びに行きました」「北海道へ出かけました」は認識する。
+- 修正前に新規対照テストが**4失敗 / 18成功**となり、話題・計画の誤認と「遊びに行く」の取りこぼしを再現。修正後の旅行/事実確認focused pytestは**35 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- 直前コードの全pytest **792 passed**は今回の最新差分前の結果。最新差分の全pytestは実行中。実Gemini APIは0回。会話004・新しい会話HTMLなし。Chrome未使用。現在の品質009実生成FAILは未解決で総合NO-GO。
+- 17:39 JSTに指示ブランチを再取得。最新版は`de38556ee55096b330ff5e81638bcad40586f442`で、この時間帯の追加優先変更はなかった。引き続き本人情報の安全性とP0品質を優先する。
+
+### 2026-10-15 17:43 JST 最終回帰確認
+
+- 旅行回答の厳格化を含む最新ローカルコードで全pytest **797 passed in 105.70s**。Firefox UIテストを含み、失敗・skipなし。`py_compile`、`node --check app.js`、`git diff --check`も成功。旅行/本人事実のfocused suiteは**35 passed**。
+- Gemini APIは0回、会話004・新規会話HTMLは未実施。品質009の実生成品質FAILは継続して未解決。総合NO-GO。
+- Test Matrixを298項目へ更新: PASS219 / FAIL13 / FIXED46 / BLOCKED5 / NOT_TESTED15。T297は旅行回答の修正、T298は全回帰テスト。
+- 変更ファイルを確認後、`app.py`、`tests/test_app.py`と検証記録だけをコミット・Pushする。ユーザー提供txtは除外。Push後に最新SHAのPush/PR Actions、PR #4 OPEN/Draft、リモートHEAD一致を確認する。Actions結果は未確認。
+
 ### 2026-10-15 16:02 JST 継続チェックポイント：直接質問の安全ゲート補強
 
 - 16:00台に `codex/directive-control` の最新版を再取得。今日のP0は本人事実の根拠、直接質問、断りの尊重、自然な返信。会話004と新規会話HTMLは禁止を維持し、Gemini API通信は0回。
@@ -737,3 +769,62 @@
 - Test Matrixを296項目: PASS218 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15に更新。QUALITY009実生成の人手評価FAILは未解決なので総合NO-GO。
 - この追補と2つのコード/テスト変更は未コミット。ユーザー提供の未追跡指示ファイル3点は触れていない。既存PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `52b074cb32d4dec2425606c13e54d3033364896d`。同HEADのGitHub Push Actions [38701496111](https://github.com/kenkyu0909/aichatapp/actions/runs/38701496111) は成功だが、今回のローカル差分を含まない。
 - 次: 保存済みQUALITY009の直接質問・候補方針差・拒否対応をオフラインで再監査し、修正前FAILを保持したテストを追加する。実APIや新しい会話HTMLは作らない。
+
+### 2026-10-15 17:47 JST 継続チェックポイント：旅行時期の誤帰属を追加修正
+
+- `codex/directive-control` を再取得し、10/16夜の期限を優先したP0品質指示、PR #4 Draft維持、Gemini実通信0回、conversation_004/新規HTML禁止を確認。作業ブランチは`codex/full-system-verification`のまま。
+- コードレビューで「先週映画を観ました 北海道に行ったことがあります」が最近の北海道旅行として受理される新たなHIGHを発見。直前の時期表現と別イベントを借用し、無期限の経験形を最近の行動として扱う問題。
+- 2つの回帰ケースを追加して修正前のFAILを確認。さらに同一文中の「先週北海道へ旅行したことがあります」も曖昧な経験形として確認済みにしないテストを追加。動作節の終了後に空白がある場合を節境界として扱い、「行ったことがある」等を最近の確定行動から除外。
+- focused旅行suite **26 passed**。全pytest **800 passed in 107.60s**（Firefox UI含む、失敗・skipなし）。`py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Gemini API 0回。Chromeは使用していない。
+- TEST_MATRIXは299件、PASS219 / FAIL13 / FIXED47 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成手動FAILは残り、総合NO-GO。
+- コードレビュアーの再確認、コミット/Push、最新SHAに対するGitHub Actions確認は未完了。ユーザー提供の未追跡指示txt3点はステージしない。次にレビュー結果を反映し、関連差分をコミットしてPushし、PR #4のHEAD/Draft状態とPush/PR Actionsを照合する。
+
+### 2026-10-15 17:56 JST 継続チェックポイント：否定経験形と人物名の第三者旅行
+
+- 追加レビューで「行った経験はありません」の見落とし、人物名の直後から広い範囲を旅行述語と誤結合する問題を確認。さらに旅先を勧めた人・紹介した人の話を本人旅行と誤って除外していた。
+- 失敗ケースを追加し、修正前のfocused suiteで対象ケースがFAILすることを確認。経験否定に助詞「は」を含め、第三者検査を「第三者主語→その直後の旅行先→旅行動作」に限定。`田中さんが勧めてくれた沖縄に行きました`等の本人旅行対照を追加。
+- 旅行関連focused suite **52 passed**。最新コードの全pytestを実行中。前の全pytest819件は今回修正前のコードであり最新証拠に数えない。Python/JavaScript構文とdiff検査は次の最終差分で再実施する。実Gemini API0回。
+- Test Matrix 299件: PASS219 / FAIL13 / FIXED47 / BLOCKED5 / NOT_TESTED15。品質009の実生成FAILは残るため総合NO-GO。次に全pytest・最終コードレビューを終え、差分をPushして最新SHAのActionsを確認する。PR #4 OPEN/Draft、未マージ。
+
+### 2026-10-15 17:49 JST 継続チェックポイント：他者の旅行・経験表現の誤帰属
+
+- コードレビューで追加の誤受理を発見。「先週北海道に行ったことあります」「先週北海道へ旅行に行った経験があります」などの過去経験表現と、「最近友達が沖縄に行きました」「先週母が北海道に行きました」など他人を主語とする旅行表現が本人の最近の旅行と扱われていた。
+- これらの回帰ケースと本人への再確認経路を追加し、修正前にfocused test **6 failed** を確認。経験表現の助詞省略/経験名詞と他者主語の旅行を安全側に除外し、明示した同伴者「友達と」は有効対照として維持。focused suite **31 passed**。
+- 変更後の全pytestは再実行中。直前版の800 passedは今回の追加修正を含まない。Gemini 0回。最新定期指示は17:46 JSTに確認済み。次に最新コードの全pytestと構文を完了し、レビュアーの追認後にコミット・Push・Actions確認を行う。PR #4 OPEN/Draft、未マージ。
+
+### 2026-10-15 18:24 JST 継続チェックポイント：旅行実績の本人帰属を再確認
+
+- 定時にcodex/directive-controlを取得し、SHA de38556ee55096b330ff5e81638bcad40586f442 の継続指示を確認。P0の実用品質を優先し、実Gemini通信、conversation_004、新しい会話HTMLは実施しない。
+- レビューで第三者の後置主語（「行ったのは彼」「旅行したのは母だった」）、伝聞、本人の旅行へ後続の第三者旅行を誤結合するケース、同日旅行の取りこぼし、目的地の補助表現の取りこぼしを発見。回帰テストを追加し、修正前FAILを確認してから帰属範囲と時期の引き継ぎを限定した。
+- 旅行関連focused suite **73 passed**。全pytest **844 passed in 114.10s**（Firefox UIを含み失敗・skipなし）。python -m py_compile app.py tests/test_app.py、
+ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不使用。
+- TEST_MATRIXは300項目: PASS219 / FAIL13 / FIXED48 / BLOCKED5 / NOT_TESTED15。過去のQUALITY009実生成品質FAILは未解決で、総合NO-GOを維持。
+- 変更はまだ未コミット/未Push。PR #4はOPEN/Draft、直前確認HEAD ce60f19dfafeb127de569e6d59beb9118a7b1c82。今回の差分に対するGitHub ActionsはPush後に確認する。ユーザー提供の未追跡指示ファイル3点はステージしない。
+- 次はコードレビューの最終確認、文書更新、コミット/Push、最新SHAのActions検証を行い、その後保存済みQUALITY009の直接質問回答と候補方針差の修正へ戻る。
+
+### 2026-10-15 18:43 JST 継続チェックポイント：カフェ回答の否定・対照節を個別判定
+
+- `codex/directive-control` を再取得し、10/16夜の実用完成期限、QUALITY009の文章手動FAILを維持、P0優先、実Gemini通信0回、conversation_004/新規会話HTMLはユーザー指示まで保留を確認。
+- Pythonレビューで「好きではないわけではない」等の二重否定を否定事実として採用する偽陽性と、「落ち着いた雰囲気が好きでにぎやかな店は苦手」の後半極性が前半へ漏れる偽陰性を発見。該当ケースをテストに追加し、修正前にfocused suite **2 failed** を再現。
+- 否定表現は二重否定を曖昧として本人確認へ回し、明示的な「好きではありません」「好みではありません」は否定回答として扱う。好みの文節を次のスタイル語で境界づけ、異なるカフェ傾向間で極性が漏れないよう修正。
+- 最終focused suite **5 passed / 758 deselected**。最新コードの全pytest **846 passed in 106.92s**（Firefox UIテストを含み失敗・skipなし）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Firefoxはテストスイート内で利用、Chromeは使用せず。Gemini実API0回。
+- T301を301項目中FIXED49へ更新。集計はPASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15。QUALITY009の保存済み実生成FAIL、候補の意味的類似、ミラーリング包括評価は未解決のため総合NO-GO。
+- 変更はまだ未コミット/Push。作業HEAD `ce60f19dfafeb127de569e6d59beb9118a7b1c82`。PR #4はOPEN/Draft・未マージ。次はレビュー最終確認、選択的コミット/Push、同一最新SHAを対象とするGitHub Actionsの確認。その後は品質009の誤字・直接回答・候補方針差のオフライン是正を続ける。ユーザー提供の未追跡指示txt3点はステージしない。
+
+### 2026-10-15 18:47 JST 継続チェックポイント：比較表現と限定的な好み
+
+- レビューで「静かな店が好きというより、にぎやかな店が好き」の前半を肯定と誤認する問題と、「落ち着いた店は好きだけど落ち着きすぎるのは苦手」で後半が前半を上書きする問題を発見。各再現を固定し、実修正前の偽判定を確認した。
+- 「好き/好みというより」を確定的な極性根拠にせず、相反する同一スタイル表現が現れた場合は曖昧として本人確認へ回す。比較文の後半にある好みや、並列する別スタイルの肯定・否定は独立して使える。
+- Pythonレビュー担当が再確認し、比較・混合限定の例では過大な肯定/否定候補が拒否され、明確な後半の好みは受け付けられることを確認。focused suite **5 passed / 758 deselected**。全pytest **846 passed in 112.64s**。Firefox UI込み、失敗・skipなし。構文・差分検査も成功。
+- T301の証拠を更新。総項目301: PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15。実Gemini API 0回。QUALITY009の誤字・意味の似た代替案等の既存実生成FAILが残るためNO-GOを維持。
+- これら変更は未コミット/Push。HEAD `ce60f19dfafeb127de569e6d59beb9118a7b1c82`、PR #4 OPEN/Draft・未マージ。次は変更対象6ファイルだけをcommit/pushし、同一SHAのActionsを確認する。既存のユーザー提供未追跡指示ファイル3点を含めない。
+
+### 2026-10-15 18:29 JST 継続チェックポイント：カフェ雰囲気の回答粒度と否定整合性
+
+- 定期指示を再取得し、P0優先、Gemini実通信0回、conversation_004/新しい会話HTML未実施、PR #4 Draft・未マージを確認。
+- QUALITY009の直接質問回答を読み直して再現ケースを追加。「カフェが好き」という一般回答で「好きな店の雰囲気」まで確認済みと誤判定し、本人への質問を省略する問題を修正前FAILで確認。
+- 同じ雰囲気語があるだけで候補を通す別問題も再現。否定文、質問のみ、相手の好みを言い換える反応、一般的な共感だけの文は回答と認めず、確認済み本人情報と方向が一致する好み表明だけを通す。表現の自然な肯定「落ち着いた雰囲気が好きなんです」も保持する。
+- focused suite 4 passed / 758 deselected。最新全pytest 845 passed in 112.90s（Firefox UIを含む、失敗・skipなし）。python -m py_compile app.py tests/test_app.py、node --check app.js、git diff --check成功。実Gemini API 0回。Firefoxはpytest経由で検証し、Chromeは使用していない。
+- 変更ファイルはapp.pyとtests/test_app.py。旅行回答の本人帰属に関する先行差分も併存する。TEST_MATRIXを301項目、PASS219 / FAIL13 / FIXED49 / BLOCKED5 / NOT_TESTED15へ更新。
+- QUALITY009の過去の実生成文面FAIL（誤字、候補間の方針差など）は解消していないため総合NO-GO。現ローカル差分のコミット/Pushと最新Actions確認はこれから。PR #4直前HEADはce60f19dfafeb127de569e6d59beb9118a7b1c82、OPEN/Draft。ユーザー提供の未追跡指示txt3点はステージしない。
+- 次: 最新コードをPythonレビューで再確認し、必要なら追加修正後にテスト。差分を選択的にコミット・Pushし、PR #4状態とActionsを最新SHAに照合する。その後、会話候補の方針差と保存済みQUALITY009の実出力を引き続き評価する。
