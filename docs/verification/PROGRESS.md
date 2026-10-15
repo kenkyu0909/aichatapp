@@ -1285,3 +1285,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHA `3a2dadd1437b47cbce20a66a119776ac426da665`。マージしていない。実Gemini通信0回。3件のユーザー指示ファイルは未追跡のまま保持。
 - T357追補: 同一SHAのPush/PR Actions success。マトリクス357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。
 - 次のP0は保存済みQUALITY009の直接質問への回答漏れ、候補方針の意味的重複、短文ミラーリング。会話004・新会話HTML・Gemini実通信は引き続き行わない。
+
+### 2026-10-16 06:19 JST 複合質問の本人確認
+
+- 新しい境界不具合を再現: 相手が「映画は好きですか？普段どんな本を読みますか？」と聞き、映画の好みだけが確認済みでも、映画にだけ答える候補が通る。さらに `movie_preferences` がプロフィール内で確認済み事実として認識されず、映画の確認質問を重複していた。
+- 修正: 明確に独立した質問についてトピックと情報スコープを照合し、最初の未確認情報だけをGemini呼出し前に本人へ確認する。候補検証では各質問を個別に再検証し、全てに回答しない候補を拒否する。`movie_preferences` / `movie_hobby`を確認済み情報キーへ加えた。二択・引用過去活動・誘いを含む曖昧な複合発話は分割しない。
+- 再現ケースを含むfocused 7 passed。初回全体回帰で既存ケース3件への分割副作用を見つけ、分割条件を情報スコープ単位に修正。最新全pytest **1302 passed in 184.98s**（Firefox UI suiteを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立レビューでも修正後のfail-openなし。
+- Gemini実通信0回。実モデルの文章品質を確認した結果ではない。QUALITY009の実生成自然さ・候補多様性FAILは未解決で、総合NO-GO。会話004・新規会話HTMLは現行指示により未実施。
+- Matrix T358: 358項目、PASS251 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。コードと記録は未コミット・未Push、最新GitHub Actions未確認。PR #4はDraft・未マージ。
+- ユーザー提供の未追跡指示ファイル3件は変更せず、コミット対象にしない。
+- 次: 変更を選択的にコミット・Pushし、同一HEADのPush/PR ActionsとDraft状態を確認。その後、保存済みQUALITY009の回答漏れ・意味的候補重複・短文ミラーリングをオフラインで監査する。`codex/directive-control`はマージしない。

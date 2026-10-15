@@ -1013,3 +1013,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHA `3a2dadd1437b47cbce20a66a119776ac426da665`。マージしていない。実Gemini通信0回。3件のユーザー指示ファイルは未追跡のまま保持。
 - T357追補: 同一SHAのPush/PR Actions success。マトリクス357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。
 - 次のP0は保存済みQUALITY009の直接質問への回答漏れ、候補方針の意味的重複、短文ミラーリング。会話004・新会話HTML・Gemini実通信は引き続き行わない。
+
+#### 2026-10-16 06:19 JST 複合本人質問の境界修正
+
+- ゴール1「本人情報の正確性」: 部分達成。映画の確認済み好みだけを使って読書ジャンルの質問を無視する候補が送信可能となる問題を再現・修正。同じトピックの異なる質問範囲（映画の好みと最近観た作品）も独立確認する。二択や引用活動質問は回帰で維持。
+- ゴール7「安定性」: focused 7 passed、最新全pytest **1302 passed in 184.98s**（Firefox UI suite含む）。`py_compile`、`node --check`、`git diff --check` PASS。独立レビュー済み。
+- Matrix 358項目: PASS251 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。
+- ゴール2〜6の実Gemini品質は未検証。API 0回。会話004と新規HTMLは実施しない。保存済みQUALITY009の自然さ/候補多様性FAILが残るため総合NO-GO。
+- 変更は未コミット・Actions未確認。次: 選択コミット/Push、最新HEADのActions確認、PR #4 Draft状態を照合。その後、保存済み実生成の回答漏れ・意味的候補重複・短文ミラーリングを調査する。

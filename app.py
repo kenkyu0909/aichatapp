@@ -1381,7 +1381,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         )
 
     topic_keys = {
-        "映画": ("hobbies", "interests", "favorite_hobbies", "favorite_movie_genres", "movie_genres", "favorite_films", "recent_movies", "最近観た映画", "映画", "movie"),
+        "映画": ("hobbies", "interests", "favorite_hobbies", "favorite_movie_genres", "movie_genres", "favorite_films", "movie_preferences", "movie_hobby", "recent_movies", "最近観た映画", "映画", "movie"),
         "読書": ("hobbies", "interests", "favorite_hobbies", "favorite_book_genres", "book_genres", "reading_genres", "recent_books", "最近読んだ本", "読書", "reading"),
         "旅行": ("hobbies", "interests", "travel", "旅行"),
         "食事": ("favorite_foods", "food", "好きな食べ物", "料理"),
@@ -1493,6 +1493,12 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
         return None
     partner_messages = [m["body"] for m in context.get("history", []) if m.get("role") == "them"]
     if not partner_messages:
+        return None
+    question_parts = _compound_direct_personal_question_parts(partner_messages[-1])
+    for topic, question_text in question_parts:
+        if not _topic_is_verified(topic, context, question_text):
+            return personal_fact_question(topic, question_text)
+    if question_parts:
         return None
     topic = _topic_for_personal_question(partner_messages[-1])
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
@@ -4405,7 +4411,30 @@ def _is_partner_directed_followup_question(text: str, direct_question: str) -> b
     return bool(len(question_stem) >= 2 and normalized.startswith(question_stem[:2]))
 
 
-def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
+def _direct_personal_question_parts(text: str) -> list[tuple[str, str]]:
+    """Return separately punctuated direct personal questions in a message."""
+    parts: list[tuple[str, str]] = []
+    for fragment in re.split(r"(?<=[?？])", text):
+        fragment = fragment.strip()
+        topic = _topic_for_personal_question(fragment)
+        if topic:
+            parts.append((topic, fragment))
+    return parts
+
+
+def _compound_direct_personal_question_parts(text: str) -> list[tuple[str, str]]:
+    """Split only genuinely separate personal topics, preserving compound asks."""
+    parts = _direct_personal_question_parts(text)
+    if (
+        len(parts) > 1
+        and len({(topic, _personal_information_scope(topic, question)) for topic, question in parts}) > 1
+        and _topic_for_personal_question(text) != "本人情報"
+    ):
+        return parts
+    return []
+
+
+def _answers_verified_single_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
     The topic markers are intentionally narrow. Unknown question types remain
@@ -4817,6 +4846,33 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
     if _reading_genre_segment_is_question_only(answer_prefix):
         return False
     return bool(re.search(marker, answer_prefix))
+
+
+def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
+    """Require a candidate to answer each recognized direct question in the latest turn."""
+    history = context.get("history", [])
+    latest_partner_index = next(
+        (index for index in range(len(history) - 1, -1, -1) if history[index].get("role") == "them"),
+        None,
+    )
+    if latest_partner_index is None:
+        return True
+    latest_partner_text = history[latest_partner_index].get("body", "")
+    questions = _compound_direct_personal_question_parts(latest_partner_text)
+    if not questions:
+        return _answers_verified_single_partner_question(candidate, context)
+
+    for _, question_text in questions:
+        question_context = dict(context)
+        question_history = list(history)
+        question_history[latest_partner_index] = {
+            **history[latest_partner_index],
+            "body": question_text,
+        }
+        question_context["history"] = question_history
+        if not _answers_verified_single_partner_question(candidate, question_context):
+            return False
+    return True
 
 
 MEETING_RELATED_QUESTION_PATTERN = re.compile(

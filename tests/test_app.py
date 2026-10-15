@@ -2112,6 +2112,96 @@ def test_direct_unanswered_personal_question_is_asked_before_gemini(client, monk
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "映画好きですか？"
 
 
+def test_multiple_direct_personal_questions_ask_for_first_unverified_fact_before_gemini(client, monkeypatch):
+    c, _ = client
+    c.put("/api/profile", json={
+        "content": json.dumps({"movie_preferences": "映画が好き"}, ensure_ascii=False)
+    })
+    mid = add_match(c, "架空あかり")
+    partner_question = "映画は好きですか？普段どんな本を読みますか？"
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+
+    def forbidden_client(**kwargs):
+        pytest.fail("複数質問の未確認情報を確認する前にGeminiを呼び出した")
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    import google.genai
+    monkeypatch.setattr(google.genai, "Client", forbidden_client)
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert "本" in body["user_questions"][0]["question"]
+    assert "ジャンル" in body["user_questions"][0]["question"]
+
+
+def test_candidate_must_answer_all_verified_direct_personal_questions(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": "映画は好きですか？普段どんな本を読みますか？",
+        }],
+        "my_profile": {"facts": {"movie_preferences": "映画が好き"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="映画だけ回答", text="映画が好きです！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_compound_direct_questions_accept_only_when_each_confirmed_fact_is_answered(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": "映画は好きですか？普段どんな本を読みますか？",
+        }],
+        "my_profile": {"facts": {
+            "movie_preferences": "映画が好き",
+            "favorite_book_genres": ["ミステリー"],
+        }},
+        "ephemeral_user_answers": [],
+    }
+    complete = backend.Candidate(
+        label="両方に回答",
+        text="映画が好きです！\nミステリーが好きです！",
+    )
+    partial = backend.Candidate(label="本だけに回答", text="ミステリーが好きです！")
+
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(complete, context)
+    assert not backend._answers_verified_partner_question(partial, context)
+
+
+def test_same_topic_questions_with_different_scopes_are_checked_independently(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": "映画は好きですか？最近どんな映画を観ましたか？",
+        }],
+        "my_profile": {"facts": {"recent_movies": "最近『青い灯台』を観ました"}},
+        "ephemeral_user_answers": [],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    recent_only = backend.Candidate(label="最近の作品だけ", text="最近は『青い灯台』を観ました！")
+
+    assert clarification is not None
+    assert "映画" in clarification.question
+    assert "好き" in clarification.question
+    assert not backend._answers_verified_partner_question(recent_only, context)
+
+
 def test_candidate_punctuation_is_filtered_without_regenerating_safe_candidates(client, monkeypatch):
     from google import genai
 
