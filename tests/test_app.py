@@ -3708,6 +3708,23 @@ def test_confirmed_movie_opinion_can_be_used(client):
     assert backend.unsupported_personal_claim_topics([candidate], context) == []
 
 
+@pytest.mark.parametrize(("answer", "claim"), [
+    ("最近は青い灯台を観て面白かったです", "赤い惑星は面白かったです！"),
+    ("最近は青い灯台を観て面白かったです", "青い灯台は面白くなかったです！"),
+    ("最近は青い灯台を観て面白くなかったです", "青い灯台は面白かったです！"),
+])
+def test_movie_opinion_requires_same_title_and_polarity(client, answer, claim):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近どんな映画を観ましたか？", "answer": answer}],
+    }
+
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="別タイトルまたは逆の感想", text=claim)
+    ], context)
+
+
 @pytest.mark.parametrize(("claim", "topic"), [
     ("自分は幅広く読む", "読書"),
     ("横浜のほうによく行く", "居住地"),
