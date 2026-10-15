@@ -671,3 +671,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T309 | 保存済み候補に`reply_move`がない場合の多様性通知 | 架空の候補を使ったバックエンドpytestと保存済みQUALITY009の再生 | FIXED | 古い応答で未記録の`reply_move`がスキーマ既定値`react`に補われ、実際に同一方針が出力されたか不明なのに重複警告を出す問題を再現・修正。すべての方針値が明示されている場合のみ同一方針警告を出し、明示的に重複した値の警告は維持。focused tests **3 passed / 769 deselected**。全pytest **851 passed in 105.01s**（Firefox UI込み）。Gemini実通信0回。|
 
 最新ID行: 309。累計: PASS222 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の生成文章自然さ・意味的多様性はなお未解決。|
+
+| T310 | 最新候補方針修正のGitHub Actions（Push・PR） | Actionsログで対象SHA・Push・PR結果を照合 | PASS | SHA `2ec2f11c51078096170a46d4543f5b6975553dad`のPush [38721061798](https://github.com/kenkyu0909/aichatapp/actions/runs/38721061798)・PR [38721069405](https://github.com/kenkyu0909/aichatapp/actions/runs/38721069405)がともにsuccess。両方でbackend tests、Firefoxチェック、JavaScript構文検査、Artifacts保存が成功。PR #4 OPEN/Draft。|
+
+最新ID行: 310。累計: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。|

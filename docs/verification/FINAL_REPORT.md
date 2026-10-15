@@ -1067,3 +1067,5 @@ focused suiteは**5 passed / 765 deselected**、全pytestは**849 passed in 108.
 ### 2026-10-15 19:33 JST 追補：候補方針が不明な履歴への警告
 
 候補に`reply_move`がない過去応答を、既定値`react`だけで重複方針と断定していたため、全候補に明示ラベルがある場合のみその比較警告を出すよう修正。明示的な重複方針への警告は維持した。focused tests **3 passed / 769 deselected**、全pytest **851 passed in 105.01s**（Firefox UI込み）、構文検査・diff check成功。Gemini実通信0回。最新コード差分のActionsは未実行。
+
+最新コードSHA `2ec2f11c51078096170a46d4543f5b6975553dad` はPush [38721061798](https://github.com/kenkyu0909/aichatapp/actions/runs/38721061798)・PR [38721069405](https://github.com/kenkyu0909/aichatapp/actions/runs/38721069405) Actionsともsuccess。pytest、Firefox確認、JavaScript構文検査、Artifacts保存に成功。PR #4はOPEN/Draft・未マージ。

@@ -909,3 +909,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 修正前回帰FAIL、修正後focused tests **3 passed / 769 deselected**。全pytest **851 passed in 105.01s**（Firefox UI込み、失敗・skipなし）。`py_compile`、`node --check app.js`、`git diff --check`成功。実Gemini API0回。
 - Test Matrix 309項目: PASS222 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。QUALITY009の文章自然さと意味的候補差の手動FAILは残るため総合NO-GO。変更は未コミット、最新差分Actions未実行。前回SHA`c3a410084f6d1fdd7977516c34bc46b05c5e2958`のPush [38720166592](https://github.com/kenkyu0909/aichatapp/actions/runs/38720166592)・PR [38720172981](https://github.com/kenkyu0909/aichatapp/actions/runs/38720172981) Actionsは成功。
 - 次: 差分を再確認してコード・テスト・報告を選択的にPushし、最新HEADのPush/PR Actionsを確認。P0の実生成FAILのうち、応答が自然に会話を進めるかをオフラインで次に分析。定期指示は15〜20分内に再取得。PR #4はDraft・未マージ。会話004/新規会話HTML・Gemini通信なし。
+
+### 2026-10-15 19:35 JST 継続チェックポイント：候補方針修正のCI確認
+
+- コミット`2ec2f11c51078096170a46d4543f5b6975553dad`をPush。Push Actions [38721061798](https://github.com/kenkyu0909/aichatapp/actions/runs/38721061798)・PR Actions [38721069405](https://github.com/kenkyu0909/aichatapp/actions/runs/38721069405)ともsuccess。両方が対象SHA一致、backend tests、Firefox確認、JS構文検査、Artifactアップロードに成功。
+- 全pytest **851 passed in 105.01s**、Firefox UIを含む。重点テストは**3 passed / 769 deselected**。Python構文、JavaScript構文、diff check成功。実Gemini API0回。
+- Test Matrix 310項目: PASS223 / FAIL13 / FIXED54 / BLOCKED5 / NOT_TESTED15。今回の既知状態は、欠けた`reply_move`情報を既定値から推測せず、明示された方針ラベルが重複した時だけ通知する。過去QUALITY009の実生成自然さFAILと意味的候補多様性FAILは残るためNO-GO。
+- PR #4はOPEN/Draft、base`feat/ui-local-backend-v1`、最新コードSHA`2ec2f11c51078096170a46d4543f5b6975553dad`、未マージ。未追跡の指示ファイル3件を保持。会話004/新しい会話HTML/実Gemini通信なし。
+- 次: 保存済みQUALITY009の会話停滞と候補方針差をもう一度、本文・過去文脈・既知情報の各要因に分けて見直し、オフラインの根本原因修正へ進む。15〜20分以内にdirective-controlを確認する。
