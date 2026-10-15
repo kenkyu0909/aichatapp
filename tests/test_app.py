@@ -1229,6 +1229,30 @@ def test_unrelated_now_statement_does_not_reactivate_reopened_invitation(client)
     assert not backend.partner_has_active_invitation_refusal(context)
 
 
+def test_refusal_filter_keeps_neutral_candidate_and_reports_soft_reinvite_shortage(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
+    model = backend.SuggestionsV2.model_validate({
+        "needs_user_info": False, "recommended": {"label": "婉曲な再勧誘", "text": "落ち着いたらご飯でも行けたら嬉しいです"},
+        "alternatives": [{"label": "中立な返答", "text": "不安な気持ちを話してくれてありがとうございます！"}],
+        "reason": "相手の意思を尊重", "strategy": "会う話は急がない", "invite_decision": "continue_conversation",
+    })
+
+    filtered = backend.filter_safe_candidates(model, 2, context)
+
+    assert filtered["available_candidate_count"] == 1
+    assert filtered["recommended"]["text"] == "不安な気持ちを話してくれてありがとうございます！"
+    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+
+
+def test_minimizing_reassurance_after_meeting_unease_is_rejected(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
+    candidate = backend.Candidate(label="不安の軽視", text="安心してください！焦らずやり取りを続けましょう")
+
+    assert "相手の不安を軽く扱う表現" in backend._candidate_rejection_reasons(candidate, context)
+
+
 @pytest.mark.parametrize("invite", [
     "ご飯行きませんか？",
     "今度ご飯でもどうですか？",
@@ -2151,6 +2175,54 @@ def test_recent_movie_answer_can_include_verified_title_and_followup(client, can
     assert backend._answers_verified_partner_question(
         backend.Candidate(label="確認済み作品に回答", text=candidate_text), context
     )
+
+
+@pytest.mark.parametrize("partner_question", [
+    "最近観た映画はどうでしたか？",
+    "最近観た映画どうだった？",
+])
+def test_recent_movie_opinion_question_accepts_verified_opinion_without_requiring_title(client, partner_question):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": partner_question}],
+        "my_profile": {"facts": {"recent_movies": "青い灯台", "movie_preferences": "映画は好きです"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="感想への回答", text="面白かったです！"), context
+    )
+
+
+def test_movie_title_answer_does_not_license_unconfirmed_movie_opinion(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近どんな映画を観ましたか？",
+            "answer": "最近は青い灯台を観ました",
+        }],
+    }
+
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="未確認の映画感想", text="最近観た映画は面白かったです！")
+    ], context)
+
+
+@pytest.mark.parametrize(("fact", "claim", "topic"), [
+    ("実家は横浜ですがあまり帰っていません", "実家は横浜ですがよく帰ります！", "出身地"),
+    ("兄弟とは連絡を取っていません", "兄弟とはよく連絡を取っています！", "家族"),
+    ("週末は料理をあまりしない", "週末は料理をよくします！", "料理習慣"),
+])
+def test_additional_negative_fact_forms_reject_opposite_claim(client, fact, claim, topic):
+    _, backend = client
+    keys = {"出身地": "hometown_visits", "家族": "siblings", "料理習慣": "cooking_habits"}
+    context = {"my_profile": {"facts": {keys[topic]: fact}}, "ephemeral_user_answers": []}
+
+    assert topic in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="逆の習慣", text=claim)
+    ], context)
 
 
 @pytest.mark.parametrize(("answer_question", "answer_text", "candidate_text", "topic"), [
