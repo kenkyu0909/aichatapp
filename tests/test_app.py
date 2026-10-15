@@ -2351,6 +2351,10 @@ def test_unlisted_origin_city_can_be_acknowledged_as_partner_fact(client):
     ("映画館に月2回行きます！", "映画館頻度", {}),
     ("土曜の夜は空いてます！", "予定", {}),
     ("三十歳です！", "年齢", {"age": 29}),
+    ("二十一歳です！", "年齢", {"age": 20}),
+    ("毎日ランニングしています！", "運動習慣", {"exercise_habits": "週3回ランニングしています"}),
+    ("毎日料理します！", "料理習慣", {"cooking_habits": "週末によく料理します"}),
+    ("鎌倉によく行きます！", "居住地", {"region": "鎌倉", "frequently_visited_places": ["横浜"]}),
 ])
 def test_open_vocabulary_personal_claims_require_matching_evidence(client, claim, topic, facts):
     _, backend = client
@@ -2359,6 +2363,24 @@ def test_open_vocabulary_personal_claims_require_matching_evidence(client, claim
     assert topic in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="未確認の本人事実", text=claim)
     ], context)
+
+
+@pytest.mark.parametrize(("claim", "facts"), [
+    ("29歳です！", {"age": 29}),
+    ("鎌倉に住んでます！", {"region": "鎌倉"}),
+    ("看護師です！", {"occupation": "看護師"}),
+    ("大学院で心理学を学んでいます！", {"education": "大学院で心理学を学んでいます"}),
+    ("先月金沢に行きました！", {"recent_trips": "先月金沢に行きました"}),
+    ("映画館に月2回行きます！", {"exercise_habits": "運動習慣なし", "favorite_hobbies": "映画館に月2回行きます"}),
+    ("土曜の夜は空いてます！", {"confirmed_availability": "土曜の夜"}),
+])
+def test_matching_confirmed_facts_support_open_vocabulary_claims(client, claim, facts):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済み情報に基づく候補", text=claim)
+    ], context) == []
 
 
 @pytest.mark.parametrize(("source_question", "expected_question"), [
