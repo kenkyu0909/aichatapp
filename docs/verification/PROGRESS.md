@@ -1006,3 +1006,13 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - code/test SHA `de93027d1b3b9206df92f14dd22375faec492f59`を作業ブランチへPush済み。同SHAのPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326) とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254) がsuccess。各runでpytest、Firefox準備、JavaScript構文検査、Artifact保存が成功し、PR Actions head SHA一致を確認した。
 - PR #4はOPEN/Draft、head SHA一致、未マージ。ユーザーの未追跡指示ファイル3件はステージしていない。Test Matrix 320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の自然さ・意味的候補多様性FAILは未解決、総合NO-GO。会話004・新しい会話HTML・実Gemini通信は指示どおり未実施。
 - 次: 同SHA Actionsの完了を確認してdocsをPushし、保存済み候補の意味的重複と直接質問回答の候補別整合を次のP0としてオフラインで調べる。安全フィルターは日本語全表現を網羅するものではない。
+
+### 2026-10-15 23:06 JST 継続チェックポイント：意味的に重なる返信候補の限定修復
+
+- 指示ブランチ `codex/directive-control` を再取得し、期限内P0・API利用禁止・会話004/新しい会話HTML禁止・PR #4 Draft維持の最新指示を確認した。作業ブランチは`codex/full-system-verification`のまま。
+- 3案要求でも返答の進め方が同義反復になるケースを修正。候補の明示的な`reply_move`重複または類似した肯定反応を検出した場合に限り、候補生成応答を一度だけ再試行する。安全候補は捨てず、再生成が不完全・不安全・試行上限の場合は確認済みの安全な候補を返し、足りない/似ていることを通知する。
+- 429フォールバック、不要な本人確認質問後の再生成、候補の一部併合、全候補拒否後の保存済み安全応答について、各候補の実生成API別名・モデルを返すよう修正。レスポンス全体のモデル表記も推奨候補の生成元と一致させる。
+- 独立したコードレビュー2件では最新差分に問題なし。Focused diversity suite **9 passed, 886 deselected in 2.09s**。全pytest **980 passed in 116.15s**（Firefox UI込み）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`も成功。Gemini実API **0回**、Chrome不使用。
+- T321をFIXED追加。Test Matrix 322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。実生成QUALITY009の文章自然さ・意味的候補多様性FAILは残るため、全体判定NO-GO。
+- コード/testはcommit `3df1847fcadf8f1ea811d84176ca275861310a6c`としてPush済み。Push Actions [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR Actions [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)はいずれもsuccessし、両方のhead SHAがコードSHAと一致。pytest、Firefox準備、JavaScript検査、Artifact uploadに成功。PR #4はOPEN/Draft・未マージ、HEAD SHA一致を確認。
+- 次: Actionsの両runが正確なHEADで成功するか確認し、その結果とテストをGitHubへ記録する。続いて保存済みQUALITY009の直接質問に各候補が答えているか、および会話前進に関する次のP0をオフラインで監査する。実Gemini、conversation_004、新規会話HTMLは最新指示により実施しない。

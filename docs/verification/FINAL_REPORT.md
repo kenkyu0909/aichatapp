@@ -1121,3 +1121,24 @@ QUALITY009の保存済み実生成で確認された「少し調べてから買�
 修正SHA `de93027d1b3b9206df92f14dd22375faec492f59`。Focused **23 passed**、全pytest **972 passed in 120.06s**（Firefox UI込み）。途中でプロフィール保存toast待ちが一度タイムアウトしたが、単独再実行と後続の全体再実行で成功し未再現。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini API0回、Chrome不使用。
 
 T320をFIXEDとして記録。Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。品質009の自然さと意味的候補多様性FAILは残るため総合NO-GO。最新コードSHAに対するPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326)とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254)はいずれもsuccessし、対象SHA一致を確認した。pytest、Firefox準備、JavaScript構文検査、Artifact保存に成功。PR #4はOPEN/Draft・未マージ。次は検証資料をPush後、候補の意味的重複/直接質問の回答適合をオフライン評価する。会話004・新しいHTML・実Gemini通信は行わない。
+
+## 2026-10-15 23:06 JST 追補：候補の意味的反復に対する限定再生成
+
+### 変更
+
+`app.py`で、V2返信/追いメッセージの3案に明示ラベルの重複方針または同義の肯定反応がある場合、候補生成を最大1回だけ修復する。新しい応答に安全な案が一部しかない場合は安全性確認済みの以前の案を併合し、不足や意味的反復の通知を残す。再生成が不安全、429、またはプロバイダー試行上限となった場合にも、保存済み安全案を返す。各候補のプロバイダー別名とモデルを個別に保持し、混合元の候補ではその由来を誤表示しない。
+
+`tests/test_app.py`に、重複案修復、明示ラベルの扱い、429後のフォールバック、生成元モデル記録、部分併合時の通知、不要な本人確認質問後の判定、再生成全拒否時の以前の安全候補など8ケースを追加した。
+
+### 検証
+
+- Focused suite: **9 passed, 886 deselected in 2.09s**。
+- 全pytest: **980 passed in 116.15s**（Firefox UIを含む）。
+- Python compile、`node --check app.js`、`git diff --check`: 成功。
+- Pythonコードレビュー: 独立レビュー2件で今回の候補修復/生成元対応に残存指摘なし。部分併合後に招待修復が続く経路はコード上確認したが、個別テストは未追加。
+- Gemini実API: **0回**。実生成品質を確認したテストではない。
+- コミット `3df1847fcadf8f1ea811d84176ca275861310a6c`を作業ブランチへPush。Push run [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR run [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)はいずれもsuccessし、head SHA一致。
+
+### 残課題と総合判定
+
+Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009での自然さ・意味的多様性・質問回答の不足は、将来の実Gemini出力で再評価できていない。オフライン修復だけでは解決済みと扱わない。**総合判定: NO-GO**。会話004、新しい会話HTML、Gemini実通信は現行の指示により未実施。PR #4はOPEN/Draft・未マージ。

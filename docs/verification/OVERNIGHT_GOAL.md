@@ -754,3 +754,17 @@ T320として、保存済みQUALITY009の回答「少し調べてから買うこ
 Matrix320項目: PASS229 / FAIL13 / FIXED58 / BLOCKED5 / NOT_TESTED15。Gemini実生成の自然さ・意味的候補多様性は未達なのでNO-GO。修正SHA`de93027d1b3b9206df92f14dd22375faec492f59`のPush Actions [38742628326](https://github.com/kenkyu0909/aichatapp/actions/runs/38742628326)とPR Actions [38742640254](https://github.com/kenkyu0909/aichatapp/actions/runs/38742640254)は両方successし、head SHA一致を確認。PR #4はDraft・未マージ。3つのローカル指示ファイルは未追跡のまま保持。
 
 次: Actions結果を待つ間も、保存済み品質009の重複候補/直接質問への回答漏れを次のオフラインP0として検査する。会話004・新しい会話HTML・実Gemini通信は現行指示で実施しない。
+
+### 2026-10-15 23:06 JST 継続チェックポイント
+
+| ゴール | 判定 | 今回の根拠 |
+|---|---|---|
+| 1. 本人情報の正確性 | 部分修正 / 全体未達 | 候補修復は安全フィルター後に行い、未確認候補を再生成で安全化できない場合は以前の安全候補を維持する。一般的な日本語の事実検査とQUALITY009実生成FAILは未解決。|
+| 2. 句読点・改行 | オフライン回帰合格 / 実生成未確認 | 候補修復後も既存安全フィルターを通し、Firefox込み全pytest 980 passed。今回のGemini新規生成なし。|
+| 3. ミラーリング | 未達 | 本回は文章量を実測評価していない。|
+| 4. 共感の反復防止 | 部分修正 / 実生成未達 | 重複のある3案を1回再生成し、品質009で報告された意味反復を防ぐ経路を追加。類似反応判定は保守的な規則で、実生成を再評価していない。|
+| 5. 返信候補の多様性 | オフライン再生成経路を確認 / 実生成未達 | Focused 9 passed。安全な一部候補の併合と類似通知を確認。15ケース評価やGemini実出力での改善は未確認。|
+| 6. 食事への誘い判断 | 未達 | 候補生成の基本挙動と既存の誘い検証は維持。全誘う/誘わないケースの評価なし。|
+| 7. アプリ全体の安定性 | ローカル合格 / CI確認待ち | 全pytest 980 passed in 116.15s、Python/JS構文とdiff検査成功。コードSHA `3df1847fcadf8f1ea811d84176ca275861310a6c`を対象にPush Actions [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR Actions [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)がsuccessし、head SHA一致。|
+
+この更新時点の総合判定は**NO-GO**。Test Matrix322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。Gemini実API0回。既存生成品質FAILを成功へ変更していない。コミット `3df1847fcadf8f1ea811d84176ca275861310a6c`。次はActions確認後、保存済み品質009の直接質問に答えない候補と会話前進の未解決P0をオフラインで続ける。会話004/新しいHTMLはユーザー指示まで実施しない。

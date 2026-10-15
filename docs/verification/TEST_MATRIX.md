@@ -722,3 +722,9 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 - T319のコード/test SHA `691999ad4f5238f233107688ffb75bbed3b1090e`を対象に、Push [Actions 38737598550](https://github.com/kenkyu0909/aichatapp/actions/runs/38737598550) とPR [Actions 38737604331](https://github.com/kenkyu0909/aichatapp/actions/runs/38737604331) が両方success。pytest、JavaScript構文検査、Artifact保存に成功。
 - PR #4はOPEN/Draft、head SHAは `691999ad4f5238f233107688ffb75bbed3b1090e`。未マージ。
 - 次: 検証資料をこのCI証拠とともにPushし、品質009の実出力から直接質問に答えない候補・意味的に似た候補の残存経路を調べる。会話004、新規会話HTML、Gemini実通信は行わない。
+
+| T321 | V2候補の意味的重複を一度だけ修復し、安全な候補と生成元を保つ | 架空データのGemini SDKモックで重複案、部分的に安全な再生成、429切替、試行上限、不要な本人確認質問を再現。`python -m pytest -q tests/test_app.py -k 'diversity or repeated_reply_purposes or all_unsafe_retry or unnecessary_questions'` | FIXED | Windows / Python 3.12 / FastAPI TestClient。実API不使用。Focused **9 passed, 886 deselected in 2.09s**。最新全pytest **980 passed in 116.15s**（Firefox UIテストを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。候補修復は最大1回。安全候補を保持し、不足・意味的類似の通知を残す。429時の後続プロバイダーや上限到達時も、返却候補の実際のAPI別名・モデルを記録する。QUALITY009の実Gemini文章品質FAIL全般を解決した証拠ではない。コミット `3df1847fcadf8f1ea811d84176ca275861310a6c`。Push Actions [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)、PR Actions [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116) は記録時点で実行中。|
+
+| T322 | 候補多様性修正コードのPush/PR Actions | `gh run view`でrunのhead SHA、結論、ジョブを確認 | PASS | コードSHA `3df1847fcadf8f1ea811d84176ca275861310a6c`のPush [38748340047](https://github.com/kenkyu0909/aichatapp/actions/runs/38748340047)とPR [38748347116](https://github.com/kenkyu0909/aichatapp/actions/runs/38748347116)はいずれもsuccess、head SHA一致。pytest、Firefox準備、JavaScript構文検査、テスト結果Artifactアップロードに成功。Gemini実通信0回。|
+
+最新ID行: 322。累計: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・意味的候補多様性FAILは未解決。
