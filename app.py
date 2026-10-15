@@ -839,7 +839,7 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
             re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)", clause)
             and re.search(r"(?:好き|楽しい|はま|趣味)", clause)
             and not _is_interrogative_evidence_clause(clause)
-            and not NEGATIVE_PERSONAL_FACT_RE.search(clause)
+            and not _is_effectively_negative_personal_fact(clause)
             for clause in partner_clauses
         )
     if topic == "旅行最近":
@@ -901,8 +901,21 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
 
 
 NEGATIVE_PERSONAL_FACT_RE = re.compile(
-    r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|趣味(?:では|じゃ)(?:なくて|ない|ありません|ないです)|趣味に(?:は)?していない|趣味に(?:は)?してない|趣味.{0,8}(?:ってほど|というほど)(?:では|じゃ)?(?:なくて|ない|ありません|ないです)|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行けない|行けなく|行けず|行けません|行けなかった|行かなかった|行っていなかった|行けていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行く機会が(?:ない|なかった|なくて|ありません)|行く時間が(?:ない|なかった|なくて|ありません)|行く余裕が(?:ない|なかった|なくて|ありません)|行かない|行っていません|行ってない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
+    r"好きではありません|好きではないです|好きではない|好きじゃありません|好きじゃないです|好きじゃない|趣味(?:では|じゃ)(?:なくて|ない|ありません|ないです)|趣味に(?:は)?していない|趣味に(?:は)?してない|趣味.{0,8}(?:ってほど|というほど)(?:では|じゃ|でも)?(?:なくて|ない|ありません|ないです)|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|観ません|見ません|観ない|見ない|読まない|行けない|行けなく|行けず|行けません|行けなかった|行かなかった|行っていなかった|行けていなかった|行けて(?:い)?(?:ない|いません)|行ったこと(?:が|は)(?:ない|ありません)|行くこと(?:が|は)(?:ない|ありません)|行く機会が(?:ない|なかった|なくて|ありません)|行く時間が(?:ない|なかった|なくて|ありません)|行く余裕が(?:ない|なかった|なくて|ありません)|行かない|行っていません|行ってない|経験がありません|経験がない|行ったことがありません|行ったことがない|未経験"
 )
+
+
+def _is_effectively_negative_personal_fact(clause: str) -> bool:
+    match = NEGATIVE_PERSONAL_FACT_RE.search(clause)
+    if not match:
+        return False
+    # Preserve an explicit positive statement following a contrast, such as
+    # "not really a hobby, but I do like it".
+    positive_contrast = re.match(
+        r"\s*(?:けど|けれども?|ですが|でも).{0,24}(?:好き|楽しい|はま|趣味)",
+        clause[match.end():],
+    )
+    return positive_contrast is None
 
 NON_ASSERTIVE_EXPERIENCE_RE = re.compile(
     r"行きたい|行ってみたい|行こうと思|行く予定|行くつもり|行くかもしれ|行くかも|行くと思|行けたら|行ければ|行けるといい|"
@@ -947,9 +960,9 @@ def _is_interrogative_evidence_clause(clause: str) -> bool:
         or re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ことありますか|ことがあるの|かな)[\s]*$", stripped)
         # Casual Japanese chat often omits the question mark. These short
         # forms are ambiguous, so evidence checks conservatively reject them.
-        or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}行ったこと(?:が)?あるの?\s*$", stripped)
-        or re.search(r"(?:映画館|シネコン).{0,16}(?:よく|頻繁に|月に|週に|たまに|時々|ときどき)?.{0,8}(?:行く|通う)の\s*$", stripped)
-        or re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)(?:のが)?好きなの\s*$", stripped)
+        or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}行ったこと(?:が)?ある(?:の|ん)?\s*$", stripped)
+        or re.search(r"(?:映画館|シネコン).{0,16}(?:よく|頻繁に|月に|週に|たまに|時々|ときどき)?.{0,8}(?:行く|通う)(?:の|ん)\s*$", stripped)
+        or re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)(?:のが|のって)?好きなの\s*$", stripped)
     )
 
 
@@ -962,7 +975,7 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
                 clauses = re.split(r"ですが|だけど|けれども|けれど|一方で|ただ", fragment)
                 for clause in clauses:
                     clause = clause.strip()
-                    if clause and (include_negated or not NEGATIVE_PERSONAL_FACT_RE.search(clause)):
+                    if clause and (include_negated or not _is_effectively_negative_personal_fact(clause)):
                         parts.append(clause)
         elif isinstance(value, list):
             for item in value:
@@ -1052,7 +1065,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             re.search(r"探す|探して|見つける|開拓", clause)
             and all(term in clause for term in candidate_atmosphere)
             and all(term in clause for term in candidate_frequency)
-            and bool(NEGATIVE_PERSONAL_FACT_RE.search(clause)) == candidate_negative
+            and _is_effectively_negative_personal_fact(clause) == candidate_negative
             for clause in clauses
         )
     elif topic == "旅行最近":
