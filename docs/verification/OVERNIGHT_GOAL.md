@@ -1096,3 +1096,12 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - 誘いやすい会話での候補、方針と候補の整合性、拒否/保留後の再勧誘抑止を含む既存ケース8件が成功。追加テスト項目の重複計上はしない。
 - これはオフライン回帰結果。実Geminiの会話品質は未検証であり、過去QUALITY009 FAILを維持。次は最新CIを確認し、安全なP0監査を継続。
+
+##### 2026-10-16 08:40 JST: Firefoxで本人情報の一時回答フローを確認
+
+- ゴール1「本人情報の正確性」: Firefoxから直接本人へ確認する質問を表示し、回答前は候補とprovider呼び出しを抑止。架空回答を入力後に生成を再開し、回答がprovider request contextへ届いたかを一致booleanで検証。プロフィールへ保存せず、回答本文もログに出していない。限定E2E PASS。日本語の全表現で事実捏造を防げる保証ではなく、保存済み実Gemini品質FAILがあるためゴール全体は未達。
+- ゴール7「安定性」: T367 Firefox focused 2 passed、レビュー修正後focusedも2 passed in 26.46s。全pytest 1366 passed in 225.82s（レビュー修正前の走行）。Python/JavaScript構文とdiff検査成功。T365のActions失敗はUI表示を待たないテスト競合と特定し、可視性待機を追加、対象テスト3回連続成功。
+- テストfixtureは期待回答と一致した場合だけ模擬候補を返し、一致結果のみログへ記録する。起動失敗時にもserver cleanupが実行されるよう修正。
+- T367累計: 367項目、PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。新HEAD ActionsはPush後に未確認。Gemini実通信0回。
+- 実Gemini生成文の自然さ・候補意味多様性FAILが残るため総合NO-GO。次: 最終差分の全体テストとActions確認、PR Draft状態確認。会話004、新HTML、PRマージは行わない。
+- レビュー修正後の全pytestは**1366 passed in 223.60s**、T365/T367 focused Firefoxは**2 passed in 26.46s**。ActionsはPush後に最新SHAで確認する。

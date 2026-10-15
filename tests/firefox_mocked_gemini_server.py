@@ -18,11 +18,19 @@ class DeterministicModels:
     def generate_content(self, *, model, contents, config):
         request_context = json.loads(contents)
         mode = request_context.get("mode", "unknown")
+        ephemeral_answers = request_context.get("ephemeral_user_answers", [])
+        expected_movie_answer = "映画は好きで洋画をよく観ます"
+        user_answer_matches_expected = any(
+            answer.get("answer", "") == expected_movie_answer
+            for answer in ephemeral_answers
+        )
         call_log = Path(os.environ["MRA_TEST_GEMINI_CALL_LOG"])
         call_log.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "model": model,
             "mode": mode,
+            "user_answer_count": len(ephemeral_answers),
+            "user_answer_matches_expected": user_answer_matches_expected,
             "input_contains_incoming_message": "休日は友達とカフェに行ってきました！" in contents,
             "system_instruction_present": bool(getattr(config, "system_instruction", None)),
         }
@@ -108,6 +116,30 @@ class DeterministicModels:
             },
         }
         mode_candidates = candidates_by_mode.get(mode, candidates_by_mode["reply"])
+        if (
+            mode == "reply"
+            and os.environ.get("MRA_TEST_REQUIRE_MOVIE_ANSWER") == "1"
+            and user_answer_matches_expected
+        ):
+            mode_candidates = {
+                "recommended": {
+                    "label": "確認回答を使った返信",
+                    "text": "映画好きで洋画をよく観ます！",
+                    "reply_move": "react",
+                },
+                "alternatives": [
+                    {
+                        "label": "短い回答",
+                        "text": "映画は好きです！",
+                        "reply_move": "grounded_share",
+                    },
+                    {
+                        "label": "回答の補足",
+                        "text": "洋画を見ることが多いです！",
+                        "reply_move": "expand",
+                    },
+                ],
+            }
         response = {
             "needs_user_info": False,
             "user_questions": [],

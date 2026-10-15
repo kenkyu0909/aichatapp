@@ -1439,3 +1439,12 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 既存の招待機会、`invite_gently`候補整合、拒否/保留の再勧誘抑止に関するfocused suiteは**8 passed, 1266 deselected in 1.96s**。
 - 追加の失敗は見つからず、修正は不要。安全候補の保持と不適切な再勧誘の除外をオフラインテストで確認した。
 - 実Gemini通信0回。実際の文章自然さ・意味的候補多様性に関する保存済みQUALITY009 FAILは未解決。総合NO-GO。PR #4はDraft・未マージ。
+
+## 2026-10-16 08:40 JST 追補：Firefox本人情報回答の実ルート確認
+
+- T367を追加。Firefoxで直接質問→本人確認→一時回答→候補再生成を、隔離SQLite・実FastAPIルート・Gemini SDKモックで確認。回答がprovider入力と一致したことをbooleanで検証し、本文はログに残さない。本人プロフィールへの自動保存なし、候補コピーによる送信記録なし。
+- T365のPR Actionsで失敗した即時ボタン可視性assertは、DB保存と画面更新のタイミング競合だった。Firefox表示を明示的に待つよう直し、対象テストを3回連続で通過。レビューで指摘された回答本文の一致確認と起動失敗時cleanupも修正。
+- 検証結果: focused Firefox 2 passed（最終レビュー修正後）、その直前の全pytest 1366 passed in 225.82s、Python/JavaScript構文・diff検査成功。Gemini実通信0回。新HEAD ActionsはPush後に確認する。
+- Test Matrix: 367項目、PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
+- 実生成品質の保存済みFAILは解消していないため総合NO-GO。PR #4はDraft・未マージ。会話004と新会話HTMLは未実施。
+- レビュー指摘修正後に全pytestを再実行し**1366 passed in 223.60s**。T365/T367 focused Firefoxは**2 passed in 26.46s**。最新変更を含むGitHub Actionsは未確認。

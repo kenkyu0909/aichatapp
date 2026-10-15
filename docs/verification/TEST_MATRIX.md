@@ -909,6 +909,14 @@ T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` の
 
 最新ID行: 366。累計: PASS256 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
 
+| T367 | Firefox実画面から本人情報を確認し一時回答で再生成 | Firefox E2E、隔離SQLite、FastAPI実 `/api/generate`、Gemini SDKモック | PASS | 架空入力「映画好きですか？」で本人確認前は候補を返さずproviderも呼ばない。回答「映画は好きで洋画をよく観ます」を一時入力して再生成し、回答内容との一致をbooleanで記録・検証（本文はログに保存しない）。本人プロフィール不変、コピーは送信履歴を作らない。focused 2 passed（T365/T367）、全pytest 1366 passed in 225.82s。レビュー修正後のfocused再実行2 passed in 26.46s。Gemini実通信0回。 |
+
+最新ID行: 367。累計: PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
+
+T365のPR Actions [38822714041](https://github.com/kenkyu0909/aichatapp/actions/runs/38822714041)は、DB保存直後にUIの追いメッセージボタンを即時検査して非表示だったため失敗。可視性を待つ`WebDriverWait`を追加し、対象Firefoxテストを3回連続で通過（13.32秒、13.58秒、13.31秒）。T367コードを含むPush後Actionsは未確認。
+
+T367のレビュー後最終回帰: 全pytest **1366 passed in 223.60s**（Firefoxを含む）、focused T365/T367 **2 passed in 26.46s**。回答の一致確認・startup cleanup修正を含む。新HEAD Actionsは未確認。
+
 T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一head SHAでsuccess。両workflowでpytestとJavaScript syntax check、Firefox準備、artifact uploadが成功。ローカル全pytestは1365 passed in 198.20s。T366を含む次のdocs-only HEADについては別途CIを確認する。
 
 最新HEAD CI: `f832bd0529970d1bd6fddfc34169b67a17002b47`のPush Actions [38821980706](https://github.com/kenkyu0909/aichatapp/actions/runs/38821980706)とPR Actions [38821986819](https://github.com/kenkyu0909/aichatapp/actions/runs/38821986819)は同一SHAでsuccess。Push run artifactのJUnit記録は1365 tests / 0 failures / 0 errors / 0 skipped。JavaScript syntax、Firefox準備、Artifact保存もsuccess。Gemini実通信0回。過去QUALITY009の生成自然さ・意味的多様性FAILは維持し、総合NO-GO。

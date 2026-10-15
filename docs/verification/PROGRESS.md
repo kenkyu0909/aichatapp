@@ -1381,3 +1381,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 新しい失敗やコード変更はなし。回帰テストは既存T313/T359等の範囲で再実行し、Test Matrixの項目数を重複加算しない。実Gemini出力を使わないため、文章品質の過去FAILは未解決のまま。
 - 直前のHEAD `3a5fdf3e4c16ac38cc704dc2d40d5f134795e67f`は検証記録の更新のみ。Push/PR Actionsはpush後に確認する。Gemini通信0回、Firefoxのみ。PR #4はDraft・未マージ。
 - 次: 最新HEAD Actionsを確認し、残る安全なオフライン監査を続ける。保存済みQUALITY009での自然さ・意味多様性FAILをモック成功で上書きしない。
+
+### 2026-10-16 08:40 JST T367 本人情報質問のFirefox往復テスト
+
+- Firefoxで架空の相手が「映画好きですか？」と送信。実FastAPI `/api/generate` はGemini SDKモックへ進む前に本人確認質問を返し、送信候補を出さないことを確認。
+- 架空の一時回答「映画は好きで洋画をよく観ます」の入力後、同じ実APIルートから候補が生成された。テストサーバーは回答本文をログへ保存せず、期待回答と一致したかだけを記録。プロフィールの永続データは不変。コピー操作は送信履歴を変更しない。
+- T367 focused Firefox再実行は**2 passed, 12 deselected in 26.46s**。その前の全pytestは**1366 passed in 225.82s**。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- レビュー指摘の回答本文未検証と起動失敗時cleanupを修正。T365の不安定な即時可視性assertも明示待機へ変更し、対象テストを3回連続成功。Gemini実通信0回、Firefoxのみ。
+- T367追加後は367項目: PASS257 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実Gemini文面の自然さ・候補意味多様性FAILは未解決で、総合NO-GO。
+- 現在のコード・記録変更は未コミット。次に最終コードで全pytest、GitHub Actions、PR #4のOPEN/Draft・最新headを確認する。会話004と新しい会話HTMLは未実施。
+- レビュー修正を含む最新差分で全pytestを再実行し**1366 passed in 223.60s**。続いてfocused Firefox T365/T367は**2 passed in 26.46s**。`py_compile`、`node --check app.js`、`git diff --check`も成功。最新コミットのActionsはまだ未確認。

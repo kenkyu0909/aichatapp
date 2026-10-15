@@ -57,7 +57,7 @@ class LocalApp:
         html = html.replace('<script src="./app.js" defer></script>', ERROR_MONITOR + '\n  <script src="./app.js" defer></script>')
         index_path.write_text(html, encoding="utf-8")
 
-    def start(self, *, mocked_gemini=False):
+    def start(self, *, mocked_gemini=False, require_movie_answer=False):
         self.data_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["APP_DATA_DIR"] = str(self.data_dir)
@@ -65,6 +65,7 @@ class LocalApp:
         env.pop("MRA_API_1_KEY", None)
         env.pop("MRA_API_2_KEY", None)
         env.pop("GEMINI_API_KEY", None)
+        env.pop("MRA_TEST_REQUIRE_MOVIE_ANSWER", None)
         command = [sys.executable, "-m", "uvicorn", "app:app"]
         if mocked_gemini:
             # The local server sees a fake key only to enter the normal provider
@@ -75,6 +76,8 @@ class LocalApp:
             env["MRA_PROVIDER_MIN_INTERVAL_SECONDS"] = "0"
             env["MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE"] = "1"
             env["MRA_TEST_GEMINI_CALL_LOG"] = str(self.mock_calls_path)
+            if require_movie_answer:
+                env["MRA_TEST_REQUIRE_MOVIE_ANSWER"] = "1"
             command = [sys.executable, "firefox_mocked_gemini_server.py"]
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = self.log_path.open("ab")
@@ -771,8 +774,10 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
 
     # Follow-up is generated from actual stored self history. It remains only
     # a suggestion until its explicit manual-record action is confirmed.
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.find_element(By.ID, "follow-up").is_displayed()
+    )
     followup_button = driver.find_element(By.ID, "follow-up")
-    assert followup_button.is_displayed()
     followup_button.click()
     WebDriverWait(driver, 15).until(
         lambda browser: browser.execute_script("return window.__modeGenerateResponses.length") == 2
@@ -856,6 +861,117 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
+
+
+def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_path, firefox):
+    app = LocalApp(
+        tmp_path / "user-info-test-database",
+        tmp_path / "user-info-app-copy",
+        ARTIFACTS / "server-user-info-mocked-gemini.log",
+    )
+    try:
+        app.start(mocked_gemini=True, require_movie_answer=True)
+        driver = firefox
+        driver.get(app.url)
+        add_fictional_contact(driver, "架空のあかり")
+        with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+            profile_before = json.load(response)
+
+        driver.find_element(By.ID, "message-input").send_keys("映画好きですか？")
+        driver.find_element(By.ID, "send-them").click()
+        WebDriverWait(driver, 8).until(
+            lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+        )
+        with urllib.request.urlopen(app.url + "api/matches", timeout=3) as response:
+            matches = json.load(response)
+        match_id = next(item["id"] for item in matches if item["name"] == "架空のあかり")
+
+        driver.execute_script("""
+          window.__realRouteResponses = [];
+          window.__copiedText = undefined;
+          Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: {writeText: async text => {window.__copiedText = text;}}
+          });
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (url, options = {}) => {
+            const response = await originalFetch(url, options);
+            if (String(url) === '/api/generate') {
+              window.__realRouteResponses.push(await response.clone().json());
+            }
+            return response;
+          };
+        """)
+
+        driver.find_element(By.ID, "generate").click()
+        WebDriverWait(driver, 8).until(
+            lambda browser: browser.find_elements(By.CSS_SELECTOR, ".user-info-question")
+        )
+        first_response = driver.execute_script("return window.__realRouteResponses.at(-1)")
+        assert first_response["needs_user_info"] is True
+        assert first_response["recommended"] is None
+        assert first_response["alternatives"] == []
+        assert "映画" in first_response["user_questions"][0]["question"]
+        assert not driver.find_elements(By.CSS_SELECTOR, ".candidate")
+        assert not app.mock_calls_path.exists(), "本人確認前にGemini provider mockが呼ばれた"
+
+        driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys(
+            "映画は好きで洋画をよく観ます"
+        )
+        driver.find_element(By.ID, "resume-generation").click()
+        WebDriverWait(driver, 12).until(
+            lambda browser: browser.execute_script("return window.__realRouteResponses.length") == 2
+            and browser.find_elements(By.CSS_SELECTOR, ".candidate")
+        )
+        generated = driver.execute_script("return window.__realRouteResponses.at(-1)")
+        assert generated["demo"] is False
+        assert generated["recommended"]["text"] == "映画好きで洋画をよく観ます！"
+        assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == generated["available_candidate_count"]
+        assert all(
+            "映画" in candidate.text or "洋画" in candidate.text
+            for candidate in driver.find_elements(By.CSS_SELECTOR, ".candidate-text")
+        )
+
+        with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
+            history = json.load(response)
+        assert [(item["role"], item["body"]) for item in history] == [("them", "映画好きですか？")]
+        with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+            assert json.load(response) == profile_before
+
+        driver.find_element(By.CSS_SELECTOR, ".candidate-actions button:first-child").click()
+        WebDriverWait(driver, 5).until(
+            lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+        )
+        assert driver.execute_script("return window.__copiedText") == generated["recommended"]["text"]
+        with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
+            assert json.load(response) == history
+
+        provider_calls = [
+            json.loads(line)
+            for line in app.mock_calls_path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert len(provider_calls) == 1
+        assert provider_calls[0]["mode"] == "reply"
+        assert provider_calls[0]["user_answer_count"] == 1
+        assert provider_calls[0]["user_answer_matches_expected"] is True
+        assert provider_calls[0]["model"] == "gemini-3.5-flash-lite"
+        errors = record_artifact(
+            "firefox-real-generate-user-info-roundtrip-sdk-mocked",
+            driver,
+            {
+                "routes": ["/api/generate"] * 2,
+                "provider_calls": 1,
+                "provider_calls_before_user_answer": 0,
+                "answer_saved_to_profile": False,
+                "copy_created_sent_message": False,
+                "external_gemini_calls": 0,
+                "binding": "127.0.0.1",
+            },
+        )
+        assert errors["runtime"] == []
+        assert errors["console"] == []
+    finally:
+        app.stop()
 
 
 def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history(local_app, firefox):
