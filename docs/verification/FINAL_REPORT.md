@@ -1321,3 +1321,23 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 再検証: 関連テスト17 passed。全pytest **1237 passed in 182.83s**（Firefox UIテスト11件を含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Firefox専用の個別コマンド再実行は未実施。Gemini実通信0回。
 - 過去の品質009実Gemini文章自然さ・候補意味多様性FAILは未解決であり、総合NO-GO。今回の変更はオフライン/モック検証のみ。
 - GitHub Actionsは未コミットのため未実施。次はこの差分を選択コミット・Pushし、最新同一HEADのPush/PR ActionsとDraft状態を確認する。PR #4はマージしない。
+
+## 2026-10-16 05:42 JST 連絡終了と映画鑑賞の帰属判定
+
+- 今回の修正は、明確な連絡終了意向を示す相手へのreply/followup生成をGemini呼出し前に止め、否定・報告・後続撤回の節ごとの極性を判定する。映画の直接質問では友人の鑑賞談や関係節内の「観た」を本人の回答として通さず、本人の直接的な「私も観ました」は許可する。
+- 修正前の失敗をテストで確認後、継続希望を誤って停止扱いするケース、否定された/友人由来の撤回で停止を解除するケースを追加修正。focused 44 passed。独立レビューでこの差分の残件なし。
+- 最新ローカル全pytest **1286 passed in 180.23s**（Firefox UI試験を含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Firefox単独コマンドは未実施。Gemini実通信0回。
+- Matrix T356: 356項目（PASS251 / FAIL13 / FIXED72 / BLOCKED5 / NOT_TESTED15）。過去QUALITY009の実文章自然さ・意味的候補多様性FAILが未解決のため、総合判定は**NO-GO**。この変更は当該文章品質を確認していない。
+- 作業SHAは未コミット・未PushのためGitHub Actions未実施。PR #4はDraft・未マージ。conversation_004および新会話HTMLは未実施。
+
+## 2026-10-16 05:55 JST 追加境界テスト
+
+- 連絡停止判定の否定形と、第三者引用に続く本人の直接的な映画視聴回答を修正した。
+- 焦点49件、全pytest 1298件が成功した。Firefox UIテストは全pytestに含まれる。Firefox専用実行・構文/差分検査・GitHub Actionsは未確認。
+- 実Gemini通信は0回。過去のQUALITY009実生成自然さ・候補多様性FAILが残るため、総合判定NO-GOを維持する。会話004と新規HTMLは実施しない。
+
+#### 2026-10-16 06:02 JST 検証完了
+
+- Firefox専用UI **11 passed in 146.93s**。全pytest **1298 passed in 183.59s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`が成功した。
+- Yomiyasu lintは変更した資料4件で実行。既存長文による箇条書き比率などの警告が出た。今回の追記に起因する重大な指摘はなく、履歴報告の意味を変える大規模な書き換えはしていない。
+- T357をFIXEDとして記録。新しいマトリクス集計は357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。GitHub Actionsはコード変更をPushした後に確認する。

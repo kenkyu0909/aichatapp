@@ -862,3 +862,11 @@ T353追補: T353の修正コードはコミット `27e8ad28027d0585e435f3154463b
 | T355 | 本人の未来/過去予定に対する日時スコープ分離と確認質問 | pytest (FastAPI/候補フィルターのオフライン回帰) | FIXED | 修正前に月日・年・「再来月」の交差利用、最近の過去活動質問、引用された先行イベント+「その時」の本人確認漏れ2件を再現。年月日、相対月、曜日、週末、時間帯、過去の参照質問と引用括弧の確認往復を分離し、別スコープ回答を拒否する。focused quote/past group 17 passed、全pytest1237 passed in 182.83s（Firefox UI 11件を含む）、Python/JavaScript構文・diff検査成功。Firefox専用の別実行は未実施。Gemini実通信0回。 |
 
 最新ID行: 355。累計: PASS251 / FAIL13 / FIXED71 / BLOCKED5 / NOT_TESTED15。
+
+| T356 | 明示的な連絡終了希望・否定/撤回の節順・映画鑑賞経験の第三者帰属 | pytest（FastAPI/候補フィルターのオフライン回帰） | FIXED | 修正前に「今後メッセージを送らないで」「話しかけないで」「関わらないで」、後続の肯定的な終了希望、友人の「によると/曰く/も/の話では」鑑賞を再現。修正過程で継続希望・否定された撤回・友人の発言を停止扱いする逆誤判定も再現し、節ごとの極性/帰属と最新の直接意思で修正。本人の「私も観ました」は対照として保持。焦点44 passed、全pytest 1286 passed in 180.23s（Firefox UI含む）。`py_compile`、`node --check app.js`、`git diff --check` PASS。Gemini実通信0回。|
+
+最新ID行: 356。累計: PASS251 / FAIL13 / FIXED72 / BLOCKED5 / NOT_TESTED15。
+
+| T357 | 連絡を控えることへの否定表現と、第三者の引用に続く本人の明示回答 | pytest（候補安全フィルターのオフライン回帰） | FIXED | レビューで「連絡を控えていただく必要はありません」「連絡を控えてもらう必要はないです」「連絡を控えるべきではありません」を停止要求と誤認するケース、および友人の引用に続く本人の「私も観ました」を拒否するケースを確認。否定表現を継続希望として扱い、引用部分を除いて本人の直接回答を判定する。焦点49 passed。全pytest 1298 passed in 183.59s、Firefox専用11 passed in 146.93s。`py_compile`、`node --check app.js`、`git diff --check` PASS。Gemini実通信なし。GitHub Actionsは未コミットのため未確認。 |
+
+最新ID行: 357。累計: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。

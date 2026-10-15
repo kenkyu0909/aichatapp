@@ -360,6 +360,67 @@ def partner_latest_message_expresses_meeting_unease(context: dict) -> bool:
     ))
 
 
+def partner_requests_contact_stop(context: dict) -> bool:
+    """Detect an explicit request to end messaging, distinct from meeting unease."""
+    latest_partner = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    message_without_quotes = re.sub(r"[「『][^」』]*[」』]", " ", latest_partner)
+    clauses = re.split(
+        r"(?:でしたが|ませんが|ないですが|たくないですが|たくありませんが|ましたが|たが|"
+        r"と思っていましたが|と思っていたが|けれども|けれど|けど|ただし|とはいえ|でも|"
+        r"、|。|！|!|\n|が(?=(?:、|今後|これから|もう|これ以上|私は|私も)))",
+        message_without_quotes,
+    )
+    stop_pattern = re.compile(
+        r"(?:連絡|メッセージ|DM|返信|返事|やり取り).{0,18}"
+        r"(?:控え|やめ|しないで|送らないで|送ってこないで|取らないで|不要|いらない|終わり)|"
+        r"(?:連絡|メッセージ|DM|やり取り).{0,14}(?:しません|しないことにします|しないつもりです|控えます|やめます)|"
+        r"(?:話しかけ|関わり|接触).{0,10}(?:しないで|やめ|控え|終わり)|"
+        r"(?:送らないで|送ってこないで|連絡してこないで|話しかけないで|関わらないで|接触しないで)"
+    )
+    negated_stop_suffix = re.compile(
+        r"(?:たくない|たくありません|したくない|したくありません|"
+        r"てほしいわけではない|てほしいわけではありません|"
+        r"てほしいわけじゃない|てほしいわけじゃありません|"
+        r"とは思わない|とは思いません|るつもりはない|るつもりはありません|"
+        r"る必要はありません|る必要はない(?:です|と思います|と考えています)?|"
+        r"て(?:いただく|もらう)必要は(?:ありません|ない(?:です|と思います)?)|"
+        r"るべきでは(?:ありません|ない(?:です|と思います)?)|るのはやめて(?:ください)?|"
+        r"控えません|やめません|控えないで(?:ください|ほしい|欲しい)|"
+        r"やめないで(?:ください|ほしい|欲しい)|控えなくて(?:いい|大丈夫)|"
+        r"控えなくても(?:いい|大丈夫))"
+    )
+    contact_retraction = re.compile(
+        r"(?:連絡|メッセージ|DM|やり取り).{0,12}"
+        r"(?:してほしい|くれるとうれしい|続けたい|してもらえるとうれしい)"
+    )
+    reported_request = re.compile(
+        r"(?:友達|友人|知人|家族|同僚|先生|上司|先輩).{0,28}"
+        r"(?:と言われ|に言われ|から.{0,10}(?:頼まれ|言われ)|と頼まれ|によると|曰く)|"
+        r"(?:と言ったのは|と言っていたのは|と話したのは)(?:友達|友人|知人|家族|同僚|先生|上司|先輩)"
+    )
+    refusal_active = False
+    for clause in clauses:
+        retraction = contact_retraction.search(clause)
+        if retraction:
+            retraction_text = clause[retraction.start():retraction.end() + 20]
+            if not reported_request.search(clause) and not negated_stop_suffix.search(retraction_text):
+                refusal_active = False
+            continue
+        match = stop_pattern.search(clause)
+        if not match or reported_request.search(clause):
+            continue
+        trailing_text = clause[match.start():match.end() + 20]
+        refusal_active = not bool(negated_stop_suffix.search(trailing_text))
+    return refusal_active
+
+
 PERSONAL_FACT_TOPICS = {
     "買い物": ("買う", "買い物", "買い方", "購入", "パケ買い", "衝動買い", "買い替え"),
     "カレー": ("カレー", "カレーライス"),
@@ -1844,6 +1905,32 @@ def _asserts_movie_viewing(segment: str) -> bool:
         ):
             return True
     return False
+
+
+def _movie_viewing_attributed_to_other_person(segment: str) -> bool:
+    """Do not treat a relative/explicit third-party viewing clause as the user's answer."""
+    other_person = r"友達|友人|知人|家族|同僚|彼氏|彼女|兄弟|姉妹|兄|姉|弟|妹|父|母|親|相手|人"
+    reported_first_person_viewing = re.compile(
+        rf"(?:{other_person})(?:さん)?(?:が|は).{{0,18}}[「『].{{0,80}}"
+        r"(?:私|自分|僕|俺)(?:も|は|が).{0,24}(?:観|見)(?:た|ました|てきた|てきました)"
+        r"[」』].{0,8}(?:と|って)(?:言|話|聞)",
+    )
+    segment_without_reported_quote = reported_first_person_viewing.sub(" ", segment)
+    first_person_viewing = re.search(
+        r"(?:私|自分|僕|俺)(?:も|は|が).{0,24}(?:観|見)(?:た|ました|てきた|てきました)"
+        r"(?=$|[！!？?\n。、「」]|(?:けど|けれど|が|し|ので|あと|後|よね))",
+        segment_without_reported_quote,
+    )
+    if first_person_viewing:
+        return False
+    return bool(reported_first_person_viewing.search(segment) or re.search(
+        rf"(?:{other_person})(?:さん)?(?:が|は).{{0,18}}(?:観|見)(?:た|ました|てきた|てきました)|"
+        rf"(?:{other_person})(?:さん)?(?:も|の話では|の話だと|から聞いた話では|によると|曰く).{{0,24}}(?:観|見)(?:た|ました|てきた|てきました)|"
+        rf"(?:観|見)(?:た|ました)(?:{other_person})(?:さん)?(?:に|が|は|から)|"
+        rf"(?:観|見)(?:た|ました)(?:と|って)(?:{other_person})(?:さん)?(?:に|から)?.{{0,10}}(?:聞|言わ)|"
+        rf"(?:{other_person})(?:さん)?(?:から|に).{{0,24}}(?:観|見)(?:た|ました)(?:と|って).{{0,8}}(?:聞|言わ)",
+        segment,
+    ))
 
 
 def _movie_opinion_polarity(text: str, marker: str) -> str | None:
@@ -4641,6 +4728,7 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
             for segment in _reading_genre_evidence_segments(candidate.text)
             if not _reading_genre_segment_is_question_only(segment)
             and _asserts_movie_viewing(segment)
+            and not _movie_viewing_attributed_to_other_person(segment)
         ]
         normalized_answer_segments = [re.sub(r"\s+", "", segment) for segment in answer_segments]
         for verified_answer in verified_recent_movies:
@@ -4762,6 +4850,8 @@ def candidate_has_high_confidence_japanese_error(text: str) -> bool:
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
+    if partner_requests_contact_stop(context):
+        reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
@@ -4922,6 +5012,8 @@ def filter_safe_candidates(
         notice = (
             f"安全確認後に表示できる候補は0案です（指定は{requested_count}案）。候補を送らず、入力内容を確認してください。"
         )
+        if any("相手がやり取りを終えたい意向" in item["reasons"] for item in rejected):
+            notice += "相手がやり取りを終えたい意向のため、返信候補を停止しました。"
         if any("会話方針に反する誘い候補" in item["reasons"] for item in rejected):
             notice += "会話方針に合わない誘い候補は除外しました。"
         result.update({
@@ -5111,6 +5203,12 @@ def blocked_user_info_response(
 @app.post("/api/generate")
 def generate(data: GenerateInput):
     context = build_context(data)
+    if data.mode in {"reply", "followup"} and partner_requests_contact_stop(context):
+        return blocked_user_info_response(
+            "相手がやり取りを終えたい意向を示しているため、返信候補を作成しませんでした。",
+            skipped=False,
+            demo=not bool(gemini_configurations()),
+        )
     supplied_profile_answer = any(
         answer["question"].strip() == "相手のプロフィールに書かれている内容はありますか？"
         for answer in data.user_answers

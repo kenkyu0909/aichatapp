@@ -1309,6 +1309,147 @@ def test_refusal_filter_keeps_neutral_candidate_and_reports_soft_reinvite_shorta
     assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
 
 
+@pytest.mark.parametrize("partner_message", [
+    "ごめんなさい！これ以上やり取りするのは控えたいです",
+    "これからは連絡を控えてください",
+    "もう連絡してこないでください",
+    "これ以上連絡を取らないでください",
+    "今後メッセージを送らないでください",
+    "もう話しかけないでください",
+    "これ以上関わらないでください",
+])
+def test_explicit_contact_stop_blocks_even_neutral_reply_candidates(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+    model = backend.SuggestionsV2.model_validate({
+        "needs_user_info": False,
+        "recommended": {"label": "中立な質問", "text": "最近どんな本を読んでるんですか？"},
+        "alternatives": [{"label": "中立な話題", "text": "おすすめの本があったら教えてください！"}],
+        "reason": "会話継続", "strategy": "中立な話題を続ける", "invite_decision": "continue_conversation",
+    })
+
+    assert backend.partner_requests_contact_stop(context)
+    filtered = backend.filter_safe_candidates(model, 2, context)
+
+    assert filtered["available_candidate_count"] == 0
+    assert filtered["generation_blocked"] is True
+    assert "やり取りを終えたい意向" in filtered["candidate_notice"]
+
+
+def test_meeting_unease_does_not_count_as_explicit_contact_stop(client):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
+
+    assert not backend.partner_requests_contact_stop(context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "これ以上やり取りを控えたくないです",
+    "これ以上連絡を控えてほしいわけではありません",
+    "連絡を控えるつもりはありません",
+    "連絡をやめるつもりはありません",
+    "今後は連絡を控えません",
+    "連絡を控えないでください",
+    "連絡をやめないでください",
+    "連絡を控えなくていいですよ",
+    "連絡を控えなくても大丈夫です",
+    "連絡を控えないでほしいです",
+    "連絡を控える必要はありません",
+    "連絡を控える必要はないです",
+    "これ以上連絡を控える必要はないと思います",
+    "連絡を控えていただく必要はありません",
+    "連絡を控えてもらう必要はないです",
+    "連絡を控えるべきではありません",
+    "連絡を控えるのはやめてください",
+    "友達から「これ以上連絡を控えて」と言われました",
+])
+def test_negated_or_reported_contact_stop_does_not_block_generation(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+
+    assert not backend.partner_requests_contact_stop(context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "連絡を控えてほしいわけではありませんが今後は連絡を控えてください",
+    "これ以上やり取りを控えたくないと思っていましたがもう連絡してこないでください",
+    "友達から今後メッセージを送らないでほしいと言われましたが私は今後あなたへ連絡しないことにします",
+    "もう連絡しないでください！連絡してほしいわけではありません",
+    "連絡を控えてください！連絡してほしいわけじゃないです",
+    "連絡しないでください！連絡してほしいとは思いません",
+    "もう連絡しないでください！連絡してほしいと言ったのは友達です",
+])
+def test_latest_explicit_contact_boundary_wins_by_clause(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+
+    assert backend.partner_requests_contact_stop(context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "もう連絡しないでください！でもやっぱり連絡してほしいです",
+    "これ以上連絡しないでください！でも連絡くれるとうれしいです",
+])
+def test_later_explicit_contact_retraction_clears_stop(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+
+    assert not backend.partner_requests_contact_stop(context)
+
+
+@pytest.mark.parametrize("partner_message", [
+    "友達によると青い灯台を観たそうです",
+    "友達曰く青い灯台を観たそうです",
+    "友達も青い灯台を観ました！",
+    "友達の話では青い灯台を観ました！",
+    "友達の話だと青い灯台を観ました！",
+    "友達から聞いた話では青い灯台を観ました！",
+    "友達が「私も青い灯台を観ました」と言ってました！",
+    "家族は『私も青い灯台を観た』と話していました！",
+    "私も青い灯台を観た友達に勧められました！",
+    "私も青い灯台を観た人から聞きました！",
+    "私も青い灯台を観た友達がいます！",
+    "自分も青い灯台を見た友達にすすめられました！",
+])
+def test_movie_viewing_reported_by_friend_is_not_personal_fact(client, partner_message):
+    _, backend = client
+    assert backend._movie_viewing_attributed_to_other_person(partner_message)
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "私も青い灯台を観ました！",
+    "自分も最近青い灯台を見てきました！",
+    "友達が「私も青い灯台を観ました」と言ってましたが私も観ました！",
+])
+def test_first_person_movie_viewing_claim_is_not_misattributed(client, candidate_text):
+    _, backend = client
+    assert not backend._movie_viewing_attributed_to_other_person(candidate_text)
+
+
+@pytest.mark.parametrize("mode", ["reply", "followup"])
+def test_explicit_contact_stop_blocks_generation_before_gemini(client, monkeypatch, mode):
+    c, _ = client
+    from google import genai
+
+    mid = add_match(c, "架空の相手・連絡終了")
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "ごめんなさい！これ以上やり取りするのは控えたいです"},
+    )
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("Gemini must not be called"))
+
+    response = c.post("/api/generate", json={
+        "mode": mode, "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generation_blocked"] is True
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+    assert "やり取りを終えたい意向" in body["blocking_reason"]
+
+
 def test_minimizing_reassurance_after_meeting_unease_is_rejected(client):
     _, backend = client
     context = {"history": [{"role": "them", "body": "まだ会うのはちょっと不安です"}]}
@@ -2551,6 +2692,48 @@ def test_recent_movie_filter_keeps_answer_and_drops_evasive_alternatives(client)
     assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
     assert {item["label"] for item in filtered["candidate_rejections"]} == {"代替案1", "代替案2"}
     assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "最近は青い灯台を観た友達に勧められました！",
+    "友達も青い灯台を観ました！",
+    "友達の話では青い灯台を観ました！",
+    "友達が「私も青い灯台を観ました」と言ってました！",
+])
+def test_recent_movie_question_rejects_friend_viewing_as_user_answer(client, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="友達の鑑賞談", text=candidate_text), context
+    )
+
+
+def test_own_movie_answer_after_friend_quote_is_accepted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="友人の話に続けて本人も回答",
+        text="友達が「私も青い灯台を観ました」と言ってましたが私も観ました！",
+    )
+
+    assert backend._answers_verified_partner_question(candidate, context)
 
 
 @pytest.mark.parametrize("candidate_text", [
@@ -6403,6 +6586,51 @@ def test_direct_question_filter_keeps_answer_and_rejects_topic_evasion(client):
     assert filtered["available_candidate_count"] == 1
     assert "1案" in filtered["candidate_notice"]
     assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "最近は青い灯台を観た友達に勧められました！",
+    "青い灯台を観たって友達に聞きました！",
+    "友達から青い灯台を観たと聞きました！",
+])
+def test_recent_movie_title_from_verified_answer_does_not_accept_friend_viewing_claim(
+    client, candidate_text
+):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="友達の視聴に言及",
+        text=candidate_text,
+    )
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_recent_movie_answer_accepts_explicit_first_person_viewing_with_friend_context(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="本人も視聴した事実を回答",
+        text="友達が観た『青い灯台』を私も観ました！",
+    )
+
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert not backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_answered_direct_question_keeps_answering_option_and_reports_unsafe_shortage(

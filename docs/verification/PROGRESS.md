@@ -1252,3 +1252,28 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T355の既存FAILをFIXEDへ置換せず修正履歴を追記する。累計Matrix 355項目: PASS251 / FAIL13 / FIXED71 / BLOCKED5 / NOT_TESTED15。品質009の保存済み実文章自然さ・候補多様性FAILが残るため総合NO-GO。
 - 指示ブランチを2026-10-16 05:10 JSTに再取得。P0優先、conversation_004/新HTML/追加Gemini通信なしを確認。作業ブランチHEADは `740e5e90e9e9a97069d6804fa1166e19d5673c25`、本変更は未コミット、Actions未確認。PR #4 OPEN/Draft維持。
 - 次: 変更を選択コミット・Pushし同一SHAのPush/PR Actionsを確認。その後、QUALITY009の保存済み回答漏れとFirefoxコア導線の不具合監査へ進む。未追跡のユーザー指示ファイル3件はステージしない。
+
+### 2026-10-16 05:42 JST 連絡停止の意思判定と第三者の映画経験
+
+- 最新作業ブランチをfetchし、HEAD `e09ae92bde75da87f2e3da7115f26e1b07910a27`がリモートと一致することを確認。指示用ブランチもfetch/showし、毎時00分のChatGPT監査・毎時10分のCodex再確認・15〜20分ごとの確認、会話004/新規HTML禁止を確認。
+- 独立レビューで、相手の明確な連絡終了希望の見逃し、否定文や後続節にある終了希望の極性混同、友人の映画鑑賞を本人の経験として扱う不具合を確認。各反例をテストで再現した。
+- `app.py`で直近の相手発言を節ごとに解析し、明確な停止希望はreply/followupのGemini呼出し前に候補生成を止める。終了希望の否定、第三者の伝聞、本人の直接的な後続撤回を区別する。映画回答では友人・伝聞・関係節内の視聴と本人の直接視聴を区別する。
+- `tests/test_app.py`に、連絡を続けてほしい表現、否定/肯定が交錯する節、撤回の否定と第三者帰属、友人の視聴、本人の明示視聴を追加。焦点44 passed、全pytest **1286 passed in 180.23s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立レビューでこの範囲に残件なし。
+- Gemini実通信0回。会話004とHTMLは現行指示で未実施。品質009の保存済み実生成自然さ・候補多様性FAILは未解決のため総合NO-GO。
+- Matrix T356: 356項目、PASS251 / FAIL13 / FIXED72 / BLOCKED5 / NOT_TESTED15。現在の変更は未コミット・未Push、最新HEADのGitHub Actions未実施。ユーザー提供の未追跡ファイル3件は保持し、ステージしない。
+- 次: PROGRESS/Matrix/Final/Overnightを選択コミットし、Push後に同一HEADのPush/PR ActionsとDraft状態を確認する。その後は保存済みQUALITY009の残るP0（回答漏れ・返信候補の意味的重複・短文ミラーリング）へ進む。Chrome不使用。
+
+### 2026-10-16 05:55 JST 連絡意思の否定形と引用内外の本人回答
+
+- レビューで「連絡を控えていただく必要はありません」「控えてもらう必要はないです」「控えるべきではありません」が連絡停止と誤認されるケースを追加確認し、否定パターンを区別した。明示的な「控えてください」は停止扱いを維持する。
+- 友人の「私も観ました」という引用だけでは本人の経験として通さず、引用に続く本人自身の「私も観ました」は回答として受け付けるよう、判定対象から伝聞引用部分を除外した。
+- focused 49 passed。全pytest **1298 passed in 183.59s**。全体テストにはFirefox UI検証を含む。Firefox専用の別実行と構文・差分検査は未完了。
+- 実Gemini通信0回。T357を追加し、累計357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実文章自然さ・候補多様性FAILは未解決で総合NO-GO。会話004と新規HTMLは現行指示により実施しない。
+- 2026-10-16 05:50 JSTに作業・指示ブランチを確認。作業HEAD `e09ae92bde75da87f2e3da7115f26e1b07910a27` はリモートと一致し、最新指示はP0継続・Gemini追加通信なし・conversation_004/新会話HTMLなし。今回のコードと記録は未コミット・未Pushで、最新Actions未確認。PR #4はDraft・未マージ。ユーザー用未追跡ファイル3件は保持し、ステージしない。
+- 次: Firefox専用検証と構文・差分検査を完了し、レビューを反映したうえで選択的にコミット・Pushする。同じHEADを対象にGitHub Actionsを確認し、その後QUALITY009の残る直接質問・意味的候補重複・短文ミラーリングのP0へ進む。
+
+#### 2026-10-16 06:02 JST 検証完了
+
+- Firefox専用UI **11 passed in 146.93s**。全pytest **1298 passed in 183.59s**。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`が成功した。
+- Yomiyasu lintは変更した資料4件で実行。既存長文による箇条書き比率などの警告が出た。今回の追記に起因する重大な指摘はなく、履歴報告の意味を変える大規模な書き換えはしていない。
+- T357をFIXEDとして記録。新しいマトリクス集計は357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。GitHub Actionsはコード変更をPushした後に確認する。
