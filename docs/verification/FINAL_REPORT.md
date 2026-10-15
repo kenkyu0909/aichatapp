@@ -1189,4 +1189,18 @@ T329の旧SHA`9d64e15990d83fec52477d9934450644214c69b6`を対象とするPush Ac
 - この差分のGemini実通信は**0回**。過去の品質009 FAILは残る。会話004・新しい会話HTMLも指示に従い未実施。
 - Test Matrix: **333項目**（PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15）。この差分はまだ未コミット・未Pushのため、最新SHAのActionsは未確認。PR #4はOPEN/Draft・未マージ。
 
+### 2026-10-16 01:32 JST 継続検証：followup / like のFirefox導線
+
+Firefox E2Eを2件追加し、既存の会話004・新規HTML・実Gemini通信禁止を維持した。
+
+- followup: 架空の会話で複数行候補を生成モックからUIへ表示し、コピーだけでは送信履歴が変わらず、明示的に記録した後にのみ履歴へ追加されることを確認。候補表示・クリップボード・SQLite/API・画面再読込後で改行と順序が一致した。
+- like: マッチ前生成のpayloadが`mode=like`かつ`match_id`なしであること、コピー操作のみ提供されること、コピー・モーダル終了・再読込後も会話履歴が空であることを確認。
+- どちらもFirefoxのJavaScript runtime/console errorを再読込前後に個別採取した。レビューで再読込前の記録がなかった点とコピー完了toastの待機不足が指摘されたため修正済み。focused **2 passed in 23.06s**。
+- 全pytest **1019 passed in 159.21s**（toast待機の安定化を入れる直前）。その変更後のfocused Firefox 2件は再度成功。Python/JavaScript/diffの構文・差分検査はコミット前に終了コードを再確認する。
+- T334/T335を追加。TEST_MATRIX **335項目: PASS235 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15**。
+- Gemini実APIは**0回**。過去QUALITY009の実生成自然さと意味的候補多様性FAILは未解決なので総合判定は**NO-GO**。今回の結果はモックUI確認であり、モデル品質の再検証ではない。
+- 変更と記録は未コミット・未Push。ActionsはSHA `7f055a003bcd0065d2b0a267732a673b77cf97c2`に対するPush/PR run **38768764507 / 38768773278**がsuccessしているが、今回のテスト変更を含まない。PR #4はOPEN/Draft・未マージ。
+
+次: 該当testとPROGRESS/TEST_MATRIX/FINAL_REPORT/OVERNIGHT_GOALのみを選択的にコミット・Pushし、同一HEAD Actionsを確認する。未追跡のユーザー指示ファイル3件は保持する。
+
 次: 変更とレポートを既存PR #4の作業ブランチへコミット・Pushし、同じHEADのPush/PR Actionsを確認する。続けて、Firefoxでfollowup/likeのコピー・手動記録・再読込のコア導線を確認する。

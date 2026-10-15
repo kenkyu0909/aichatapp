@@ -1097,3 +1097,12 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 変更前のレビュー指摘は修正前テストで再現。Focused質問/映画テスト **70 passed, 861 deselected**、stale候補Firefoxテスト **1 passed**。最終全pytest **1017 passed in 137.53s**（Firefox込み）。過去のフル実行では既存プロフィールtoast待ち1件が一度タイムアウトしたが、単独テストと後続の全pytestで成功。Pythonコードレビューは追加した平叙形と映画否定疑問に明確な問題なし。
 - `python -m py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。変更はまだ未コミット・未Push、Actionsは未実行。TEST_MATRIXを333項目（PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15）へ更新。QUALITY009の実Gemini自然さ/候補意味多様性FAILが残るためNO-GO。
 - 次: `app.py` / `tests/test_app.py` / `tests/test_ui_firefox.py`と検証資料だけを選択的にコミット・Pushし、最新SHAのPush/PR ActionsとPR #4 OPEN/Draftを確認する。ユーザー提供の未追跡指示ファイル3件を保持する。次のP0としてFirefoxでのfollowup/likeのコピー→手動記録→再読込導線が未確認か調べ、残差を続ける。
+
+### 2026-10-16 01:32 JST Firefox followup/like導線の追加確認
+
+- 現行指示を確認し、Gemini実通信・conversation_004・新規会話HTMLは実施しない。既存PR #4・`codex/full-system-verification`を維持。
+- Firefox E2Eを2件追加。followupでは候補生成、複数行候補、コピーのみで未送信、手動記録、再読込後のUI/API履歴と改行保持を確認。likeではマッチ前候補のコピーがDB/API/画面の会話履歴を変えず、送信記録操作も提示しないことを確認。
+- Code reviewerは、ページ再読込前にJavaScriptエラー監視結果が失われる問題と、コピーtoastの非同期待機不足を指摘。前後のページ状態でruntime/console errorを個別に記録し、toastを明示待機するよう修正した。独立レビューで更新後の2テストに明確な問題なし。
+- Focused Firefox tests **2 passed in 23.06s**。toast待機強化前の全pytest **1019 passed in 159.21s**（Firefox UI込み）、強化後focusedは再度成功。Python compile、JavaScript構文、差分検査を別途確認中。今回Gemini実通信0回。
+- T334/T335を追加し、TEST_MATRIX **335項目: PASS235 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15**。既存QUALITY009の実生成自然さ・候補多様性FAILは残るためNO-GO。コードと今回の検証記録は未コミット・未Push、Actionsは今回の追加テストを含まない前HEAD対象で成功済み。ユーザー提供の未追跡指示ファイル3点は保持・未ステージ。
+- 次: Python/JavaScript構文とdiffの終了コードを確認し、`tests/test_ui_firefox.py`と4つの報告ファイルを選択的にコミット・Pushする。最新Push/PR Actionsが同じSHAで成功することを確認する。その後、コアのモード導線で残る実利用上の未達を確認する。

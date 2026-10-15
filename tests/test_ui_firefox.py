@@ -788,3 +788,205 @@ def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
+
+
+def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(local_app, firefox):
+    """Follow-up candidates stay unsent until explicitly recorded and retain newlines."""
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のさくら")
+
+    incoming = "最近は仕事が忙しくて少し疲れています"
+    already_sent = "無理しすぎないでくださいね"
+    followup = "落ち着いたらゆっくり休めるといいですね\n返信は気にしないでください😊"
+    driver.find_element(By.ID, "message-input").send_keys(incoming)
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+    driver.find_element(By.ID, "message-input").send_keys(already_sent)
+    driver.find_element(By.ID, "send-me").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    assert [
+        "me" if "me" in item.get_attribute("class").split() else "them"
+        for item in driver.find_elements(By.CSS_SELECTOR, "article.chat-message")
+    ] == ["them", "me"]
+
+    driver.execute_script("""
+      window.__generationPayloads = [];
+      window.__copiedText = undefined;
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable:true,
+        value:{writeText: async text => {window.__copiedText=text;}}
+      });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          window.__generationPayloads.push(payload);
+          return new Response(JSON.stringify({
+            recommended:{label:'やさしい案',text:arguments[0]},
+            alternatives:[
+              {label:'短め',text:'返信は大丈夫です！'},
+              {label:'別の案',text:'無理せず過ごしてくださいね'}
+            ],
+            reason:'相手を急かさない架空データのモックです',
+            demo:false
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """, followup)
+
+    driver.find_element(By.ID, "follow-up").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generationPayloads.at(-1).mode") == "followup"
+    candidate = driver.find_element(By.CSS_SELECTOR, ".candidate-text")
+    assert driver.execute_script("return arguments[0].textContent", candidate) == followup
+    assert driver.execute_script("return getComputedStyle(arguments[0]).whiteSpace", candidate) == "pre-wrap"
+
+    initial_history = [
+        ("them", incoming),
+        ("me", already_sent),
+    ]
+    def visible_history(browser):
+        return [
+            ("me" if "me" in item.get_attribute("class").split() else "them",
+             item.find_element(By.CSS_SELECTOR, ".bubble").get_attribute("textContent").strip())
+            for item in browser.find_elements(By.CSS_SELECTOR, "article.chat-message")
+        ]
+    assert visible_history(driver) == initial_history
+
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+    )
+    assert driver.execute_script("return window.__copiedText") == followup
+    assert visible_history(driver) == initial_history
+
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    assert "実際に送信した文章を記録" in modal(driver).find_element(By.ID, "modal-title").text
+    textarea = modal(driver).find_element(By.CSS_SELECTOR, "#modal-body textarea")
+    assert textarea.get_attribute("value") == followup
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 2)
+    expected_history = initial_history + [("me", followup)]
+    assert visible_history(driver) == expected_history
+
+    errors = record_artifact(
+        "firefox-followup-copy-record-before-reload",
+        driver,
+        {"mode": "followup", "copy_preserved_history": True, "multiline_saved": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+    driver.refresh()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 3)
+    assert visible_history(driver) == expected_history
+    errors = record_artifact(
+        "firefox-followup-history-after-reload",
+        driver,
+        {"mode": "followup", "multiline_saved_and_restored": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_like_candidate_can_be_copied_without_creating_match_history(local_app, firefox):
+    """Pre-match like candidates can be copied but never recorded as sent messages."""
+    app = local_app
+    driver = firefox
+    driver.get(app.url)
+    add_fictional_contact(driver, "架空のりお")
+
+    with urllib.request.urlopen(app.url + "api/matches", timeout=3) as response:
+        matches = json.load(response)
+    match_id = next(item["id"] for item in matches if item["name"] == "架空のりお")
+
+    def saved_history():
+        with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
+            return json.load(response)
+
+    assert saved_history() == []
+    like_text = "プロフィールの美術館巡りが気になりました！\n最近行ってよかった展示はありますか？"
+    driver.execute_script("""
+      window.__likePayloads = [];
+      window.__copiedText = undefined;
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable:true,
+        value:{writeText: async text => {window.__copiedText=text;}}
+      });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          window.__likePayloads.push(payload);
+          return new Response(JSON.stringify({
+            recommended:{label:'自然な初回のきっかけ',text:arguments[0]},
+            alternatives:[
+              {label:'短め',text:'美術館いいですね！'},
+              {label:'別の話題',text:'旅行もお好きなんですね！'}
+            ],
+            reason:'プロフィールの情報だけを使った架空データのモックです',
+            demo:false
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """, like_text)
+
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="like"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    body = modal(driver)
+    body.find_element(By.CSS_SELECTOR, "#modal-body input").send_keys("架空のりお")
+    body.find_element(By.CSS_SELECTOR, "#modal-body textarea").send_keys(
+        "休日は美術館や水族館に行きます。旅行も好きです。"
+    )
+    body.find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "#modal .candidate")) == 3
+    )
+    assert driver.execute_script("return window.__likePayloads.at(-1).mode") == "like"
+    assert driver.execute_script("return window.__likePayloads.at(-1).match_id") is None
+    assert driver.execute_script("return window.__likePayloads.at(-1).name") == "架空のりお"
+    assert driver.execute_script("return window.__likePayloads.at(-1).count") == 3
+    assert body.find_element(By.CSS_SELECTOR, "#modal .candidate-text").get_attribute("textContent") == like_text
+    assert len(body.find_elements(By.CSS_SELECTOR, "#modal .candidate button")) == 3
+    assert not body.find_elements(By.CSS_SELECTOR, "#modal .candidate button:nth-child(2)")
+
+    body.find_element(By.CSS_SELECTOR, "#modal .candidate button:first-child").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
+    )
+    assert driver.execute_script("return window.__copiedText") == like_text
+    WebDriverWait(driver, 5).until(
+        lambda browser: "送信済み履歴には追加していません" in browser.find_element(By.ID, "toast").text
+    )
+    assert saved_history() == []
+
+    driver.find_element(By.ID, "close-modal").click()
+    assert saved_history() == []
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 0
+    errors = record_artifact(
+        "firefox-like-copy-no-history-before-reload",
+        driver,
+        {"mode": "like", "copied_candidate": True, "conversation_history_unchanged": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+    driver.refresh()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のりお")
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 0
+    assert saved_history() == []
+    errors = record_artifact(
+        "firefox-like-copy-no-history-after-reload",
+        driver,
+        {"mode": "like", "history_still_empty": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []

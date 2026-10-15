@@ -822,3 +822,19 @@ T329 SHAのPush/PR Actions [38762044607](https://github.com/kenkyu0909/aichatapp
 本人情報の口語質問判定へ誤検知を防ぐ条件を追加し、映画の否定疑問の回帰も修正した。確認ケースは、直接質問「音楽何聴く」の確認誘導と、平叙文「何でも食べる」「誰にでも話す」「どんな本でも読む」「どこにだって行く」「誰からでも話を聞く」等。本人質問/映画のfocused 70 passed、最終全pytest 1017 passed、Firefox stale-candidateテスト1 passed。Python/JS構文・diff検査成功。今回の新規Gemini通信は0回。T332 FIXED、T333 PASS、累計333項目: PASS233 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15。
 
 今の判定はNO-GO。過去品質009の実Gemini自然さ・意味的候補多様性FAILは解決されていない。会話004と新規会話HTMLは現行指示で禁止。差分は未コミット・未Pushで、Actionsは未確認。次はコード/testと4つの検証資料を選択的にPushし、最新SHAのPush/PR Actionsを確認。その後、Firefoxのfollowup/like送信記録導線の不足を調べる。ユーザー提供の未追跡指示ファイル3件は保持する。
+
+### 2026-10-16 01:32 JST Firefox followup / like UI確認
+
+| ゴール | 状況 |
+|---|---|
+| 本人情報の正確性 | FAIL継続。保存済みQUALITY009実生成品質FAILが残り、今回はGemini通信を禁止されているため再実生成なし。 |
+| 句読点・改行 | PASS for the tested UI path。followup候補の改行コピー・記録・再読込保持をFirefoxで確認。全モードの生成品質合格を示す結果ではない。 |
+| ミラーリング | NOT_TESTED against real Gemini in this checkpoint。 |
+| 共感の反復防止 | FAIL継続。既存実生成の意味的重複FAILを保持。 |
+| 返信候補の多様性 | FAIL継続。QUALITY009の候補多様性FAILを保持。 |
+| 食事への誘い判断 | NOT_TESTED against real Gemini in this checkpoint。 |
+| アプリ全体の安定性 | ローカルPASS、最新SHA Actionsは未実行。全pytest 1019 passed in 159.21s。2件のFirefox E2Eはtoast待機強化後もfocusedで成功。 |
+
+追いメッセージ候補をコピーしても履歴が変わらず、明示記録後のみ履歴へ追加されることを確認。マッチ前like候補はコピーのみでSQLite/API/画面の会話履歴を空のまま保つ。Code reviewerの指摘により、再読込前後でJS error監視結果を個別に記録し、toastを明示待機するテストに修正。TEST_MATRIXは335項目: PASS235 / FAIL13 / FIXED67 / BLOCKED5 / NOT_TESTED15。総合NO-GO。Gemini通信0回。PR #4はDraft・未マージ。
+
+次: 対象testと検証記録だけをコミットしてPushし、最新SHAのPush/PR Actionsを確認する。ユーザー提供txtはステージしない。CI後に残る実利用コア導線をオフラインで継続確認する。
