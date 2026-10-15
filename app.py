@@ -4499,6 +4499,7 @@ def generate(data: GenerateInput):
                             parsed = parsed.model_copy(update={
                                 "recommended": safe_candidates[0],
                                 "alternatives": safe_candidates[1:],
+                                "conversation_stage": "Stage 3" if invite_opportunity_exists else "Stage 2",
                                 "invite_decision": "consider_invite" if invite_opportunity_exists else "continue_conversation",
                                 "decision_reason": (
                                     "誘い候補を安全に作れなかったため、今回は誘いを確定せず安全な返信候補を優先します"

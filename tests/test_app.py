@@ -1361,7 +1361,7 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
     assert len(prompts) == 1
 
 
-@pytest.mark.parametrize(("turns", "expected_decision"), [
+@pytest.mark.parametrize(("turns", "expected_decision", "expected_stage"), [
     (
         [
             ("them", "カフェ巡りは好きですか？"),
@@ -1369,11 +1369,12 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
             ("them", "中野のカフェに行ってみたいです！"),
         ],
         "consider_invite",
+        "Stage 3",
     ),
-    ([("them", "中野のカフェに行ってみたいです！")], "continue_conversation"),
+    ([("them", "中野のカフェに行ってみたいです！")], "continue_conversation", "Stage 2"),
 ])
 def test_invite_gently_without_safe_invite_downgrades_to_contextual_policy(
-    client, monkeypatch, turns, expected_decision
+    client, monkeypatch, turns, expected_decision, expected_stage
 ):
     from google import genai
 
@@ -1416,6 +1417,7 @@ def test_invite_gently_without_safe_invite_downgrades_to_contextual_policy(
     body = result.json()
     candidates = [body["recommended"], *body["alternatives"]]
     assert body["invite_decision"] == expected_decision
+    assert body["conversation_stage"] == expected_stage
     assert not any(backend.INVITATION_PATTERN.search(item["text"]) for item in candidates)
     assert candidates[0]["text"] == "中野のカフェ気になります！"
     assert "誘い候補" in body["decision_reason"]
