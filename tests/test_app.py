@@ -7801,6 +7801,96 @@ def test_unknown_direct_personal_questions_require_confirmation_and_block_claims
     assert backend._answers_verified_partner_question(candidate, context)
 
 
+@pytest.mark.parametrize(("question", "unsupported_claim", "answer", "expected_clarification"), [
+    ("今日何してたの？", "今日は家でゆっくりしてました！", "今日は家で映画を観ていました", "今日の過ごし方"),
+    ("今日何してたの", "今日は家でゆっくりしてました！", "今日は家で映画を観ていました", "今日の過ごし方"),
+    ("今日どう過ごした？", "今日は友達と出かけました！", "今日は家で読書をしていました", "今日の過ごし方"),
+    ("今日どう過ごしてたの？", "今日は友達と出かけました！", "今日は家で読書をしていました", "今日の過ごし方"),
+    ("今日は何しましたか？", "今日は家で映画を観ました！", "今日は家で買い物をしました", "今日の過ごし方"),
+    ("昨日何してた？", "昨日は友達と出かけてました！", "昨日は家で読書をしていました", "昨日の過ごし方"),
+    ("昨日はどう過ごしていましたか？", "昨日は友達と出かけました！", "昨日は家で読書をしました", "昨日の過ごし方"),
+    ("今日は何してましたか？", "今日は家で映画を観ています！", "今日は家で読書をしていました", "今日の過ごし方"),
+    ("今日何してるの？", "今は買い物中です！", "今日は仕事をしています", "今日の予定"),
+    ("今日は何してますか？", "今日は家で映画を観ています！", "今日は家で読書をしています", "今日の予定"),
+    ("今日は何してるんですか？", "今日は家で映画を観ています！", "今日は家で読書をしています", "今日の予定"),
+    ("今日はどう過ごしていますか？", "今日は友達と出かけています！", "今日は家でゆっくりしています", "今日の予定"),
+    ("最近何してたの？", "最近は旅行に行ってました！", "最近は仕事の後に読書をしています", "最近何してたの？"),
+])
+def test_unknown_recent_activity_question_requires_matching_temporary_answer(
+    client, question, unsupported_claim, answer, expected_clarification
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert expected_clarification in clarification.question
+
+    unsupported = backend.Candidate(label="未確認の本人事実", text=unsupported_claim)
+    assert not backend._answers_verified_partner_question(unsupported, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unsupported, context)
+    filtered = backend.filter_safe_candidates(
+        backend.SuggestionsV2(
+            needs_user_info=False,
+            recommended=unsupported,
+            alternatives=[],
+            reason="未確認の行動を述べる",
+            invite_decision="continue_conversation",
+        ),
+        1,
+        context,
+    )
+    assert filtered["available_candidate_count"] == 0
+    assert filtered["generation_blocked"] is True
+
+    context["ephemeral_user_answers"] = [{
+        "question": clarification.question,
+        "answer": answer,
+    }]
+    grounded = backend.Candidate(label="確認済みの回答", text=answer + "！")
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(grounded, context)
+    appended_claim = backend.Candidate(
+        label="未確認の追加行動",
+        text=answer + "！\nそのあと友達とカフェにも行きました！",
+    )
+    assert not backend._answers_verified_partner_question(appended_claim, context)
+
+
+@pytest.mark.parametrize(("question", "expected_clarification"), [
+    ("今日何してたの？", "今日の過ごし方"),
+    ("今日は何してますか？", "今日の予定"),
+])
+def test_same_day_activity_question_is_requested_before_generation(
+    client, monkeypatch, question, expected_clarification
+):
+    c, backend = client
+    from google import genai
+
+    mid = add_match(c, "架空の相手・日常会話")
+    c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them", "body": question,
+    })
+    monkeypatch.setattr(genai, "Client", lambda **_: pytest.fail("Gemini must not be called"))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert "今日" in body["user_questions"][0]["question"]
+    assert expected_clarification in body["user_questions"][0]["question"]
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
+
+
 def test_nonpersonal_fact_question_does_not_trigger_personal_confirmation(client):
     _, backend = client
     context = {
@@ -7814,9 +7904,45 @@ def test_nonpersonal_fact_question_does_not_trigger_personal_confirmation(client
     assert backend.missing_personal_fact_question(context) is None
 
 
+def test_same_day_business_hours_question_is_not_a_personal_activity_question(client):
+    _, backend = client
+    question = "このお店は今日何時まで営業ですか？"
+
+    assert backend._topic_for_personal_question(question) is None
+
+
+@pytest.mark.parametrize(("answered_question", "new_question"), [
+    ("今日は何してますか？", "今日何してたの？"),
+    ("今日何してたの？", "今日は何してますか？"),
+])
+def test_same_day_activity_answers_do_not_cross_current_past_scope(
+    client, answered_question, new_question
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": new_question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": answered_question,
+            "answer": "今日は家で読書をしています",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="既存回答の再利用",
+        text="今日は家で読書をしています！",
+    )
+
+    assert not backend._topic_is_verified("本人情報", context, new_question)
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
 @pytest.mark.parametrize("question", [
     "将来の夢がある人って素敵ですよね？",
     "食べられないものがある人向けのメニューはありますか？",
+    "友達は今日何してたんですか？",
+    "彼は今日何してたの？",
 ])
 def test_third_party_personal_phrase_does_not_trigger_user_confirmation(client, question):
     _, backend = client
@@ -7828,6 +7954,7 @@ def test_third_party_personal_phrase_does_not_trigger_user_confirmation(client, 
     }
 
     assert backend._topic_for_personal_question(question) is None
+    assert backend._same_day_activity_scope(question) is None
     assert backend.missing_personal_fact_question(context) is None
 
 

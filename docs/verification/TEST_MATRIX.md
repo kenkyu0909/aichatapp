@@ -848,3 +848,7 @@ T342の追加確認: docs-only SHA `872095d9c3accb5f6f3527632e713574e9c79700` �
 | T352 | 最新報告HEADのPush/PR Actions | GitHub Actions、pytest、JS syntax | PASS | SHA `5780a8cf61ad128018916d096695fb26314b33ae`。Push [38786313156](https://github.com/kenkyu0909/aichatapp/actions/runs/38786313156) / PR [38786324398](https://github.com/kenkyu0909/aichatapp/actions/runs/38786324398) 同一HEADでsuccess。1105 passed / 1 warning in 129.40s。合計352: PASS249 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
 
 最新ID行: 352。累計: PASS249 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|
+
+| T353 | 当日活動に関する相手の直接質問と一時回答のスコープ保護 | pytest (FastAPI/候補フィルターのオフライン回帰) | PASS | 架空の今日/昨日の過ごし方・現在の活動を使い、本人未確認時に質問へ分岐、回答なし候補を拒否、同じ日/同じ時制の回答だけを許可。丁寧形、第三者の活動、店舗営業時間の誤検出、回答後の未確認追加行動、現在回答と過去質問の交差利用を確認。焦点27 passed、関連群52 passed、全pytest1125 passed、Firefox UI11 passed。Gemini実通信なし。コードSHAは未コミット（起点 `e28195c`）。Actionsは未実施。|
+
+最新ID行: 353。累計: PASS250 / FAIL13 / FIXED70 / BLOCKED5 / NOT_TESTED15。|

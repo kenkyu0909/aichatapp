@@ -942,3 +942,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - `5780a8cf61ad128018916d096695fb26314b33ae` のPush/PR Actions success: [38786313156](https://github.com/kenkyu0909/aichatapp/actions/runs/38786313156) / [38786324398](https://github.com/kenkyu0909/aichatapp/actions/runs/38786324398)。1105 pytest passed / 1 warning、JS構文検査成功。
 - 実生成品質FAILが残るためNO-GOは維持。
+
+### 2026-10-16 03:58 JST 同日活動の質問スコープ
+
+- **達成状況: 部分達成。** 空プロフィールに対する「今日何してたの？」が未確認の本人行動を候補として通す問題を再現し、同日活動の本人確認・一時回答スコープを修正。
+- 追加した対照ケース: 今日/昨日、過去/現在、丁寧形、第三者の活動、店舗営業時間、回答への未確認追加主張、現在回答と過去質問の相互流用。
+- テスト: focused 27 passed、本人確認周辺52 passed、全pytest1125 passed、Firefox UI11 passed。Python/JavaScript構文とdiff checkもPASS。独立レビューで今回の差分に高確度のブロッカーなし。
+- Gemini実通信0回。実生成自然さ・候補多様性の過去FAILは維持されるためGOではない。最新変更は未コミット・Actions未確認。
+- 次: 変更を選択的にPushし同一SHAのCIを確認。続けてQUALITY009の残る実出力起点のP0を既存証拠とオフラインテストで監査する。conversation_004と新会話HTMLは実施しない。

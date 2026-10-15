@@ -1218,3 +1218,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 
 - SHA `5780a8cf61ad128018916d096695fb26314b33ae` のPush [38786313156](https://github.com/kenkyu0909/aichatapp/actions/runs/38786313156) とPR [38786324398](https://github.com/kenkyu0909/aichatapp/actions/runs/38786324398) が同一HEADでsuccess。1105 passed / 1 warning in 129.40s、`node --check app.js`成功。
 - PR #4 OPEN/Draft、base `feat/ui-local-backend-v1`。Matrix T351までの347ではなく、T352を追加して集計更新する。品質009の生成自然さ・候補多様性FAILは未解決、NO-GO。
+
+### 2026-10-16 03:58 JST 同日活動の本人確認ガード
+
+- QUALITY009の回答範囲監査で、相手の「今日何してたの？」に対して本人情報が空でも候補「今日は家でゆっくりしてました！」が候補ゲートを通る問題を再現。`app.py`で今日/昨日の活動質問を検出し、ユーザーの一時回答が同じ日・同じ現在/過去スコープに一致しない場合は生成前質問と候補拒否を行うよう修正。
+- 標準形・丁寧形、現在/過去、別人についての質問、営業時間の非該当、回答後の追加未確認主張を含む回帰を追加。焦点テスト27 passed、本人確認関連群52 passed。全pytest **1125 passed in 184.70s**。Firefox専用UI **11 passed in 139.78s**。`py_compile`、`node --check app.js`、`git diff --check`も成功。
+- 独立レビューで今回の範囲の重大な残存問題なし。現在形の回答と過去形の質問（および逆）の混用を防ぐ2ケースも追加し、修正後に全テストを実行。
+- Gemini API通信0回。既存QUALITY009の実生成の自然さ・候補多様性FAILは未解決なので総合判定NO-GO。作業SHA `e28195c`を起点とする変更は未コミットで、Actions未確認。次: 選択的にソース/テスト/検証記録だけをコミット・Pushし、最新SHAのPush/PR ActionsとPR #4のDraft状態を確認する。ユーザーの未追跡指示ファイル3件はステージしない。

@@ -406,6 +406,30 @@ UNPUNCTUATED_CASUAL_PERSONAL_QUESTION = re.compile(
 UNPUNCTUATED_INTERROGATIVE_ASSERTION = re.compile(
     r"(?:何|なに|どんな|どの|どこ|いつ|誰|だれ)[^?？!！\r\n]{0,16}(?:でも|にも|へも|とも|からでも|からも|までも|だって)"
 )
+SAME_DAY_ACTIVITY_QUESTION = re.compile(
+    r"^(?:そういえば|ちなみに|ところで)?\s*(?:今日|本日|昨日|きのう)(?:って)?(?:は|に)?\s*(?:"
+    r"(?:何|なに)(?:を)?\s*(?:して(?:た|いた|いました|ました|る|いる|ます|います)|し(?:た|ました)|過ごし(?:た|てた|ていた|ていました|てました|ました|てる|ている|てます|ています))|"
+    r"どう(?:やって)?\s*過ごし(?:た|てた|ていた|ていました|てました|ました|てる|ている|てます|ています))"
+    r"(?:(?:の|ん)?(?:ですか)?|か(?:ですか)?)[?？!！]*$"
+)
+SAME_DAY_CURRENT_ACTIVITY_QUESTION = re.compile(
+    r"^(?:そういえば|ちなみに|ところで)?\s*(?:今日|本日)(?:って)?(?:は|に)?\s*(?:"
+    r"(?:何|なに)(?:を)?\s*(?:してる|している|してます|しています|過ごしてる|過ごしている|過ごしてます|過ごしています)|"
+    r"どう(?:やって)?\s*過ごして(?:る|いる|ます|います))"
+    r"(?:(?:の|ん)?(?:ですか)?|か(?:ですか)?)[?？!！]*$"
+)
+
+
+def _same_day_activity_scope(text: str) -> tuple[str, str] | None:
+    day_match = re.search(r"今日|本日|昨日|きのう", text)
+    if not day_match:
+        return None
+    day = {"本日": "今日", "きのう": "昨日"}.get(day_match.group(0), day_match.group(0))
+    if SAME_DAY_CURRENT_ACTIVITY_QUESTION.search(text) or re.search(r"今日の予定や今していること", text):
+        return day, "current"
+    if SAME_DAY_ACTIVITY_QUESTION.search(text) or re.search(r"(?:今日|昨日)の過ごし方", text):
+        return day, "past"
+    return None
 
 
 def _topic_for_personal_question(text: str) -> str | None:
@@ -426,6 +450,8 @@ def _topic_for_personal_question(text: str) -> str | None:
         text,
     ):
         return None
+    if SAME_DAY_ACTIVITY_QUESTION.search(text):
+        return "本人情報"
     if "映画館" in text and re.search(r"どこにあります|どこにある|場所.{0,8}(?:あります|ある)|どこ(?:ですか|でしょうか)", text) and not re.search(r"行く|行った|通う|利用|普段|よく|行きつけ|どの映画館|どこの映画館", text):
         return None
     explicit_movie_request = "映画" in text and re.search(
@@ -1068,6 +1094,13 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             for answer in context.get("ephemeral_user_answers", [])
         )
     if topic == "本人情報":
+        requested_activity_scope = _same_day_activity_scope(question_text)
+        if requested_activity_scope:
+            return any(
+                answer.get("answer", "").strip()
+                and _same_day_activity_scope(answer.get("question", "")) == requested_activity_scope
+                for answer in context.get("ephemeral_user_answers", [])
+            )
         if re.search(r"何年|何年間|勤続|職歴|経験年数", question_text):
             return any(facts.get(key) for key in (
                 "work_experience_years", "years_experience", "職歴年数", "勤務年数", "勤続年数"
@@ -1277,6 +1310,8 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
         return None
     if topic == "本人情報":
+        if SAME_DAY_ACTIVITY_QUESTION.search(partner_messages[-1]):
+            return personal_fact_question(topic, partner_messages[-1])
         quoted_question = partner_messages[-1].strip().replace("\n", " ")[:180]
         return UserQuestion(
             question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
@@ -1501,6 +1536,13 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "好きなカレーの種類や具を教えてください"
     elif topic == "カレー好み":
         question = "カレーは好きですか？"
+    elif topic == "本人情報" and SAME_DAY_ACTIVITY_QUESTION.search(source_question):
+        day = re.search(r"今日|本日|昨日|きのう", source_question)
+        day_label = day.group(0) if day else "今日"
+        if SAME_DAY_CURRENT_ACTIVITY_QUESTION.search(source_question):
+            question = f"{day_label}の予定や今していることを教えてください"
+        else:
+            question = f"{day_label}の過ごし方を教えてください"
     elif topic == "本人情報" and normalized:
         quoted_question = source_question.strip().replace("\n", " ")[:180]
         question = f"相手の「{quoted_question}」にどう答えたいか教えてください"
@@ -4335,9 +4377,13 @@ def _answers_verified_partner_question(candidate: Candidate, context: dict) -> b
         return False
     if topic == "本人情報":
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)
+        requested_activity_scope = _same_day_activity_scope(question)
         for answer in context.get("ephemeral_user_answers", []):
             answered_question = re.sub(r"\s+|[?？。！!]", "", answer.get("question", ""))
-            if answered_question != exact_question and exact_question not in answered_question:
+            if requested_activity_scope:
+                if _same_day_activity_scope(answer.get("question", "")) != requested_activity_scope:
+                    continue
+            elif answered_question != exact_question and exact_question not in answered_question:
                 continue
             answer_text = str(answer.get("answer", "")).strip()
             normalized_answer = re.sub(r"[\s、。！!？?]", "", answer_text)

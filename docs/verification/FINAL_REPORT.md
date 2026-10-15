@@ -1292,3 +1292,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 ### 2026-10-16 03:34 JST 最新report SHA CI
 
 `5780a8cf61ad128018916d096695fb26314b33ae` のPush Actions [38786313156](https://github.com/kenkyu0909/aichatapp/actions/runs/38786313156) とPR Actions [38786324398](https://github.com/kenkyu0909/aichatapp/actions/runs/38786324398) は同一headでsuccess。pytest 1105 passed / 1 warning in 129.40s、JS構文検査成功。
+
+## 2026-10-16 03:58 JST 追加回帰検証
+
+- 今回の差分では、相手の同日活動に関する直接質問を本人プロフィールの裏付けなしに返信候補へ通してしまう経路を修正した。今日/昨日と現在/過去の確認範囲を区別し、候補生成前の本人確認と一時回答を要求する。
+- 検証: focused 27 passed、本人確認関連52 passed、全pytest **1125 passed in 184.70s**、Firefox専用UI **11 passed in 139.78s**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
+- 過去の品質009実Gemini文章自然さ・候補意味多様性FAILは未解決のままであり、今回のモック/フィルター検証を実モデル品質の成功とは扱わない。総合NO-GOを維持する。
+- この追記時点でソース・テスト変更は未コミット、最新GitHub Actions未確認。Push後に同じHEADのPush/PR Actionsを確認し、結果を進捗記録とPR本文へ反映する。
