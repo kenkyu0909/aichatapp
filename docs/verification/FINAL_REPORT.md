@@ -1100,3 +1100,10 @@ Gemini実APIは0回。修正SHAへのGitHub Actionsは未確認。保存済みQU
 誘い候補が安全に生成されないケースでは`invite_decision`だけでなく`conversation_stage`も古い誘い段階のまま残ることを検出した。準備済み/未準備を含む修正前テスト**2 failed**を確認後、準備済みをconsider_invite / Stage 3、未準備をcontinue_conversation / Stage 2へ揃えた。修正後回帰**2 passed**、全pytest**932 passed in 113.98s**。コードSHA `058ec382c8d734a5273d33af1bbf93609cefa61f`。最新SHAのActionsは確認待ち。品質009の生成品質FAILは未解決のため総合NO-GOを維持する。
 
 コードSHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38731667450)・PR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38731677887)と、資料HEAD `5081dcaf7acddceef30b09b3aeb4cd7b6380e954`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38731751338)・PR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38731758965)が成功し、各head SHAを確認した。T317をPASS追加。現在317項目: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。PR #4はOPEN/Draft・未マージ。
+
+
+### 2026-10-15 21:17 JST 追補：Firefox主要操作の一連回帰
+
+Firefoxで初回候補生成からコピー、手動送信記録、相手メッセージ追加、通常返信生成、履歴表示、再読込後のSQLite会話保持までを通すE2Eを追加した。コピーだけでは送信記録に追加されないこと、本文の改行保持、first/replyの区別、ブラウザーruntime/console errorなしを架空データ・一時SQLite・Geminiモックで確認した。レビュー前のFirefox UI全体7 passed in 90.08s。レビューで再読込後の相手本文/順序確認不足が見つかり、全3発言の発言者・本文順を照合するよう修正。修正後のfocused Firefox test 1 passed in 11.39s、全pytest933 passed in 123.63s（Firefox UI込み）。Gemini実通信は0回。
+
+Test Matrixは318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。Firefox操作とオフライン回帰は合格だが、保存済みQUALITY009の実生成における自然さ・意味的候補多様性FAILは未解決のため、総合NO-GOを維持する。今回のテスト変更を含む最新コミットとGitHub Actionsはこれから確認する。PR #4はDraft・未マージを維持する。

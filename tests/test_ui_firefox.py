@@ -478,6 +478,90 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     assert errors["console"] == []
 
 
+def test_firefox_first_to_reply_copy_manual_record_and_history_flow(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のあおい")
+    first_text = "はじめまして！\nマッチできてうれしいです☺️\nカフェ巡り好きなんですね！"
+    reply_text = "えーいいですね！\n最近行ったお店で印象に残ったところありますか？"
+    driver.execute_script("""
+      window.__generatePayloads = [];
+      window.__copiedText = undefined;
+      Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText: async text => {window.__copiedText=text;}}});
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          window.__generatePayloads.push(payload);
+          const text = payload.mode === 'first' ? arguments[0] : arguments[1];
+          return new Response(JSON.stringify({
+            recommended:{label:'自然な返信',text},
+            alternatives:[
+              {label:'別の切り口',text:'カフェ巡りいいですね！'},
+              {label:'短い返信',text:'それ楽しそうです！'}
+            ], reason:'Firefoxの架空データUI検証用モックです', demo:false
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """, first_text, reply_text)
+
+    driver.find_element(By.ID, "first-message").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generatePayloads.at(-1).mode") == "first"
+    assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == first_text
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText !== undefined"))
+    assert driver.execute_script("return window.__copiedText") == first_text
+    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
+
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1)
+    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble").text == first_text
+
+    driver.find_element(By.ID, "message-input").send_keys("休日は友達とカフェに行ってきました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generatePayloads.at(-1).mode") == "reply"
+    assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == reply_text
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText === arguments[0]", reply_text))
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+
+    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 2)
+    driver.find_element(By.ID, "history-button").click()
+    history_text = modal(driver).text
+    assert first_text in history_text
+    assert reply_text in history_text
+    driver.find_element(By.ID, "close-modal").click()
+    driver.refresh()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 3)
+    restored_messages = []
+    for message in driver.find_elements(By.CSS_SELECTOR, "article.chat-message"):
+        role = "me" if "me" in message.get_attribute("class").split() else "them"
+        restored_messages.append((role, message.find_element(By.CSS_SELECTOR, ".bubble").text))
+    assert restored_messages == [
+        ("me", first_text),
+        ("them", "休日は友達とカフェに行ってきました！"),
+        ("me", reply_text),
+    ]
+    errors = record_artifact("firefox-first-reply-send-history", driver, {
+        "modes": ["first", "reply"],
+        "copied_without_recording": True,
+        "manually_recorded_messages": 2,
+        "history_survived_reload": True,
+    })
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
 def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)

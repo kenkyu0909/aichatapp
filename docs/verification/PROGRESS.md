@@ -981,3 +981,11 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - 全pytest **932 passed in 113.98s**。Firefox実UI **6 passed in 82.61s**。品質009保存結果の安全フィルター再生**5 passed in 0.33s**。Node/Ubuntu runnerの非阻害警告を除き、CI jobs成功。Gemini実API0回。
 - T317をPASS追加。Test Matrixは317項目: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の生成自然さ・意味的候補差FAILは解消していないため総合NO-GO。
 - PR #4はOPEN/Draft、head`5081dcaf7acddceef30b09b3aeb4cd7b6380e954`、未マージ。実験004/新HTMLなし。3つの未追跡ユーザー指示ファイルは保持。次は資料とPR本文を更新し、15〜20分以内にdirective-controlを再取得。次の作業は保存済みQUALITY009の意味的反復/候補方針差のオフライン再監査。
+
+
+### 2026-10-15 21:17 JST 継続チェックポイント：Firefox主要操作の一連回帰
+
+- `tests/test_ui_firefox.py`へ、first/reply生成、コピーだけでは未送信のまま、手動記録、相手メッセージ追加、履歴モーダル、再読込後の保存確認をまとめたFirefox E2Eを追加。架空データ・一時SQLite・Geminiモックを使用し、画面内JS runtime/console errorがないことも確認する。
+- 新規E2E単体は初回・再確認とも成功。レビューで相手発言の本文と全発言順序の検査不足が指摘されたため、再読込後の3発言を発言者/本文の組で照合するよう修正。修正後の対象テスト **1 passed in 11.39s**、全pytest **933 passed in 123.63s**（Firefox UIを含む）。レビュー前のFirefox UI全体は7 passed in 90.08s。Gemini実通信0回、Chrome不使用。
+- T318をPASSとして追加。Matrixは318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。実生成品質009の自然さ・意味的候補多様性FAILは未解決で、総合NO-GOを維持。
+- このUI追加と結果はこれからコミット・Pushする。最新SHAのPush/PR ActionsおよびPR #4 OPEN/Draftを確認する。会話004・新規会話HTMLは現行指示により実施しない。未追跡のユーザー指示ファイル3件はステージしない。

@@ -702,3 +702,8 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T317 | 会話段階同期修正と検証資料の最新HEADに対するGitHub Actions | Push/PR Actionsログのhead SHA・pytest・Firefox・JS検査を確認 | PASS | コードSHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のPush [38731667450](https://github.com/kenkyu0909/aichatapp/actions/runs/38731667450)・PR [38731677887](https://github.com/kenkyu0909/aichatapp/actions/runs/38731677887)がsuccess。検証資料HEAD `5081dcaf7acddceef30b09b3aeb4cd7b6380e954`のPush [38731751338](https://github.com/kenkyu0909/aichatapp/actions/runs/38731751338)・PR [38731758965](https://github.com/kenkyu0909/aichatapp/actions/runs/38731758965)もsuccess。各runでbackend tests、Firefox準備、JavaScript構文検査、Artifact upload成功。PR #4はOPEN/Draft。|
 
 最新ID行: 317。累計: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・候補方針多様性FAILは未解決。
+
+
+| T318 | Firefoxで初回生成から返信・コピー・手動記録・履歴・再読込までの一連操作 | `python -m pytest -q tests/test_ui_firefox.py::test_firefox_first_to_reply_copy_manual_record_and_history_flow` および全pytest | PASS | Windows上のFirefox実ブラウザー。架空の「あおい」、一時DB、Gemini APIモックを使用。コピーのみでは会話に追加されず、手動記録後に履歴・再読込で改行を含む本文が保持され、first/replyモード、JS runtime/consoleエラーなしを確認。レビュー指摘反映後の対象テスト1 passed in 11.39s、全pytest933 passed in 123.63s（Firefox UIを含む）。レビュー前のFirefox UI全体7 passed in 90.08s。実Gemini通信0回。Chrome不使用。|
+
+最新ID行: 318。累計: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。保存済みQUALITY009の実生成自然さ・候補方針多様性FAILは未解決。

@@ -717,3 +717,18 @@ Gemini API0回。会話004・新規HTMLは未実施。総合NO-GO。Test Matrix3
 2026-10-15 21:07 JST: 生成方針を降格した際にStage 4が残るケースを回帰で2件FAILとして再現し、誘い準備済みならconsider_invite / Stage 3、準備未完了ならcontinue_conversation / Stage 2へ同期した。回帰2 passed、全pytest932 passed in 113.98s。Python/JS構文検査とdiff check成功。修正SHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のActionsはPush後に確認する。Gemini API0回、conversation_004/新規会話HTMLなし。Matrixは316項目: PASS227 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。実生成QUALITY009自然さ・候補意味多様性FAILは残るためNO-GO。
 
 2026-10-15 21:05 JST: stage同期コードSHA `058ec382c8d734a5273d33af1bbf93609cefa61f`のPush/PR Actions [38731667450](https://github.com/kenkyu0909/aichatapp/actions/runs/38731667450) / [38731677887](https://github.com/kenkyu0909/aichatapp/actions/runs/38731677887)がsuccess。検証資料HEAD `5081dcaf7acddceef30b09b3aeb4cd7b6380e954`のPush/PR [38731751338](https://github.com/kenkyu0909/aichatapp/actions/runs/38731751338) / [38731758965](https://github.com/kenkyu0909/aichatapp/actions/runs/38731758965)もsuccess。全pytest932、Firefox UI6、QUALITY009オフライン再生5が成功。Gemini0回、会話004/新HTMLなし。Matrix317項目: PASS228 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。実生成品質FAILが残るためNO-GO。
+
+
+### 2026-10-15 21:17 JST 追補：Firefox主要操作回帰
+
+| ゴール | 現在の確認 | 状態 |
+|---|---|---|
+| 本人情報の正確性 | 実生成QUALITY009に関する課題が残る。今回のUIモックは本人情報の実生成評価ではない。 | 未達 |
+| 句読点・改行 | Firefox E2Eで生成候補の改行表示・コピー・保存後の保持を確認。日本語実生成の品質は未確認。 | 部分達成 |
+| ミラーリング | 本日の固定評価セットなし。 | 未達 |
+| 共感の反復防止 | QUALITY009の実生成FAILは未解決。 | 未達 |
+| 候補多様性 | 実生成の意味的候補差FAILは未解決。 | 未達 |
+| 食事への誘い判断 | Stageと安全な候補の同期は回帰済みだが全シナリオ評価は未完了。 | 部分達成 |
+| アプリ全体の安定性 | Firefox UIを含む全pytest933 passed。レビュー指摘を反映したfocused Firefox test 1 passed in 11.39s。Actionsは新しいテスト差分のPush後に確認する。 | ローカルPASS / CI待ち |
+
+Firefox E2Eはfirst/reply、候補コピー、手動記録、履歴画面、再読込保持、runtime/consoleエラー不在を確認した。Gemini API0回、Chrome不使用。Test Matrix 318項目: PASS229 / FAIL13 / FIXED56 / BLOCKED5 / NOT_TESTED15。**総合判定NO-GO**。次は構文/diff検査、レビュー、コミット・Push、最新SHAのActionsとPR状態を確認し、その後もP0品質のオフライン監査を続ける。
