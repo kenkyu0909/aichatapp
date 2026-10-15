@@ -3619,6 +3619,52 @@ def test_positive_resistance_reassurance_is_not_misclassified_as_refusal(client)
     assert not backend.partner_has_active_invitation_refusal(context)
 
 
+def test_duplicate_reply_moves_keep_safe_candidates_and_show_diversity_notice(client):
+    _, backend = client
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="自然", text="カフェの話を聞けてうれしいです！", reply_move="react"),
+        alternatives=[
+            backend.Candidate(label="広げる", text="そのお店はどんな雰囲気ですか？", reply_move="react"),
+            backend.Candidate(label="共有", text="お店の雰囲気が気になります！", reply_move="react"),
+        ],
+        reason="会話を続ける",
+        strategy="相手の話題を拾う",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="話題を続ける",
+        next_action="会話を続ける",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 3, {})
+
+    assert filtered["available_candidate_count"] == 3
+    assert len(filtered["alternatives"]) == 2
+    assert "進め方が重なっている" in filtered["candidate_notice"]
+
+    distinct = value.model_copy(update={
+        "alternatives": [
+            backend.Candidate(label="広げる", text="そのお店はどんな雰囲気ですか？", reply_move="expand"),
+            backend.Candidate(label="共有", text="お店の雰囲気が気になります！", reply_move="grounded_share"),
+        ],
+    })
+    distinct_filtered = backend.filter_safe_candidates(distinct, 3, {})
+    assert "進め方が重なっている" not in distinct_filtered["candidate_notice"]
+
+    partially_repeated = value.model_copy(update={
+        "recommended": backend.Candidate(label="自然", text="カフェの話を聞けてうれしいです！", reply_move="react"),
+        "alternatives": [
+            backend.Candidate(label="広げる", text="そのお店はどんな雰囲気ですか？", reply_move="react"),
+            backend.Candidate(label="共有", text="お店の雰囲気が気になります！", reply_move="expand"),
+        ],
+    })
+    partially_repeated_filtered = backend.filter_safe_candidates(partially_repeated, 3, {})
+    assert partially_repeated_filtered["available_candidate_count"] == 3
+    assert "進め方が重なっている" in partially_repeated_filtered["candidate_notice"]
+
+
 def test_cafe_preference_polarity_is_preserved(client):
     _, backend = client
     context = {

@@ -558,3 +558,20 @@
 - 重点回帰5 passed。バックエンド **641 passed in 17.92s**。全pytestとFirefox UI **720 passed in 101.07s**。Python/JavaScript構文と差分検査成功。Gemini実API 0回。
 - この修正と最新の検証記録は未コミット。最新SHAのActionsも未実施。QUALITY009の文章品質FAILと意味評価基準未達があるため総合NO-GO。conversation_004・新会話HTMLは実施しない。
 - 次: 抵抗判定のパッチを記録とともに追跡対象のみcommit/pushし、同一SHAのPush/PR Actionsを確認する。その後は会話009の直接質問・候補方針の品質問題へ進む。ユーザー提供のtxtはステージしない。
+
+
+### 2026-10-15 14:34 JST：候補ロールの重複を知らせる
+
+- QUALITY009では3案があっても質問中心の候補や共感の言い換えが混在した。V2安全フィルターは安全候補を保つ設計で、意味的類似やreply_moveの重複を警告しない。
+- 3案のreply_moveが同じ場合、`candidate_notice` に重複の可能性を表示するよう変更。安全確認済みの候補は削除しない。UIがこの注意を実際に表示することも確認した。ラベルだけで意味的多様性を保証できるとはみなさない。
+- 修正前の通知テストはFAIL。修正後の重点回帰3 passed、バックエンド **642 passed in 17.63s**、全pytest/Firefox UI **721 passed in 98.68s**。Python compile、`node --check app.js`、`git diff --check`成功。
+- `ca9028416c6d1b3b5fd2cb9ff8c91571a000d735` のPush/PR Actionsは同SHAで成功。この追補は未コミットで、追補SHAのActionsは未実施。Gemini実API 0回。PR #4 OPEN/Draft。総合NO-GO（品質009の手動文章品質FAILと包括評価未達）。
+- 次: 候補通知の修正を記録とともにcommit/pushし、最新SHAのActionsを確認。その後、保存済み品質009の候補が回答を先送りする/同じ共感を繰り返すケースを引き続き監査する。ユーザー提供txtはステージしない。
+
+### 2026-10-15 14:39 JST：候補の部分重複も通知する境界修正
+
+- 独立レビューで、3候補中2候補だけが同じ `reply_move` の場合に警告が出ない境界条件を指摘された。異なる進め方の数が採用候補数より少なければ警告するよう変更し、全重複・部分重複・全て異なるケースをテストした。
+- 安全な候補は削除せず、部分重複時は `candidate_notice` で選択時の注意を出す。候補ラベルだけから意味的な多様性を保証しない制限は残る。
+- focused回帰 **3 passed**。全pytest・Firefox UI **721 passed in 98.90s**。Python compile、`node --check app.js`、`git diff --check`成功。独立レビュー指摘0件。
+- この追補の最新SHA Actionsは未実施。今回Gemini API 0回。PR #4 OPEN/Draft、未マージ。過去QUALITY009の実生成品質FAILを保持し、総合判定NO-GO。
+- 次: 追跡対象の修正・検証ログをcommit/pushし、同一SHAのPush/PR Actionsを確認する。続けてQUALITY009の回答保留と相槌反復を監査し、安全候補の保持と候補不足通知を維持する。会話004と新しいHTMLは作成しない。未追跡のユーザー指示ファイルはステージしない。

@@ -494,3 +494,27 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T251 | 最新差分のPython/JavaScript構文と空白 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 2026-10-15 14:29 JST、すべて成功。|
 
 最新ID行は251件。累計: PASS188 / FAIL13 / FIXED30 / BLOCKED5 / NOT_TESTED15。修正後の最新Actionsは未実施（前コミット `029f86a` のPush/PR Actionsは成功）。今回Gemini実API 0回。`conversation_004`・新会話HTMLは指示どおり未実施。
+
+
+### 2026-10-15 14:34 JST：候補の進め方が重なる場合の通知
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T252 | V2候補のreply_move重複通知と安全候補保持 | pytest / filter_safe_candidates | FIXED | 3案が同じ `reply_move` の場合に、候補を削除せず進め方が重なる可能性を通知。異なるreply_moveなら通知しない。UIが `candidate_notice` を表示する実装も確認。意味的な同一内容を完全検出する機能ではない。|
+| T253 | 候補ロールと誘い判断の重点回帰 | pytest focused | PASS | 候補重複/進め方の注意・自然な誘い条件 **3 passed**。修正前は重複ロールの注意がなく1件FAIL。|
+| T254 | 最新バックエンド全体 | `python -m pytest tests/test_app.py -q` | PASS | **642 passed in 17.63s**。|
+| T255 | 最新コードの全pytest・Firefox UI | `python -m pytest -q` | PASS | **721 passed in 98.68s**。Firefox UIを含む。Chrome未使用。|
+| T256 | 最新差分のPython/JavaScript構文と空白 | `py_compile` / `node --check app.js` / `git diff --check` | PASS | 2026-10-15 14:34 JST、すべて成功。|
+
+最新ID行は256件。累計: PASS192 / FAIL13 / FIXED31 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。
+
+### 2026-10-15 14:39 JST：候補ロール重複の境界条件を修正
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T257 | 3候補中2候補だけ進め方が重複する境界 | pytest / reply_move の重複検査 | FIXED | 独立レビューで `react, react, expand` では注意が出ない境界を指摘。修正前のテストで再現し、異なる進め方の数が候補数より少なければ警告するよう変更。安全な候補3案は保持。|
+| T258 | 全重複・部分重複・全て異なる進め方 | focused pytest | PASS | 重複通知のfocused回帰3件成功。部分重複では警告、全て異なる場合は警告なし。|
+| T259 | 最新変更の全pytest・Firefox UI | `python -m pytest -q` | PASS | 2026-10-15 14:39 JST、**721 passed in 98.90s**。Firefox UIを含む。|
+| T260 | 構文・差分検査・独立レビュー | Python compile、Node構文、`git diff --check`、code reviewer | PASS | Python/JavaScript構文・空白検査成功。レビュー指摘0件。|
+
+最新ID行は260件。累計: PASS195 / FAIL13 / FIXED32 / BLOCKED5 / NOT_TESTED15。過去FAILとQUALITY009の実生成評価FAILは維持。今回Gemini実API 0回。`conversation_004`・新会話HTMLは実施しない。

@@ -3008,6 +3008,10 @@ def filter_safe_candidates(
         for right in normalized_safe[index + 1:]
     ):
         notices.append("候補の切り口が似ている可能性があります。本文を確認して選んでください。")
+    if isinstance(value, SuggestionsV2) and len(accepted) > 1:
+        reply_moves = {candidate.reply_move for candidate in accepted}
+        if len(reply_moves) < len(accepted):
+            notices.append("候補の進め方が重なっている可能性があります。本文を確認して選んでください。")
     result["candidate_notice"] = " ".join(notices)
     return result
 

@@ -840,3 +840,18 @@ Gemini実API通信は0回。QUALITY009の実文章品質FAILは維持し、conve
 「直接会うのは少し抵抗があります」などの慎重な断りが既存の不安パターンに一致せず、再勧誘候補を通す問題を修正した。「抵抗はありません」という肯定対照は拒否扱いせず、中立の候補は保持する。修正前の再現テストは2件失敗し、肯定対照は通過。修正後重点5件、バックエンド641件、Firefox UIを含む全pytest **720件**が成功した（全体101.07秒）。構文/差分検査も成功。
 
 この差分に対する最新SHAのActionsはこれから確認する。前コミット `029f86a2baaba36dc88919f7f6ab3e70cfe643ff` のPush/PR Actionsは成功。Gemini API呼び出しは0回。過去の品質009実生成FAILと広い自然言語品質基準の未評価を維持するため、総合判定はNO-GO。TEST_MATRIXは251項目（PASS188 / FAIL13 / FIXED30 / BLOCKED5 / NOT_TESTED15）。
+
+
+## 2026-10-15 14:34 JST 候補の進め方が重なる場合の利用者通知
+
+V2候補でreply_moveが重なる場合、候補を捨てずに進め方の重複可能性を `candidate_notice` で知らせる修正を追加した。画面側の通知表示も確認した。修正後は重点3件、バックエンド642件、Firefox UIを含む全pytest **721件**が成功し、構文と差分検査も成功。意味的な同一内容をラベルから完全に判定できる仕組みではない。
+
+前コミット `ca9028416c6d1b3b5fd2cb9ff8c91571a000d735` のPush/PR Actionsは成功。この修正は未コミット。今回Gemini API 0回。品質009の実生成文章評価FAILと包括評価の未達があるため、総合判定はNO-GO。TEST_MATRIXは256項目（PASS192 / FAIL13 / FIXED31 / BLOCKED5 / NOT_TESTED15）。
+
+## 2026-10-15 14:39 JST 候補ロールの部分重複を通知
+
+コードレビューで、3候補の進め方が `react, react, expand` のように部分重複する場合に注意が出ない境界条件を確認した。distinctな `reply_move` の数が採用候補の数より少なければ、全ての安全候補を維持したまま重複可能性を通知するよう修正した。
+
+部分重複・全重複・全て異なるケースのfocusedテスト3件が成功。最新コードの全pytestとFirefox UIは **721 passed in 98.90s**。Python/JavaScript構文、差分検査も成功し、独立コードレビュー指摘は0件。今回Gemini実API呼び出しは0回。
+
+この作業差分はコミット・Push前で、同一SHAのGitHub Actionsは未実施。QUALITY009の実際の生成品質FAILは解消済みとみなさず、総合判定はNO-GOを維持する。TEST_MATRIXは260項目（PASS195 / FAIL13 / FIXED32 / BLOCKED5 / NOT_TESTED15）。conversation_004と新しい会話HTMLはユーザー指示により未実施。
