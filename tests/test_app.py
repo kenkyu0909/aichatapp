@@ -2383,6 +2383,32 @@ def test_unrelated_positive_after_contrast_does_not_verify_negative_topic(client
     ], context)
 
 
+@pytest.mark.parametrize("irrelevant_positive", ["好きな人がいます", "好きな食べ物はカレーです"])
+def test_contrast_does_not_promote_noun_modifier_to_affirmative_fact(client, irrelevant_positive):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {"hobbies": f"カフェを探すのは趣味ではないですが{irrelevant_positive}"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert "場所探し" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="連体修飾を誤認", text="カフェを探すのが好きです！")
+    ], context)
+
+
+@pytest.mark.parametrize(("fact", "expected_claim"), [
+    ("カフェを探すのは趣味ではないですが、好きです", "カフェを探すのが好きです！"),
+    ("カフェを探すのは趣味ではないけど、楽しいです", "カフェを探すのが楽しいです！"),
+])
+def test_comma_after_contrast_keeps_elliptical_positive_grounded(client, fact, expected_claim):
+    _, backend = client
+    context = {"my_profile": {"facts": {"hobbies": fact}}, "ephemeral_user_answers": []}
+
+    assert "場所探し" not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="読点を挟む肯定", text=expected_claim)
+    ], context)
+
+
 @pytest.mark.parametrize("partner_message", [
     "カフェを探すのは趣味ではないですが好きです",
     "カフェを探すのは趣味ではないですが楽しいです",
