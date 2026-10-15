@@ -2204,6 +2204,29 @@ def test_uncovered_personal_fact_domains_are_rejected_without_evidence(client, c
     ], context)
 
 
+@pytest.mark.parametrize(("claim", "topic", "facts"), [
+    ("ジムには週3で行きます！", "運動習慣", {"exercise_habits": "ジムに週3回行きます"}),
+    ("実家が横浜なのでよく帰ります！", "出身地", {"hometown_visits": "実家は横浜でよく帰ります"}),
+    ("兄弟がいるのでよく連絡します！", "家族", {"siblings": "兄弟がいてよく連絡します"}),
+    ("料理は週末によくします！", "料理習慣", {"cooking_habits": "週末によく料理します"}),
+])
+def test_uncovered_personal_fact_domains_allow_matching_confirmed_evidence(client, claim, topic, facts):
+    _, backend = client
+    context = {"my_profile": {"facts": facts}, "ephemeral_user_answers": []}
+
+    assert topic not in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認済み事実", text=claim)
+    ], context)
+
+
+def test_hometown_visit_frequency_requires_matching_evidence(client):
+    _, backend = client
+    candidate = backend.Candidate(label="未確認頻度", text="実家が横浜なのでよく帰ります！")
+    context = {"my_profile": {"facts": {"hometown_visits": "実家は横浜で年に数回帰省します"}}}
+
+    assert "出身地" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
 @pytest.mark.parametrize(("answered_question", "answer", "new_question"), [
     ("最近どんな本を読みましたか？", "最近は青い灯台を読みました", "普段どのくらい本を読みますか？"),
     ("最近どんな映画を観ましたか？", "最近は青い灯台を観ました", "映画は好きですか？"),
