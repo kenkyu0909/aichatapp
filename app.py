@@ -14,7 +14,7 @@ from difflib import SequenceMatcher
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -167,6 +167,7 @@ class GenerateInput(BaseModel):
 class Candidate(BaseModel):
     label: str = Field(min_length=1, max_length=50)
     text: str = Field(min_length=1, max_length=1000)
+    reply_move: Literal["react", "expand", "grounded_share", "invite"] = "react"
 
 
 class Suggestions(BaseModel):
@@ -227,7 +228,7 @@ class ProviderAttemptLimitError(RuntimeError):
 
 
 INVITATION_PATTERN = re.compile(
-    r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行けたら|どうですか|しませんか)|"
+    r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行ってみません|行けたら|どうですか|しませんか)|"
     r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
     r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
 )
@@ -275,6 +276,45 @@ def invite_opportunity_ready(context: dict) -> bool:
     asks_reciprocally = bool(re.search(r"[?？]|ですか|ますか", recent_partner_text))
     relates_to_outing = bool(re.search(r"カフェ|喫茶店|コーヒー|ご飯|ごはん|食事|ランチ|お店|おすすめ|どこ|一緒に行", recent_partner_text))
     return has_outing_topic and shows_interest and asks_reciprocally and relates_to_outing
+
+
+def partner_has_active_invitation_refusal(context: dict) -> bool:
+    """Keep a clear refusal or stated unease from being overridden by model metadata."""
+    partner_messages = [
+        (index, str(message.get("body", "")))
+        for index, message in enumerate(context.get("history", []))
+        if message.get("role") == "them"
+    ]
+    refusal_pattern = re.compile(
+        r"まだ会う|会うのは.{0,10}(?:不安|難|控え)|今は.{0,8}(?:難|無理)|"
+        r"(?:会う|誘い|一緒に行く).{0,10}(?:断|ごめんなさい|遠慮)|"
+        r"これ以上.{0,10}(?:やり取り|連絡)|連絡.{0,8}控え|行くのは.{0,8}(?:不安|難)"
+    )
+    hesitation_pattern = re.compile(
+        r"(?:けど|けれど|でも).{0,12}(?:まだ|不安|難|もう少し|考えたい|検討|迷|悩|今は)|"
+        r"まだ(?:会う|行く|考え)|もう少し|少し考え|考えたい|検討|不安|難しい|無理|"
+        r"今は|遠慮|ごめんなさい|急ぎたくない|ちょっと.{0,8}(?:不安|難|迷|悩)|"
+        r"会うのは.{0,8}(?:控え|待ち)|"
+        r"(?:行く|会う).{0,8}(?:迷|悩)"
+    )
+    refusal_indexes = [index for index, text in partner_messages if refusal_pattern.search(text)]
+    if not refusal_indexes:
+        return False
+    last_refusal_index = max(refusal_indexes)
+    refusal_active = True
+    reopen_pattern = re.compile(
+        r"(?:(?:やっぱり|ぜひ|喜んで).{0,8})?(?:(?:今度|次は)(?:あなたと|一緒に)|(?:あなたと|一緒に)).{0,20}"
+        r"(?:会いましょう|会ってみたい|行きましょう|行ってみたい|行けたら嬉しい|行けたらうれしい)|"
+        r"(?:ぜひ|喜んで)[！! ]{0,4}(?:会いましょう|一緒に.{0,12}行きましょう|行きましょう)"
+    )
+    for index, text in partner_messages:
+        if index <= last_refusal_index:
+            continue
+        if hesitation_pattern.search(text) or refusal_pattern.search(text):
+            refusal_active = True
+        elif reopen_pattern.search(text):
+            refusal_active = False
+    return refusal_active
 
 
 PERSONAL_FACT_TOPICS = {
@@ -1604,7 +1644,23 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         re.search(r"(?:休日|休みの日|週末).{0,24}友達と.{0,18}(?:カフェ|喫茶店|出かけ|行く)", message)
         for message in partner_messages
     )
+    knows_recent_cafe_visit = any(
+        re.search(
+            r"(?:最近|この前|昨日|先週).{0,14}(?:カフェ|喫茶店).{0,14}(?:行|訪れ|寄っ)"
+            r"|(?:カフェ|喫茶店).{0,14}(?:最近|この前|昨日|先週).{0,14}(?:行|訪れ|寄っ)",
+            message,
+        )
+        for message in partner_messages
+    )
     repeat_rules: list[tuple[str, bool, re.Pattern[str]]] = [
+        (
+            "最近行ったカフェ",
+            knows_recent_cafe_visit,
+            re.compile(
+                r"(?:最近|この前|昨日|先週).{0,14}(?:カフェ|喫茶店).{0,14}(?:行った|行きました|訪れた|寄った)"
+                r"|(?:カフェ|喫茶店).{0,14}(?:最近|この前|昨日|先週).{0,14}(?:行った|行きました|訪れた|寄った)"
+            ),
+        ),
         (
             "友達とカフェに行く頻度",
             knows_friend_cafe_frequency,
@@ -1647,7 +1703,13 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
     ))
 
 
-def check_suggestions(value: Suggestions | SuggestionsV2, count: int, context: dict | None = None) -> dict:
+def check_suggestions(
+    value: Suggestions | SuggestionsV2,
+    count: int,
+    context: dict | None = None,
+    *,
+    enforce_similarity: bool = True,
+) -> dict:
     candidates = [value.recommended, *value.alternatives]
     if any("、" in candidate.text or "。" in candidate.text for candidate in candidates):
         raise CandidatePunctuationError("候補本文に使用禁止の句読点が含まれています")
@@ -1662,13 +1724,192 @@ def check_suggestions(value: Suggestions | SuggestionsV2, count: int, context: d
     normalized = [re.sub(r"\s+", "", c.text) for c in candidates]
     if len(candidates) != count or len(set(normalized)) != count:
         raise ValueError("候補の数または重複が不正です")
-    if count > 1 and any(
+    if enforce_similarity and count > 1 and any(
         SequenceMatcher(None, left, right).ratio() >= 0.9
         for index, left in enumerate(normalized)
         for right in normalized[index + 1:]
     ):
         raise CandidateSimilarityError("返信候補が似すぎています")
     return value.model_dump()
+
+
+def _unsupported_partner_claim(candidate: Candidate, context: dict) -> bool:
+    """Reject a few high-confidence assumptions about the other person.
+
+    This deliberately covers claims that can be checked safely with local text
+    evidence. It is not a general semantic fact checker.
+    """
+    partner_text = " ".join(
+        [str(context.get("other", {}).get("description", ""))]
+        + [
+            str(message.get("body", ""))
+            for message in context.get("history", [])
+            if message.get("role") == "them"
+        ]
+    )
+    work_claim = re.compile(
+        r"お仕事お疲れ|仕事(?:が|は)?(?:忙し|大変|終わり|帰り)|職場(?:が|は)?(?:忙し|大変)|"
+        r"お仕事(?:が|は)?(?:忙し|大変)"
+    )
+    if work_claim.search(candidate.text) and not re.search(
+        r"仕事|職場|勤務|働いて|会社", partner_text
+    ):
+        return True
+    return False
+
+
+def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
+    """Check that a verified direct question is not silently evaded.
+
+    The topic markers are intentionally narrow. Unknown question types remain
+    under the prompt and the existing direct-question preflight.
+    """
+    partner_messages = [
+        item.get("body", "") for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if not partner_messages:
+        return True
+    question = partner_messages[-1]
+    topic = _topic_for_personal_question(question)
+    if not topic or not _topic_is_verified(topic, context, question):
+        return True
+    normalized_candidate = re.sub(r"\s+", "", candidate.text)
+    for answer in context.get("ephemeral_user_answers", []):
+        answer_text = str(answer.get("answer", "")).strip()
+        answer_question = str(answer.get("question", ""))
+        same_scope = _topic_for_personal_question(answer_question) == topic
+        if topic == "映画" and re.search(r"最近|この前|昨日|先週|観た映画|見た映画", question):
+            same_scope = bool(
+                re.search(r"最近|この前|昨日|先週", answer_question)
+                and re.search(r"観|見|作品", answer_question)
+            )
+        if (
+            answer_text
+            and same_scope
+            and re.sub(r"\s+", "", answer_text) in normalized_candidate
+        ):
+            return True
+        if topic == "映画" and same_scope:
+            answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+            answer_title = re.search(r"[『「]([^』」]{1,40})[』」]", answer_text)
+            if answer_title and re.sub(r"\s+", "", answer_title.group(1)) in re.sub(r"\s+", "", answer_prefix):
+                return True
+    answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+    patterns = {
+        "映画": r"(?:映画|洋画|邦画).{0,18}(?:好き|観|見)|(?:好き|観|見).{0,18}(?:映画|洋画|邦画)|作品名",
+        "読書": r"(?:本|小説|読書|漫画|マンガ).{0,18}(?:好き|読|読み)|(?:読|読み).{0,18}(?:本|小説|漫画|マンガ)",
+        "買い物": r"(?:買|購入|調べ|比較|考え|悩ん).{0,22}(?:買|購入|調べ|比較|考え|悩ん)?",
+        "カレー好み": r"カレー.{0,18}(?:好き|苦手|嫌い)|(?:好き|苦手|嫌い).{0,18}カレー",
+        "カレー": r"カレー.{0,18}(?:好き|苦手|嫌い|辛口|甘口|チキン|ポーク|キーマ)",
+        "カレー頻度": r"カレー.{0,18}(?:よく|頻繁|週|月|たまに|あまり)",
+        "旅行": r"旅行|旅",
+        "旅行最近": r"(?:旅行|旅|行っ|出かけ).{0,18}(?:最近|この前|先週|昨日)?|(?:最近|この前|先週|昨日).{0,18}(?:旅行|旅|行っ|出かけ)",
+        "旅行頻度": r"(?:旅行|旅).{0,18}(?:よく|頻繁|何回|年に|月に|たまに)",
+        "料理習慣": r"(?:料理|自炊).{0,18}(?:する|作る|しない|作らない)",
+        "居住地": r"(?:住んで|在住|地域|エリア)",
+        "予定": r"(?:曜日|時間|予定|空いて|都合)",
+    }
+    marker = patterns.get(topic)
+    if not marker:
+        return True
+    return bool(re.search(marker, answer_prefix))
+
+
+def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
+    reasons: list[str] = []
+    text = candidate.text
+    if "、" in text or "。" in text:
+        reasons.append("禁止句読点")
+    if candidate_has_placeholder(text):
+        reasons.append("未完成プレースホルダー")
+    if candidate_has_missing_sentence_break(text):
+        reasons.append("文の区切り不足")
+    if any(not line.strip() for line in text.splitlines()):
+        reasons.append("空行")
+    if repeated_partner_question_topics([candidate], context):
+        reasons.append("相手の既知情報を再質問")
+    if unsupported_personal_claim_topics([candidate], context):
+        reasons.append("未確認の本人事実")
+    if not _answers_verified_partner_question(candidate, context):
+        reasons.append("相手からの直接質問に未回答")
+    if _unsupported_partner_claim(candidate, context):
+        reasons.append("未確認の相手情報")
+    if (
+        (
+            context.get("invite_decision") in {"respect_no", "do_not_repeat_invite"}
+            or partner_has_active_invitation_refusal(context)
+        )
+        and INVITATION_PATTERN.search(text)
+    ):
+        reasons.append("相手の断りや慎重さに反する誘い")
+    return reasons
+
+
+def filter_safe_candidates(
+    value: Suggestions | SuggestionsV2,
+    requested_count: int,
+    context: dict,
+) -> dict:
+    """Keep independently safe candidates and report any shortage transparently.
+
+    Unsafe alternatives do not erase a safe recommendation. Exact duplicate
+    text is removed; semantic similarity remains a quality warning rather than
+    a reason to discard otherwise safe candidate text.
+    """
+    source_candidates = [value.recommended, *value.alternatives]
+    accepted: list[Candidate] = []
+    rejected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    candidate_context = {
+        **context,
+        "invite_decision": getattr(value, "invite_decision", None),
+    }
+    for candidate in source_candidates:
+        reasons = _candidate_rejection_reasons(candidate, candidate_context)
+        normalized = re.sub(r"\s+", "", candidate.text)
+        if normalized in seen:
+            reasons.append("重複候補")
+        if reasons:
+            rejected.append({"label": candidate.label, "reasons": reasons})
+            continue
+        seen.add(normalized)
+        accepted.append(candidate)
+        if len(accepted) >= requested_count:
+            break
+
+    result = value.model_dump()
+    result["requested_candidate_count"] = requested_count
+    result["available_candidate_count"] = len(accepted)
+    result["candidate_rejections"] = rejected
+    if not accepted:
+        result.update({
+            "recommended": None,
+            "alternatives": [],
+            "needs_user_info": False,
+            "user_questions": [],
+            "generation_blocked": True,
+            "candidate_notice": "安全性・形式の確認を通過した返信候補がありません。候補を送らず、入力内容を確認してください。",
+        })
+        return result
+
+    result["recommended"] = accepted[0].model_dump()
+    result["alternatives"] = [candidate.model_dump() for candidate in accepted[1:]]
+    result["generation_blocked"] = False
+    notices: list[str] = []
+    if len(accepted) < requested_count:
+        notices.append(
+            f"安全確認後に表示できる候補は{len(accepted)}案です（指定は{requested_count}案）。不足分を不自然な候補で補っていません。"
+        )
+    normalized_safe = [re.sub(r"\s+", "", item.text) for item in accepted]
+    if len(normalized_safe) > 1 and any(
+        SequenceMatcher(None, left, right).ratio() >= 0.9
+        for index, left in enumerate(normalized_safe)
+        for right in normalized_safe[index + 1:]
+    ):
+        notices.append("候補の切り口が似ている可能性があります。本文を確認して選んでください。")
+    result["candidate_notice"] = " ".join(notices)
+    return result
 
 
 def demo_suggestions(mode: str, count: int) -> dict:
@@ -1854,8 +2095,21 @@ def generate(data: GenerateInput):
            "stageはStage 1からStage 6、invite_decisionはdo_not_invite/continue_conversation/consider_invite/invite_gently/wait/respect_no/ask_user_info/do_not_repeat_invite/schedule_after_acceptance/continue_or_closeのいずれかです。"
            if data.response_version == 2 else "strategyは無理のない提案を1文で記述してください。")
     )
+    if data.response_version == 2 and data.count == 3 and data.mode in {"reply", "followup"}:
+        system_instruction += (
+            "\n3案は安全性と自然さを優先し、reply_moveを使って切り口を分けます。"
+            "1案目はreact（素直な反応）、2案目はexpand（新しい具体的な話題へ進める）、"
+            "3案目はgrounded_share（確認済みの本人情報で短く共有）を基本にします。"
+            "会話方針がinvite_gentlyなら、3案のいずれかをinviteにして自然に誘います。"
+            "本人事実が未確認ならgrounded_shareを強行せず、react等の安全な案に置き換えます。"
+            "候補の文末だけを変えて多様性を装わず、役割を本文内容にも反映します。"
+        )
     attempted_models: list[dict[str, str]] = []
-    quality_repair_used = False
+    fact_repair_used = False
+    invite_repair_used = False
+    candidate_repair_used = False
+    safe_candidate_fallback: SuggestionsV2 | None = None
+    safe_candidate_fallback_notice = ""
     question_repair_used = False
     unnecessary_question_repair_used = False
     try:
@@ -1895,6 +2149,28 @@ def generate(data: GenerateInput):
                     if not response.text:
                         raise ValueError("AIから応答がありません")
                     parsed = response_model.model_validate_json(response.text)
+                    candidate_notice = ""
+                    if (
+                        data.response_version == 2
+                        and partner_has_active_invitation_refusal(context)
+                        and parsed.invite_decision not in {"respect_no", "do_not_repeat_invite"}
+                    ):
+                        parsed = parsed.model_copy(update={
+                            "invite_decision": "respect_no",
+                            "decision_reason": "会話履歴に相手の断りまたは会うことへの慎重さがあります",
+                            "next_action": "誘いを繰り返さず相手の意思を尊重します",
+                        })
+                        candidate_notice = "相手が会うことへの慎重さを示しているため誘い候補を除外します。"
+                    if (
+                        data.response_version == 2
+                        and parsed.needs_user_info
+                        and safe_candidate_fallback is not None
+                    ):
+                        parsed = safe_candidate_fallback.model_copy(deep=True)
+                        candidate_notice = " ".join(filter(None, [
+                            safe_candidate_fallback_notice,
+                            "追加確認を経ても新しい安全候補を得られなかったため、先に確認済みの安全な候補を表示します。",
+                        ]))
                     if data.response_version == 2 and parsed.needs_user_info:
                         if data.skipped_user_info:
                             return blocked_user_info_response(
@@ -1964,6 +2240,112 @@ def generate(data: GenerateInput):
                         return {**parsed.model_dump(), "demo": False, "skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models}
                     if data.response_version == 2 and (len(parsed.user_questions) > 0 or parsed.recommended is None):
                         raise ValueError("生成結果の形式が不正です")
+                    if data.response_version == 2:
+                        filtered_result = filter_safe_candidates(parsed, data.count, context)
+                        if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
+                            parsed = safe_candidate_fallback.model_copy(deep=True)
+                            filtered_result = filter_safe_candidates(parsed, data.count, context)
+                            candidate_notice = " ".join(filter(None, [
+                                safe_candidate_fallback_notice,
+                                "再生成で安全な候補を得られなかったため、先に確認済みの安全な候補を表示します。",
+                            ]))
+                        if filtered_result.get("generation_blocked"):
+                            partner_messages = [
+                                message.get("body", "")
+                                for message in context.get("history", [])
+                                if message.get("role") == "them"
+                            ]
+                            direct_question = partner_messages[-1] if partner_messages else ""
+                            direct_topic = _topic_for_personal_question(direct_question)
+                            if direct_topic and not _topic_is_verified(
+                                direct_topic, context, direct_question
+                            ):
+                                if data.skipped_user_info:
+                                    return blocked_user_info_response(
+                                        "本人情報の確認がスキップされたため、未確認の回答候補を表示しませんでした。",
+                                        skipped=True,
+                                        attempted_models=attempted_models,
+                                        api_attempt_count=len(attempted_models),
+                                        api_alias=account,
+                                        model=model,
+                                    )
+                                question = personal_fact_question(direct_topic, direct_question)
+                                return {
+                                    **user_info_question_response(
+                                        question.question,
+                                        question.purpose,
+                                        "相手から本人への直接質問があり、候補には確認できない本人情報が含まれていました。候補を隠して質問の内容を確認します。",
+                                    ),
+                                    "demo": False,
+                                    "api_alias": account,
+                                    "model": model,
+                                    "api_attempt_count": len(attempted_models),
+                                    "attempted_models": attempted_models,
+                                }
+                            if not candidate_repair_used:
+                                candidate_repair_used = True
+                                reasons = sorted({
+                                    reason
+                                    for item in filtered_result.get("candidate_rejections", [])
+                                    for reason in item.get("reasons", [])
+                                })
+                                system_instruction += (
+                                    "\n【候補ごとの安全・形式検査で不適切候補を検出】"
+                                    + "、".join(reasons)
+                                    + "。問題部分だけでなく全候補を見直し、未確認の本人・相手情報、句読点、既知情報の聞き直しを避けてください。"
+                                    "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
+                                )
+                                continue
+                            blocked_result = blocked_user_info_response(
+                                "安全性と文章形式の確認を通過する候補を作れなかったため、候補を表示せず停止しました。",
+                                skipped=data.skipped_user_info,
+                                attempted_models=attempted_models,
+                                api_attempt_count=len(attempted_models),
+                                api_alias=account,
+                                model=model,
+                            )
+                            blocked_result.update({
+                                "requested_candidate_count": data.count,
+                                "available_candidate_count": 0,
+                                "candidate_notice": filtered_result.get("candidate_notice", ""),
+                                "candidate_rejection_summary": sorted({
+                                    reason
+                                    for item in filtered_result.get("candidate_rejections", [])
+                                    for reason in item.get("reasons", [])
+                                }),
+                            })
+                            return blocked_result
+                        candidate_notice = " ".join(filter(None, [
+                            candidate_notice,
+                            filtered_result.get("candidate_notice", ""),
+                        ]))
+                        safe_candidates = [
+                            filtered_result["recommended"],
+                            *filtered_result.get("alternatives", []),
+                        ]
+                        if parsed.invite_decision == "invite_gently":
+                            invitation_index = next(
+                                (
+                                    index for index, candidate in enumerate(safe_candidates)
+                                    if INVITATION_PATTERN.search(candidate["text"])
+                                ),
+                                None,
+                            )
+                            if invitation_index is not None and invitation_index > 0:
+                                safe_candidates = [
+                                    safe_candidates[invitation_index],
+                                    *safe_candidates[:invitation_index],
+                                    *safe_candidates[invitation_index + 1:],
+                                ]
+                        parsed = parsed.model_copy(update={
+                            "recommended": Candidate.model_validate(safe_candidates[0]),
+                            "alternatives": [Candidate.model_validate(item) for item in safe_candidates[1:]],
+                        })
+                        if safe_candidate_fallback is None:
+                            safe_candidate_fallback = parsed.model_copy(deep=True)
+                            safe_candidate_fallback_notice = candidate_notice
+                    else:
+                        safe_candidates = [parsed.recommended, *parsed.alternatives]
                     unsupported_topics = unsupported_personal_claim_topics(
                         [parsed.recommended, *parsed.alternatives], context
                     )
@@ -2010,8 +2392,8 @@ def generate(data: GenerateInput):
                                     "api_attempt_count": len(attempted_models),
                                     "attempted_models": attempted_models,
                                 }
-                        if not quality_repair_used:
-                            quality_repair_used = True
+                        if not fact_repair_used:
+                            fact_repair_used = True
                             system_instruction += (
                                 "\n【未確認の本人事実による1回限りの修正】前回の候補に確認できない本人の趣味・経験・予定が含まれていました。"
                                 "本人のプロフィールfactsとuser_answersに明記された情報だけを一人称で述べてください。"
@@ -2080,15 +2462,22 @@ def generate(data: GenerateInput):
                         and parsed.invite_decision == "invite_gently"
                         and not any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
                     ):
-                        if quality_repair_used:
-                            raise ValueError("会話方針と返信候補が一致していません")
-                        quality_repair_used = True
-                        system_instruction += (
-                            "\n【誘い判断と候補の不一致による1回限りの再生成】invite_decision=invite_gentlyの場合は、"
-                            "候補のうち少なくとも1案に、相手が断りやすい具体的で軽い食事・カフェの誘いを含めてください。"
-                            "日時や場所は本人が明言していない限り決めません。"
-                        )
-                        continue
+                        if not invite_repair_used:
+                            invite_repair_used = True
+                            safe_candidate_fallback = parsed.model_copy(deep=True)
+                            safe_candidate_fallback_notice = candidate_notice
+                            system_instruction += (
+                                "\n会話方針はinvite_gentlyです。安全で自然な候補がすでにある場合も保持した上で、"
+                                "相手が断りやすく、未確認の日時や場所を含まない誘い候補を最低1案追加してください。"
+                            )
+                            continue
+                        if safe_candidate_fallback is not None:
+                            parsed = safe_candidate_fallback.model_copy(deep=True)
+                            safe_candidates = [parsed.recommended, *parsed.alternatives]
+                            candidate_notice = " ".join(filter(None, [
+                                safe_candidate_fallback_notice,
+                                "会話方針は自然な誘いを勧めていますが、安全な誘い候補を得られなかったため他の安全な候補を表示します。",
+                            ]))
                     consider_invite_ready = (
                         data.response_version == 2
                         and parsed.invite_decision == "consider_invite"
@@ -2099,15 +2488,23 @@ def generate(data: GenerateInput):
                         and consider_invite_ready
                         and not any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
                     ):
-                        if quality_repair_used:
-                            raise ValueError("誘いを検討する方針と返信候補が一致していません")
-                        quality_repair_used = True
-                        system_instruction += (
-                            "\n【誘いを検討する判断と候補の不一致による1回限りの再生成】会話方針では双方の関心や自然な機会が確認できています。"
-                            "相手に圧力をかけず断りやすい軽いカフェ・食事の誘いを少なくとも1候補に含めてください。"
-                            "日時や場所を本人が確認していない場合は決めず、本人の空き時間を作らないでください。"
-                        )
-                        continue
+                        if not invite_repair_used:
+                            invite_repair_used = True
+                            safe_candidate_fallback = parsed.model_copy(deep=True)
+                            safe_candidate_fallback_notice = candidate_notice
+                            system_instruction += (
+                                "\n会話方針はconsider_inviteで誘いを検討できる根拠があります。"
+                                "安全で自然な候補を保持しつつ、無理がなければ軽い誘い候補を1案含めてください。"
+                                "相手が断ったり慎重な場合は誘わないでください。"
+                            )
+                            continue
+                        if safe_candidate_fallback is not None:
+                            parsed = safe_candidate_fallback.model_copy(deep=True)
+                            safe_candidates = [parsed.recommended, *parsed.alternatives]
+                            candidate_notice = " ".join(filter(None, [
+                                safe_candidate_fallback_notice,
+                                "誘いを検討する方針ですが、安全な誘い候補を得られなかったため他の安全な候補を表示します。",
+                            ]))
                     prohibited_invite_decisions = {
                         "do_not_invite", "continue_conversation", "wait", "respect_no",
                         "do_not_repeat_invite", "ask_user_info", "schedule_after_acceptance", "continue_or_close",
@@ -2117,16 +2514,21 @@ def generate(data: GenerateInput):
                         and parsed.invite_decision in prohibited_invite_decisions
                         and any(INVITATION_PATTERN.search(candidate.text) for candidate in [parsed.recommended, *parsed.alternatives])
                     ):
-                        if quality_repair_used:
+                        if invite_repair_used:
                             raise ValueError("会話方針に反する誘い候補が含まれています")
-                        quality_repair_used = True
+                        invite_repair_used = True
                         system_instruction += (
                             "\n【誘い判断と候補の不一致による1回限りの再生成】現在のinvite_decisionは誘いを控える判断です。"
                             "候補に食事や対面の誘いを含めず、特に相手の断り・慎重さを尊重してください。"
                         )
                         continue
                     try:
-                        validated = check_suggestions(parsed, data.count, context)
+                        validated = check_suggestions(
+                            parsed,
+                        len(safe_candidates) if data.response_version == 2 else data.count,
+                            context,
+                            enforce_similarity=data.response_version != 2,
+                        )
                     except (
                         CandidatePunctuationError,
                         CandidateSimilarityError,
@@ -2134,9 +2536,9 @@ def generate(data: GenerateInput):
                         CandidatePlaceholderError,
                         CandidateRepeatedQuestionError,
                     ) as quality_error:
-                        if quality_repair_used:
+                        if candidate_repair_used:
                             raise
-                        quality_repair_used = True
+                        candidate_repair_used = True
                         if isinstance(quality_error, CandidatePunctuationError):
                             system_instruction += (
                                 "\n【句読点違反による1回限りの再生成】前回の候補本文に「、」または「。」が含まれていました。"
@@ -2165,6 +2567,11 @@ def generate(data: GenerateInput):
                             )
                         continue
                     result = {**validated, "demo": False}
+                    result.update({
+                        "requested_candidate_count": data.count,
+                        "available_candidate_count": len(safe_candidates),
+                        "candidate_notice": candidate_notice,
+                    })
                     if data.response_version == 2:
                         result.update({"skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models})
                     return result

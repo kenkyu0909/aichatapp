@@ -966,7 +966,7 @@ def test_weekend_movie_watching_does_not_confirm_cinema_visit(client):
     assert "休日" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
-def test_prohibited_invite_decision_repairs_candidates_without_invitation(client, monkeypatch):
+def test_prohibited_invite_is_filtered_while_safe_candidates_remain(client, monkeypatch):
     from google import genai
 
     c, _ = client
@@ -986,7 +986,7 @@ def test_prohibited_invite_decision_repairs_candidates_without_invitation(client
             "decision_reason": "相手が不安を示した", "next_action": "誘わず会話を続ける",
         }
 
-    responses = [payload("よかったら今度一緒にカフェに行きませんか？"), payload("話してくれてありがとうございます！\n気持ちを尊重します")]
+    responses = [payload("よかったら今度一緒にカフェに行きませんか？")]
     prompts = []
 
     class FakeModels:
@@ -998,16 +998,125 @@ def test_prohibited_invite_decision_repairs_candidates_without_invitation(client
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200, response.text
-    assert response.json()["invite_decision"] == "respect_no"
-    assert "一緒に" not in response.json()["recommended"]["text"]
-    assert len(prompts) == 2
-    assert "現在のinvite_decisionは誘いを控える判断" in prompts[1]
+    body = response.json()
+    assert body["invite_decision"] == "respect_no"
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert candidates
+    assert all("一緒に" not in candidate["text"] for candidate in candidates)
+    assert any("無理せず話しましょう" in candidate["text"] for candidate in candidates)
+    assert body["available_candidate_count"] == 2
+    assert body["candidate_notice"]
+    assert len(prompts) == 1
+
+
+def test_clear_partner_unease_overrides_incorrect_model_invite_decision(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "まだ会うのはちょっと不安です"})
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "誘い", "text": "よかったら今度一緒にカフェに行きませんか？"},
+        "alternatives": [
+            {"label": "安全な反応", "text": "気持ちを話してくれてありがとうございます！\n無理せず話しましょう"},
+            {"label": "短い反応", "text": "分かりました！\n気持ちを大事にします"},
+        ],
+        "reason": "架空テスト", "strategy": "会話を続ける",
+        "conversation_stage": "Stage 4", "invite_decision": "invite_gently",
+        "decision_reason": "モデルが誤って誘い可能と判定", "next_action": "誘う",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert body["invite_decision"] == "respect_no"
+    assert len(candidates) == 2
+    assert all("一緒に" not in candidate["text"] for candidate in candidates)
+    assert any("無理せず話しましょう" in candidate["text"] for candidate in candidates)
+    assert "慎重さを示しているため誘い候補を除外" in body["candidate_notice"]
+    assert body["available_candidate_count"] == 2
+
+
+def test_unrelated_partner_outing_does_not_reopen_refused_invite(client):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+            {"role": "me", "body": "分かりました！無理せず話しましょう"},
+            {"role": "them", "body": "今度友達と一緒にカフェへ行くんです"},
+        ]
+    }
+
+    assert backend.partner_has_active_invitation_refusal(context)
+
+
+def test_appreciation_with_hesitation_does_not_reopen_refused_invite(client):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+            {"role": "me", "body": "分かりました！無理せず話しましょう"},
+            {"role": "them", "body": "誘ってくれて嬉しいけどもう少し考えたいです"},
+        ]
+    }
+
+    assert backend.partner_has_active_invitation_refusal(context)
+
+
+def test_unrelated_solo_trip_does_not_reopen_refused_invite(client):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+            {"role": "them", "body": "やっぱり一人旅に行ってみたいです"},
+        ]
+    }
+
+    assert backend.partner_has_active_invitation_refusal(context)
+
+
+@pytest.mark.parametrize("reconsideration", [
+    "やっぱり今度一緒に行ってみたいです",
+    "誘ってくれてうれしいです！今度一緒にカフェへ行きましょう",
+])
+def test_explicit_reconsideration_reopens_refused_invite(client, reconsideration):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+            {"role": "them", "body": reconsideration},
+        ]
+    }
+
+    assert not backend.partner_has_active_invitation_refusal(context)
+
+
+def test_explicit_acceptance_with_excitement_reopens_refused_invite(client):
+    _, backend = client
+    context = {
+        "history": [
+            {"role": "them", "body": "まだ会うのはちょっと不安です"},
+            {"role": "them", "body": "今度一緒にカフェへ行きましょう！ちょっと楽しみです"},
+        ]
+    }
+
+    assert not backend.partner_has_active_invitation_refusal(context)
 
 
 @pytest.mark.parametrize("invite", [
     "ご飯行きませんか？",
     "今度ご飯でもどうですか？",
     "よかったらカフェでお茶しませんか？",
+    "中野のカフェ気になりますね！\n今度一緒に行ってみませんか？",
 ])
 def test_invitation_matcher_catches_common_food_and_cafe_phrases(client, invite):
     _, backend = client
@@ -1064,10 +1173,14 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200
-    assert response.json()["needs_user_info"] is False
-    assert response.json()["recommended"]["label"] == "自然"
-    assert len(prompts) == 2
-    assert "不明な詳細は無理に本人へ質問せず" in prompts[1]
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert body["needs_user_info"] is False
+    assert body["generation_blocked"] is False
+    assert len(candidates) == 2
+    assert all(item["label"] != "不適切" for item in candidates)
+    assert "安全確認後に表示できる候補は2案" in body["candidate_notice"]
+    assert len(prompts) == 1
 
 
 def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client, monkeypatch):
@@ -1108,7 +1221,7 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
     assert body["invite_decision"] == "invite_gently", body
     assert "一緒に行きませんか" in body["recommended"]["text"]
     assert len(prompts) == 2
-    assert "誘い判断と候補の不一致" in prompts[1]
+    assert "安全で自然な候補がすでにある場合も保持" in prompts[1]
 
 
 def test_positive_consider_invite_reason_requires_invitation_option(client, monkeypatch):
@@ -1149,7 +1262,7 @@ def test_positive_consider_invite_reason_requires_invitation_option(client, monk
     assert response.json()["recommended"], response.text
     assert "一緒に行きませんか" in response.json()["recommended"]["text"]
     assert len(captured_prompts) == 2
-    assert "誘いを検討する判断と候補の不一致" in captured_prompts[1]
+    assert "安全で自然な候補を保持しつつ" in captured_prompts[1]
 
 
 def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
@@ -1581,7 +1694,7 @@ def test_direct_unanswered_personal_question_is_asked_before_gemini(client, monk
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "映画好きですか？"
 
 
-def test_candidate_punctuation_triggers_at_most_one_constrained_regeneration(client, monkeypatch):
+def test_candidate_punctuation_is_filtered_without_regenerating_safe_candidates(client, monkeypatch):
     from google import genai
 
     c, backend = client
@@ -1611,10 +1724,14 @@ def test_candidate_punctuation_triggers_at_most_one_constrained_regeneration(cli
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["recommended"]["text"] == "カフェ好きなんですね！\nよく行くお店はありますか？"
-    assert body["api_attempt_count"] == 2
-    assert len(calls) == 2
-    assert "句読点違反" in calls[1]["config"].system_instruction
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert len(candidates) == 2
+    assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
+    assert body["requested_candidate_count"] == 3
+    assert body["available_candidate_count"] == 2
+    assert "不足分を不自然な候補で補っていません" in body["candidate_notice"]
+    assert body["api_attempt_count"] == 1
+    assert len(calls) == 1
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "カフェ好きです！"
 
 
@@ -1646,16 +1763,22 @@ def test_candidate_missing_line_break_gets_one_repair_before_return(client, monk
     before = c.get(f"/api/matches/{mid}/messages").json()
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert response.status_code == 200, response.text
-    assert response.json()["recommended"]["text"] == "えーそうなんですね！\n最近行ってよかったお店ありますか？"
-    assert len(calls) == 2
-    assert "改行形式違反" in calls[1]["config"].system_instruction
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert len(candidates) == 1
+    assert candidates[0]["label"] == "短め"
+    assert candidates[0]["text"] == "カフェのお話も聞いてみたいです"
+    assert body["requested_candidate_count"] == 3
+    assert body["available_candidate_count"] == 1
+    assert "不足分を不自然な候補で補っていません" in body["candidate_notice"]
+    assert len(calls) == 1
     assert c.get(f"/api/matches/{mid}/messages").json() == before
 
 
 def test_placeholder_candidates_are_never_returned_after_repair_limit(client, monkeypatch):
     from google import genai
 
-    c, _ = client
+    c, backend = client
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェが好きです！"})
     payload = {
@@ -1673,12 +1796,18 @@ def test_placeholder_candidates_are_never_returned_after_repair_limit(client, mo
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
-    assert response.status_code == 502
-    assert response.json()["error_code"] == "invalid_response"
-    assert len(calls) == 2
+    assert response.status_code == 200
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert len(candidates) == 2
+    assert all(not backend.candidate_has_placeholder(item["text"]) for item in candidates)
+    assert all("〇〇さん" not in item["text"] for item in candidates)
+    assert body["available_candidate_count"] == 2
+    assert body["api_attempt_count"] == 1
+    assert len(calls) == 1
 
 
-def test_second_candidate_punctuation_violation_fails_safely_without_third_request(client, monkeypatch):
+def test_candidate_punctuation_violation_is_filtered_and_safe_alternatives_remain(client, monkeypatch):
     from google import genai
 
     c, _ = client
@@ -1702,14 +1831,17 @@ def test_second_candidate_punctuation_violation_fails_safely_without_third_reque
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     before = c.get(f"/api/matches/{mid}/messages").json()
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
-    assert response.status_code == 502
-    assert response.json()["error_code"] == "invalid_response"
-    assert response.json()["api_attempt_count"] == 2
-    assert len(calls) == 2
+    assert response.status_code == 200
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert len(candidates) == 2
+    assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
+    assert body["api_attempt_count"] == 1
+    assert len(calls) == 1
     assert c.get(f"/api/matches/{mid}/messages").json() == before
 
 
-def test_candidate_repair_is_limited_to_one_across_rate_limit_fallback(client, monkeypatch):
+def test_candidate_filtering_stays_safe_after_rate_limit_fallback(client, monkeypatch):
     from google import genai
 
     c, backend = client
@@ -1730,7 +1862,7 @@ def test_candidate_repair_is_limited_to_one_across_rate_limit_fallback(client, m
 
         def generate_content(self, **kwargs):
             calls.append(self.name)
-            if self.name == "first" and len([call for call in calls if call == "first"]) == 2:
+            if self.name == "first":
                 raise RuntimeError("429 RESOURCE_EXHAUSTED")
             return SimpleNamespace(text=json.dumps(bad, ensure_ascii=False))
 
@@ -1744,9 +1876,14 @@ def test_candidate_repair_is_limited_to_one_across_rate_limit_fallback(client, m
     monkeypatch.setattr(genai, "Client", FakeClient)
     before = c.get(f"/api/matches/{mid}/messages").json()
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
-    assert response.status_code == 502
-    assert len(calls) == 3  # bad response, one quota fallback, one final bad response
-    assert calls == ["first", "first", "second"]
+    assert response.status_code == 200
+    body = response.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert calls == ["first", "second"]
+    assert len(candidates) == 2
+    assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
+    assert body["api_attempt_count"] == 2
+    assert body["available_candidate_count"] == 2
     assert c.get(f"/api/matches/{mid}/messages").json() == before
 
 
@@ -2008,7 +2145,7 @@ def test_provider_attempt_limit_stops_quality_repair_before_an_extra_call(client
     ("気になる新作を見つけたらすぐ買うタイプですか？", "新作や気になる商品を見つけたときの買い方を教えてください", "気になった新作は少し調べてから買うことが多いです", "少し調べてから買うことが多いです！"),
     ("カレーだと何が好きですか？", "カレーの種類や具で好きなものを教えてください", "辛さ控えめのチキンカレーが好きです", "辛さ控えめのチキンカレーが好きです！"),
     ("普段どんなジャンルの本を読みますか？", "普段読む本のジャンルや最近読んだ本を教えてください", "ミステリー小説をよく読みます", "ミステリー小説を読むことが多いです！"),
-    ("最近どんな映画を観ましたか？", "映画はお好きですか？最近の作品についてなら、分かる範囲で教えてください", "最近は架空作品の『青い灯台』を観ました", "最近は架空作品の『青い灯台』を観ました！"),
+    ("最近どんな映画を観ましたか？", "最近観た映画の作品名を教えてください", "最近は架空作品の『青い灯台』を観ました", "最近は架空作品の『青い灯台』を観ました！"),
 ])
 def test_user_answer_resumes_generation_ephemerally_for_specific_question(
     client, monkeypatch, partner_question, user_question, answer, reply
@@ -2290,11 +2427,14 @@ def test_unrelated_unsupported_personal_claim_from_model_is_blocked_without_extr
     assert response.status_code == 200
     body = response.json()
     assert body["needs_user_info"] is False
-    assert body["generation_blocked"] is True
+    assert body["generation_blocked"] is False
     assert body["user_questions"] == []
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
-    assert body["api_attempt_count"] == 2
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert candidates
+    assert all("映画はときどき観ますよ" not in item["text"] for item in candidates)
+    assert body["available_candidate_count"] < body["requested_candidate_count"]
+    assert body["candidate_notice"]
+    assert body["api_attempt_count"] == 1
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
 

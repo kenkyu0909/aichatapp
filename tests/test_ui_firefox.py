@@ -566,3 +566,41 @@ def test_firefox_distinguishes_invalid_candidate_and_rate_limit_errors(local_app
     errors = record_artifact("firefox-generation-error-categories", driver)
     assert errors["runtime"] == []
     assert errors["console"] == []
+
+
+def test_firefox_keeps_safe_candidate_visible_with_shortage_notice(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空の候補確認")
+    driver.find_element(By.ID, "message-input").send_keys("休日は友達とカフェに行くことが多いです！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+    driver.execute_script("""
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          return new Response(JSON.stringify({
+            recommended:{label:'安全な案',text:'そのカフェ気になります！'},
+            alternatives:[], reason:'架空データのUI検証', strategy:'会話を続ける',
+            demo:false, generation_blocked:false,
+            requested_candidate_count:3, available_candidate_count:1,
+            candidate_notice:'安全確認後に表示できる候補は1案です（指定は3案）。不足分を不自然な候補で補っていません。'
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """)
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 1)
+    assert "表示できる候補は1案" in driver.find_element(By.CSS_SELECTOR, ".user-info-terminal").text
+    assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == "そのカフェ気になります！"
+    errors = record_artifact(
+        "firefox-safe-candidate-shortage",
+        driver,
+        {"requested_candidate_count": 3, "available_candidate_count": 1, "safe_candidate_retained": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []

@@ -224,6 +224,7 @@ async function copyText(text){
 }
 function renderCards(container,payload,allowSave,matchId){
   if(payload.demo)container.append(node("p","demo-warning","⚠ APIキー未設定：以下は会話を解析していない固定サンプルです。"));
+  if(payload.candidate_notice)container.append(node("p","user-info-terminal",payload.candidate_notice));
   const candidates=[payload.recommended,...(payload.alternatives||[])];
   candidates.forEach((item,i)=>{
     const card=node("article","candidate");
@@ -330,6 +331,7 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
         followup:"✦ 追いメッセージは作成できませんでした"
       }[options.mode]||"✦ 返信候補は作成できませんでした";
       area.append(node("div","suggestion-heading",blockedTitle));
+      if(result.candidate_notice)area.append(node("p","user-info-terminal",result.candidate_notice));
       area.append(node("p","user-info-terminal",result.user_info_reason||result.blocking_reason||result.detail||"未確認の本人情報を使わずに返信を作れないため、ここで停止しました。プロフィールを確認してから再度お試しください。"));
     }else if(result.needs_user_info){
       area.append(node("div","suggestion-heading","✦ 本人情報の確認"));

@@ -1,8 +1,8 @@
 # Matching Reply Assistant 最終検証報告
 
-## 最新判定（2026-10-15 実Gemini品質007）
+## 最新判定（2026-10-15 実Gemini品質008）
 
-**NO-GO**。オフラインの質問安全ゲート修正後は全pytest 375件とFirefox UI 5件が成功しました。さらに今回Geminiへ8論理リクエスト / 10プロバイダー試行を行いましたが、実生成品質にFAILが残ったため実用品質とは判定できません。利用枠上限後は追加通信を行わず、conversation_004は開始していません。詳細は末尾の「最終検証追記（2026-10-15 実Gemini品質007）」を参照してください。以前のセクションは当時の状態を記録した履歴です。
+**CONDITIONAL GO（候補の目視確認を前提とする限定利用）**。品質008では、安全な候補を個別に残し、指定数に届かない場合に不足を知らせる動作を、限定した実Gemini出力・FastAPIテスト・Firefox UIで確認しました。全体の品質基準は未達で、会話004は未実施です。今回の最終結果は末尾の「品質確認008 最終報告」を参照してください。以前のセクションは当時の記録として維持しています。
 
 コード/テスト結果commit `f12dc9751496e4bf981fb152231fcf6c052a3f71`はPush済み。[Push Actions 38593027083](https://github.com/kenkyu0909/aichatapp/actions/runs/38593027083)と[PR Actions 38593036072](https://github.com/kenkyu0909/aichatapp/actions/runs/38593036072)が同SHAで成功し、各runで372 passed, 1 warningを確認しました。報告追記commit後の最新Actionsは別途確認します。
 
@@ -661,3 +661,54 @@ API枠が尽きたため、これらは今回再通信していません。オ�
 - マトリクス: [`TEST_MATRIX.md`](TEST_MATRIX.md)
 - 夜間目標: [`OVERNIGHT_GOAL.md`](OVERNIGHT_GOAL.md)
 - プロンプト仕様: [`prompt_spec.md`](prompt_spec.md)
+
+# 品質確認008 最終報告（2026-10-15）
+
+## 判定: CONDITIONAL GO（手動確認を前提とする限定利用）
+
+安全な候補を個別に残し、指定数に届かない場合に不足を伝える動作を、FastAPIテスト・Firefox UI・限定した実Gemini生成で確認しました。危険な候補を数合わせに使わないため、候補を送る前に利用者が内容を確認してください。
+
+返信AI全体の品質基準は未達です。30件以上の事実確認、20件のミラーリング、15件の候補多様性、誘いやすい5件と誘うべきでない5件の評価は完了していません。conversation_004も未実施です。
+
+## 今回のテスト結果
+
+- テスト項目: 180
+- PASS: 151
+- FAIL: 12（過去の履歴。品質008の現行ケースに未解決FAILなし）
+- FIXED: 4
+- BLOCKED: 5（過去の履歴）
+- NOT_TESTED: 8（今回の最新HEAD Actionsを含む）
+- pytest: 406 passed in 93.32s。Firefox UIテストを含む
+- Python構文、node --check app.js、git diff --check: PASS
+- 秘密形式検索: 一致なし。値は表示していない
+- GitHub Actions: 今回の変更をPush後に確認するため未実施
+
+## Gemini実API
+
+- 11論理リクエスト / 14 provider attempts（上限12 / 24以内）
+- API1 / gemini-3.5-flash-liteのみ
+- 初回疎通はHTTP 502で生成なし。同じ入力の限定再試行はHTTP 200で3候補
+- 429、401、403、404は観測なし
+- 映画回答ケースで候補安全判定が過剰に拒否した問題を修正。再確認では安全候補1件を残し、指定3件に対する不足を通知
+- 誘い候補の検出漏れを修正し、同じケースで誘い候補を確認
+- APIキー、認証情報、実在人物データを成果物へ含めていない
+- 課金状態・実費・残り利用枠は未確認。設定変更なし
+- 会話004は未実施。少数ケースを長期会話品質の証明とみなしていない
+
+詳細はquality_checks_008.jsonとquality_checks_008_analysis.mdを参照してください。
+
+## 修正内容
+
+候補を一括で破棄せず、候補ごとに検証して安全な案だけを残します。候補数が足りない場合は要求数と利用可能数を返し、UIに表示します。安全な候補がない場合は成功に見せず、ブロック通知を返します。拒否・不安の後は、明確な受諾があるまで誘い候補を除外します。
+
+変更ファイル: app.py、app.js、prompts/common.txt、prompts/reply.txt、tests/test_app.py、tests/test_quality_checks_008.py、tests/test_ui_firefox.py、scripts/run_quality_checks_008.py、品質008のJSON・分析記録と原因整理。
+
+## 未解決事項
+
+- 静的検査だけで日本語の意味的な本人情報の捏造をすべて見つける保証はない
+- ミラーリング20ケース、共感の連続反復、多様性15ケースは未評価
+- 誘い判断の5+5ケースは未評価
+- 最新変更後のGitHub ActionsとPR本文更新は未完了
+- 旧キーの失効、課金状態、実費は未確認
+
+PR #4はOPEN/Draftのまま維持し、マージしていません。

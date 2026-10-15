@@ -336,3 +336,27 @@ Actions対象HEAD `2e6a34410548915c79409a8388821699cb6de95c`:
 | T163 | PR #4の最新実装SHA CI | GitHub Actions / Pull Request | PASS | 同SHA。375 passed, 1 warning。[run 38658104233](https://github.com/kenkyu0909/aichatapp/actions/runs/38658104233)。PRはOPEN/Draft、未マージ。 |
 
 最新集計: 163項目、PASS 138 / FAIL 12 / FIXED 1 / BLOCKED 5 / NOT_TESTED 7。実API品質007のFAILを保持し、修正後の実API品質は未確認。
+
+## 2026-10-15 品質確認008と安全候補優先の再検証
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T164 | 候補ごとの安全判定と不足数通知 | FastAPI + Gemini SDKモック | PASS | 安全な候補を残し、危険候補は除外。requested / available数と不足通知を返す。 |
+| T165 | 安全候補と不足通知のUI表示 | Firefox + Selenium | PASS | 1件の安全候補と指定3件に対する不足通知を同時に確認。Chrome未使用。 |
+| T166 | 拒否後の再勧誘抑止 | FastAPI + Gemini SDKモック | PASS | ためらい・無関係な外出・一人旅の発言では拒否状態を維持し、明確な再考・受諾でのみ解除。 |
+| T167 | 本人回答による作品名の根拠確認 | FastAPI + Gemini SDKモック | PASS | 確認済み回答中の作品名は許容し、別の未確認作品名は拒否。 |
+| T168 | Gemini初回疎通 | 実Gemini、既存API | FIXED | 初回HTTP 502を保持。同一入力の限定再試行でAPI1 / gemini-3.5-flash-liteがHTTP 200、3候補。 |
+| T169 | 短文への返信 | 実Gemini | PASS | 短い候補1件を取得。指定3件との差2件を通知し、候補を水増ししない。 |
+| T170 | 冗談への返信 | 実Gemini | PASS | 短文候補2件。冗談に応答し、未確認の職業を仮定しない。不足通知あり。 |
+| T171 | 映画の好みが未確認の直接質問 | ローカル事前確認 | PASS | 本人への確認質問を返し、相手向け候補0件。Geminiプロバイダー呼び出し0回。 |
+| T172 | 映画の本人回答を使った候補検査 | 実Gemini + 候補安全フィルター | FIXED | 初回の不適切候補は履歴に保持。修正後は安全候補1件と2件不足の通知を確認。 |
+| T173 | 確認済み買い物習慣との整合 | 実Gemini | PASS | 架空の本人回答「少し調べてから買う」と矛盾する候補なし。 |
+| T174 | 相手が述べた情報の聞き直し | 実Gemini | PASS | 友達とカフェへ行く頻度を聞き直す候補なし。 |
+| T175 | 誘い表現の候補判定 | 実Gemini + 修正後フィルター | FIXED | 「今度一緒に行ってみませんか」の検出漏れを修正。再試行で誘い候補と安全な別案を確認。 |
+| T176 | 会うことへの不安の尊重 | 実Gemini | PASS | 再勧誘候補なし。 |
+| T177 | API上限・選択順・秘密情報非出力 | 実行ログとファイル検査 | PASS | 11論理要求 / 14 provider attempts、上限12 / 24以内。API1 / gemini-3.5-flash-liteのみ。秘密値は出力・保存していない。 |
+| T178 | 全pytest（Firefox UIを含む） | Windows / pytest | PASS | 406 passed in 93.32s。 |
+| T179 | Python/JavaScript構文・差分・秘密形式検査 | py_compile、node --check、git diff --check、rg | PASS | 構文・差分検査終了コード0。秘密形式の一致なし。 |
+| T180 | 最新HEADのGitHub Actions | GitHub Actions Push/PR | NOT_TESTED | 今回の変更は未Push。実行URLは未取得。 |
+
+集計: 180項目、PASS 151 / FAIL 12 / FIXED 4 / BLOCKED 5 / NOT_TESTED 8。過去のFAIL・BLOCKEDは履歴として維持する。品質008の現在ケースに未解決結果はないが、全体品質基準を満たしたとは扱わない。

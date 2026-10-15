@@ -415,3 +415,15 @@
 ### 2026-10-15 品質007の最終CI
 
 実装・品質修正コミット`44fbe733e00652774d942109fe2a2411fb67029d`のPush Actions [38658096934](https://github.com/kenkyu0909/aichatapp/actions/runs/38658096934)とPR Actions [38658104233](https://github.com/kenkyu0909/aichatapp/actions/runs/38658104233)は同じSHAで成功しました。各runでpytest 375 passed / 1 warning、Firefox準備、JavaScript構文検査、テスト成果物のArtifact保存を確認しました。警告はStarlette/httpx TestClientの非推奨通知です。品質007は8論理要求 / 10 provider attemptsでFAIL。会話004は未実施です。
+
+## 2026-10-15 品質確認008：安全候補を優先した修正
+
+- ユーザーの優先指示に合わせ、危険候補を数合わせで残さず、候補ごとに安全性を判定する。安全な候補を表示し、指定数に足りない場合は要求数・利用可能数・不足理由を返す。安全候補が0件の場合は成功を装わず通知する。
+- 作業開始時のローカルHEADはef30f836b8a1e8bcb993adfe0fd8abbaab053c64、リモートHEADは39430c25d17b7c42a52ef553f24ac57b2df8f774。ローカルは1コミット先行し、リモートに追加変更はなかった。PR #4はOPEN/Draft、base feat/ui-local-backend-v1。
+- 品質008の実APIは11論理リクエスト / 14 provider attemptsで停止。指定上限12 / 24以内。API1 / gemini-3.5-flash-liteのみ。最初の接続はHTTP 502で生成なし。同一入力の限定再試行はHTTP 200で3候補。429・認証・モデル不在はなし。APIキー値は出力・保存していない。料金・課金状態は確認していない。
+- 初回候補検査で映画回答後の安全な言い換えを落とす問題と、「今度一緒に行ってみませんか」を誘いと認識しない問題を確認。フィルターを修正し、同じ実APIケースで安全候補を保持して不足数を通知すること、誘いケースで適切な候補を返すことを確認。初回結果はJSON履歴に保持した。
+- Firefox UIで安全候補1件と指定数に対する不足通知を同時に確認した。拒否後は明確な受諾・再考があるまで誘い制限を維持するテストも追加した。
+- 品質008の現行ケースは未解決FAIL 0件。ただし、30件の事実評価、20件のミラーリング、15件の候補多様性、誘いやすい5件/誘わない5件の基準は未評価。会話004は開始していない。
+- 全pytestは406 passed in 93.32s。Python py_compile、node --check app.js、git diff --check成功。秘密形式検索に一致なし。Firefox UIを含む。Chromeは使用していない。
+- 証拠: quality_checks_008.json、quality_checks_008_analysis.md、QUALITY_ROOT_CAUSES_008.md。TEST_MATRIXは180項目へ更新し、過去FAILは保持した。
+- 次: 対象ファイルだけをステージし、ユーザー提供の指示ファイルを除外してコミット・Push。最新HEADのPush/PR Actionsを確認後、PR #4本文を更新する。
