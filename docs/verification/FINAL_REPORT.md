@@ -1357,3 +1357,16 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head SHA `3a2dadd1437b47cbce20a66a119776ac426da665`。マージしていない。実Gemini通信0回。3件のユーザー指示ファイルは未追跡のまま保持。
 - T357追補: 同一SHAのPush/PR Actions success。マトリクス357項目: PASS251 / FAIL13 / FIXED73 / BLOCKED5 / NOT_TESTED15。
 - 次のP0は保存済みQUALITY009の直接質問への回答漏れ、候補方針の意味的重複、短文ミラーリング。会話004・新会話HTML・Gemini実通信は引き続き行わない。
+
+## 2026-10-16 06:19 JST 継続検証の追補
+
+- 新規不具合: 一つの相手発言で複数の本人情報を質問した場合、先頭の既知トピックだけを見て後続の未確認質問に答えない候補が通る可能性があった。`movie_preferences`プロフィール値も既知の映画好みとして認識されず、重複質問につながっていた。
+- 修正: 明確に独立した質問範囲ごとの事前確認と送信候補検証を追加。本人へは最初の未確認事項だけを質問し、確認済み複合質問では各問いへの回答を検証する。同じトピックでも異なる情報スコープを比較する。二択・引用活動質問・誘いを含む曖昧な発話は従来の全文解釈を維持。
+- テスト: focused 7 passed。修正後全pytest **1302 passed in 184.98s**（Firefox UI suite含む）。Python/JavaScript構文、`git diff --check`成功。独立レビューで同一トピック別スコープのケースがブロックされ、二択・引用活動の処理が維持されることを確認。
+- Matrix T358: 358項目（PASS251 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15）。Gemini実通信0回。実モデルの文章品質評価ではない。
+- 保存済みQUALITY009の自然さ・候補意味多様性FAILは未解決。総合NO-GOを維持。PR #4はDraft・未マージ。
+
+### T358 最新HEAD CI追補
+
+- SHA `9389aa937df569a2aa7c2e683544fe8101e92766` のPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)はsuccess。Pushログは**1302 passed / 1 warning**、JavaScript構文検査成功。
+- PR #4はOPEN/Draft・未マージ。次は保存済み品質不具合とFirefox追いメッセージのmatch_id確認を調査する。Gemini追加通信・conversation_004・新HTMLは実施しない。

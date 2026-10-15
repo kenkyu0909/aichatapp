@@ -876,3 +876,5 @@ T357追補: コミット 3a2dadd1437b47cbce20a66a119776ac426da665のPush Actions
 | T358 | 複数の直接質問と同一トピック別スコープの本人確認 | pytest（FastAPI/TestClient、オフライン） | FIXED | 架空入力「映画は好きですか？普段どんな本を読みますか？」で映画の確認済みプロフィールだけでは未回答の本ジャンルを含む候補が通る問題を再現・修正。`movie_preferences`を既知事実と認識し、最初の未確認質問だけを事前確認、全てに答えない候補を拒否する。同じ映画トピックでも好み/最近の視聴経験を別スコープとして確認。二択・引用過去活動も維持。focused 7 passed、全pytest 1302 passed in 184.98s（Firefox UI suiteを含む）、構文とdiff検査成功、独立レビュー済み。Gemini実通信0回。 |
 
 最新ID行: 358。累計: PASS251 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。
+
+T358 CI追補: 最新コミット `9389aa937df569a2aa7c2e683544fe8101e92766` のPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)がsuccess。同SHAのPushログは1302 passed / 1 warningとJavaScript構文検査成功を確認。

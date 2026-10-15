@@ -1295,3 +1295,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Matrix T358: 358項目、PASS251 / FAIL13 / FIXED74 / BLOCKED5 / NOT_TESTED15。コードと記録は未コミット・未Push、最新GitHub Actions未確認。PR #4はDraft・未マージ。
 - ユーザー提供の未追跡指示ファイル3件は変更せず、コミット対象にしない。
 - 次: 変更を選択的にコミット・Pushし、同一HEADのPush/PR ActionsとDraft状態を確認。その後、保存済みQUALITY009の回答漏れ・意味的候補重複・短文ミラーリングをオフラインで監査する。`codex/directive-control`はマージしない。
+
+#### 2026-10-16 06:24 JST T358 Push/CI確認
+
+- T358を含むコミット `9389aa937df569a2aa7c2e683544fe8101e92766` を `codex/full-system-verification` へPushした。
+- 同一SHAのPush Actions [38809221895](https://github.com/kenkyu0909/aichatapp/actions/runs/38809221895)とPR Actions [38809228016](https://github.com/kenkyu0909/aichatapp/actions/runs/38809228016)がsuccess。Pushログは**1302 passed / 1 warning**、`node --check app.js`成功。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、head `9389aa937df569a2aa7c2e683544fe8101e92766`、未マージ。
+- 次は保存済みQUALITY009の候補重複の回復動作と、Firefox追いメッセージ導線の`match_id`確認不足を監査する。Gemini追加通信、conversation_004、新しい会話HTMLは行わない。
