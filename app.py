@@ -911,16 +911,16 @@ def _is_effectively_negative_personal_fact(clause: str) -> bool:
         return False
     # Preserve an explicit positive statement following a contrast, such as
     # "not really a hobby, but I do like it".
-    positive_contrast = re.match(
-        r"\s*(?:けど|けれども?|ですが|でも)(.{0,24})",
-        clause[match.end():],
-    )
-    if not positive_contrast:
+    contrast = re.match(r"\s*(?:けど|けれども?|ですが|でも)(.{0,24})", clause[match.end():])
+    if not contrast:
         return True
-    following = positive_contrast.group(1)
-    has_positive = re.search(r"好き|楽しい|はま|趣味", following)
-    has_negative = NEGATIVE_PERSONAL_FACT_RE.search(following)
-    return not has_positive or has_negative is not None
+    following = contrast.group(1)
+    for positive in re.finditer(r"好き|楽しい|はま|趣味", following):
+        local_tail = following[positive.end():]
+        if re.match(r"(?:では|じゃ|でも)?(?:ない|ありません|ないです|なくて)|(?:とは思わない|とは言えない|わけではない|わけじゃない)", local_tail):
+            continue
+        return False
+    return True
 
 NON_ASSERTIVE_EXPERIENCE_RE = re.compile(
     r"行きたい|行ってみたい|行こうと思|行く予定|行くつもり|行くかもしれ|行くかも|行くと思|行けたら|行ければ|行けるといい|"
@@ -965,9 +965,9 @@ def _is_interrogative_evidence_clause(clause: str) -> bool:
         or re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ことありますか|ことがあるの|かな)[\s]*$", stripped)
         # Casual Japanese chat often omits the question mark. These short
         # forms are ambiguous, so evidence checks conservatively reject them.
-        or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}行ったこと(?:が)?ある(?:の|ん|か)?\s*$", stripped)
+        or re.search(r"(?:旅行|旅|海外|国内|京都|北海道|沖縄).{0,20}(?:行ったこと(?:が)?ある|行ってきた)(?:の|ん|か)?\s*$", stripped)
         or re.search(r"(?:映画館|シネコン).{0,16}(?:よく|頻繁に|月に|週に|たまに|時々|ときどき)?.{0,8}(?:行く|通う)(?:の|ん|か)\s*$", stripped)
-        or re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)(?:のが|のって|の)?好きなの\s*$", stripped)
+        or re.search(r"(?:カフェ|喫茶店|お店|店|場所).{0,16}(?:探す|探して|見つける|開拓)(?:のが|のって|の)?好き(?:なの|なん|か)\s*$", stripped)
     )
 
 
