@@ -955,3 +955,5 @@ Windowsのstart.batは一時DBを用いた8767番で起動し、Firefoxから架
 回答済み映画質問のFastAPIモック回帰では、Geminiモックが質問を避ける候補2案を返しても、API経路は回答を含む安全候補だけを残して不足を伝えた（focused pytest 3 passed）。これは候補ゲートとプロンプト送信の確認であり、実Geminiの追従性の証拠ではない。Test Matrixは290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。先行した誤assertの失敗と修正も追跡記録に残した。
 
 直前コミット`305b919401b1163f9ea69cae1764b26359c68073`のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928)は成功（pytest 761件）。T290を追加した次のコミットのActionsは別途確認する。
+
+T290追加後のSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` で全pytest **762 passed in 110.09s**（Firefox UI込み）。Python構文、JavaScript構文、差分検査も成功。Push [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)はともに成功。この変更でプロンプトの直接回答指示と候補不足時の安全フィルターを回帰確認したが、実Geminiによる追従性は未検証。総合NO-GOを維持する。

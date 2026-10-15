@@ -596,3 +596,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T290 | 直接質問への回答済み候補を残し、すり替え案を返さず不足を通知 | FastAPI TestClient + Gemini SDKモック | PASS | 架空の最近観た映画に対し、確認回答を含む候補1案と直接回答を避ける候補2案をモック応答。API経路は確認済み候補だけを返し、代替欄を空にし、3案中1案しか安全に表示できない旨を通知。プロンプトにも各案で回答する指示が渡ることを検証。pytest **3 passed**。実Geminiの追従性は未検証。初回テストではレスポンスに内部`candidate_rejections`が露出すると誤想定して失敗。アプリはその内部情報を返さない設計であり、公開契約（候補の除外・不足通知）を確認するassertに直して再実行した。|
 
 最新ID行: 290。累計: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|
+
+| T291 | 直接質問の回帰を含む全pytest・構文・最新Actions | Windows 11でpytest、構文検査、GitHub Actions Push/PR | PASS | `python -m pytest -q`: **762 passed in 110.09s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`も成功。SHA `b7c55affef071a88b2fdf46f5e02134ca571c707` のPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)は成功。Firefoxでの新しい手動実操作はしていない。|
+
+最新ID行: 291。累計: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。|

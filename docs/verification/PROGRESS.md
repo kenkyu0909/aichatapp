@@ -697,3 +697,10 @@
 - 初回focusedテストは内部フィールド`candidate_rejections`がレスポンスにあると想定して失敗。内部判定をAPIに公開する仕様ではないため、公開される候補数・代替なし・不足通知を確認するassertへ修正。最終focused回帰は**3 passed**。実Gemini 0回。
 - 直前プロンプト変更SHA `305b919401b1163f9ea69cae1764b26359c68073` のPush Actions [38699147020](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020) とPR Actions [38699152928](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928) は成功。これらは今回追加したT290テストを含まない。
 - Test Matrix 290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。保存済み品質009の手動FAILと意味的多様性の課題は残るためNO-GO。次は差分をコミットし、最新SHAのPush/PR Actionsを確認する。会話004/新規HTMLは行わない。PR #4 Draft・未マージ。
+
+### 2026-10-15 16:35 JST 継続チェックポイント：全回帰と最新Actions
+
+- 回答済み直接質問のTestClientモック試験を追加。Geminiモックが回答回避候補を返す場合も、安全候補だけを表示し、指定候補数に足りないことを知らせる。focused suite 3 passed。レビューで指摘された「静的プロンプト確認だけでは候補フィルター経路を確認できない」点はT290で補った。
+- 最新コミットSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` の全pytest **762 passed in 110.09s**（Firefox UI含む）。Python `py_compile`、`node --check app.js`、`git diff --check`成功。Push [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)も成功。
+- Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。Gemini実API 0回。プロンプト変更の実生成品質、保存済みQUALITY009の意味重複、ミラーリングの包括検証が未達のため総合NO-GO。会話004・新規HTMLなし。PR #4 OPEN/Draft。
+- 次: 最新指示を定期取得し、保存済み候補の短文誤字/候補役割不足に対し、既存の安全候補保持を損なわない生成前の指示分離を監査する。ユーザー提供の未追跡ファイルは未ステージ。

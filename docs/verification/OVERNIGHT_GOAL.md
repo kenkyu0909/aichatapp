@@ -430,3 +430,9 @@ Test Matrixは289項目: PASS213 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。
 更新後Test Matrixは290項目: PASS214 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。実生成指示へのモデル追従は未検証。過去FAILと総合NO-GOを維持する。
 
 T290を追加する前のプロンプト変更コミット`305b919401b1163f9ea69cae1764b26359c68073`はPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699147020)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699152928)で成功し、pytest 761件を確認した。今回の新しいモックテストを含むSHAのCI結果は未確認。
+
+### 2026-10-15 16:35 JST：最新の全回帰とCI確認
+
+アプリ全体の安定性はCONDITIONAL。全pytest **762 passed in 110.09s**、Firefox UIを含み、Python/JavaScript構文とdiff検査に成功。T290を含むSHA `b7c55affef071a88b2fdf46f5e02134ca571c707` はPush [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699527292)とPR [Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38699532641)が成功。
+
+Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。本人情報の包括的意味確認、自然さ・ミラーリング・候補多様性の実生成品質はNOT_MET。過去QUALITY009手動FAILを維持し、総合NO-GO。実Gemini 0回、会話004/新規HTMLなし。
