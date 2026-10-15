@@ -720,3 +720,11 @@
 - tests/test_quality_checks_009.pyのfocused suiteは2 passed。scriptのpy_compileとdiff checkも成功。コードレビュアーは部分候補の安全性保持と実通信識別を確認し、未解決指摘なしと報告。
 - 全pytest **764 passed in 104.45s**。失敗/skipなし。Firefox UIを含む。py_compile、node --check app.js、git diff --check成功。GitHub Actionsはこの新しいコードSHAでは未実施。
 - Test Matrix 294件: PASS217 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。QUALITY009の文章手動評価FAILはそのまま維持。総合NO-GO。次は変更をPushして最新SHAのActionsを確認し、candidate-roleの品質再現へ戻る。PR #4 Draft・未マージ。ユーザー未追跡指示ファイルは未ステージ。
+
+### 2026-10-15 17:05 JST 継続チェックポイント：候補方針を今後の記録に保存
+
+- 17時台の定期取得で同じ継続指示を確認。実Gemini通信、conversation_004、新規会話HTMLは禁止のまま。QUALITY009の手動FAILを保持し、P0品質と保存済み実出力の監査を続ける。
+- QUALITY009 JSONには候補のlabel/textはあるがreply_moveが保存されていない。ランナーに記録関数を追加し、今後の実験でlabel・reply_move・本文を保持する。秘密情報らしい候補が検出された場合はこれらをすべて省く。既存JSONは改変しない。
+- 最終ローカル状態の全pytest **765 passed in 106.62s**。Firefox UIを含み、skipなし。py_compile、node --check app.js、git diff --check成功。品質ランナーfocused suite **3 passed**。コードレビューで秘密情報の非保存と候補方針保存に問題なし。
+- Matrix 295件: PASS217 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。最新確定Push SHA 9863eded6faaac8777c6060dd61580c7726c6236 のPush/PR Actions両方成功。ただしこのSHAのCIは直近のreply_move記録変更前であり、最終ローカル差分を次にPushして新SHAのActionsを確認する。
+- 次: ドキュメントとreply_move記録変更をPushしCI完了を確認。その後、会話候補の方針差・自然さの品質課題をオフラインで監査する。総合NO-GO、PR #4 OPEN/Draft、未マージ。ユーザー提供の未追跡指示ファイルはステージしない。

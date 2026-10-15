@@ -69,6 +69,22 @@ def smoke_has_live_valid_response(
     )
 
 
+def record_candidates(
+    candidates: list[dict[str, Any]], texts: list[str], *, redacted: bool
+) -> list[dict[str, Any]]:
+    """Persist reply strategy metadata without retaining redacted text."""
+    if redacted:
+        return []
+    return [
+        {
+            "label": candidate.get("label"),
+            "reply_move": candidate.get("reply_move"),
+            "text": text,
+        }
+        for candidate, text in zip(candidates, texts)
+    ]
+
+
 def save(state: dict[str, Any]) -> None:
     tmp = OUTPUT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -206,7 +222,7 @@ def main() -> int:
                 "http_status": result.status_code,
                 "needs_user_info": body.get("needs_user_info"),
                 "user_questions": body.get("user_questions", []),
-                "candidates": [{"label": item.get("label"), "text": text} for item, text in zip(candidates, texts)] if not secret_like else [],
+                "candidates": record_candidates(candidates, texts, redacted=secret_like),
                 "response_fields": {k: body.get(k) for k in ("reason", "conversation_stage", "invite_decision", "decision_reason", "next_action", "error_code", "api_alias", "model", "demo", "requested_candidate_count", "available_candidate_count", "candidate_notice", "candidate_rejection_summary", "generation_blocked") if k in body},
                 "provider_attempts": attempts, "attempted_models": body.get("attempted_models", []),
                 "punctuation_violation": not no_punctuation, "placeholder_violation": not no_placeholders,

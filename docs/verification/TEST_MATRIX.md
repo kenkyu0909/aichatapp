@@ -609,6 +609,10 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 
 最新ID行: 293。累計: PASS216 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。実Gemini APIは0回。|
 
-| T294 | 評価ランナー変更後の全pytestと構文検査 | Windows 11、Firefox UIを含むpytest、Python/JavaScript構文、diff検査 | PASS | 全pytest **764 passed in 104.45s**、失敗/skipなし。Firefox UIテストを含む。py_compileでapp.pyと関連スクリプト成功、node --check app.js成功、git diff --check成功。実Gemini APIは0回。ActionsはPush後に別IDで確認する。|
+| T294 | 評価ランナー変更後の全pytestと構文検査 | Windows 11、Firefox UIを含むpytest、Python/JavaScript構文、diff検査 | PASS | 最終ローカル状態で全pytest **765 passed in 106.62s**、失敗/skipなし。Firefox UIテストを含む。py_compileでapp.pyと関連スクリプト成功、node --check app.js成功、git diff --check成功。実Gemini APIは0回。SHA 9863edeのActionsは成功だが、次の変更を含む最新SHA ActionsはPush後に確認する。|
 
 最新ID行: 294。累計: PASS217 / FAIL13 / FIXED44 / BLOCKED5 / NOT_TESTED15。品質009の実生成手動FAILは未解決。|
+
+| T295 | 品質記録にreply_moveを保持し、秘密らしい候補を非保存 | pytest / 保存関数のユニット試験 | FIXED | 新規記録では各候補のlabel・reply_move・textを保存し、認証情報検出時は候補メタデータと本文をともに保存しない。品質009の既存JSONは変更していない。focused runner suite **3 passed**。コードレビューで未解決指摘なし。|
+
+最新ID行: 295。累計: PASS217 / FAIL13 / FIXED45 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成文面FAILは未解決。今回Gemini APIは0回。|

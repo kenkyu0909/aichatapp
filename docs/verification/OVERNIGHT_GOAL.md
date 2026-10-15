@@ -464,3 +464,17 @@ Test Matrix 291項目: PASS215 / FAIL13 / FIXED43 / BLOCKED5 / NOT_TESTED15。�
 | アプリ全体の安定性 | CONDITIONAL | 新しい評価ランナー回帰を追加し、全pytest 764 passed in 104.45s、Firefox UI含む。Python/JS構文とdiff検査成功。新コードSHA Actions確認待ち。 |
 
 ランナーは完全候補と安全な部分候補を区別し、実provider attempt・model identityがない応答をlive smoke PASSにしない。既存QUALITY009 JSONは保持し、2/3案をpartial_safeと読み取れる。実Geminiは0回。conversation_004/新規HTMLなし。総合NO-GO。
+
+### 2026-10-15 17:05 JST：最終ローカル差分の全回帰
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 既知の生成FAILは現行ゲートが止めたが、包括的意味評価・修正後実生成は未確認。 |
+| 句読点・改行 | NOT_MET | 固定回帰は通過。包括基準は未評価。 |
+| ミラーリング | NOT_MET | 20ケース採点未評価。 |
+| 共感の反復防止 | NOT_MET | QUALITY009の手動FAILが残る。 |
+| 返信候補の多様性 | NOT_MET | reply_moveの今後の監査記録は改善。実モデルの意味的多様性は未達。 |
+| 食事への誘い判断 | NOT_MET | 固定回帰以外の包括評価が未達。 |
+| アプリ全体の安定性 | CONDITIONAL | 最終ローカル状態765 passed、Firefox UI、構文、diff検査成功。GitHub Actionsは今回の未コミットreply_move記録変更を含むSHAでは未確認。 |
+
+保存済み品質009の初回応答2/3案はpartial_safe。今後の品質JSONにはreply_moveを保存し、認証情報らしい候補を一切保存しない。旧JSONは変更なし。実Gemini 0回。conversation_004と新規HTMLは行わない。総合NO-GO。

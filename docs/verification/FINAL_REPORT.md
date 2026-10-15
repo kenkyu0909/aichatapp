@@ -969,3 +969,5 @@ PR #4最新HEAD SHA `5e269301c6618571a4724b6918c4e50fe1d97bf6` に対するPush 
 品質009のsmoke評価が実API通信やモデル名なしでもPASSになり得る点を修正した。安全フィルターが候補を減らした結果はpartial_safeとして記録し、完全候補集合とは区別する。既存品質009 JSONは変更せず、既存の初回出力は1 provider attempt・API1 / gemini-3.5-flash-lite・2/3安全候補でpartial_safeと読み取れる。候補数不足のため安全候補を捨てることはしない。
 
 評価ランナーの追加pytest 2件が成功。全pytest **764 passed in 104.45s**（Firefox UI含む、skipなし）。Python構文、JavaScript構文、diff検査も成功した。Gemini API通信は0回。新コードSHAのGitHub ActionsはPush後に確認する。品質009の生成文手動FAILと実用品質NO-GOは維持する。
+
+その後、今後の品質記録に各候補のreply_moveも保存し、秘密情報らしい応答は候補一式を記録しない回帰を追加した。最終ローカル差分の全pytestは**765 passed in 106.62s**、Firefox UI込み。runner focused suiteは3 passed。最終差分のActionsはPush後確認待ち。過去JSONはそのまま保持。

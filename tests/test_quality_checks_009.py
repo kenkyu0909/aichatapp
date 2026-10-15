@@ -1,4 +1,5 @@
 from scripts.run_quality_checks_009 import (
+    record_candidates,
     smoke_candidate_set_status,
     smoke_has_live_valid_response,
 )
@@ -36,3 +37,18 @@ def test_smoke_pass_requires_provider_attempt_and_model_identity():
     assert not smoke_has_live_valid_response(
         {**response, "demo": True}, 3, 3, provider_attempts=1
     )
+
+
+def test_quality_record_preserves_candidate_reply_moves():
+    recorded = record_candidates(
+        [
+            {"label": "自然な反応", "reply_move": "react"},
+            {"label": "話題を広げる", "reply_move": "expand"},
+        ],
+        ["短い反応です！", "次の話題につなげます！"],
+        redacted=False,
+    )
+
+    assert [item["reply_move"] for item in recorded] == ["react", "expand"]
+    assert [item["text"] for item in recorded] == ["短い反応です！", "次の話題につなげます！"]
+    assert record_candidates([{"label": "秘密", "reply_move": "react"}], ["secret"], redacted=True) == []
