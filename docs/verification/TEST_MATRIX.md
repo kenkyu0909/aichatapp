@@ -909,4 +909,4 @@ T361 CI追補: 最新コードSHA `43a214dcaa4657aaf21094ddb7b311299f7567df` の
 
 最新ID行: 366。累計: PASS256 / FAIL13 / FIXED77 / BLOCKED5 / NOT_TESTED15。
 
-T365最新SHAのCI追補: `620e34354f181f22d27a43805d3f3f2c4e5eb279`を対象とするPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)が同一head SHAでsuccess。両CIはT366テスト追加前に実行された。T366入りHEADのActionsは次のpush後に確認する。
+T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一head SHAでsuccess。両workflowでpytestとJavaScript syntax check、Firefox準備、artifact uploadが成功。ローカル全pytestは1365 passed in 198.20s。T366を含む次のdocs-only HEADについては別途CIを確認する。

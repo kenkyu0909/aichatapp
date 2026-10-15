@@ -1076,6 +1076,6 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - 達成条件: 安全フィルターが指定数より少ない候補を残す場合、候補数と不足理由を画面で知らせる。判定: **PASS（Firefox E2Eの固定応答で確認）**。
 - 証拠: T365 firstモードの安全候補1案fixtureを使い、応答とUIの両方で不足通知を確認。focused 1 passed、全pytest 1365 passed in 198.20s。Gemini通信0回。テスト変更はまだ未コミット。
-- CI: 直前のHEAD 620e343に対するPush/PR run 38820131346 / 38820136319はsuccessだが、T366を含まない。新HEADのActions確認が必要。
+- CI: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush/PR run 38820922000 / 38820929128は同一headでsuccess。pytest、JS syntax、Firefox準備、artifact uploadが成功。ローカル全pytest 1365 passed in 198.20s。
 - 他の品質ゴールはこの確認によって達成扱いにしない。保存済みQUALITY009の生成自然さと意味的多様性FAILが残るため、総合判定はNO-GO。
-- 次: T366と進捗を作業ブランチにcommit・pushし、同じSHAのActionsを確認。その後、保存済み実生成例から直接質問回答と候補の意味的な重複を監査する。
+- 次: CI結果を記録するdocs-only変更をcommit・pushし、そのHEADのActionsを確認。その後、保存済み実生成例から直接質問回答と候補の意味的な重複を監査する。

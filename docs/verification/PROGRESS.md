@@ -1357,5 +1357,5 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 指示ブランチをfetchして最新版を確認。優先事項は4モードのFirefox実ルートと、QUALITY009で残る直接質問回答漏れ・意味的候補類似・共感反復・慎重/拒否時の誘いの監査。Gemini実通信、conversation_004、新規会話HTMLは行わない。
 - T365のfirstモードE2Eを拡張し、安全確認後に1案だけ残る状況で候補不足の説明が応答と画面の両方に表示されることを確認。安全候補は保持し、数合わせしない。focused 1 passed。全pytest **1365 passed in 198.20s**。Python compile、`node --check app.js`、`git diff --check`成功。Gemini通信0回。
 - 先行HEAD `620e34354f181f22d27a43805d3f3f2c4e5eb279`に対するPush Actions [38820131346](https://github.com/kenkyu0909/aichatapp/actions/runs/38820131346)とPR Actions [38820136319](https://github.com/kenkyu0909/aichatapp/actions/runs/38820136319)は同一SHAでsuccess。これらはT366テスト追加を含まない。
-- T366を含む変更は未コミット。次は変更と記録を選択的にcommit・pushし、そのHEADのPush/PR Actionsを確認する。PR #4はOPEN/Draft・未マージ。保護対象の未追跡指示ファイル3件は保持し、ステージしない。
-- QUALITY009の実Gemini文章自然さ・候補意味多様性FAILは未解決のため、総合NO-GOを維持する。次の自律作業は保存済み失敗例を用いた直接回答と候補間方針差の監査。
+- T366はコミット `e93aef60486e89a7e0d6ba9554b592f1276a0d68`としてPush済み。Push Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一SHAでsuccess。pytest、JavaScript syntax check、Firefox準備、結果Artifact uploadを確認。PR #4はOPEN/Draft・未マージ。保護対象の未追跡指示ファイル3件は維持し、コミットしていない。
+- QUALITY009の実Gemini文章自然さ・候補意味多様性FAILは未解決のため、総合NO-GOを維持する。次の自律作業は保存済み失敗例を用いた直接回答と候補間方針差の監査。T366を含むActions成功後に検証報告を更新するため、最新SHAのActionsも追って確認する。
