@@ -3714,6 +3714,61 @@ def test_duplicate_reply_moves_keep_safe_candidates_and_show_diversity_notice(cl
     assert "進め方が重なっている" in partially_repeated_filtered["candidate_notice"]
 
 
+def test_semantically_similar_safe_reactions_are_kept_with_diversity_notice(client):
+    _, backend = client
+    repeated_positive_reactions = backend.Suggestions(
+        recommended=backend.Candidate(
+            label="反応と質問",
+            text="新しいお店を見つけるのワクワクしますよね！\nお気に入りのエリアはあるんですか？",
+        ),
+        alternatives=[backend.Candidate(
+            label="素直な反応",
+            text="新しいお店を開拓するの楽しいですよね！",
+        )],
+        reason="相手の話題へ反応する",
+        strategy="カフェの話題を続ける",
+    )
+
+    filtered = backend.filter_safe_candidates(repeated_positive_reactions, 2, {})
+
+    assert filtered["available_candidate_count"] == 2
+    assert [filtered["recommended"]["text"], filtered["alternatives"][0]["text"]] == [
+        repeated_positive_reactions.recommended.text,
+        repeated_positive_reactions.alternatives[0].text,
+    ]
+    assert filtered["candidate_rejections"] == []
+    assert "中心的な反応が似ている可能性" in filtered["candidate_notice"]
+
+    distinct_reply_purposes = repeated_positive_reactions.model_copy(update={
+        "alternatives": [backend.Candidate(
+            label="別の話題",
+            text="最近読んで印象に残った本はありますか？",
+        )]
+    })
+    distinct_filtered = backend.filter_safe_candidates(distinct_reply_purposes, 2, {})
+    assert distinct_filtered["available_candidate_count"] == 2
+    assert "中心的な反応が似ている可能性" not in distinct_filtered["candidate_notice"]
+
+    opposite_reactions = backend.Suggestions(
+        recommended=backend.Candidate(label="肯定", text="映画って楽しいですよね！"),
+        alternatives=[backend.Candidate(label="否定", text="映画って楽しくないですよね！")],
+        reason="映画について反応する",
+        strategy="映画の話題を続ける",
+    )
+    opposite_filtered = backend.filter_safe_candidates(opposite_reactions, 2, {})
+    assert opposite_filtered["available_candidate_count"] == 2
+    assert "中心的な反応が似ている可能性" not in opposite_filtered["candidate_notice"]
+
+    unrelated_negative_clause = backend.Candidate(
+        label="反応と補足",
+        text="新しいお店を見つけるのワクワクしますよね！最近はまだ行けてないです",
+    )
+    assert backend._has_redundant_positive_reaction(
+        unrelated_negative_clause,
+        repeated_positive_reactions.alternatives[0],
+    )
+
+
 def test_cafe_preference_polarity_is_preserved(client):
     _, backend = client
     context = {

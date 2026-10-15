@@ -3100,6 +3100,47 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     return reasons
 
 
+def _has_redundant_positive_reaction(left: Candidate, right: Candidate) -> bool:
+    """Warn when two choices mainly react positively to the same concrete topic.
+
+    This conservative lexical check never rejects a candidate. It catches cases
+    where the opening reactions are near-paraphrases and one option only adds a
+    generic follow-up question, while avoiding a claim of general semantic
+    understanding.
+    """
+    positive_reaction = re.compile(
+        r"(?:ワクワク|楽し|いいですね|素敵|面白|気になります|うれし|嬉し|魅力的|最高)"
+    )
+    filler = re.compile(
+        r"^(?:えー|えっ|へー|あー|なるほど|たしかに|そうなんですね|そうなんだ|それ|\s)+"
+    )
+    suffix = re.compile(
+        r"(?:ですね|ですよね|ますよね|しますよね|ですねえ|だね|ですよ|です|ます|！|!|笑|☺️|😊|✨)+$"
+    )
+
+    def reaction_core(candidate: Candidate) -> str | None:
+        first_line = candidate.text.splitlines()[0]
+        reaction_clause = re.split(r"[！!？?]", first_line, maxsplit=1)[0]
+        if not positive_reaction.search(reaction_clause) or re.search(
+            r"(?:くない|ではない|じゃない|と思わない|しない|ません|ない(?:です|ですよね|よね|んです|かも|！|!|$))",
+            reaction_clause,
+        ):
+            return None
+        core = re.sub(r"[！!？?\s]", "", reaction_clause)
+        core = filler.sub("", core)
+        core = suffix.sub("", core)
+        return core if len(core) >= 5 else None
+
+    left_core = reaction_core(left)
+    right_core = reaction_core(right)
+    if not left_core or not right_core:
+        return False
+    common = SequenceMatcher(None, left_core, right_core).find_longest_match(
+        0, len(left_core), 0, len(right_core)
+    )
+    return common.size >= 5
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -3169,6 +3210,12 @@ def filter_safe_candidates(
         for right in normalized_safe[index + 1:]
     ):
         notices.append("候補の切り口が似ている可能性があります。本文を確認して選んでください。")
+    elif len(accepted) > 1 and any(
+        _has_redundant_positive_reaction(left, right)
+        for index, left in enumerate(accepted)
+        for right in accepted[index + 1:]
+    ):
+        notices.append("候補の中心的な反応が似ている可能性があります。安全な候補は残しているため本文を確認して選んでください。")
     if isinstance(value, SuggestionsV2) and len(accepted) > 1:
         reply_moves = {candidate.reply_move for candidate in accepted}
         if len(reply_moves) < len(accepted):

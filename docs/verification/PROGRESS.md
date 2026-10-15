@@ -600,3 +600,14 @@
 - Test Matrixは274項目: **PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15**。QUALITY009の過去実生成品質FAILを消さず、実API文章の改善確認済みとは扱わない。PR #4はOPEN/Draft、未マージ。
 - 変更中: `app.py` と `tests/test_app.py`。ユーザー提供の未追跡指示txt 3点は保護しており、ステージしない。
 - 次: 最新差分を追跡対象のみコミット・Pushし、同一SHAのPush/PR ActionsとPR #4 Draft状態を確認。その後は品質009の残る意味的候補重複・会話前進の不足をオフラインで検証する。
+
+
+### 2026-10-15 15:36 JST 継続チェックポイント：同じ肯定反応の言い換えを通知
+
+- `codex/directive-control` を15:26 JSTに再取得。P0の安全な候補保持と、QUALITY009の実生成FAILに関連する改善を継続。Gemini APIは呼び出さず、会話004・新しい会話HTMLも作成していない。
+- QUALITY009の `known_partner_fact_after_fix` にある「新しいお店を見つけるのワクワクしますよね！」と「新しいお店を開拓するの楽しいですよね！」は、安全な2候補として保持されていたが、同じ肯定反応に寄っていた。現行の文字列類似度と `reply_move` 重複警告ではこの旧形式の出力に気づけないことを確認。
+- 第一文の肯定反応と共有トピックの長い文字列一致を使う保守的な警告を追加。候補は削除しない。異なる話題・肯定と否定の対照をテストし、否定反応への誤警告を避ける。これは意味理解の完全な検出器ではなく、候補品質の注意表示に限る。
+- 新規focused回帰は **2 passed**。変更後の全pytest・Firefox UIは **757 passed in 99.50s**。`python -m py_compile app.py`、`node --check app.js`、`git diff --check`成功。独立レビューの最終指摘なし。
+- 最新コミット `7bf133d435cdfcb10fe6c0e507e16e7a163a741c` に対するGitHub Actions Push・PR両run成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38692383229), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38692377526)。これらは今回の未コミット差分より前のSHAを検証した結果であり、今回の差分のCI証拠ではない。
+- 現在のコード差分 `app.py` / `tests/test_app.py` は未コミット。今回のTest Matrixは278項目（PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15）。Gemini API 0回。総合NO-GOは維持。
+- 次: 最終差分で構文と差分を確認し、今回の変更と検証記録をコミット・Push。同一SHAのPush/PR Actions、PR #4 OPEN/Draftを確認した後、直接質問の回答完全性など残るP0へ進む。ユーザーが置いた未追跡txtはステージしない。

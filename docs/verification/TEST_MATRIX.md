@@ -544,3 +544,14 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T272 | 最近観た映画への回答関連ケース | `python -m pytest tests/test_app.py -q -k 'recent_movie_title_in_question or recent_movie_answer_can_include_verified_title or recent_movie_answer_does_not_accept_topical_followup or direct_question_filter_keeps_answer'` | PASS | **21 passed**。直接回答、疑問形回避、矛盾候補、改行付き追質問と安全候補の不足通知を確認。モック/ローカル試験。 |
 | T273 | 全pytestとFirefox UI回帰 | `python -m pytest -q` | PASS | **756 passed in 100.64s**。Firefox UIテストを含む。Chromeは使用していない。 |
 | T274 | 構文検査・差分検査・独立レビュー | Python `py_compile`、`node --check app.js`、`git diff --check`、code reviewer | PASS | 構文・差分検査成功。独立レビュー指摘を順次テストに追加し、最終差分レビューで未解決指摘なし。 |
+
+### 2026-10-15 15:36 JST：品質009の候補反応重複警告
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+| T275 | QUALITY009に保存された同じ肯定反応候補の意味重複 | オフライン再現・候補フィルター | FIXED | 「新しいお店を見つけるのワクワクしますよね！」と「新しいお店を開拓するの楽しいですよね！」は両方安全なので保持し、中心的反応が似る旨の注意を表示する。候補は削除せず、指定数不足なら既存の不足通知も維持する。|
+| T276 | 異なる話題・反対の感情・後続節にある否定の対照 | focused pytest | PASS | 2 tests passed。異なる話題では警告せず、肯定/否定の反応差も誤警告せず、同じ肯定反応の後に別の否定節が続く場合は反応部分を比較できる。いずれも安全候補を保持。|
+| T277 | 最新コードの全pytest・Firefox UI | `python -m pytest -q` | PASS | **757 passed in 99.50s**。ブラウザUIテストはFirefoxを使用しChrome未使用。 |
+| T278 | Python/JavaScript構文・差分検査・独立レビュー | `py_compile`、`node --check app.js`、`git diff --check`、code reviewer | PASS | 構文・差分検査成功。独立レビューは最終差分に未解決指摘なし。 |
+
+最新ID行: 278。累計: PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。Gemini実APIは今回0回。前回のQUALITY009実生成品質FAILは履歴として維持し、意味的多様性全般の解決とは扱わない。今回コードのGitHub Actionsは未実施。 |

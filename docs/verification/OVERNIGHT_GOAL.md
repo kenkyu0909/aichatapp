@@ -329,3 +329,20 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 修正内容: 作品名が一致するだけで直接質問への回答扱いにせず、肯定的な視聴表現を候補と節単位で照合。修正前に疑問・意図・否定・伝聞の候補通過を再現し、修正後に拒否と肯定的な完了/対比文の双方を検証した。Gemini実API 0回。変更中は `app.py` と `tests/test_app.py`。直前HEAD `fece04510e91fe19110e0781fd94c32e130c06ed` のActionsは[成功](https://github.com/kenkyu0909/aichatapp/actions/runs/38690998981)だが、本差分のActions証拠ではない。Test Matrix 274件: PASS203 / FAIL13 / FIXED38 / BLOCKED5 / NOT_TESTED15。総合NO-GO。PR #4 Draft・未マージ。会話004と新規会話HTMLは実施しない。
 
 次の作業: 追跡ファイルのみコミット・Pushし、最新SHAのActionsを確認。その後、QUALITY009に残る相槌・候補方針の意味重複をオフラインで監査する。
+
+
+### 2026-10-15 15:36 JST チェックポイント
+
+| ゴール | 判定 | 確認状況 |
+|---|---|---|
+| 本人情報の正確性 | NOT_MET | 映画・読書など直接質問への限定的な根拠検査は追加済みだが、全30ケース以上の意味品質基準は未完了。|
+| 句読点・改行 | NOT_MET | 全pytest/Firefox UIは成功。包括的な文体ベンチマークは未完了。|
+| ミラーリング | NOT_MET | 20ケースで90%以上という事前基準は未評価。|
+| 共感の反復防止 | NOT_MET | QUALITY009の過去実生成品質FAILを維持。今回の類似反応注意は候補の意味重複を完全に検出しない。|
+| 返信候補の多様性 | NOT_MET | QUALITY009の具体的な同義反応ペアに、候補を保持したまま注意を出すよう変更。異なる話題と反対感情の対照はfocused 2 passed。15ケース基準は未評価。|
+| 食事への誘い判断 | NOT_MET | 既存の誘い/拒否ガードを維持。誘いやすい5件・控える5件の基準は未達。|
+| アプリ全体の安定性 | CONDITIONAL | 全pytest・Firefox UI 757 passed in 99.50s、Python/JavaScript構文、diff検査、独立レビュー成功。今回SHAのActions待ち。|
+
+今回のコード差分は `app.py` と `tests/test_app.py`、Gemini実API 0回、会話004/新会話HTMLなし。Test Matrix 278件: PASS206 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。過去の実生成FAILを解決済みに変えず、総合NO-GOを維持する。
+
+次の再開手順: (1) 追跡ファイルだけをコミット・Push、(2) Push/PRの両Actionsが最新SHAで成功することを確認、(3) PR #4がOPEN/Draft、base `feat/ui-local-backend-v1`であることを確認、(4) 次のcodex/directive-control更新を取得し、直接質問回答・会話前進の残存P0へ進む。ユーザー提供の未追跡txtはステージしない。
