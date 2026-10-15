@@ -1081,3 +1081,10 @@ ode --check app.js、git diff --check成功。実Gemini API **0回**。Chrome不
 - T329のコード/test SHA `9d64e15990d83fec52477d9934450644214c69b6`を対象とするActionsは確認待ち。T330の差分は未コミット・未Push。PR #4は前回確認時OPEN/Draft、未マージ。ユーザーの指示txt3点を保持しステージしない。
 - 次: 構文と差分を再確認し、T330のコード/test/docsを選択的にコミット・Pushする。Push/PR Actionsのhead SHAが一致し成功することとPRのDraft状態を確認する。次のP0は最新指示から選び、オフラインで継続する。
 - T329の旧SHA `9d64e15990d83fec52477d9934450644214c69b6`を対象にしたPush [Actions 38762044607](https://github.com/kenkyu0909/aichatapp/actions/runs/38762044607)とPR [Actions 38762147748](https://github.com/kenkyu0909/aichatapp/actions/runs/38762147748)がsuccessし、head SHA一致を確認。ただし、誤判定対照を追加する前の版でありT330の最新コード検証としては扱わない。
+
+### 2026-10-16 00:46 JST Actions・PR確認
+
+- T330コミット`af1038c636341595c1d0eedbf443d72568fd0a6c`のPush Actions [38763118050](https://github.com/kenkyu0909/aichatapp/actions/runs/38763118050)とPR Actions [38763126584](https://github.com/kenkyu0909/aichatapp/actions/runs/38763126584)が両方successし、head SHAが一致した。ログ上のpytestは**1012 passed**、Firefox 157準備・JavaScript構文検査・Artifact uploadも成功。
+- PR #4: OPEN/Draft、base `feat/ui-local-backend-v1`、head `af1038c636341595c1d0eedbf443d72568fd0a6c`、未マージ。
+- T331をPASS追加。Test Matrix **331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15**。過去QUALITY009の実生成自然さ・候補意味多様性FAILが残るため総合**NO-GO**。
+- 現在の差分はT331の記録だけで、ユーザー提供の未追跡指示txt3点をステージしていない。次はこの記録をPushし、docs-only HEADのCIも確認する。その後、保存済み品質ログに関連する次の未達課題をオフラインで確認する。

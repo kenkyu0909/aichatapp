@@ -1173,3 +1173,7 @@ Test Matrixは322項目: PASS230 / FAIL13 / FIXED59 / BLOCKED5 / NOT_TESTED15。
 拒否後の再勧誘ガードを再監査し、「もうちょっと話してから」「もうちょっとやり取りしてから」という保留の口語表現が未検出だった点を修正した。最初の拡張では「もう少し仲良くしたい」「もう少し話したいことがある」も拒否扱いする過剰判定が回帰テストで見つかったため、延期の「してから／なってから」に絞った。条件付き延期で即時の再勧誘を防ぎ、一般的な会話希望は拒否扱いしない。Focused 21 passed、全pytest 1012 passed in 131.45s（Firefox UI込み）、Python/JS構文検査・diff検査成功。独立Pythonレビューで残存する具体的誤判定なし。T330 FIXED、累計330項目: PASS231 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。総合NO-GO。Gemini実通信0回、T330未Push。
 
 T329の旧SHA`9d64e15990d83fec52477d9934450644214c69b6`を対象とするPush Actions 38762044607とPR Actions 38762147748はsuccessし、SHA一致を確認した。このコードには後続の対照テストで見つかった過剰判定が含まれ、T330で修正したため、最新コードの成功根拠にはしない。
+
+### 2026-10-16 00:46 JST 最新CI
+
+延期表現境界修正SHA`af1038c636341595c1d0eedbf443d72568fd0a6c`を対象に、Push Actions 38763118050およびPR Actions 38763126584が両方successし、head SHA一致。pytest 1012 passed、Firefox 157確認、JavaScript構文検査とartifact upload成功。PR #4はOPEN/Draft・未マージ。T331 PASSを追加し、Test Matrixは331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。実Gemini APIは0回。過去QUALITY009の実生成品質FAILが残るためNO-GO。|

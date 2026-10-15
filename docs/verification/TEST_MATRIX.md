@@ -748,3 +748,7 @@ ode --check app.js、git diff --check成功。実Gemini API 0回。|
 | T330 | 延期表現の口語差を認識し、単なる会話希望を拒否と誤判定しない | `python -m pytest -q tests/test_app.py -k 'wants_more_conversation_before_meeting or general_positive_message_about_getting_along or explicit_wait_before_meeting or soft_reinvitation_after_refusal or explicit_reconsideration or refusal_filter_keeps_neutral_candidate'` と全pytest | FIXED | Windows / Python 3.12 / 架空会話。修正前に「もうちょっと話してから」「もうちょっとやり取りしてから」を延期として認識しないことを再現。最初の拡張案が「もう少し仲良くしたい」「もう少し話したいことがある」も拒否扱いする過剰判定を発見し、修正前失敗として記録。パターンを「してから／なってから」に限定し、条件付き延期は即時再勧誘を止める一方、一般的な会話希望は拒否扱いしない。focused **21 passed, 906 deselected**。全pytest **1012 passed in 131.45s**（Firefox UI込み）。Pythonレビューで誤判定の残存指摘なし。構文・差分検査成功。実Gemini通信0回。|
 
 最新ID行: 330。累計: PASS231 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。過去QUALITY009の実生成自然さ・意味的候補多様性FAILは解消していないため総合NO-GO。
+
+| T331 | 延期表現境界修正の最新SHAに対するGitHub Actions Push/PR | `gh run view`でrun結果、head SHA、ジョブとpytestログを確認 | PASS | SHA `af1038c636341595c1d0eedbf443d72568fd0a6c`のPush [Actions 38763118050](https://github.com/kenkyu0909/aichatapp/actions/runs/38763118050)とPR [Actions 38763126584](https://github.com/kenkyu0909/aichatapp/actions/runs/38763126584)がともにsuccessし、head SHA一致。両方ともpytest **1012 passed**、Firefox 157準備、JavaScript構文検査、結果Artifact保存に成功。Gemini実通信0回。PR #4 OPEN/Draft。|
+
+最新ID行: 331。累計: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成自然さ・意味的候補多様性FAILは残るため総合NO-GO。

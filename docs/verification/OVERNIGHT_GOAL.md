@@ -814,3 +814,5 @@ QUALITY009保存出力の休息・慰労共感重複ペアを`/api/generate`経�
 延期表現の会話希望との境界を明示し、「もうちょっと話してから」等の再勧誘を止める一方、「もう少し話したいことがある」等を拒否扱いしないよう修正した。過剰判定の再現を確認してからパターンを絞った。Focused 21 passed、全pytest 1012 passed in 131.45s（Firefox UI込み）、構文・差分検査成功、Pythonレビューに具体的指摘なし。T330 FIXED。過去品質009の実生成自然さFAILが残るためNO-GO。Gemini通信0回、T330は未Push。
 
 T329 SHAのPush/PR Actions [38762044607](https://github.com/kenkyu0909/aichatapp/actions/runs/38762044607) / [38762147748](https://github.com/kenkyu0909/aichatapp/actions/runs/38762147748)は両方success・SHA一致。後続のT330で過剰判定を見つけて修正したため、このCIは最新状態の検証ではない。
+
+修正SHA `af1038c636341595c1d0eedbf443d72568fd0a6c`のPush/PR Actionsは両方success（[38763118050](https://github.com/kenkyu0909/aichatapp/actions/runs/38763118050) / [38763126584](https://github.com/kenkyu0909/aichatapp/actions/runs/38763126584)）、同一SHA、pytest 1012 passed、Firefox 157、JS構文・artifact保存成功。Test Matrix331項目: PASS232 / FAIL13 / FIXED66 / BLOCKED5 / NOT_TESTED15。品質009の実生成自然さFAILを解決していないのでNO-GO。次は検証記録をPushしてdocs-only HEADのCIを確認し、別の未解決P0を続ける。
