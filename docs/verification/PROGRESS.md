@@ -621,3 +621,12 @@
 - 候補意味重複警告のコード・報告コミット `6db8503a221cec55639467f82cc2e7f05b9f5e09` はPush/PR Actions両方成功: [Push](https://github.com/kenkyu0909/aichatapp/actions/runs/38693495802), [PR](https://github.com/kenkyu0909/aichatapp/actions/runs/38693502508)。Firefox追加assertを含む未コミット差分は次のPushでCIを再実行する。
 - Test Matrix 279項目: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。直前のコード全pytest/Firefox 757 passed in 99.50s、今回の追加Firefoxチェック1 passed。総合NO-GO。未追跡のユーザー指示txtはステージしない。
 - 次: Firefox追加確認と報告を追跡ファイルに記録し、Push/PR両Actionsが新しいHEADで成功することを確認する。その後、直接質問回答・会話前進・候補多様性の残るP0/P1へ続行する。
+
+
+### 2026-10-15 15:43 JST 継続チェックポイント：最新コミットのCI成功
+
+- `c6ea0337d525746463936c9e6c28f366e4190648` を対象とするPush run [38693787481](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) とPR run [38693794221](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221) はともにsuccess。
+- Push artifactのpytest.xmlを取得して確認: **757 tests / 0 failures / 0 errors / 0 skipped**。Firefox 157.0の存在確認、Firefox UI E2E、`node --check app.js`、artifact uploadも成功。ローカルでは全pytest 757 passed in 99.50s、追加のFirefox copy/send回帰1 passed。
+- PR #4はOPEN / Draft / base `feat/ui-local-backend-v1`、head `c6ea0337d525746463936c9e6c28f366e4190648`。マージなし。Gemini実API 0回。
+- Test Matrix 280項目: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。過去QUALITY009生成品質FAILは維持し、総合NO-GO。会話004と新規会話HTMLは未実施。
+- 次: Actionsの証拠URLと集計を各報告へ記録してPushし、そのドキュメント専用更新のActionsも追跡。次の未達課題は本人確認情報と直接質問への回答ガードの未見ケースを監査する。ユーザーの未追跡txtはステージしない。

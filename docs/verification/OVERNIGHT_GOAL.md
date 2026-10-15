@@ -361,3 +361,8 @@ API利用は11論理リクエスト / 14 provider attemptsで上限内。API1 / 
 | アプリ全体の安定性 | CONDITIONAL | 全pytest 757 passedに加え、コピー直後の送信履歴0件をFirefoxで検証。最新追加UI assertionを含むActionsは次のpush待ち。|
 
 2026-10-15 15:40 JST時点でGemini実API 0回。会話004/新規HTMLなし。Test Matrix 279項目（PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15）。最新Pushedコード `6db8503a221cec55639467f82cc2e7f05b9f5e09` のPush/PR Actionsは両方成功。Firefoxの追加assertは未コミット。総合判定NO-GOを維持し、会話品質009の過去FAILを成功に変更しない。
+
+
+### 2026-10-15 15:43 JST CI結果
+
+`c6ea0337d525746463936c9e6c28f366e4190648` を対象とするActionsは成功: [Push run 38693787481](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) / [PR run 38693794221](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221)。Push artifact pytest.xmlで757 tests / 0 failures / 0 errors / 0 skippedを確認。Firefox 157 UI E2EとJavaScript構文も成功。Firefox UIのコピー直後0送信・手動確認後1件の回帰を含む。PR #4はOPEN/Draft、base feat/ui-local-backend-v1。Gemini 0回。Test Matrix 280項目: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。QUALITY009の実生成FAILが残るためNO-GOを維持する。

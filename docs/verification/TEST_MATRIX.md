@@ -559,3 +559,7 @@ T221は単独Firefox **6 passed in 81.18s**へ更新。行基準の現在集計�
 | T279 | コピーのみでは送信履歴に記録されず、手動確認後は1件だけ保存 | Firefox UI / SQLite連携 | PASS | 改行付き返信をコピーした直後の本人送信バブル0件を確認。手動保存後は本文・改行を保持した1件だけが表示され、再読み込み後も1件のまま。Firefox単独テスト1 passed。 |
 
 最新ID行: 279。累計: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。全pytestはコード変更後757 passed in 99.50sで、最後のFirefox回帰T279は個別に1 passed。Gemini実APIは今回0回。 |
+
+| T280 | 候補重複警告・Firefox送信分離を含むGitHub Actions | Push / PR workflow・artifact確認 | PASS | SHA `c6ea0337d525746463936c9e6c28f366e4190648`を対象にPush [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) とPR [run](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221) が成功。Push artifactのpytest.xml: 757 tests / 0 failures / 0 errors / 0 skipped。Firefox 157.0とJavaScript構文検査も成功。|
+
+最新ID行: 280。累計: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。対象SHA `c6ea0337d525746463936c9e6c28f366e4190648`のActionsは成功。 |

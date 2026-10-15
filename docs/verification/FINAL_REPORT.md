@@ -910,3 +910,8 @@ V2候補でreply_moveが重なる場合、候補を捨てずに進め方の重�
 ## 2026-10-15 15:40 JST UI回帰追補
 
 Firefoxの改行保持テストを強化し、候補コピー直後には本人側の送信履歴が0件であることを明示確認した。手動で送信記録を確認した後は正確な改行付き本文が1件保存され、再読み込み後も1件であることを既存の同テストで確認する。focused Firefox testは**1 passed**。今回のassertを含む最新コミットはまだPush前であり、Actions検証は未実施。直前コミット `6db8503a221cec55639467f82cc2e7f05b9f5e09` に対するPush/PR Actionsは成功したが、追加UI assertの証拠とは区別する。最新Test Matrixは279件: PASS207 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。
+
+
+## 2026-10-15 15:43 JST CI最終確認
+
+コミット `c6ea0337d525746463936c9e6c28f366e4190648` のPush [GitHub Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38693787481) およびPR [GitHub Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38693794221) は成功した。Push artifactのpytest.xmlで**757 tests / 0 failures / 0 errors / 0 skipped**を確認。Firefox 157 UI E2E、JavaScript構文検査、artifact保存も成功。Test Matrix 280項目: PASS208 / FAIL13 / FIXED39 / BLOCKED5 / NOT_TESTED15。今回のGemini実API通信は0回。PR #4はOPEN/Draftで未マージ。QUALITY009の過去実生成品質FAILと包括品質基準未達が残るため、総合判定は**NO-GO**。
