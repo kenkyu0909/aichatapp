@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 00:40 JST 検証エージェント指摘の反映（テ形スコープ・近未来誘い精度）
+
+- 検証エージェント#3が `11c6dbc` と `32db88a` の回帰を検出した。テ形の本人映画質問（`観てる映画の評価はどれですか？` 等）が下流分類器のテ形未対応で本人確認から漏れ、近未来誘いブランチは `近いうちに食事でもどうですか？` のような「どうですか」提案を漏らしつつ `近日中には間に合いません`・`近いうちに来ませんね`・`近いうちにまた連絡しましょう` のような否定/非提案文を誘いと誤認していた。
+- `e2b7426`: 除外を `(?<!を)(?:観|見)て` にして接続の「を見て」だけを除外し、映画分類器にテ形（`てる/ている/ています`）を追加。近未来誘いブランチを動作動詞＋`ませんか`／`ましょう`／`どうですか` に限定し、正例と負例の対テストを追加。
+- 検証: 対象focused 45 passed、`tests/test_app.py` 1702 passed、全pytest **1811 passed in 362.25s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38919538142](https://github.com/kenkyu0909/aichatapp/actions/runs/38919538142) とPR [38919546626](https://github.com/kenkyu0909/aichatapp/actions/runs/38919546626) が同一SHA `e2b7426` でsuccess（CI **1811 passed / 1 warning in 241.12s**）。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-16 23:55 JST D03第一歩（確認回答のセッション蓄積）
 
 - D03の要件「別の確認が続いても以前の一時回答を蓄積する」を阻害していた `GenerateInput.user_answers` の上限3を12へ緩和し、`merge_user_answers` を追加した。NFKC正規化した質問文でキー化し最新回答を採用、初出順を保持する（ブラウザ側 `mergeUserInfoAnswers` と一致）。

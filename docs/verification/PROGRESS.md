@@ -1705,3 +1705,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
 - 次: D03の構造化（fact_id/subject/predicate/value/polarity/time_scope/source/confirmation_state と question_id/requested_slot/scope の最小モデル、confirmed_facts の明示確認時のみ永続化）。検証エージェントで次サブステップを確定する。
 
+### 2026-10-17 00:40 JST 検証#3指摘の反映（テ形スコープ・近未来誘い精度）
+
+- 検証エージェント#3の独立検証: `08560dc`（蓄積・重複排除）は機能的に妥当だが、エンドポイントは同一質問の異なる回答を400で拒否するため「最新回答採用」は `build_context` 直接呼び出しでのみ観測可能（実利は上限緩和）。`11c6dbc`/`32db88a` には回帰を検出。
+- 修正 `e2b7426`: (a) 除外 `(?:観|見)(?:た|ま|る|れ)` を `...|(?<!を)(?:観|見)て` に変更し、接続の「を見て」だけを除外（`観てる映画の評価は…` 等は本人確認へ）。映画分類器にテ形 `(?:観|見)て(?:る|いる|います)` を追加。(b) 近未来誘いブランチを動作動詞＋`ません(?:か|？)`／`(?:お)?(?:会い|行き)(?:ましょう|ましょうか)`／`(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}どう(?:ですか|でしょう|？)` に限定し、`食事でもどうですか` 系を認識、`近日中には間に合いません`・`近いうちに来ませんね`・`近いうちにまた連絡しましょう` を除外。
+- 検証: 対象focused 45 passed、`tests/test_app.py` 1702 passed、全pytest **1811 passed in 362.25s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38919538142](https://github.com/kenkyu0909/aichatapp/actions/runs/38919538142) / PR [38919546626](https://github.com/kenkyu0909/aichatapp/actions/runs/38919546626) は同一SHA `e2b7426` でsuccess（CI **1811 passed / 1 warning in 241.12s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
+- 次: 検証#3推奨のD03サブステップ（`build_ephemeral_confirmations`: 派生のみ・非永続の構造化確認レコード、`confirmation_state="ephemeral"`）を実装する。
+
