@@ -287,3 +287,31 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 ## 2026-10-16 18:00 JST 監査追記
 
 作業ブランチHEAD `9bdd6ad7037d9751cd39db1e977e612696928c98`、Draft PR #4未マージ、PR Actions 38876699757成功、pytest 1668件成功・警告1件。検証資料4件を確認し、398項目（PASS261 / FAIL14 / FIXED103 / BLOCKED5 / NOT_TESTED15）。保存済み実Gemini品質009の手動FAILは未解消であり、総合NO-GO。今夜の完成期限を優先し、次の順序で進める：①本人への質問→架空回答→根拠のある自己開示の短いFirefox/モックE2E、②映画名など相手の直接質問への全候補回答と未確認事実の抑止、③first/reply/followup/likeの生成・コピー・保存・履歴のFirefox回帰、④誤字・意味的重複・相槌・褒め言葉・絵文字の実際の文章評価、⑤全pytest・Actionsと記録更新。細かな語句パターンやテスト件数の増加よりP0を優先する。Codexは毎時10分JSTと稼働中15〜20分ごとに本指示を再取得し、各タスク後も次のP0へ自律的に進む。既存の制約、会話004・新会話HTMLの禁止、PR Draft維持、未検証の実Gemini品質をPASSとしない方針は継続する。
+
+
+---
+
+## 2026-10-16 20:14 JST — セッション再開監査・最優先指示
+
+### 監査時点でGitHubから再取得した事実
+- 作業ブランチ `codex/full-system-verification` HEAD: `8b1e0cb5c8cec4611cf554364b798639b035de05`（commit: `docs: distinguish live smoke evidence from fictional chat preview`）。
+- PR #4: OPEN / Draft / 未マージ、base `feat/ui-local-backend-v1`。マージ禁止を継続。
+- 同HEADのGitHub Actions run `38890990970`（Local app offline tests）は completed / success。これは監査時点のCI結果であり、引継ぎ時点で確認されたUI・品質FAILが解消した証拠ではない。Combined status APIはstatuses空配列だったため、run結果と区別する。
+- 継続指示ブランチ `codex/directive-control` HEAD は `e227f52e8a8e3c687e132fb65688e35635260c9b`、対象ファイルの取得SHAは `cfde9c6969dfd474e6c2930cc6b06ac0a0918a1d`。更新前SHAを競合検出用に使い、内容を再取得してから追記すること。
+- `DEEPSEEK_HANDOFF.md` blob SHA `650a2051faa155f464dd9ed72bb0a50648c4f961`、`audit_evidence_20261016.json` blob SHA `aaf353b26b7a35553e831bcbded85168a12f2224`。
+- 監査証拠はscope `dirty worktree over 7e82f2a; offline only`、Gemini requests 0。確認されたFAIL: 未確認の本人事実3例、プロフィール編集往復で `availability` / `confirmed_facts` / `food` が消失、Aの下書きが相手切替後も残る、古いreply応答が新followupを上書き、履歴更新後に旧履歴由来の候補が表示される。直接質問スコープにも曖昧回答を許すFAILがある。
+- 以前の基準CI `1720 passed / 1 warning` は7e82f2a基準。ローカル1743件成功の記録と同一条件とは確認できない。保全パッチは未適用・無条件適用禁止。
+
+### 次に実施する順序（P0）
+1. **D04プロフィール保持**: Firefox + 空の一時SQLiteで任意キー・配列・確認済み事実を編集→保存→再読込し、未知キーも含め完全一致を確認。UIが対応していない項目を黙って空文字で上書きしない。
+2. **D05相手別下書き分離**: A→B→A、切替中保存、非同期遅延を再現。下書き・一時回答・候補・ローディング状態をmatch/contact IDに結び付け、別相手の内容を表示・保存しない。
+3. **D06古い生成結果の競合**: 同一相手でreplyを遅延、followupを後発実行し、後発結果のみ表示されることを確認。履歴追加後に旧historyに基づく候補が表示・コピー・保存されないことも検証。request token/履歴version等の仕組みは既存設計を調べてから最小修正する。
+4. 上記の回帰後、本人事実の未確認情報ゲートと直接質問回答の候補別検査へ進む。質問に答えない案、根拠のない本人事実、拒否後の再勧誘をFAILとして維持する。安全な候補を全件破棄して合格扱いにしない。
+5. 既存の変更・未コミット差分を保全し、保全パッチを無条件適用しない。Firefox、隔離DB、Gemini SDKモックを用い、Gemini実通信は承認済み残枠が明確に確認できない限り0回。conversation_004・新しい会話HTML・本番DB操作・PRマージは禁止。
+6. 各修正は再現→原因→最小修正→対象テスト→回帰→独立レビュー→進捗/証拠更新の順。最新コードSHAとCI run SHAを一致確認し、実際の結果を記録する。FAILは消去せず履歴化し、総合NO-GOを維持する。
+7. 変更をPushしたらPR #4がOPEN/Draft/未マージのままか確認。Codexはこの指示書を開始時・15〜20分ごと・各作業サイクル後に再取得し、次の毎時監査を待たずにP0を継続する。
+
+### オートメーション運用上の注意
+- 既存「Codex開発・毎時監査」automation ID `6ad054c48248819199fe51f70575d82f` は存在するが、監査時点で `is_enabled=false`、`next_run_time=null`。前回実行表示は `2026-10-16T11:06:49Z`。実行継続中とは見なさない。
+- この環境のオートメーション作成/更新では毎時の定期実行がサポート対象外のため、同じ処理の重複automationを作成しない。毎時00分の実行を保証できない旨をユーザーへ明示し、利用可能な代替手段を別途判断する。存在するだけで実行済みと報告しない。
+- 期限の「2026-10-16夜」は本監査時点で進行中。期限到達・経過だけを理由に未解決P0を完了扱いにしない。
