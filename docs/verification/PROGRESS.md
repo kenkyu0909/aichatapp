@@ -17,6 +17,25 @@
 
 最終更新: 2026-10-14（継続作業）
 
+### 2026-10-16 13:42 JST 本人確認ゲートの否定表現追加修正
+
+- 最新の作業ブランチと既存PR #4を確認し、既存の未コミット変更を保持。指示ブランチは13:42 JSTに再取得し、SHA `c83a29e45746560bdddad6080146fee9cd20991c`で未更新を確認。Gemini実通信、conversation_004、新しい会話HTMLは行っていない。
+- 独立レビューで、カフェ頻度の否定（「よく行かない」）を肯定頻度に読み違える問題と、二重否定を低頻度と扱う問題を発見。朝食の「取ってない」「食べてない」も本人情報質問として分類されないことを再現した。
+- 修正前の追加再現テストは5件FAIL。`app.py`で否定頻度を肯定分類より先に処理し、二重否定は曖昧としてfail-closedに変更。朝食の口語否定を質問分類と確認スコープに追加。相手の曖昧な二択回答から食事習慣を推測せず、確認質問を行う。
+- 該当focused suite **9 passed**。最新コードの全pytest（Firefox UI含む）**1577 passed in 276.39s**。`py_compile`、`node --check app.js`、`git diff --check`成功。Windows Firefox UIは全suite内で実行し成功。Gemini通信0回。
+- TEST_MATRIXへT387–T388を追加し、累計388項目（PASS261 / FAIL14 / FIXED93 / BLOCKED5 / NOT_TESTED15）。以前のT369実Gemini品質FAILは維持し、総合判定NO-GOを変更しない。
+- 現在の変更は未コミット。次は独立レビューの再確認、差分と秘密情報スキャン、文書更新の確認後に、保護対象の未追跡指示ファイルを除く変更をコミット・Pushする。最新SHAのPush/PR ActionsとPR #4のDraft状態を確認する。
+- 残課題: 実生成の自然さ・多様性・ミラーリング・会話前進は過去FAILのままで、今回実API未使用のため改善確認なし。本人事実ゲートも自由文全体の意味解釈を保証しない。実験004・新しいHTML・PRマージは行わない。
+
+### 2026-10-16 13:55 JST 二重否定の追加形をfail-closed
+
+- 再レビューで「カフェにあまり行かないわけでもない」「ってわけでもない」「というわけではない」が低頻度の根拠として通る3ケースを確認。修正前は3件FAIL。
+- 複合的な二重否定を曖昧表現として扱い、低頻度候補の本人根拠に使わないよう修正。朝食習慣の否定質問分類、曖昧な二択回答への確認質問、単純な否定頻度から肯定頻度への誤変換も保持。
+- 関連focused suite **12 passed**。最新全pytest **1580 passed in 273.36s**（Firefox UI含む）。Python構文、JavaScript構文、差分検査成功。Gemini通信0回。
+- T389を追加し、累計389項目: PASS261 / FAIL14 / FIXED94 / BLOCKED5 / NOT_TESTED15。T369実Gemini品質FAILは残り、総合NO-GO。
+- 次: 再レビュー後、秘密情報スキャンとドキュメント差分確認を行い、意図した追跡ファイルだけをコミット・Pushする。Push後は同一最新SHAのActionsとPR #4のDraft/未マージ状態を確認して記録する。
+- 再開制約: 実API、conversation_004、新しいHTMLは別指示がない限り行わない。Firefoxのみを使い、ユーザーの本番データには触れない。
+
 ## 2026-10-14 最終修正・実API会話検証（継続中）
 
 - 開始時にリモートをfetchし、`codex/full-system-verification`のHEADが`4cb01c4e72de745295ed163c01802c60deda2273`であることを確認。PR #4は`feat/ui-local-backend-v1`宛てDraftで、マージなし。既存PROGRESS/TEST_MATRIX/FINAL_REPORT/prompt_specと共通・各モードのプロンプトを確認。Chromeは起動・操作していない。
@@ -1478,3 +1497,32 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T373を追加。累計373: PASS261 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
 - 直前HEAD `1c9fae193f42bb64d369b3e0fbc0116bdc64d8f1`のPush [38835470570](https://github.com/kenkyu0909/aichatapp/actions/runs/38835470570)・PR [38835475731](https://github.com/kenkyu0909/aichatapp/actions/runs/38835475731)は同一SHAでsuccess。CI pytest 1369 passed / 1 warning、JavaScript syntax・artifact成功。今回の変更を含むActionsは未実施。
 - 次: diff check、commit/push、最新SHA Push/PR Actions確認。会話004、新会話HTML、Gemini追加通信は行わない。
+### 2026-10-16 11:20 JST 映画感想の境界ケース追試
+
+- `origin/codex/directive-control`をSHA `c83a29e45746560bdddad6080146fee9cd20991c`で再取得・確認。Gemini実通信0回、会話004/新しいHTML禁止、P0返信品質を優先する指示を維持。
+- 独立レビューで、口語の二重否定 (`面白くなかったとは思わないです`)、否定感想 (`微妙ではありませんでした`)、不確かな感想 (`面白くなかった気がします`) の検出漏れを再現。さらに「少し面白かった」の「し」を接続詞と誤判定し作品名の根拠を失うケースと、本人が明示した否定的な映画の好みを誤拒否するケースをテストへ追加。
+- `app.py`で否定形の主張検出を拡張し、曖昧な入れ子否定は安全側で候補拒否。接続詞「し」は述語の後だけ分割し、「少し」を分割しない。本人の確認済み否定好みは、本人の肯定回答からは認めず、確認済み同極性の情報がある場合に限り使用可能とした。
+- 修正前の新規回帰テストは7件失敗、修正後は `tests/test_app.py -k movie_` が240 passed / 1109 deselected。Python構文、`node --check app.js`、`git diff --check`は成功。
+- テスト追加ID T378〜T380をTEST_MATRIXへ記録。累計380行: PASS261 / FAIL14 / FIXED85 / BLOCKED5 / NOT_TESTED15。実API通信0回。T369の実生成品質FAILは維持。
+- 修正より前に開始した全pytest実行は途中で1件失敗を表示したが、コード変更・テスト追加前の古い実行であり最新結果として採用しない。最新コードで全pytestを改めて実行する。
+- 次: 全pytest最新コードで完了、レビュー再確認、保存済みQUALITY009の候補品質・回答範囲と自己開示フローをオフライン監査。Firefoxを使い、Chrome・Gemini・conversation004は使用しない。Push後にActionsを確認する。
+
+
+### 2026-10-16 12:40 JST 本人事実ゲートの追加境界修正
+
+- `origin/codex/directive-control` はSHA `c83a29e45746560bdddad6080146fee9cd20991c`で再確認。指示は未更新。Gemini実通信0回、会話004と新規会話HTMLは実施しない。
+- 独立レビューで、(1)曖昧な映画嗜好が肯定事実に変わる、(2)確認済み「月1回」を「月に数回」と言い換えられる、(3)「昔猫いた？」「ペットいたことある？」が本人確認へ進まない、の3件を発見。いずれも追加テストで修正前のFAILを再現。
+- `app.py`で映画嗜好の不確実・中立表現を肯定根拠から除外。直接質問に対するカフェ頻度の回答を確認済み頻度と照合し、口語の過去ペット質問を確認対象として分類。対応する回帰テストを`tests/test_app.py`へ追加。
+- 関連focused suite **51 passed / 1391 deselected**。最新コード全体のpytestを再実行中。前回コードの全pytestは1532 passed in 239.23sだったが、今回の追加修正後の結果には流用しない。
+- Python/JavaScript構文・差分検査、独立レビュー最終結果、今回HEADのCI、PR #4状態はこれから確認する。未コミット変更は保持し、保護対象の未追跡指示ファイルはステージしない。T369実Gemini品質FAILと総合NO-GOは維持する。
+- 次: 全pytest完了後に構文・差分検査とレビューを確認し、必要な追加修正を続ける。その後レポート・Test Matrixを確定し、意図した追跡ファイルのみコミット・Push、最新SHAのActions確認。PR #4はDraft/未マージ。
+
+
+### 2026-10-16 13:13 JST 映画嗜好の限定否定をfail-closed
+
+- `origin/codex/directive-control` をSHA `c83a29e45746560bdddad6080146fee9cd20991c`で再取得・確認。Gemini実通信、conversation_004、新しい会話HTMLは行わない。
+- 独立コードレビューで「ホラー映画だけは好きではない」等が、ホラー映画を肯定する根拠として解釈され、未確認の肯定候補を通す問題を発見。
+- 4表現の再現テストを先に追加し、修正前は4件すべて失敗。`app.py`で「だけ＋否定」を曖昧情報としてfail-closedにし、肯定解釈は「しか」「以外」の明示形に限定。関連映画嗜好focused suiteは58 passed。独立レビューでも修正を確認。
+- 最新全pytest（Firefox UIを含む）は **1557 passed in 222.77s**。Python構文検査、JavaScript構文検査、`git diff --check`も成功。Gemini実通信0回。
+- T386を追加。集計は386項目: PASS261 / FAIL14 / FIXED91 / BLOCKED5 / NOT_TESTED15。過去の実Gemini生成品質FAIL T369は維持し、総合判定はNO-GO。
+- 最新コードのActionsとPR #4のOPEN/Draft状態は未確認。次は文書を確定し、保護対象の未追跡指示ファイルを除いてコミット・Pushし、最新SHAのActionsとPR状態を確認する。続いてQUALITY009の本人回答済み直接質問・候補多様性・共感反復を限定監査する。

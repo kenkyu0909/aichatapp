@@ -1531,7 +1531,7 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
     body = response.json()
     candidates = [body["recommended"], *body["alternatives"]]
     assert body["needs_user_info"] is False
-    assert body["generation_blocked"] is False
+    assert body["generation_blocked"] is False, body
     assert len(candidates) == 2
     assert all(item["label"] != "不適切" for item in candidates)
     assert "安全確認後に表示できる候補は2案" in body["candidate_notice"]
@@ -4484,6 +4484,254 @@ def test_movie_genre_does_not_support_broad_movie_preference(client):
     ], context)
 
 
+@pytest.mark.parametrize(("fact", "supported_claim", "unsupported_claim"), [
+    ("ホラー映画だけが好き", "ホラー映画が好きです！", "映画が好きです！"),
+    ("昔の名作映画だけ好き", "名作映画が好きです！", "映画が好きです！"),
+    ("ミステリー映画が好き", "ミステリー映画が好きです！", "映画全般が好きです！"),
+    ("ホラー映画だけ好き", "ホラー映画が好きです！", "恋愛映画が好きです！"),
+])
+def test_movie_preference_does_not_broaden_genre_or_exclusive_scope(
+    client, fact, supported_claim, unsupported_claim
+):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}, "ephemeral_user_answers": []}
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="一致する範囲", text=supported_claim)
+    ], context) == []
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="広すぎる範囲", text=unsupported_claim)
+    ], context) == ["映画"]
+
+
+@pytest.mark.parametrize(("question", "subject"), [
+    ("昔うちに猫いた？", "猫"),
+    ("昔家に猫いた？", "猫"),
+    ("昔はうちにペットいた？", "ペット"),
+])
+def test_informal_past_pet_question_with_home_particle_requires_confirmation(client, question, subject):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == ("pet_past", subject)
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_vague_monthly_frequency_equivalent_wording_is_supported_only_by_vague_evidence(client):
+    _, backend = client
+    candidate = backend.Candidate(label="同程度の頻度", text="カフェには月に何度か行きます！")
+    vague = {"my_profile": {"facts": {"cafe_frequency": "月に数回カフェに行きます"}}, "ephemeral_user_answers": []}
+    precise = {"my_profile": {"facts": {"cafe_frequency": "月に1回カフェに行きます"}}, "ephemeral_user_answers": []}
+
+    assert "カフェ" not in backend.unsupported_personal_claim_topics([candidate], vague)
+    assert "カフェ" in backend.unsupported_personal_claim_topics([candidate], precise)
+
+
+def test_subjectless_monthly_cafe_frequency_claim_is_checked_against_profile(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近は新しいカフェを探してます！"}],
+        "my_profile": {"facts": {"cafe_frequency": "月に1回カフェに行きます"}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の頻度", text="カフェには月に数回行きます！")
+
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(("evidence", "candidate"), [
+    ("たまに行きます", "たまに行きます！"),
+    ("週末によく行きます", "週末によく行きます！"),
+])
+def test_qualitative_cafe_frequency_answers_are_usable_when_scope_matches(
+    client, evidence, candidate
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カフェってどのくらいの頻度で行きますか？"}],
+        "my_profile": {"facts": {"cafe_frequency": evidence}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_is_verified("カフェ頻度", context, context["history"][-1]["body"])
+    assert backend._answers_verified_partner_question(
+        backend.Candidate(label="確認済み頻度", text=candidate), context
+    )
+
+
+@pytest.mark.parametrize("evidence", ["よく行かない", "週末はよく行かない"])
+def test_negative_qualitative_cafe_frequency_does_not_support_positive_claim(
+    client, evidence
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {"cafe_frequency": evidence}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の肯定頻度", text="カフェにはよく行きます！")
+
+    assert not backend._frequency_claim_is_supported(candidate.text, evidence)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize("evidence", [
+    "あまり行かないわけではない",
+    "あまり行かないとは思わない",
+    "あまり行っていないわけではない",
+    "あまり行かないわけでもない",
+    "あまり行かないってわけでもない",
+    "あまり行かないというわけではない",
+])
+def test_double_negative_cafe_frequency_is_ambiguous_and_fails_closed(client, evidence):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {"cafe_frequency": evidence}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の低頻度", text="カフェにはあまり行きません")
+
+    assert backend._qualitative_cafe_frequency_class(evidence) is None
+    assert not backend._frequency_claim_is_supported(candidate.text, evidence)
+
+
+@pytest.mark.parametrize("question", [
+    "朝食取ってないんですか？",
+    "朝ごはん取ってない？",
+    "朝ごはん食べてないんですか？",
+    "朝食食べていませんか？",
+])
+def test_negative_meal_take_question_requires_clarification_for_bare_answer(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "うん"}],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == ("meal", "朝食" if "朝食" in question else "朝ごはん")
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "普段" in clarification.question
+
+
+@pytest.mark.parametrize(("question", "answer", "claim"), [
+    ("猫飼ってない？", "ううん", "猫を飼っています！"),
+    ("犬飼っていないんですか？", "いいえ", "犬を飼っています！"),
+])
+def test_bare_answer_to_negative_pet_question_requires_explicit_clarification(
+    client, question, answer, claim
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="曖昧な二択回答", text=claim), context
+    )
+    assert "ペット" in backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="未確認の飼育事実", text=claim)], context
+    )
+
+
+@pytest.mark.parametrize(("question", "answer", "claim", "clarification_marker"), [
+    ("朝ごはん食べないんですか？", "うん", "朝ごはんは食べていません！", "普段"),
+    ("朝ごはん食べないんですか？", "ううん", "朝ごはんは食べています！", "普段"),
+    ("猫を飼ったことないんですか？", "いいえ", "猫を飼ったことがあります！", "これまで"),
+])
+def test_negative_binary_question_clarifies_scope_and_time_before_generating(
+    client, question, answer, claim, clarification_marker
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert clarification_marker in clarification.question
+    assert not backend._answers_verified_partner_question(
+        backend.Candidate(label="曖昧な二択回答", text=claim), context
+    )
+
+
+@pytest.mark.parametrize(("fact", "supported", "rejected"), [
+    ("ホラーより恋愛映画が好き", "恋愛映画が好きです！", "ホラー映画が好きです！"),
+    ("ホラーよりも恋愛映画の方が好き", "恋愛映画が好きです！", "ホラー映画が好きです！"),
+    ("ホラー映画よりも恋愛映画が好き", "恋愛映画が好きです！", "ホラー映画が好きです！"),
+    ("ホラー映画しか好きじゃない", "ホラー映画が好きです！", "ホラー映画は好きではありません！"),
+    ("ホラー映画しか好きではない", "ホラー映画が好きです！", "ホラー映画は好きではありません！"),
+    ("ホラー映画以外は好きじゃない", "ホラー映画が好きです！", "ホラー映画は好きではありません！"),
+    ("ホラー映画以外は好きではない", "ホラー映画が好きです！", "ホラー映画は好きではありません！"),
+])
+def test_comparative_and_exclusive_movie_preference_keeps_correct_polarity(
+    client, fact, supported, rejected
+):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}, "ephemeral_user_answers": []}
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="明示された好み", text=supported)
+    ], context) == []
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="逆の好み", text=rejected)
+    ], context)
+
+
+@pytest.mark.parametrize("fact", [
+    "ホラー映画だけは好きではない",
+    "ホラー映画だけ好きではない",
+    "ホラー映画だけは好きじゃない",
+    "ホラー映画だけ好きじゃない",
+])
+def test_ambiguous_dake_movie_negation_never_supports_positive_claim(client, fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}, "ephemeral_user_answers": []}
+
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="曖昧な否定からの肯定", text="ホラー映画が好きです！")
+    ], context)
+
+
+@pytest.mark.parametrize(("question", "scope"), [
+    ("昔は猫が家にいた？", ("pet_past", "猫")),
+    ("猫が昔うちにいた？", ("pet_past", "猫")),
+])
+def test_subject_first_past_pet_question_with_home_location_requires_confirmation(
+    client, question, scope
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == scope
+    assert backend.missing_personal_fact_question(context) is not None
+
+
 @pytest.mark.parametrize(("fact_key", "fact", "claim", "topic"), [
     ("movie_preferences", "映画は好きですし映画館は苦手です", "映画は好きです！", "映画"),
     ("hobbies", "読書は好きですし小説は苦手です", "読書が好きです！", "読書"),
@@ -5888,10 +6136,101 @@ def test_confirmed_movie_opinion_can_be_used(client):
     assert backend.unsupported_personal_claim_topics([candidate], context) == []
 
 
+@pytest.mark.parametrize("answer", [
+    "最近観た映画は青い灯台で面白かった",
+    "この前観た映画は青い灯台で面白かった",
+])
+def test_generic_recent_movie_phrase_does_not_become_title(client, answer):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近どんな映画を観ましたか？", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="確認済み作品への感想", text="青い灯台は面白かったです！")
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+@pytest.mark.parametrize("claim", [
+    "青い灯台は面白かったわけではないです！",
+    "青い灯台は面白かったとは思わなかった！",
+    "青い灯台は面白いとは言えないです！",
+    "青い灯台は微妙だったとは思いません！",
+    "この映画は怖くなかったです！",
+    "映画は楽しくなかったです！",
+    "映画は良くなかったです！",
+    "映画は感動しませんでした！",
+    "映画では泣けませんでした！",
+    "映画は良くなかったと思います！",
+    "映画は楽しいとは思いませんでした！",
+    "映画は好きじゃなかったです！",
+    "映画はあまり好きではありません！",
+    "映画はつまらなかったです！",
+    "映画は面白くなかったとは思わないです！",
+    "映画は怖くなかったとは思わないです！",
+    "映画は微妙ではなかったとは思わないです！",
+    "映画は面白かったわけじゃないです！",
+    "映画は面白くなかった気がします！",
+    "青い灯台は微妙ではありませんでした！",
+    "青い灯台はいまいちではありませんでした！",
+])
+def test_negated_movie_opinions_without_evidence_are_blocked(client, claim):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+    candidate = backend.Candidate(label="未確認の否定感想", text=claim)
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+    assert backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(("answer", "claim"), [
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったとは思いません！"),
+    ("青い灯台は怖くなかったです", "青い灯台は怖くなかったとは思いません！"),
+    ("青い灯台は面白かったです", "青い灯台は面白かったとは思いません！"),
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったとは思わないです！"),
+    ("青い灯台は微妙でした", "青い灯台は微妙ではなかったとは思わないです！"),
+])
+def test_movie_outer_negation_reverses_inner_opinion(answer, claim, client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近観た映画の感想", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="二重否定", text=claim)
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("answer", "claim"), [
+    ("青い灯台の映像がきれいでした", "青い灯台は映像がきれいでした！"),
+    ("青い灯台のストーリーが面白かった", "青い灯台は面白かったです！"),
+])
+def test_movie_aspect_opinion_paraphrase_keeps_movie_title_scope(client, answer, claim):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "最近観た映画の感想を教えてください", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="同じ作品の確認済み感想", text=claim)
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
 @pytest.mark.parametrize(("answer", "claim"), [
     ("最近は青い灯台を観て面白かったです", "赤い惑星は面白かったです！"),
     ("最近は青い灯台を観て面白かったです", "青い灯台は面白くなかったです！"),
     ("最近は青い灯台を観て面白くなかったです", "青い灯台は面白かったです！"),
+    ("青い灯台は面白かった", "青い灯台は面白かったわけではないです！"),
+    ("青い灯台は面白かった", "青い灯台は面白いとは言えないです！"),
+    ("青い灯台は微妙でした", "青い灯台は微妙だったとは思いません！"),
+    ("青い灯台は微妙でした", "青い灯台は微妙ではありませんでした！"),
+    ("青い灯台は微妙でした", "青い灯台はいまいちではありませんでした！"),
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったし面白かったです！"),
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったし内容も面白かったです！"),
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったうえに面白かったです！"),
+    ("青い灯台は面白くなかったです", "青い灯台は面白くなかったのに面白かったです！"),
+    ("青い灯台は怖くなかったです", "青い灯台は怖かったです！"),
+    ("青い灯台は楽しくなかったです", "青い灯台は楽しかったです！"),
 ])
 def test_movie_opinion_requires_same_title_and_polarity(client, answer, claim):
     _, backend = client
@@ -5903,6 +6242,356 @@ def test_movie_opinion_requires_same_title_and_polarity(client, answer, claim):
     assert "映画" in backend.unsupported_personal_claim_topics([
         backend.Candidate(label="別タイトルまたは逆の感想", text=claim)
     ], context)
+
+
+@pytest.mark.parametrize(("answer", "claim"), [
+    (
+        "青い灯台は面白かったけど赤い惑星は面白くなかった",
+        "青い灯台は面白くなかったです！",
+    ),
+    (
+        "青い灯台は面白くなかったけど赤い惑星は面白かった",
+        "青い灯台は面白かったです！",
+    ),
+    (
+        "青い灯台は面白かったけど赤い惑星も面白かった",
+        "緑の小道が面白かったです！",
+    ),
+    (
+        "青い灯台は面白くなかったし面白かった",
+        "青い灯台は面白かったです！",
+    ),
+    (
+        "青い灯台2は面白かった",
+        "青い灯台は面白かったです！",
+    ),
+    (
+        "青い灯台の外伝は面白かった",
+        "青い灯台は面白かったです！",
+    ),
+    (
+        "青い灯台は微妙でした",
+        "青い灯台は微妙ではなかったです！",
+    ),
+    (
+        "青い灯台は微妙ではなかったです",
+        "青い灯台は微妙でした！",
+    ),
+    (
+        "青い灯台は微妙じゃないです",
+        "青い灯台は微妙でした！",
+    ),
+    (
+        "青い灯台は面白かったけど青い灯台は面白くなかった",
+        "青い灯台は面白かったです！",
+    ),
+])
+def test_movie_opinion_uses_title_scoped_polarity_in_mixed_answer(client, answer, claim):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の感想を教えてください",
+            "answer": answer,
+        }],
+    }
+    candidate = backend.Candidate(label="別作品の感想を誤帰属", text=claim)
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_movie_opinion_splitter_preserves_title_after_slight_modifier(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "最近観た映画の感想",
+            "answer": "青い灯台は少し面白かった",
+        }],
+    }
+    candidate = backend.Candidate(label="別作品の感想", text="赤い惑星は少し面白かった！")
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("answer", ["映画は好きではありません", "映画は好きじゃありません"])
+def test_confirmed_negative_movie_preference_is_allowed(answer, client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画は好きですか？", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="本人が確認した回答", text=answer + "！")
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
+def test_confirmed_positive_movie_preference_does_not_support_negative_claim(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画は好きですか？", "answer": "映画が好きです"}],
+    }
+    candidate = backend.Candidate(label="反対の好み", text="映画は好きじゃありません！")
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("answer", "claim"), [
+    ("映画は嫌いではありません", "映画は嫌いです！"),
+    ("映画は苦手ではありません", "映画は苦手です！"),
+    ("映画は興味がないわけではありません", "映画は興味がありません！"),
+    ("洋画は好きではありません", "映画は好きではありません！"),
+])
+def test_movie_negative_preference_requires_matching_scope_and_polarity(answer, claim, client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画は好きですか？", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="範囲または極性が違う", text=claim)
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+    assert backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_past_negative_movie_preference_does_not_ground_present_preference(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "映画の好みを教えてください",
+            "answer": "映画は昔は好きではありませんでした",
+        }],
+    }
+    candidate = backend.Candidate(label="時制が異なる", text="映画は好きではありません！")
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize(("answer", "claim"), [
+    ("映画は好きですけど洋画は苦手です", "洋画は好きではありません！"),
+    ("洋画は好きですけど邦画は苦手です", "洋画は好きではありません！"),
+])
+def test_movie_preference_evidence_is_scoped_to_each_clause(answer, claim, client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画の好みを教えてください", "answer": answer}],
+    }
+    candidate = backend.Candidate(label="別節から極性を借りる", text=claim)
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_movie_preference_can_use_matching_second_genre_clause(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "映画の好みを教えてください",
+            "answer": "洋画は好きですけど邦画は苦手です",
+        }],
+    }
+    candidate = backend.Candidate(label="同じ範囲の確認済み事実", text="邦画は苦手です！")
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+def test_contradictory_movie_preference_candidate_fails_closed(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画の好みを教えてください", "answer": "映画は好きではありません"}],
+    }
+    candidate = backend.Candidate(label="候補内で矛盾", text="映画は好きですけど映画は苦手です！")
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_conflicting_confirmed_movie_answers_fail_closed(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [
+            {"question": "映画は好きですか？", "answer": "映画は好きです"},
+            {"question": "映画は好きですか？", "answer": "映画は好きではありません"},
+        ],
+    }
+    candidate = backend.Candidate(label="矛盾した回答", text="映画は好きです！")
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+def test_candidate_with_two_confirmed_scoped_preferences_is_allowed(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "映画の好みを教えてください",
+            "answer": "洋画は好きですけど邦画は苦手です",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="節ごとに根拠がある候補",
+        text="洋画は好きですけど邦画は苦手です！",
+    )
+
+    assert backend.unsupported_personal_claim_topics([candidate], context) == []
+
+
+def test_movie_preference_conjunction_cannot_hide_contradictory_claim(client):
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "映画は好きですか？",
+            "answer": "映画は好きではありません",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="しで接続された矛盾",
+        text="映画は好きではありませんし映画が好きです！",
+    )
+
+    assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
+    assert backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize("answer", ["うん", "うんうん", "そうです", "はい"])
+def test_movie_yes_no_confirmation_supports_only_broad_positive_preference(answer, client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "映画は好きですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": "映画は好きですか？", "answer": answer}],
+    }
+    supported = backend.Candidate(label="確認済みの好み", text="映画が好きです！")
+    unsupported = backend.Candidate(label="未確認の頻度", text="映画をよく観ます！")
+
+    assert not backend._candidate_rejection_reasons(supported, context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(unsupported, context)
+    response = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        recommended=supported,
+        alternatives=[],
+        reason="確認済みの好みを短く伝える",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="本人の回答を反映する",
+        next_action="相手の反応を待つ",
+    )
+    filtered = backend.filter_safe_candidates(response, 1, context)
+    assert filtered["available_candidate_count"] == 1
+    assert filtered["recommended"]["text"] == supported.text
+
+
+@pytest.mark.parametrize(("question", "candidate"), [
+    ("朝ごはん食べますか？", "朝は食べることが多いです！"),
+    ("普段朝ごはん食べる？", "朝は食べないことが多いです"),
+    ("ペット飼ってる？", "いまは飼っていません！"),
+    ("犬を飼っていますか？", "犬を飼っています！"),
+    ("ペットいる？", "ペットはいません！"),
+    ("朝ごはんを食べていますか？", "朝ごはんは食べます！"),
+    ("朝ごはん食べること多い？", "朝ごはんはよく食べます！"),
+])
+def test_unknown_meal_and_pet_questions_require_user_confirmation(question, candidate, client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    proposed = backend.Candidate(label="未確認の回答", text=candidate)
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(proposed, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(proposed, context)
+
+
+@pytest.mark.parametrize("question", [
+    "朝ごはんの栄養バランスって大事ですか？",
+    "ペットを飼うなら犬と猫どちらがいいですか？",
+    "水族館に猫はいますか？",
+])
+def test_general_meal_and_pet_questions_are_not_misclassified_as_personal(question, client):
+    _, backend = client
+    assert backend._topic_for_personal_question(question) is None
+
+
+def test_mixed_hypothetical_and_personal_pet_question_still_triggers_preflight(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": "ペットを飼うなら犬と猫どちらがいいですか？ペットは飼っていますか？",
+        }],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="回避", text="犬かわいいですよね！")
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(("question", "answer", "candidate", "safe"), [
+    ("ペット飼っていますか？", "はい", "はい！\nペットを飼っています！", True),
+    ("ペット飼っていますか？", "はい", "はい！\n犬を飼っています！", False),
+    ("ペット飼っていますか？", "いいえ", "いいえ！\n今は飼っていません！", True),
+    ("朝ごはん食べますか？", "はい", "はい！\n朝ごはんは食べます！", True),
+    ("朝ごはん食べますか？", "はい", "はい！\n毎朝必ず食べます！", False),
+    ("朝ごはんを食べないんですか？", "はい", "はい！\n朝ごはんは食べません！", False),
+    ("朝ごはんを食べないんですか？", "はい", "はい！\n朝ごはんは食べます！", False),
+    ("朝ごはんを食べないんですか？", "いいえ", "いいえ！\n朝ごはんは食べます！", False),
+    ("朝ごはんを食べないんですか？", "いいえ", "いいえ！\n朝ごはんは食べません！", False),
+    ("ペットを飼っていないんですか？", "はい", "はい！\nペットは飼っていません！", False),
+    ("ペットを飼っていないんですか？", "はい", "はい！\nペットは飼っていません！", False),
+    ("ペットを飼っていないんですか？", "はい", "はい！\nペットを飼っています！", False),
+    ("朝ごはんを食べたことありますか？", "はい", "はい！\n朝ごはんを食べたことがあります！", True),
+    ("朝ごはんを食べたことありますか？", "はい", "はい！\n朝ごはんは食べます！", False),
+    ("朝ごはんを食べたことありますか？", "いいえ", "いいえ！\n朝ごはんを食べたことはありません！", True),
+    ("朝ごはんを食べたことありますか？", "いいえ", "いいえ！\n朝ごはんは食べません！", False),
+])
+def test_binary_meal_and_pet_answers_allow_only_scope_matched_restatements(
+    question, answer, candidate, safe, client
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+    proposed = backend.Candidate(label="回答", text=candidate)
+    assert (not backend._candidate_rejection_reasons(proposed, context)) is safe
+
+
+@pytest.mark.parametrize("partner_question", ["朝ごはん食べますか？", "ペット飼ってる？"])
+def test_meal_and_pet_question_preflight_returns_only_matching_user_question(
+    partner_question, client, monkeypatch
+):
+    c, backend = client
+    match_id = add_match(c, "架空の生活習慣質問相手")
+    c.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": partner_question})
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [])
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 1,
+    })
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["needs_user_info"] is True
+    assert partner_question.rstrip("？?") in body["user_questions"][0]["question"]
+    assert body["recommended"] is None
+    assert body["alternatives"] == []
 
 
 @pytest.mark.parametrize(("claim", "topic"), [
@@ -5939,6 +6628,223 @@ def test_yes_to_movie_preference_does_not_confirm_genre_or_watching_frequency(cl
     assert backend.unsupported_personal_claim_topics(generic, context) == []
 
 
+@pytest.mark.parametrize(("question", "answer", "supported", "rejected"), [
+    ("映画は好きじゃないんですか？", "はい", "映画は好きではありません！", "映画が好きです！"),
+    ("映画は好きじゃないんですか？", "いいえ", "映画が好きです！", "映画は好きではありません！"),
+    ("映画は苦手ですか？", "はい", "映画は好きではありません！", "映画が好きです！"),
+])
+def test_binary_movie_preference_answer_resolves_question_polarity(
+    client, question, answer, supported, rejected
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+    allowed = backend.Candidate(label="確認済みの極性", text=supported)
+    contradicted = backend.Candidate(label="逆の極性", text=rejected)
+
+    assert not backend._candidate_rejection_reasons(allowed, context)
+    assert backend._candidate_rejection_reasons(contradicted, context)
+
+
+@pytest.mark.parametrize(("question", "answer", "supported", "rejected"), [
+    ("映画は好きでしたか？", "はい", "昔は映画が好きでした！", "映画が好きです！"),
+    ("昔は映画が好きでしたか？", "いいえ", "昔は映画が好きではありませんでした！", "映画は好きではありません！"),
+])
+def test_binary_movie_preference_answer_preserves_past_scope(
+    client, question, answer, supported, rejected
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    assert not backend._candidate_rejection_reasons(
+        backend.Candidate(label="時制一致", text=supported), context
+    )
+    assert backend._candidate_rejection_reasons(
+        backend.Candidate(label="現在へ拡張", text=rejected), context
+    )
+
+
+@pytest.mark.parametrize("fact", [
+    "映画は好きではなくてあまり観ません",
+    "映画は好きとは言えないです",
+    "映画は好きとは言いにくいです",
+    "映画が好きなわけではないです",
+    "映画が好きというほどではありません",
+    "映画が好きというわけではないです",
+    "映画が好きというわけじゃないです",
+    "映画が好きと言うほどではないです",
+    "映画が好きってほどでもないです",
+    "映画は好きというわけでもないです",
+    "映画は好きなわけでもないです",
+    "映画は好きっていうわけじゃないです",
+])
+def test_movie_preference_negation_does_not_ground_positive_claim(client, fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}}
+
+    assert backend._movie_preference_polarity(fact) == "negative"
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="反対の好み", text="映画が好きです！")], context
+    ) == ["映画"]
+
+
+@pytest.mark.parametrize(("fact", "claim"), [
+    ("洋画より邦画が好き", "洋画が好きです！"),
+    ("昔の映画が好きです", "昔は映画が好きでした！"),
+])
+def test_movie_comparison_and_object_age_do_not_ground_unstated_personal_facts(
+    client, fact, claim
+):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}}
+
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="未確認の映画嗜好", text=claim)], context
+    ) == ["映画"]
+
+
+def test_preference_for_old_films_does_not_ground_all_movie_preferences(client):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": "昔の映画が好きです"}}}
+
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="広げすぎ", text="映画が好きです！")], context
+    ) == ["映画"]
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="同じ範囲", text="昔の映画が好きです！")], context
+    ) == []
+
+
+@pytest.mark.parametrize("fact", ["昔の映画が好きです", "古い映画が好きです"])
+def test_preference_for_old_films_synonyms_do_not_ground_all_movie_preferences(client, fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}}
+
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="広げすぎ", text="映画が好きです！")], context
+    ) == ["映画"]
+
+
+@pytest.mark.parametrize("fact", [
+    "映画が好きかどうか分からない",
+    "映画が好きかは微妙です",
+    "映画は好きかもしれないです",
+    "映画が好きというより普通です",
+])
+def test_uncertain_or_neutral_movie_preference_does_not_ground_positive_claim(client, fact):
+    _, backend = client
+    context = {"my_profile": {"facts": {"movie_preferences": fact}}}
+
+    assert backend._movie_preference_polarity(fact) is None
+    assert backend.unsupported_personal_claim_topics(
+        [backend.Candidate(label="未確定を肯定化", text="映画が好きです！")], context
+    ) == ["映画"]
+
+
+@pytest.mark.parametrize(("question", "answer", "candidate"), [
+    ("映画は好きですか？", "はい", "映画は好きではなくてあまり観ません！"),
+    ("映画は好きですか？", "はい", "映画が好きとは言いにくいです！"),
+    ("昔は映画が好きでしたか？", "はい", "映画は好きではありません！"),
+])
+def test_unverified_negative_movie_preference_is_rejected(question, answer, candidate, client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    assert backend._candidate_rejection_reasons(
+        backend.Candidate(label="極性が未確認", text=candidate), context
+    )
+
+
+@pytest.mark.parametrize(("candidate", "safe"), [
+    ("猫を飼ったことがあります！", True),
+    ("猫を飼っています！", False),
+])
+def test_past_cat_ownership_answer_does_not_confirm_current_ownership(client, candidate, safe):
+    _, backend = client
+    question = "猫を飼ったことありますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "はい"}],
+    }
+
+    proposed = backend.Candidate(label="飼育経験", text=candidate)
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == ("pet_past", "猫")
+    assert (not backend._candidate_rejection_reasons(proposed, context)) is safe
+
+
+@pytest.mark.parametrize("question", [
+    "猫を飼ったことありますか？",
+    "昔ペットを飼っていましたか？",
+    "以前犬を飼っていたことがありますか？",
+    "昔は猫を飼っていなかったんですか？",
+])
+def test_past_pet_question_without_answer_requires_user_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question)[0] == "pet_past"
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_current_pet_answer_does_not_confirm_past_ownership(client):
+    _, backend = client
+    question = "猫を飼っていますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "はい"}],
+    }
+
+    candidate = backend.Candidate(label="過去経験", text="前に猫を飼ったことがあります！")
+    assert backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(("question", "answer", "candidate"), [
+    ("昔ペットを飼っていましたか？", "はい", "昔ペットを飼っていました！"),
+    ("猫を飼ったことありますか？", "いいえ", "猫を飼ったことはありません！"),
+    ("猫を飼ったことありますか？", "いいえ", "猫を飼ったことないです！"),
+    ("以前犬を飼っていたことがありますか？", "はい", "前に犬を飼ったことがあります！"),
+])
+def test_past_pet_answer_accepts_natural_scope_matched_restatement(
+    client, question, answer, candidate
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    assert not backend._candidate_rejection_reasons(
+        backend.Candidate(label="自然な回答", text=candidate), context
+    )
+
+
 def test_movie_title_does_not_confirm_opinion_or_causal_change(client):
     _, backend = client
     context = {
@@ -5950,6 +6856,65 @@ def test_movie_title_does_not_confirm_opinion_or_causal_change(client):
         backend.Candidate(label="因果", text="青い灯台を観てから読書の時間も楽しんでいます"),
     ]
     assert backend.unsupported_personal_claim_topics(candidates, context) == ["映画"]
+
+
+@pytest.mark.parametrize("claim", [
+    "最近は映画をよく観ています！",
+    "映画はあまり観ません！",
+    "映画は全然観ません！",
+    "映画はほとんど観ません！",
+])
+def test_implicit_movie_frequency_claim_requires_personal_evidence(client, claim):
+    _, backend = client
+    context = {"my_profile": {"facts": {}}, "ephemeral_user_answers": []}
+
+    assert "映画" in backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="主語省略の未確認習慣", text=claim)
+    ], context)
+
+
+def test_implicit_movie_frequency_claim_accepts_matching_user_confirmation(client):
+    _, backend = client
+    question = "普段どのくらい映画を観ますか？"
+    context = {
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "映画はよく観ます"}],
+    }
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="確認回答と一致", text="映画はよく観ます！")
+    ], context) == []
+
+
+def test_movie_habit_acknowledgment_is_not_misread_as_user_claim(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "映画はよく観ます！"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="相手への相槌", text="映画はよく観るんですね！")
+    ], context) == []
+
+
+@pytest.mark.parametrize(("partner", "reply"), [
+    ("映画は全然観ません！", "映画は全然観ないんですね！"),
+    ("映画はほとんど観ません！", "映画はほとんど観ないんですね！"),
+])
+def test_negative_movie_habit_acknowledgment_is_not_misread_as_user_claim(client, partner, reply):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend.unsupported_personal_claim_topics([
+        backend.Candidate(label="相手の発言への相槌", text=reply)
+    ], context) == []
 
 
 def test_purchase_answer_does_not_confirm_unstated_research_details_or_personality(client):
@@ -6699,10 +7664,10 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
     }
     invite_response = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然な誘い", "text": "中野のカフェ気になります！\nよかったら今度一緒に行きませんか？", "reply_move": "invite"},
+                    "recommended": {"label": "自然な誘い", "text": "月に数回行きます！\n中野のカフェよかったら今度一緒に行きませんか？", "reply_move": "invite"},
         "alternatives": [
-            {"label": "会話を広げる", "text": "お店はどんな雰囲気なんですか？", "reply_move": "expand"},
-            {"label": "話題を続ける", "text": "ケーキもおいしそうですね！\n何がおすすめなんですか？", "reply_move": "react"},
+                        {"label": "会話を広げる", "text": "月に数回行きます！\n中野のお店ってどんな雰囲気ですか？", "reply_move": "expand"},
+                        {"label": "話題を続ける", "text": "月に数回行きます！\nケーキのお店とかよく行くんですか？", "reply_move": "react"},
         ],
         "reason": "相手が興味を示す店の話題に自然につなぐ", "strategy": "相手の反応を尊重する",
         "conversation_stage": "Stage 4", "invite_decision": "invite_gently",
@@ -6727,7 +7692,7 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
     body = response.json()
 
     assert response.status_code == 200, body
-    assert body["generation_blocked"] is False
+    assert body["generation_blocked"] is False, body
     assert body["invite_decision"] == "invite_gently"
     assert any(backend.INVITATION_PATTERN.search(item["text"]) for item in [body["recommended"], *body["alternatives"]])
     assert body["api_attempt_count"] == 3
@@ -7126,6 +8091,53 @@ def test_verified_book_genre_answer_rejects_broad_requestion_and_keeps_grounded_
     profile_evasive = backend.Candidate(label="広い聞き返し", text="本は好きですか？")
     assert backend._answers_verified_partner_question(profile_grounded, profile_context)
     assert not backend._answers_verified_partner_question(profile_evasive, profile_context)
+
+
+@pytest.mark.parametrize(("answer", "candidate_text"), [
+    ("カレーを作るのが得意です", "カレー作りが得意です！"),
+    ("カレーを作るのが得意です", "カレーが得意料理です！"),
+    ("カレーを作るのが得意です", "得意なのはカレーです！"),
+    ("私はカレーを作るのが得意です", "カレー作りが得意です！"),
+    ("自分もカレーを作るのが得意です", "カレー作りが得意です！"),
+])
+def test_cooking_skill_answer_accepts_scope_preserving_paraphrases(client, answer, candidate_text):
+    _, backend = client
+    question = "得意料理はありますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": question,
+            "answer": answer,
+        }],
+    }
+    candidate = backend.Candidate(label="確認済み事実の自然な言い換え", text=candidate_text)
+
+    assert backend._answers_verified_partner_question(candidate, context)
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "カレーが好きです！",
+    "カレー作りは得意ではありません！",
+    "カレー作りが得意です！\nスパイスから作ります！",
+])
+def test_cooking_skill_answer_does_not_authorize_new_or_contradictory_claims(client, candidate_text):
+    _, backend = client
+    question = "得意料理はありますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": question,
+            "answer": "カレーを作るのが得意です",
+        }],
+    }
+    candidate = backend.Candidate(label="回答範囲を越える候補", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
 
 
 def test_recent_book_answer_does_not_support_habitual_genre_claim(client):
@@ -9361,6 +10373,113 @@ def test_profile_occupation_answers_occupation_question_and_is_retained(client):
 
     unsupported_tenure = backend.Candidate(label="未確認の勤続年数", text="会社員として5年働いています！")
     assert not backend._answers_verified_partner_question(unsupported_tenure, context)
+
+
+@pytest.mark.parametrize("question", [
+    "カフェにはどのくらいの頻度で行きますか？",
+    "カフェに行くことって多い？",
+    "カフェ行くこと多い？",
+])
+def test_verified_cafe_frequency_question_requires_an_actual_frequency_answer(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"cafe_frequency": "月に1回カフェに行きます"}},
+        "ephemeral_user_answers": [],
+    }
+
+    evasive = backend.Candidate(label="未回答", text="そうなんですね！")
+    answer = backend.Candidate(label="頻度への回答", text="月に1回くらい行きます！")
+    mismatched_answer = backend.Candidate(label="確認済み頻度と不一致", text="月に数回行きます！")
+    answer_with_followup = backend.Candidate(
+        label="回答後に質問", text="月に1回くらい行きます！\n中野のお店ってどんな雰囲気ですか？"
+    )
+    assert backend._topic_for_personal_question(question) == "カフェ頻度"
+    assert backend._topic_is_verified("カフェ頻度", context, question)
+    assert not backend._answers_verified_partner_question(evasive, context)
+    assert backend._answers_verified_partner_question(answer, context)
+    assert not backend._answers_verified_partner_question(mismatched_answer, context)
+    assert backend._answers_verified_partner_question(answer_with_followup, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(mismatched_answer, context)
+
+    vague_frequency_context = {
+        **context,
+        "my_profile": {"facts": {"cafe_frequency": "月に数回カフェに行きます"}},
+    }
+    vague_frequency_answer = backend.Candidate(label="同じ頻度", text="月に数回行きます！")
+    assert backend._answers_verified_partner_question(vague_frequency_answer, vague_frequency_context)
+
+
+@pytest.mark.parametrize("fact", [
+    "映画が好きか分からない",
+    "映画が好きなのか微妙",
+    "映画は好きでも嫌いでもない",
+    "映画は好きってほどじゃないと思う",
+    "映画は好きとは限らない",
+])
+def test_uncertain_or_neutral_movie_preference_does_not_ground_positive_claim(client, fact):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "映画好きですか？"}],
+        "my_profile": {"facts": {"movie_preferences": fact}},
+        "ephemeral_user_answers": [],
+    }
+    positive_claim = backend.Candidate(label="未確認の肯定", text="映画が好きです！")
+
+    assert backend._movie_preference_signatures(fact) == []
+    assert "映画" in backend.unsupported_personal_claim_topics([positive_claim], context)
+
+
+@pytest.mark.parametrize(("question", "scope"), [
+    ("昔猫いた？", ("pet_past", "猫")),
+    ("ペットいたことある？", ("pet_past", "ペット")),
+])
+def test_informal_past_pet_question_requests_user_confirmation(client, question, scope):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == scope
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_casual_past_pet_question_does_not_confirm_current_ownership(client):
+    _, backend = client
+    question = "猫飼った？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": question, "answer": "はい"}],
+    }
+    candidate = backend.Candidate(label="過去経験から現在へ拡張", text="今は猫を飼っています！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == ("pet_past", "猫")
+    assert "ペット" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("question", ["猫飼ってたことある？", "猫飼ってたことありますか？"])
+def test_casual_past_pet_question_requires_confirmation_and_keeps_temporal_scope(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    evasive = backend.Candidate(label="不明なのに二択回答", text="ううん！")
+
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend._binary_personal_question_scope(question) == ("pet_past", "猫")
+    assert not backend._answers_verified_partner_question(evasive, context)
 
 
 def test_school_profile_does_not_answer_personal_job_question(client):

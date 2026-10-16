@@ -648,6 +648,15 @@ def _topic_for_personal_question(text: str) -> str | None:
     third_party_subject = re.sub(
         r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)?\s*", "", text
     )
+    hypothetical_pet = re.search(r"(?:ペット|犬|猫).{0,10}飼う(?:なら|としたら|場合)", text)
+    if hypothetical_pet:
+        trailing_questions = re.split(r"(?<=[?？])", text)
+        if len(trailing_questions) > 1:
+            for fragment in trailing_questions[1:]:
+                topic = _topic_for_personal_question(fragment.strip())
+                if topic:
+                    return topic
+        return None
     third_party = (
         r"友達|友人|彼氏|彼女|元彼|元彼女|元夫|元妻|夫|妻|旦那|奥さん|ご主人|子ども|子供|子|家族|親|父|母|兄|姉|弟|妹|兄弟|姉妹|両親|祖父母|"
         r"同僚|上司|先輩|後輩|先生|教師|知り合い"
@@ -699,6 +708,17 @@ def _topic_for_personal_question(text: str) -> str | None:
         and not re.search(r"普段|よく行|いつも|行きつけ|おすすめ|近くの", text)
     ):
         return None
+    if re.search(
+        r"(?:水族館|動物園|博物館|美術館|公園|牧場|施設)(?:の中|の?に|では|には).{0,12}(?:ペット|犬|猫)",
+        text,
+    ):
+        return None
+    if re.search(
+        r"(?:(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?)?(?:うち|家|実家)(?:に|で)?(?:ペット|犬|猫)(?:が|は)?(?:いた|飼っていた|飼ってた)|"
+        r"(?:ペット|犬|猫)(?:が|は)(?:(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?)?(?:うち|家|実家)(?:に|で)?(?:いた|飼っていた|飼ってた)",
+        text,
+    ) and re.search(r"[?？]|ですか|ますか|いたの|いたん", text):
+        return "本人情報"
     if (
         UNPUNCTUATED_INTERROGATIVE_ASSERTION.search(text)
         and not re.search(r"[?？!！]|ですか|ますか|でしょうか|ませんか|んですか", text)
@@ -783,8 +803,12 @@ def _topic_for_personal_question(text: str) -> str | None:
         r"(?:を|が|は)?(?:話せる|話せます|話す|話します|使える|使えます)(?:んですか|んです|ん|の|か)?[?？]?$|"
         r"(?:タバコ|煙草|お酒|アルコール).{0,10}(?:吸う|吸います|飲む|飲みます|吸わない|吸いません|飲まない|飲みません|吸える|吸えます|飲める|飲めます)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
         r"(?:魚|肉|生もの).{0,8}(?:食べられる|食べられます|食べれる|食べれます|食べる|食べます|苦手|好き)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
-        r"(?:犬|猫).{0,8}飼って(?:る|いる|ます|います)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
-        r"^(?:犬|猫)(?:は|って)?いますか[?？]?$|"
+        r"(?:(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?)?(?:(?:うち|家|実家)(?:に|で))?(?:ペット|犬|猫)(?:を|は|が)?(?:いた|いなかった|飼ってた|飼っていた)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:ペット|犬|猫).{0,10}(?:飼ったこと(?:が)?(?:あります|ある|ない|ありません)|飼った|飼ってたこと(?:が)?(?:あります|ある|ない|ありません)|飼って(?:いたこと(?:が)?(?:あります|ある)|いなかった|いませんでした|いた|いました|た|ました|る|いる|ます|います|ない|いない|ません|いません)|いたこと(?:が)?(?:あります|ある|ない|ありません)|飼う|いる|います|いない|いません)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?(?:ペット|犬|猫)(?:を|は|が)?(?:いた|飼ってた|飼っていた)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"^(?:犬|猫)(?:は|って)?(?:いる|います|いない|いません)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
+        r"(?:朝ごはん|朝ご飯|朝食|昼ごはん|昼ご飯|昼食|夕飯|夕食|晩ごはん|晩御飯|朝は).{0,10}"
+        r"(?:食べること(?:が)?多い|食べています|食べてます|食べている|食べてる|食べてない|食べていない|食べてません|食べていません|食べない|食べません|食べます|食べる|取っています|とっています|取る|とる|取っていない|取ってない|取っていません|取ってません|とっていない|とってない|とっていません|とってません)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
         r"車.{0,5}(?:あります|持ってる|持っている|持ってます|持っています)(?:の|ん)?(?:ですか|ますか|か)?[?？]?$|"
         r"(?:料理|自炊)(?:って)?(?:する|します|してる|している|しています)(?:の|ん)?(?:ですか|ますか|か)?[?？]$|"
         r"一人暮らし(?:ですか|してる|している|しています|してます)?(?:か)?[?？]$|"
@@ -828,7 +852,7 @@ def _topic_for_personal_question(text: str) -> str | None:
             return "カフェ好み"
         if re.search(r"最近|この前|昨日|先週", text) and re.search(r"どこ|どの店|何という|行った|行きました|訪れ", text):
             return "カフェ最近"
-        if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に", text):
+        if re.search(r"頻度|何回|どのくらい|どれくらい|よく行|月に|週に|行くこと(?:が|って)?多い|行くこと多い", text):
             return "カフェ頻度"
     if any(term in text for term in PERSONAL_FACT_TOPICS["料理習慣"]):
         if re.search(r"普段|よく|自炊|作ります|料理します|頻度|どのくらい|どれくらい|週末|週に|何回", text):
@@ -1075,12 +1099,67 @@ def _explicit_frequency_signature(text: str) -> set[str]:
         count = _japanese_integer(match.group("count"))
         if count is not None:
             signatures.add(f"{match.group('period')}{count}")
+    signatures.update(
+        f"{match.group('period')}数"
+        for match in re.finditer(
+            r"(?P<period>週(?!末)|月|年)(?:に)?\s*(?:数\s*(?:回|度)|何(?:回|度)か)", text
+        )
+    )
     return signatures
+
+
+def _qualitative_cafe_frequency_class(text: str) -> str | None:
+    """Recognize a small set of qualitative cafe frequency statements conservatively."""
+    compact = re.sub(r"\s+", "", text)
+    if re.search(
+        r"(?:行かない|行きません|行ってない|行っていない|行っていません)"
+        r"(?:(?:って|という)?わけ(?:では|じゃ|でも)(?:ない|ありません)|"
+        r"とは思わない|とは思いません|とは限らない)",
+        compact,
+    ):
+        return None
+    if re.search(r"(?:あまり|ほとんど|めったに).{0,6}(?:行かない|行きません|行ってない|行っていません)", compact):
+        return "rarely"
+    if re.search(r"(?:よく|頻繁に).{0,8}(?:行かない|行きません|行ってない|行っていません)", compact):
+        return "not_often"
+    if re.search(r"週末.{0,8}(?:よく|頻繁に).{0,5}行", compact):
+        return "weekends_often"
+    if re.search(r"(?:たまに|時々|ときどき).{0,8}行", compact):
+        return "sometimes"
+    if re.search(r"(?:よく|頻繁に).{0,8}行", compact):
+        return "often"
+    return None
 
 
 def _frequency_claim_is_supported(claim: str, evidence: str) -> bool:
     claimed = _explicit_frequency_signature(claim)
-    return not claimed or claimed.issubset(_explicit_frequency_signature(evidence))
+    confirmed = _explicit_frequency_signature(evidence)
+    if claimed and not claimed.issubset(confirmed):
+        return False
+
+    # 「月に数回」のような数量表現 is materially broader than a precise
+    # confirmed rate such as 「月に1回」. Do not treat the absence of a parsed
+    # number in the candidate as permission to broaden the user's statement.
+    vague_counts = {
+        match.group("period")
+        for match in re.finditer(
+            r"(?P<period>週(?!末)|月|年)(?:に)?\s*(?:数\s*(?:回|度)|何(?:回|度)か)", claim
+        )
+    }
+    if vague_counts:
+        confirmed_periods = {signature[0] for signature in confirmed}
+        if not vague_counts.issubset(confirmed_periods):
+            return False
+        if any(
+            period in confirmed_periods
+            and not re.search(rf"{period}(?:に)?\s*(?:数\s*(?:回|度)|何(?:回|度)か)", evidence)
+            for period in vague_counts
+        ):
+            return False
+    qualitative_claim = _qualitative_cafe_frequency_class(claim)
+    if qualitative_claim:
+        return qualitative_claim == _qualitative_cafe_frequency_class(evidence)
+    return True
 
 
 GENERIC_OCCUPATION_LABELS = {
@@ -1614,11 +1693,15 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
         return None
     question_parts = _compound_direct_personal_question_parts(partner_messages[-1])
     for topic, question_text in question_parts:
+        if _negative_binary_question_has_ambiguous_answer(context, question_text):
+            return _negative_binary_question_clarification(question_text)
         if not _topic_is_verified(topic, context, question_text):
             return personal_fact_question(topic, question_text)
     if question_parts:
         return None
     topic = _topic_for_personal_question(partner_messages[-1])
+    if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
+        return _negative_binary_question_clarification(partner_messages[-1])
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
         return None
     if topic == "本人情報":
@@ -1920,8 +2003,14 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
 
 
 MOVIE_OPINION_CLAIM_PATTERN = re.compile(
+    r"(?:面白|微妙|いまいち|楽しい|良|怖|つまらな|好き).{0,24}(?:わけでは(?:ない|ありません|なかった)|わけじゃ(?:ない|ありません|なかった)|とは思わなかった|とは思いません|とは思いませんでした|とは思わない(?:です)?|とは言えない|とは言えません|気がします|気がする|ではありませんでした|じゃありませんでした)|"
+    r"(?:面白く(?:なかった|ない|ありません)|良く(?:なかった|ない|ありません)|楽しく(?:なかった|ない|ありません)|"
+    r"感動し(?:なかった|ませんでした)|泣け(?:なかった|ない|ませんでした)|怖く(?:なかった|ない|ありません)|"
+    r"つまらな(?:かった|い|くない)|好き(?:では|じゃ)(?:なかった|ない|ありません|ありませんでした))(?:です|でした|と思います|と思います！|！|!|$)|"
     r"(?:映画|作品|映像|景色|音楽|ストーリー|展開|演技|内容).{0,8}(?:きれい|綺麗|美しい|素晴らしい|よかった|良かった|面白|印象的)(?:でした|です|だった|で|くて|と思|と感じ)|"
-    r"面白.{0,5}(?:です|でした|！|!|$)|(?:良かった|よかった|楽しかった|感動した|泣けた|怖かった|微妙だった|いまいちだった)(?:です|でした|！|!|$)|"
+    r"面白.{0,5}(?:です|でした|！|!|$)|(?:良かった|よかった|楽しかった|感動した|泣けた|怖かった)(?:です|でした|！|!|$)|"
+    r"(?:微妙|いまいち)(?:(?:では|じゃ)?(?:なかった|ない)(?:です|でした)?|(?:だった|でした))(?:！|!|$)|"
+    r"(?:微妙|いまいち)(?:です|！|!|$)|"
     r"(?:すごく|とても|かなり|本当に).{0,8}(?:良かった|面白かった|楽しめました|感動しました)(?:です|！|!|$)|"
     r"(?:映画|作品|ストーリー|展開).{0,10}(?:感動しました|感動した)(?:です|！|!|$)|"
     r"(?:最近|この前|昨日|先週)?観た映画.{0,12}(?:感動しました|感動した)(?:です|！|!|$)|"
@@ -1931,7 +2020,7 @@ MOVIE_OPINION_CLAIM_PATTERN = re.compile(
 
 
 def _movie_assertion_segments(text: str) -> list[str]:
-    """Keep opinion claims unless their own ending is an interrogative."""
+    """Keep opinion claims, excluding clear recipient-directed agreement checks."""
     assertions: list[str] = []
     for match in MOVIE_OPINION_CLAIM_PATTERN.finditer(text):
         suffix = text[match.end():].lstrip()
@@ -1944,12 +2033,14 @@ def _movie_assertion_segments(text: str) -> list[str]:
             continue
         if suffix.startswith(("?", "？")):
             continue
+        if re.match(r"(?:ですよね|だよね|よね)(?:[！!]?)$", suffix):
+            continue
         assertions.append(match.group(0))
     return assertions
 
 
 MOVIE_OPINION_MARKERS = (
-    "面白", "良かった", "よかった", "楽しかった", "感動", "泣け", "怖かった", "微妙", "いまいち",
+    "面白", "良", "よかった", "楽し", "つまらな", "好き", "感動", "泣け", "怖", "微妙", "いまいち",
     "きれい", "綺麗", "美しい", "素晴らしい", "印象的", "印象に残",
 )
 
@@ -1989,10 +2080,22 @@ def _movie_claim_title(text: str) -> str | None:
     quoted = re.search(r"[『「]([^』」]{1,40})[』」]", text)
     if quoted:
         return quoted.group(1).strip()
+    title_text = re.sub(r"^(?:最近|この前|先日|昨日|先週)(?:は|に)?", "", text)
+    title_text = re.sub(
+        r"^(?:(?:観|見)た)?(?:映画|作品)(?:は|が|を|の)?",
+        "",
+        title_text,
+    )
+    aspect_title = re.search(
+        r"([一-龯ぁ-んァ-ンA-Za-z0-9・ー]{2,18}?)の(?:映像|ストーリー|演技|景色|音楽|展開|内容)",
+        title_text,
+    )
+    if aspect_title:
+        return aspect_title.group(1).strip()
     title_match = re.search(
-        r"([一-龯ぁ-んァ-ンA-Za-z0-9・ー]{2,18})(?:という映画|という作品|は|を(?:観|見)).{0,18}"
-        r"(?:面白|良かった|よかった|楽しかった|感動|泣け|怖かった|微妙|いまいち|きれい|綺麗|美しい|印象)",
-        text,
+        r"([一-龯ぁ-んァ-ンA-Za-z0-9・ー]{2,18}?)(?:という映画|という作品|は|が|も|で|を(?:観|見)).{0,18}"
+        r"(?:面白|良|よかった|楽し|感動|泣け|怖|微妙|いまいち|きれい|綺麗|美しい|印象)",
+        title_text,
     )
     if not title_match:
         return None
@@ -2058,16 +2161,28 @@ def _movie_viewing_attributed_to_other_person(segment: str) -> bool:
 
 
 def _movie_opinion_polarity(text: str, marker: str) -> str | None:
+    # An outer denial can reverse an already-negative phrase (e.g. "怖くなかったとは思いません").
+    # These layered constructions are ambiguous in casual Japanese, so fail closed.
+    if re.search(
+        r"(?:くなかった|くない|くありません|くなかったです|くないです|"
+        r"かったわけでは(?:ない|ありません)|かったわけじゃ(?:ない|ありません)|かったとは思わなかった|"
+        r"ではなかった|じゃなかった|ではない|じゃない|くなかったとは言えない)"
+        r"(?:とは思いませんでした|とは思いません|とは思わない(?:です)?|とは言えません|とは言えない)",
+        text,
+    ):
+        return None
     negative_patterns = {
-        "面白": r"面白く(?:なかった|ない|ありません)|面白いとは思わなかった",
-        "良かった": r"良く(?:なかった|ない)|良かったとは思わない",
+        "面白": r"面白く(?:なかった|ない|ありません)|面白(?:かった|い)(?:わけでは(?:ない|ありません)|とは思わなかった|とは思いません|とは思いませんでした|とは言えない|とは言えません)",
+        "良": r"良く(?:なかった|ない|ありません)(?:と思います)?|良かったとは思わない|良かったとは思いません(?:でした)?",
         "よかった": r"よく(?:なかった|ない)|よかったとは思わない",
-        "楽しかった": r"楽しく(?:なかった|ない)|楽しかったとは思わない",
+        "楽し": r"楽しく(?:なかった|ない|ありません)|楽しかったとは思わない|楽しいとは思いません(?:でした)?",
+        "つまらな": r"つまらな(?:かった|い|くない)",
+        "好き": r"好き(?:では|じゃ)(?:なかった|ない|ありません|ありませんでした)",
         "感動": r"感動しなかった|感動しませんでした",
-        "泣け": r"泣けなかった|泣けない",
-        "怖かった": r"怖くなかった|怖くない",
-        "微妙": r"微妙ではなかった|微妙じゃなかった",
-        "いまいち": r"いまいちではなかった|いまいちじゃなかった",
+        "泣け": r"泣けなかった|泣けない|泣けませんでした|泣けません",
+        "怖": r"怖く(?:なかった|ない|ありません)|怖かったとは思わない",
+        "微妙": r"微妙(?:(?:では|じゃ)(?:なかった|ない|ありません)(?:でした)?|(?:では|じゃ)?ありません(?:でした)?|.{0,16}(?:わけでは(?:ない|ありません)|とは思わなかった|とは思いません|とは言えない|とは言えません))",
+        "いまいち": r"いまいち(?:(?:では|じゃ)(?:なかった|ない|ありません)(?:でした)?|(?:では|じゃ)?ありません(?:でした)?|.{0,16}(?:わけでは(?:ない|ありません)|とは思わなかった|とは思いません|とは言えない|とは言えません))",
         "きれい": r"きれい.{0,5}(?:では|じゃ)(?:なかった|ない)|綺麗.{0,5}(?:では|じゃ)(?:なかった|ない)",
         "綺麗": r"綺麗.{0,5}(?:では|じゃ)(?:なかった|ない)|きれい.{0,5}(?:では|じゃ)(?:なかった|ない)",
         "美しい": r"美しく(?:なかった|ない)|美しいとは思わなかった",
@@ -2076,25 +2191,331 @@ def _movie_opinion_polarity(text: str, marker: str) -> str | None:
         "印象に残": r"印象に残らなかった|印象に残っていない",
     }
     if re.search(negative_patterns[marker], text):
-        return "negative"
-    if marker in {"微妙", "いまいち", "怖かった"}:
+        return "positive" if marker in {"微妙", "いまいち", "怖"} else "negative"
+    if marker in {"微妙", "いまいち", "怖", "つまらな"}:
         return "negative"
     if marker in text:
         return "positive"
     return None
 
 
-def _movie_claim_supported_by_evidence(candidate_text: str, evidence_text: str) -> bool:
-    markers = _movie_opinion_markers(candidate_text)
-    if not markers or not markers.issubset(_movie_opinion_markers(evidence_text)):
-        return False
-    title = _movie_claim_title(candidate_text)
-    if title and title not in evidence_text:
-        return False
-    return all(
-        _movie_opinion_polarity(candidate_text, marker) == _movie_opinion_polarity(evidence_text, marker)
-        for marker in markers
+def _movie_opinion_polarities(text: str, marker: str) -> set[str]:
+    """Classify each occurrence so conjunctions cannot hide a conflicting claim."""
+    matches = list(re.finditer(re.escape(marker), text))
+    polarities: set[str] = set()
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        polarity = _movie_opinion_polarity(text[match.start():end], marker)
+        if polarity:
+            polarities.add(polarity)
+    return polarities
+
+
+def _movie_preference_category(text: str) -> str | None:
+    """Return the stated movie scope; do not broaden a genre answer to all films."""
+    if re.search(r"名作.{0,10}映画|映画.{0,10}名作", text):
+        return "名作映画"
+    if re.search(r"(?:昔|古い)(?:の)?映画.{0,14}(?:好き|苦手|嫌い|興味)|(?:好き|苦手|嫌い|興味).{0,14}(?:昔|古い)(?:の)?映画", text):
+        return "古い映画"
+    comparison = re.search(r"(洋画|邦画)より(洋画|邦画)(?:(?:が|は)(?:のほうが|の方が)?|(?:のほうが|の方が))?(?:好き|苦手|嫌い)", text)
+    if comparison:
+        # A comparative preference only confirms the explicitly preferred side.
+        return comparison.group(2)
+    genre_names = r"ホラー|ミステリー|ミステリ|サスペンス|アニメ|コメディ|恋愛|アクション|SF|ドキュメンタリー"
+    genre_comparison = re.search(
+        rf"(?P<less>{genre_names})(?:映画)?より(?:も)?(?P<preferred>{genre_names})(?:映画)?(?:(?:が|は)(?:のほうが|の方が)?|(?:のほうが|の方が))?(?:好き|苦手|嫌い)",
+        text,
     )
+    if genre_comparison:
+        preferred = genre_comparison.group("preferred")
+        preferred = "ミステリー" if preferred == "ミステリ" else preferred
+        return f"{preferred}映画"
+    if re.search(r"洋画.{0,14}(?:好き|苦手|嫌い|興味)|(?:好き|苦手|嫌い|興味).{0,14}洋画", text):
+        return "洋画"
+    if re.search(r"邦画.{0,14}(?:好き|苦手|嫌い|興味)|(?:好き|苦手|嫌い|興味).{0,14}邦画", text):
+        return "邦画"
+    genre = re.search(
+        r"(?P<genre>ホラー|ミステリー|ミステリ|サスペンス|アニメ|コメディ|恋愛|アクション|SF|ドキュメンタリー)(?:映画)?",
+        text,
+    )
+    if genre and re.search(r"好き|苦手|嫌い|興味", text):
+        normalized_genre = "ミステリー" if genre.group("genre") == "ミステリ" else genre.group("genre")
+        return f"{normalized_genre}映画"
+    if re.search(r"映画(?!館).{0,14}(?:好き|苦手|嫌い|興味)|(?:好き|苦手|嫌い|興味).{0,14}映画(?!館)", text):
+        return "映画"
+    return None
+
+
+def _movie_preference_is_uncertain(text: str) -> bool:
+    return bool(re.search(
+        r"(?:好き|苦手|嫌い)(?:か(?:どうか)?|なのか)(?:分からない|わからない|微妙|は微妙)|"
+        r"好きでも嫌いでもない|好きってほど(?:じゃ|では)(?:ない|ありません)|"
+        r"好きとは限らない|好きかどうかは微妙|好きなのかは微妙|"
+        r"だけ(?:は)?好き(?:じゃ|では)(?:ない|ありません)",
+        text,
+    ))
+
+
+def _movie_preference_polarity(text: str) -> str | None:
+    """Classify a broad movie-preference clause and fail closed on stacked negation."""
+    if _movie_preference_is_uncertain(text):
+        return None
+    if (
+        _movie_preference_category(text)
+        and re.search(r"しか(?:は)?好き(?:じゃ|では)(?:ない|ありません)|以外は好き(?:じゃ|では)(?:ない|ありません)", text)
+    ):
+        # 「ホラー映画しか好きじゃない」 and 「ホラー映画以外は好きじゃない」
+        # affirm the named preference; the surrounding negative only excludes other scopes.
+        return "positive"
+    if re.search(
+        r"(?:好き|苦手|嫌い).{0,10}(?:かどうか分から|かは分から|かは微妙|"
+        r"かもしれない|かもしれません|というより|っていうより|と言うより)",
+        text,
+    ):
+        return None
+    if re.search(
+        r"(?:好き(?:では|じゃ)?(?:ない|ありません|なかった|なくて|なく)|"
+        r"好きなわけ(?:では|でも)(?:ない|ありません|ないです)|"
+        r"好きというわけ(?:では|じゃ|でも)(?:ない|ありません|ないです)|"
+        r"好きっていうわけ(?:では|じゃ|でも)(?:ない|ありません|ないです)|"
+        r"好きというほどでは(?:ない|ありません|ないです)|好きと言うほどでは(?:ない|ありません|ないです)|"
+        r"好きってほどでも(?:ない|ありません|ないです)|"
+        r"好き(?:とは|とまでは)(?:言えない|言えません|言いにくい|言えなかった|言えませんでした)|"
+        r"興味(?:が|は)?ない).{0,12}(?:わけでは|わけじゃ|とは思わない|とは思いません)",
+        text,
+    ):
+        return None
+    if re.search(
+        r"(?:好き(?:では|じゃ)?(?:なくて|なく|ない|ありません|なかった|ありませんでした)|"
+        r"好きなわけ(?:では|でも)(?:ない|ありません|ないです)|"
+        r"好きというわけ(?:では|じゃ|でも)(?:ない|ありません|ないです)|"
+        r"好きっていうわけ(?:では|じゃ|でも)(?:ない|ありません|ないです)|"
+        r"好きというほどでは(?:ない|ありません|ないです)|好きと言うほどでは(?:ない|ありません|ないです)|"
+        r"好きってほどでも(?:ない|ありません|ないです)|"
+        r"好き(?:とは|とまでは)(?:言えない|言えません|言いにくい|言えなかった|言えませんでした)|"
+        r"好きじゃ(?:なくて|なく|ない|ありません|なかった|ありませんでした)|"
+        r"苦手(?!ではない|じゃない|ではありません|じゃありません)|"
+        r"嫌い(?!ではない|じゃない|ではありません|じゃありません)|"
+        r"興味(?:が|は)?(?:ありません|ない|なし))",
+        text,
+    ):
+        return "negative"
+    if re.search(
+        r"好き|苦手(?:では|じゃ)(?:ない|ありません)|嫌い(?:では|じゃ)(?:ない|ありません)|"
+        r"興味(?:が|は)?ないわけでは(?:ない|ありません)",
+        text,
+    ):
+        return "positive"
+    return None
+
+
+def _movie_preference_signature(text: str) -> tuple[str, str, str, str] | None:
+    category = _movie_preference_category(text)
+    polarity = _movie_preference_polarity(text)
+    if not category or not polarity:
+        return None
+    marker_match = re.search(r"好き|苦手|嫌い|興味", text)
+    if not marker_match:
+        return None
+    temporal_scope = "past" if re.search(
+        r"(?:昔|以前|かつて|前|当時)(?:は|には|の頃は)|"
+        r"(?:好き|苦手|嫌い|興味).{0,8}(?:でした|だった)",
+        text,
+    ) else "current"
+    return category, marker_match.group(0), polarity, temporal_scope
+
+
+def _movie_preference_clauses(text: str) -> list[str]:
+    """Separate contrastive movie-preference statements before classifying them."""
+    clauses = [
+        clause.strip()
+        for clause in re.split(
+            r"けれども|けれど|だけど|けど|ですが|ですけど|一方(?:で)?|ただ|(?<!ほど)(?<!わけ)(?<!嫌い)でも(?!嫌いでもない)|[。.!！?？\n]+",
+            text,
+        )
+        if clause.strip()
+    ]
+    separated: list[str] = []
+    for clause in clauses:
+        # A preference conjunction can introduce a second scope. Split only
+        # when the following word names another movie category; this avoids
+        # treating the 「し」 in words such as 「新しい映画」 as a boundary.
+        boundaries = [
+            match.end()
+            for match in re.finditer(
+                r"(?:好き|苦手|嫌い|興味)(?:ではありません|ではない|じゃありません|じゃない|ありません|ない|です|だ)?し(?=(?:映画|洋画|邦画))",
+                clause,
+            )
+        ]
+        start = 0
+        for boundary in boundaries:
+            part = clause[start:boundary].strip()
+            if part:
+                separated.append(part)
+            start = boundary
+        tail = clause[start:].strip()
+        if tail:
+            separated.append(tail)
+    return separated
+
+
+def _movie_preference_signatures(text: str) -> list[tuple[str, str, str, str]]:
+    """Return clause-local preference facts so scope and polarity cannot leak."""
+    signatures = []
+    for clause in _movie_preference_clauses(text):
+        signature = _movie_preference_signature(clause)
+        if signature:
+            signatures.append(signature)
+    return signatures
+
+
+def _movie_preference_has_conflict(
+    signatures: list[tuple[str, str, str, str]],
+) -> bool:
+    polarities: dict[tuple[str, str, str], set[str]] = {}
+    for category, marker, polarity, temporal_scope in signatures:
+        key = (category, marker, temporal_scope)
+        polarities.setdefault(key, set()).add(polarity)
+    return any(len(values) > 1 for values in polarities.values())
+
+
+def _movie_preference_evidence_signatures(context: dict) -> list[tuple[str, str, str, str]]:
+    evidence_texts = [
+        clause
+        for clause in _trusted_fact_clauses(context, include_negated=True)
+        if re.search(r"映画(?!館)|洋画|邦画", clause)
+    ]
+    evidence_texts.extend(
+        str(answer.get("answer", ""))
+        for answer in context.get("ephemeral_user_answers", [])
+        if re.search(r"映画|洋画|邦画", str(answer.get("question", "")))
+    )
+    signatures = [
+        signature
+        for evidence in evidence_texts
+        for signature in _movie_preference_signatures(evidence)
+    ]
+    facts = context.get("my_profile", {}).get("facts", {})
+    ambiguous_movie_preference = any(
+        _movie_preference_is_uncertain(str(facts.get(field, "")))
+        for field in ("movie_preferences", "movie_hobby", "favorite_movie_genres")
+        if facts.get(field)
+    )
+    if ambiguous_movie_preference:
+        # The profile expander can split a neutral sentence into affirmative
+        # fragments. Do not let those fragments become broad movie evidence.
+        signatures = [signature for signature in signatures if signature[0] != "映画"]
+    for field in ("favorite_movie_genres", "movie_genres"):
+        value = facts.get(field)
+        if not value:
+            continue
+        genres = [str(item) for item in value] if isinstance(value, (list, tuple, set)) else [str(value)]
+        for genre in genres:
+            if _movie_preference_is_uncertain(genre) or _movie_preference_polarity(genre) == "negative":
+                continue
+            genre_preference = genre if re.search(r"映画|洋画|邦画", genre) else f"{genre}映画"
+            category = _movie_preference_category(f"{genre_preference}が好き")
+            if category:
+                signatures.append((category, "好き", "positive", "current"))
+    for answer in context.get("ephemeral_user_answers", []):
+        question = str(answer.get("question", ""))
+        response = str(answer.get("answer", "")).strip()
+        if not re.search(r"映画.{0,12}(?:好き|好み|興味|苦手|嫌い)|(?:好き|好み|興味|苦手|嫌い).{0,12}映画", question):
+            continue
+        answer_polarity = _binary_answer_polarity(response)
+        if answer_polarity:
+            if _movie_preference_question_is_negative(question):
+                answer_polarity = "negative" if answer_polarity == "positive" else "positive"
+            temporal_scope = _movie_preference_question_temporal_scope(question)
+            if temporal_scope == "past":
+                claim = (
+                    "以前は映画が好きでした"
+                    if answer_polarity == "positive"
+                    else "以前は映画が好きではありませんでした"
+                )
+            else:
+                claim = "映画は好きです" if answer_polarity == "positive" else "映画は好きではありません"
+            signatures.extend(_movie_preference_signatures(claim))
+        elif re.fullmatch(r"(?:好きです|好き|興味あります)[！!。]?", response):
+            signatures.append(("映画", "好き", "positive", "current"))
+    return signatures
+
+
+def _movie_preference_question_is_negative(question: str) -> bool:
+    """Whether agreeing with the question affirms a negative movie preference."""
+    if re.search(r"(?:苦手|嫌い)(?:では|じゃ)(?:ない|ありません)", question):
+        return False
+    return bool(re.search(
+        r"(?:好き|興味)(?:では|じゃ)?(?:なく|ない|ありません|なかった)|苦手|嫌い",
+        question,
+    ))
+
+
+def _movie_preference_question_temporal_scope(question: str) -> str:
+    """Keep a yes/no answer about a past preference from becoming a current fact."""
+    return "past" if re.search(
+        r"昔|以前|かつて|前は|当時|(?:好き|苦手|嫌い|興味)(?:では|じゃ)?(?:でした|だった|なかった|ありませんでした)",
+        question,
+    ) else "current"
+
+
+def _movie_opinion_clauses(text: str) -> list[str]:
+    """Keep title-specific movie opinions apart from contrastive clauses."""
+    opinion_start = (
+        r"面白|良|よかった|楽し|感動|泣け|怖|微妙|いまいち|"
+        r"きれい|綺麗|美しい|素晴らしい|印象的|印象に残"
+    )
+    return [
+        clause.strip()
+        for clause in re.split(
+            rf"(?<=[。.!！?？\n])|けれども|けれど|けど|でも|一方(?:で)?|しかも|それに|さらに|"
+            rf"(?<=かった)し(?=(?:{opinion_start}))|(?<=ない)し(?=(?:{opinion_start}))|"
+            rf"(?<=い)し(?=(?:{opinion_start}))|(?<=でした)し(?=(?:{opinion_start}))|"
+            rf"(?<=です)し(?=(?:{opinion_start}))|(?<=だ)し(?=(?:{opinion_start}))",
+            text,
+        )
+        if clause.strip()
+    ]
+
+
+def _movie_claim_supported_by_evidence(candidate_text: str, evidence_text: str) -> bool:
+    claim_clauses = [
+        (clause, _movie_opinion_markers(clause))
+        for clause in _movie_opinion_clauses(candidate_text)
+        if _movie_opinion_markers(clause)
+    ]
+    if not claim_clauses:
+        return False
+    evidence_clauses = _movie_opinion_clauses(evidence_text)
+    for claim_clause, markers in claim_clauses:
+        title = _movie_claim_title(claim_clause)
+        relevant_evidence = [
+            clause for clause in evidence_clauses
+            if _movie_opinion_markers(clause)
+            and (not title or _movie_claim_title(clause) == title)
+        ]
+        if not relevant_evidence:
+            return False
+        for marker in markers:
+            claim_polarities = _movie_opinion_polarities(claim_clause, marker)
+            supported_polarities = set().union(*(
+                _movie_opinion_polarities(clause, marker)
+                for clause in relevant_evidence
+                if marker in _movie_opinion_markers(clause)
+            ))
+            if len(claim_polarities) != 1:
+                return False
+            if len(supported_polarities) > 1:
+                # Conflicting statements about the same work cannot ground
+                # either polarity safely without asking the user to clarify.
+                return False
+            if not claim_polarities.issubset(supported_polarities):
+                return False
+            # Without a title, mixed evidence cannot safely establish which
+            # work the candidate is describing.
+            if not title and len(supported_polarities) > 1:
+                return False
+    return True
 
 
 def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
@@ -2144,11 +2565,13 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
     if topic == "映画館頻度":
         return any(_has_cinema_habit_evidence(clause) for clause in partner_clauses)
     if topic == "映画":
-        movie_habit = re.compile(r"(?:最近|ここしばらく)?(?:映画|洋画|邦画).{0,10}(?:にはまって|にハマって|にはまる|にハマる)")
+        movie_habit = re.compile(
+            r"(?:最近|ここしばらく)?(?:映画|洋画|邦画).{0,10}(?:にはまって|にハマって|にはまる|にハマる)|"
+            r"(?:映画|洋画|邦画).{0,14}(?:よく|たまに|時々|ときどき|あまり|そんなに|全然|ほとんど).{0,8}(?:観|見)(?:ます|ません|る|ない)"
+        )
         return any(
             movie_habit.search(clause)
             and not _is_interrogative_evidence_clause(clause)
-            and not _is_effectively_negative_personal_fact(clause)
             for clause in partner_clauses
         )
     if topic == "出身地":
@@ -2188,6 +2611,10 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
     "映画": re.compile(
         r"(?<!ですか)(?:自分|私|僕|俺).{0,12}(?:映画|洋画|邦画).{0,18}(?:好き|よく|たまに|時々|観|見)|"
         r"(?:映画|洋画|邦画).{0,12}(?:好きです|好きだ|よく観ます|よく見ます|ときどき観ます|たまに観ます)(?!か)|"
+        r"(?:映画(?!館)|洋画|邦画).{0,12}(?:好きでは(?:ない|ありません|なかった)|好きじゃ(?:ない|ありません|なかった)|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない)(?!ですか|ますか|[?？])|"
+        r"(?:(?:最近|この前|昨日|先週|普段|よく|たまに|時々|ときどき|あまり|そんなに).{0,4})?"
+        r"(?:映画|洋画|邦画)(?:は|を|が)?(?:あまり|そんなに|全然|ほとんど)?(?:よく|たまに|時々|ときどき)?"
+        r"(?:観|見)(?:てい(?:ます|ません)|て(?:ます|ない)|ます|ません|る|ない)(?!か)|"
         r"(?:最近|ここしばらく)?(?:映画|洋画|邦画).{0,8}(?:にはまって|にハマって|にはまる|にハマる)|"
         r"(?:最近|この前|昨日|先週).{0,10}(?:観た|見た)(?:映画|作品).{0,14}(?:面白|楽しかった|良かった)|"
         r"(?:最近|この前|昨日|先週).{0,10}(?:映画|洋画|邦画).{0,10}(?:観|見)(?:た|ました)|"
@@ -2242,8 +2669,8 @@ UNVERIFIED_PERSONAL_CLAIM_PATTERNS = {
 
 UNVERIFIED_PERSONAL_CLAIM_PATTERNS["カフェ"] = re.compile(
     UNVERIFIED_PERSONAL_CLAIM_PATTERNS["カフェ"].pattern
-    + r"|(?:カフェ|喫茶店).{0,16}(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:\d+|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?)"
-    + r"|(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:\d+|[一二三四五六七八九十]{1,3})\s*(?:回|度|くらい|程度|ほど)?).{0,12}(?:カフェ|喫茶店)"
+    + r"|(?:カフェ|喫茶店).{0,16}(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:(?:\d+|[一二三四五六七八九十]{1,3}|数)\s*(?:回|度|くらい|程度|ほど)?|何(?:回|度)か))"
+    + r"|(?:毎日|毎週|毎月|毎年|(?:週(?!末)|月|年)(?:に)?\s*(?:(?:\d+|[一二三四五六七八九十]{1,3}|数)\s*(?:回|度|くらい|程度|ほど)?|何(?:回|度)か)).{0,12}(?:カフェ|喫茶店)"
 )
 
 SHARED_PERSONAL_ASSERTION_PATTERN = re.compile(
@@ -2359,7 +2786,7 @@ def _contrastive_evidence_clauses(fragment: str) -> list[str]:
     fragment = re.sub(r"(ですが|だけど|けれども?|一方で|ただ)[、,]\s*", r"\1", fragment)
     # ``ほどでもない`` is one negative idiom, not a contrast boundary.
     clauses = re.split(
-        r"ですが|だけど|けれども|けれど|(?<!ほど)でも|一方で|ただ|"
+        r"ですが|だけど|けれども|けれど|(?<!ほど)(?<!わけ)でも|一方で|ただ|"
         r"し(?=(?:静かな|落ち着いた|にぎやかな|騒がしい|最近の|好きな|苦手な)?(?:映画館|映画|読書|本|小説|漫画|マンガ|カフェ|喫茶店))",
         fragment,
     )
@@ -2694,7 +3121,7 @@ def _shared_personal_claim_is_grounded(claim: str, trusted_clauses: list[str]) -
 
 def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bool:
     facts = context.get("my_profile", {}).get("facts", {})
-    source = _trusted_fact_text(context, include_negated=topic == "買い物")
+    source = _trusted_fact_text(context, include_negated=topic in {"買い物", "映画"})
     profile_source = _trusted_fact_text(
         {**context, "ephemeral_user_answers": []}, include_negated=topic == "買い物"
     )
@@ -2971,7 +3398,7 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         "カフェ": r"(?:カフェ|喫茶店).{0,8}(?:好き|趣味)",
     }
     broad_negative = {
-        "映画": r"(?:映画(?!館)|映画鑑賞).{0,6}(?:好きではない|好きじゃない|苦手|嫌い|興味(?:が|は)?ない)",
+        "映画": r"(?:映画(?!館)|映画鑑賞).{0,10}(?:好きでは(?:ない|ありません|なかった)|好きじゃ(?:ない|ありません|なかった)|苦手|嫌い|興味(?:が|は)?ない|興味(?:が|は)?ありません)",
         "読書": r"(?:読書|本を読むこと|本).{0,10}(?:好きではない|好きじゃない|苦手|嫌い|あまり.{0,8}読まない)",
         "旅行": r"(?:旅行|旅(?!先|の計画)).{0,6}(?:好きではない|好きじゃない|苦手|嫌い|興味(?:が|は)?ない)",
         "カフェ": r"(?:(?<!静かな)(?<!落ち着いた)(?<!にぎやかな)(?<!騒がしい)(?:カフェ|喫茶店)|カフェ巡り|カフェ自体).{0,6}(?:好きではない|好きじゃない|苦手|嫌い|興味(?:が|は)?ない)",
@@ -2984,11 +3411,27 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if clause.strip()
     ]
     broad_topic = "旅行" if topic.startswith("旅行") else topic
+    scoped_positive_movie_exception = False
+    if topic == "映画":
+        candidate_movie_preferences = _movie_preference_signatures(text)
+        evidence_movie_preferences = _movie_preference_evidence_signatures(context)
+        scoped_positive_movie_exception = any(
+            candidate_category == evidence_category
+            and candidate_marker == evidence_marker
+            and candidate_temporal_scope == evidence_temporal_scope
+            and candidate_polarity == evidence_polarity == "positive"
+            for candidate_category, candidate_marker, candidate_polarity, candidate_temporal_scope
+            in candidate_movie_preferences
+            for evidence_category, evidence_marker, evidence_polarity, evidence_temporal_scope
+            in evidence_movie_preferences
+        )
     if (
         broad_topic in broad_claims
         and re.search(broad_claims[broad_topic], text)
+        and not re.search(broad_negative[broad_topic], text)
         and any(re.search(broad_negative[broad_topic], clause) for clause in fact_clauses)
         and not re.search(r"ミステリー|小説|漫画|マンガ|洋画|邦画|映画館|旅先|計画|本屋", text)
+        and not scoped_positive_movie_exception
     ):
         return False
     if topic == "読書" and re.search(broad_claims["読書"], text):
@@ -3044,7 +3487,27 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
         if re.search(r"幅広く|いろいろなジャンル", text) and not re.search(r"幅広く|いろいろなジャンル", source):
             return False
     elif topic == "映画":
-        opinion_claims = _movie_assertion_segments(text)
+        preference_signatures = _movie_preference_signatures(text)
+        if preference_signatures:
+            if _movie_preference_has_conflict(preference_signatures):
+                return False
+            evidence_signatures = _movie_preference_evidence_signatures(context)
+            if not evidence_signatures:
+                return False
+            evidence_by_key: dict[tuple[str, str, str], set[str]] = {}
+            for category, marker, polarity, temporal_scope in evidence_signatures:
+                key = (category, marker, temporal_scope)
+                evidence_by_key.setdefault(key, set()).add(polarity)
+            for category, marker, polarity, temporal_scope in preference_signatures:
+                matching_polarities = evidence_by_key.get((category, marker, temporal_scope), set())
+                if len(matching_polarities) != 1 or polarity not in matching_polarities:
+                    return False
+        has_movie_opinion_detail = bool(re.search(
+            r"面白|良|よかった|楽し|感動|泣け|怖|微妙|いまいち|きれい|綺麗|美しい|素晴らしい|印象",
+            text,
+        ))
+        preference_only = bool(preference_signatures) and not has_movie_opinion_detail
+        opinion_claims = [] if preference_only else _movie_assertion_segments(text)
         if opinion_claims and not any(
             _movie_claim_supported_by_evidence(text, evidence)
             for evidence in _movie_evidence_texts(context)
@@ -3058,17 +3521,25 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             return False
         if not specific_markers and not frequency and re.search(r"映画.{0,8}好き", text):
             preference_values = [facts.get(key) for key in ("favorite_movie_genres", "movie_preferences", "movie_hobby")]
-            positive_preference_field = any(
+            ambiguous_movie_preference = any(
+                facts.get(key)
+                and _movie_preference_is_uncertain(str(facts.get(key)))
+                for key in ("movie_preferences", "movie_hobby", "favorite_movie_genres")
+            )
+            positive_preference_field = not ambiguous_movie_preference and any(
                 facts.get(key)
                 and not NEGATIVE_PERSONAL_FACT_RE.search(str(facts.get(key)))
                 and bool(re.search(r"映画.{0,8}(?:好き|趣味|鑑賞)", str(facts.get(key))))
                 for key in ("movie_preferences", "movie_hobby")
             )
-            profile_preference = positive_preference_field or bool(re.search(r"映画.{0,8}(?:好き|趣味)|映画鑑賞", source))
+            profile_preference = positive_preference_field or (
+                not ambiguous_movie_preference
+                and bool(re.search(r"映画.{0,8}(?:好き|趣味)|映画鑑賞", source))
+            )
             for answer in context.get("ephemeral_user_answers", []):
                 if "映画" in answer.get("question", "") and re.search(r"はい|好き|観ます|見ます", answer.get("answer", "")) and not re.search(r"好きではありません|好きではない|好きじゃありません|好きじゃない|苦手|嫌い|興味(?:が|は)?ありません|興味(?:が|は)?ない|見ません|観ません|見ない|観ない", answer.get("answer", "")):
                     return True
-            if not profile_preference:
+            if not profile_preference and not preference_signatures:
                 return False
         return True
     elif topic == "居住地":
@@ -3142,14 +3613,11 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             )
         if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
-        frequency_patterns = (
-            r"よく行|よく巡|頻繁に|毎日|毎週|毎月|毎年|通って",
-            r"(?:月|週|年)に(?:\d+回|何度か|何回か|数回)",
+        candidate_frequency = re.findall(
+            r"よく行|よく巡|頻繁に|毎日|毎週|毎月|毎年|通って", text
         )
-        for frequency_pattern in frequency_patterns:
-            candidate_frequency = re.findall(frequency_pattern, text)
-            if candidate_frequency and not all(marker in source for marker in candidate_frequency):
-                return False
+        if candidate_frequency and not all(marker in source for marker in candidate_frequency):
+            return False
         if re.search(r"よく行|よく巡|頻繁に|毎週|通って", text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
             return False
     elif topic == "場所探し":
@@ -3626,6 +4094,20 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
         ]
         if tenure_assertions and not _claim_supported_by_trusted_fact("職業", text, context):
             found.append("職業")
+        movie_preference_pattern = re.compile(
+            r"(?:映画(?!館)|映画鑑賞).{0,32}(?:好き|苦手|嫌い|興味)|"
+            r"(?:好き|苦手|嫌い|興味).{0,32}映画(?!館)"
+        )
+        movie_preference_matches = [
+            match for match in movie_preference_pattern.finditer(text)
+            if not _candidate_claim_is_interrogative(text, match)
+            and not _candidate_claim_is_partner_attribution("映画", text, match, context)
+        ]
+        if movie_preference_matches and (
+            not _movie_preference_signatures(text)
+            or not _claim_supported_by_trusted_fact("映画", text, context)
+        ):
+            found.append("映画")
         if _movie_assertion_segments(text) and not _claim_supported_by_trusted_fact("映画", text, context):
             found.append("映画")
     return list(dict.fromkeys(found))
@@ -3691,11 +4173,11 @@ def _pet_claim_signatures(
                 continue
             verb = match.group("verb")
             ending = clause[match.end():match.end() + 8]
-            subtype = "started" if verb == "飼い始め" else "past" if verb == "飼った" or re.match(r"(?:い)?(?:ました|た)", ending) else "ongoing"
+            subtype = "started" if verb == "飼い始め" else "past" if verb == "飼った" or re.match(r"(?:い)?(?:ました|ませんでした|た|なかった)", ending) else "ongoing"
             segment = _pet_claim_segment(clause, match.start("animal"), match.group("animal"))
             polarity = "negative" if re.search(
                 r"(?:飼っていない|飼ってない|飼っていなかった|飼ってなかった|飼っていません|飼ってません|"
-                r"飼っていませんでした|飼ってませんでした|飼ったことがない|飼ったことがありません|"
+                r"飼っていませんでした|飼ってませんでした|飼ったこと(?:が|は)?(?:ない|ないです|ありません|ありませんでした)|"
                 r"飼っているわけではない|飼っているわけではありません|飼っているわけじゃない|"
                 r"飼ってるわけではない|飼ってるわけじゃない|飼育していない|飼育してません|"
                 r"飼育していません|飼育していなかった|飼育してなかった)",
@@ -3751,6 +4233,26 @@ def _has_unverified_pet_claim(text: str, context: dict) -> bool:
     if not claims:
         return False
     evidence = _trusted_fact_clauses(context, include_negated=True)
+    for answer in context.get("ephemeral_user_answers", []):
+        question = str(answer.get("question", ""))
+        scope = _binary_personal_question_scope(question)
+        polarity = _binary_answer_polarity(str(answer.get("answer", ""))) if scope else None
+        if polarity and _binary_question_is_negative(question):
+            # A bare yes/no to a negative question is ambiguous in Japanese.
+            # Require the user to restate the concrete situation instead.
+            polarity = None
+        if scope and scope[0] == "pet" and polarity:
+            subject = scope[1]
+            if polarity == "positive":
+                evidence.append(f"{subject}を飼っています")
+            else:
+                evidence.append(f"{subject}は飼っていません")
+        elif scope and scope[0] == "pet_past" and polarity:
+            subject = scope[1]
+            if polarity == "positive":
+                evidence.append(f"以前は{subject}を飼ったことがあります")
+            else:
+                evidence.append(f"以前は{subject}を飼ったことがありません")
     grounded = _latest_pet_claim_signatures(evidence, include_uncertain=False)
     # A partner's messages can establish what the partner said about a third
     # party, but must never be treated as facts about the app user.
@@ -4543,13 +5045,180 @@ def _direct_personal_question_parts(text: str) -> list[tuple[str, str]]:
 def _compound_direct_personal_question_parts(text: str) -> list[tuple[str, str]]:
     """Split only genuinely separate personal topics, preserving compound asks."""
     parts = _direct_personal_question_parts(text)
+    whole_topic = _topic_for_personal_question(text)
+    if len(parts) == 1 and parts[0][1].strip() != text.strip():
+        # A hypothetical or general question may precede a separate personal
+        # question. Preserve the independently classified personal fragment.
+        return parts
     if (
         len(parts) > 1
         and len({(topic, _personal_information_scope(topic, question)) for topic, question in parts}) > 1
-        and _topic_for_personal_question(text) != "本人情報"
+        and whole_topic != "本人情報"
     ):
         return parts
     return []
+
+
+def _is_confirmed_cooking_skill_paraphrase(
+    candidate: str,
+    *,
+    question: str,
+    answer: str,
+) -> bool:
+    """Allow a few exact-scope rewrites of an explicitly confirmed cooking skill."""
+    if not re.search(r"得意料理|料理.{0,8}(?:得意|上手)", question):
+        return False
+    answer = re.sub(r"^(?:はい|うん|そうですね)?(?:私|自分|僕|俺)(?:は|も)", "", answer)
+    answer_match = re.fullmatch(
+        r"(.{1,18}?)(?:を作るのが得意|作るのが得意|作りが得意|が得意料理|が得意)(?:です|だ)?",
+        answer,
+    )
+    if not answer_match:
+        return False
+    dish = answer_match.group(1)
+    dish_pattern = re.escape(dish)
+    allowed_forms = (
+        rf"{dish_pattern}(?:を)?作るのが得意(?:です|だ)?",
+        rf"{dish_pattern}作りが得意(?:です|だ)?",
+        rf"{dish_pattern}が得意料理(?:です|だ)?",
+        rf"得意なのは{dish_pattern}(?:です|だ)?",
+    )
+    return any(re.fullmatch(form, candidate) for form in allowed_forms)
+
+
+def _binary_personal_question_scope(question: str) -> tuple[str, str] | None:
+    """Return a narrowly scoped yes/no question kind and subject."""
+    if re.search(r"頻度|どのくらい|どれくらい|何回|こと(?:が)?多い|週に|月に|毎日", question):
+        return None
+    informal_past_pet = re.search(
+        r"(?:(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?)?"
+        r"(?:(?:うち|家|実家)(?:に|で))?"
+        r"(?P<subject>ペット|犬|猫)(?:を|は|が)?"
+        r"(?:いたこと(?:が)?(?:あります|ある|ない|ありません)|いた|いなかった|飼ってた|飼っていた)",
+        question,
+    )
+    if not informal_past_pet:
+        informal_past_pet = re.search(
+            r"(?P<subject>ペット|犬|猫)(?:が|は)"
+            r"(?:(?:昔|以前|子どもの頃|子供の頃|小さい頃)(?:は|に)?)?"
+            r"(?:(?:うち|家|実家)(?:に|で))?"
+            r"(?:いたこと(?:が)?(?:あります|ある|ない|ありません)|いた|いなかった|飼ってた|飼っていた)",
+            question,
+        )
+    if informal_past_pet:
+        return "pet_past", informal_past_pet.group("subject")
+    if re.search(r"ペット|犬|猫", question) and re.search(r"飼|いる", question):
+        if "ペット" not in question and "犬" in question and "猫" not in question:
+            subject = "犬"
+        elif "ペット" not in question and "猫" in question and "犬" not in question:
+            subject = "猫"
+        else:
+            subject = "ペット"
+        if re.search(
+            r"飼ったこと(?:が)?(?:あります|ある|ない|ありません)|飼った|飼ってたこと(?:が)?(?:あります|ある|ない|ありません)|"
+            r"飼って(?:いたこと(?:が)?(?:あります|ある)|いなかった|いませんでした|いた|いました|た|ました)|飼育経験",
+            question,
+        ):
+            return "pet_past", subject
+        return "pet", subject
+    if re.search(r"朝ごはん|朝ご飯|朝食|昼ごはん|昼ご飯|昼食|夕飯|夕食|晩ごはん|晩御飯|朝は", question) and re.search(
+        r"食べ|取る|とる|取っ|とっ", question
+    ):
+        subject_match = re.search(r"朝ごはん|朝ご飯|朝食|昼ごはん|昼ご飯|昼食|夕飯|夕食|晩ごはん|晩御飯|朝", question)
+        if subject_match:
+            if re.search(r"(?:食べ|取っ|とっ)たこと(?:が)?(?:あります|ある|ない|ありません)", question):
+                return "meal_past", subject_match.group(0)
+            return "meal", subject_match.group(0)
+    return None
+
+
+def _binary_answer_polarity(answer: str) -> str | None:
+    normalized = re.sub(r"[\s、。！!？?]", "", answer)
+    if normalized in {"はい", "うん", "うんうん", "ええ", "そう", "そうです", "そうだよ", "そうですね"}:
+        return "positive"
+    if normalized in {"いいえ", "ううん", "違います", "ちがいます", "そうではありません", "そうじゃないです"}:
+        return "negative"
+    return None
+
+
+def _binary_answer_restatement_matches(segment: str, scope: tuple[str, str], polarity: str) -> bool:
+    kind, subject = scope
+    normalized = re.sub(r"[\s、。！!？?]", "", segment)
+    normalized = re.sub(r"^(?:今は|現在は|以前は|昔は|昔|以前|前に|私は|自分は|僕は|俺は)", "", normalized)
+    subject_pattern = re.escape(subject)
+    if kind == "meal_past":
+        if polarity == "positive":
+            predicate = r"(?:を|は)?(?:食べたこと(?:が|は)?(?:あります|ある)|食べた経験(?:が|は)?(?:あります|ある))"
+        else:
+            predicate = r"(?:を|は)?(?:食べたこと(?:が|は)?(?:ありません|ない)|食べた経験(?:が|は)?(?:ありません|ない))"
+        return bool(re.fullmatch(subject_pattern + predicate, normalized))
+    if kind == "pet_past":
+        if polarity == "positive":
+            predicate = r"(?:を|は|が)?(?:飼ったこと(?:が|は)?(?:あります|ある)|飼って(?:いました|いた)|飼育経験(?:が|は)?(?:あります|ある))"
+        else:
+            predicate = r"(?:を|は|が)?(?:飼ったこと(?:が|は)?(?:ありません|ない(?:です)?|ありませんでした)|飼って(?:いませんでした|いなかった)|飼育経験(?:が|は)?(?:ありません|ない))"
+        return bool(re.fullmatch(subject_pattern + predicate, normalized))
+    if kind == "pet":
+        if polarity == "positive":
+            predicate = r"(?:を|は|が)?(?:飼って(?:います|ます|いる|る)|(?:は)?います|いる)"
+        else:
+            predicate = r"(?:を|は|が)?(?:飼って(?:いません|ません|いない|ない)|(?:は)?いません|いない)"
+    else:
+        if polarity == "positive":
+            predicate = r"(?:は|を|なら)?(?:食べています|食べてます|食べている|食べてる|食べます|食べる|取っています|とっています|取る|とる)"
+        else:
+            predicate = r"(?:は|を|なら)?(?:食べていません|食べてません|食べていない|食べてない|食べません|食べない|取っていません|とっていません|取らない|とらない)"
+    if re.fullmatch(subject_pattern + predicate, normalized):
+        return True
+    # A confirmed yes/no question supplies the omitted generic subject in a
+    # concise answer such as 「今は飼っていません」. This still cannot add a
+    # specific species or frequency that the user did not confirm.
+    if kind in {"pet", "pet_past"}:
+        return bool(re.fullmatch(predicate, normalized))
+    return False
+
+
+def _binary_question_is_negative(question: str) -> bool:
+    """Whether a yes/no question asks about a negated meal or pet proposition."""
+    compact = re.sub(r"\s+", "", question)
+    return bool(re.search(
+        r"(?:飼ってい?|飼い|飼ったこと(?:が)?|食べたこと(?:が)?|食べてい?|食べ|取ってい?|取っ|とってい?|とっ)(?:ない|ません|なかった|ありませんでした)",
+        compact,
+    ))
+
+
+def _negative_binary_question_has_ambiguous_answer(context: dict, question: str) -> bool:
+    """Bare yes/no replies do not establish facts for a negatively phrased question."""
+    scope = _binary_personal_question_scope(question)
+    if not scope or scope[0] not in {"pet", "pet_past", "meal", "meal_past"} or not _binary_question_is_negative(question):
+        return False
+    for answer in context.get("ephemeral_user_answers", []):
+        answer_question = str(answer.get("question", ""))
+        answer_scope = _binary_personal_question_scope(answer_question)
+        if answer_scope != scope or not _binary_question_is_negative(answer_question):
+            continue
+        if _binary_answer_polarity(str(answer.get("answer", ""))):
+            return True
+    return False
+
+
+def _negative_binary_question_clarification(question: str) -> UserQuestion:
+    scope = _binary_personal_question_scope(question)
+    quoted_question = question.strip().replace("\n", " ")[:180]
+    if not scope:
+        detail = "質問の内容を具体的に"
+    elif scope[0] == "pet_past":
+        detail = f"これまでに{scope[1]}を飼ったことがあるか"
+    elif scope[0] == "pet":
+        detail = f"現在{scope[1]}を飼っているか"
+    elif scope[0] == "meal_past":
+        detail = f"これまでに{scope[1]}を食べたことがあるか"
+    else:
+        detail = f"普段{scope[1]}を食べるか"
+    return UserQuestion(
+        question=f"「{quoted_question}」について、{detail}を具体的に教えてください",
+        purpose="否定形への短い返事だけでは本人の状況を特定できないため確認します",
+    )
 
 
 def _answers_verified_single_partner_question(candidate: Candidate, context: dict) -> bool:
@@ -4565,6 +5234,8 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
     if not partner_messages:
         return True
     question = partner_messages[-1]
+    if _negative_binary_question_has_ambiguous_answer(context, question):
+        return False
     topic = _topic_for_personal_question(question)
     if not topic:
         return True
@@ -4573,6 +5244,46 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         # be treated as answered by an unrelated, evasive candidate. The API
         # preflight normally asks the user first; this is the final send guard.
         return False
+    if topic == "カフェ頻度":
+        facts = context.get("my_profile", {}).get("facts", {})
+        frequency_evidence = [
+            str(facts[key])
+            for key in ("cafe_frequency", "cafe_visit_frequency", "カフェに行く頻度")
+            if facts.get(key)
+        ]
+        frequency_evidence.extend(
+            clause
+            for clause in _trusted_fact_clauses({**context, "ephemeral_user_answers": []})
+            if re.search(r"カフェ|喫茶店", clause)
+            and (_explicit_frequency_signature(clause) or _qualitative_cafe_frequency_class(clause))
+        )
+        frequency_evidence.extend(
+            str(answer.get("answer", ""))
+            for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and re.search(r"カフェ|喫茶店", str(answer.get("question", "")))
+            and (
+                _explicit_frequency_signature(str(answer.get("answer", "")))
+                or _qualitative_cafe_frequency_class(str(answer.get("answer", "")))
+            )
+        )
+        answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+        answer_segments = [
+            segment.strip()
+            for segment in re.split(r"(?<=[!?！？])|\n+", answer_prefix)
+            if segment.strip()
+        ]
+        frequency_answers = [
+            segment
+            for segment in answer_segments
+            if _explicit_frequency_signature(segment) or _qualitative_cafe_frequency_class(segment)
+        ]
+        if not frequency_answers or not frequency_evidence:
+            return False
+        return all(
+            any(_frequency_claim_is_supported(segment, evidence) for evidence in frequency_evidence)
+            for segment in frequency_answers
+        )
     if topic == "本人情報" and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question):
         # Profile-backed occupation facts are trusted evidence, but the generic
         # confirmation validator below only accepts ephemeral user answers.
@@ -4785,6 +5496,13 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             normalized_answer = re.sub(r"[\s、。！!？?]", "", answer_text)
             if not normalized_answer:
                 continue
+            binary_scope = _binary_personal_question_scope(question)
+            binary_polarity = _binary_answer_polarity(answer_text) if binary_scope else None
+            if binary_polarity and _binary_question_is_negative(question) and binary_scope[0] in {"pet", "pet_past", "meal", "meal_past"}:
+                # Do not infer the user's polarity from an ambiguous bare reply.
+                binary_polarity = None
+            elif binary_polarity and _binary_question_is_negative(question):
+                binary_polarity = "negative" if binary_polarity == "positive" else "positive"
             answer_seen = False
             # Generic personal answers have no domain-specific polarity or
             # scope validator. Split clauses before questions so a confirmed
@@ -4799,6 +5517,19 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             )
             for segment in (part.strip() for part in segments if part.strip()):
                 normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
+                if binary_scope and binary_polarity:
+                    if normalized_segment == normalized_answer:
+                        answer_seen = True
+                        continue
+                    segment_polarity = _binary_answer_polarity(segment)
+                    if segment_polarity:
+                        if segment_polarity != binary_polarity:
+                            return False
+                        answer_seen = True
+                        continue
+                    if _binary_answer_restatement_matches(segment, binary_scope, binary_polarity):
+                        answer_seen = True
+                        continue
                 if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね"}:
                     continue
                 if _is_partner_directed_followup_question(segment, question):
@@ -4808,7 +5539,11 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 # contradictions such as "とは言えません" and arbitrary
                 # claims appended to the confirmed answer.
                 answer_clause = re.sub(r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_segment)
-                if answer_clause == normalized_answer:
+                if answer_clause == normalized_answer or _is_confirmed_cooking_skill_paraphrase(
+                    answer_clause,
+                    question=question,
+                    answer=normalized_answer,
+                ):
                     answer_seen = True
                 else:
                     return False
@@ -4954,6 +5689,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             r"(?:とても|すごく|めっちゃ|かなり)?好き(?:なんです|なんだ|なんですよ|ですね|です|だ|！|!|$)|"
             r"好きな(?:カフェ|喫茶店)(?:巡り)?(?:が|は)?(?:いくつか|たくさん|いくつも)?あります"
         ),
+        "カフェ頻度": r"(?:カフェ|喫茶店).{0,18}(?:よく|頻繁|週|月|たまに|時々|ときどき|あまり)|(?:よく|頻繁|週|月|たまに|時々|ときどき|あまり).{0,18}(?:カフェ|喫茶店)|(?:週|月|年)に?\s*(?:\d+|数)\s*回|(?:毎日|毎週|毎月|毎年|頻繁|たまに|時々|ときどき|あまり|よく)",
         "料理習慣": r"(?:料理|自炊).{0,18}(?:する|作る|しない|作らない)",
         "居住地": r"(?:住んで|在住|地域|エリア)",
         "予定": r"(?:曜日|時間|予定|空いて|都合)",
@@ -4961,7 +5697,12 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
     marker = patterns.get(topic)
     if not marker:
         return True
-    if _reading_genre_segment_is_question_only(answer_prefix):
+    answer_segments = [
+        segment.strip()
+        for segment in re.split(r"(?<=[!?！？])|\n+", answer_prefix)
+        if segment.strip()
+    ]
+    if not answer_segments or all(_reading_genre_segment_is_question_only(segment) for segment in answer_segments):
         return False
     return bool(re.search(marker, answer_prefix))
 

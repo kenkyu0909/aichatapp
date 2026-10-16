@@ -2,8 +2,11 @@
 /* Windows localhost UI. No private conversation data is kept in browser storage. */
 (() => {
 const $ = id => document.getElementById(id);
-const state = { matches:[],selectedId:null,messages:[],profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
+const state = { matches:[],selectedId:null,messages:[],loadingConversation:false,conversationLoadFailed:false,profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
 let timer;
+let contactSelectionEpoch=0;
+let generationRequestSequence=0;
+const generationRequestTokens=new WeakMap();
 function node(tag,cls,txt) {
   const e=document.createElement(tag);
   if(cls)e.className=cls;
@@ -82,7 +85,19 @@ function renderContacts(){
   });
 }
 async function selectContact(id,relist=true){
+  contactSelectionEpoch+=1;
+  const selectionEpoch=contactSelectionEpoch;
   state.selectedId=id;
+  const generationButtons=[
+    [$("first-message"),"🌱 初回メッセージを生成"],
+    [$("generate"),$("count").value+"案を生成"],
+    [$("follow-up"),"💬 追いメッセージ"],
+  ];
+  generationButtons.forEach(([button,label])=>{
+    generationRequestTokens.set(button,++generationRequestSequence);
+    button.disabled=true;
+    button.textContent=label;
+  });
   const c=current();
   const holder=$("current-avatar");
   const av=c?photoAvatar(c,true):node("span","avatar big","?");
@@ -94,18 +109,36 @@ async function selectContact(id,relist=true){
   $("incoming-count").textContent="💬 相手から："+(c?.incoming_count||0)+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   if(relist)renderContacts();
-  if(!c){state.messages=[];renderMessages();return;}
+  state.messages=[];
+  state.loadingConversation=!!c;
+  state.conversationLoadFailed=false;
+  renderMessages();
+  if(!c)return;
   const fromId=id;
-  const data=await api("/matches/"+id+"/messages");
-  if(fromId!==state.selectedId)return;
-  state.messages=data;renderMessages();
+  let loaded=false;
+  try{
+    const data=await api("/matches/"+id+"/messages");
+    if(fromId!==state.selectedId||selectionEpoch!==contactSelectionEpoch)return;
+    state.messages=data;
+    loaded=true;
+  }finally{
+    if(fromId===state.selectedId&&selectionEpoch===contactSelectionEpoch){
+      state.loadingConversation=false;state.conversationLoadFailed=!loaded;
+      generationButtons.forEach(([button])=>{button.disabled=!loaded;});
+      renderMessages();
+    }
+  }
 }
 function renderMessages(){
   const holder=$("messages");holder.replaceChildren();
   const hasConversation=state.messages.length>0;
-  $("first-message").hidden=!current()||hasConversation;
-  $("generate").hidden=!current()||!hasConversation;
-  $("follow-up").hidden=!current()||!hasConversation;
+  $("first-message").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||hasConversation;
+  $("generate").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
+  $("follow-up").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
+  const composerUnavailable=state.loadingConversation||state.conversationLoadFailed||!current();
+  ["message-input","send-them","send-me"].forEach(id=>{$(id).disabled=composerUnavailable;});
+  if(state.loadingConversation){holder.append(node("p","empty-chat","会話履歴を読み込み中です"));return;}
+  if(state.conversationLoadFailed){holder.append(node("p","empty-chat","会話履歴を読み込めませんでした。通信状態を確認して相手を選び直してください"));return;}
   if(!hasConversation){holder.append(node("p","empty-chat",current()?"まだ会話がありません。初回メッセージを生成するか、下の入力欄から履歴を追加してください。":"左側の＋から相手を登録してください。"));return;}
   state.messages.forEach(m=>{
     const wrap=node("article","chat-message "+m.role);
@@ -127,8 +160,15 @@ function renderMessages(){
 async function refreshConversation(){
   const id=state.selectedId;
   if(id===null)return;
-  const records=await api("/matches/"+id+"/messages");
+  let records;
+  try{records=await api("/matches/"+id+"/messages");}
+  catch(error){
+    if(id===state.selectedId){state.loadingConversation=false;state.conversationLoadFailed=true;renderMessages();}
+    throw error;
+  }
   if(id!==state.selectedId)return;
+  state.loadingConversation=false;
+  state.conversationLoadFailed=false;
   state.messages=records;
   const c=current();
   if(c){
@@ -318,10 +358,13 @@ function renderUserInfoQuestions(container,payload,options,matchId,generationTar
 async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false){
   const button=generationTarget.button||$(options.mode==="followup"?"follow-up":options.mode==="first"?"first-message":"generate");
   const area=generationTarget.container||$("suggestion-list");
+  const selectionEpoch=contactSelectionEpoch;
+  const requestToken=++generationRequestSequence;
+  generationRequestTokens.set(button,requestToken);
   const before=button.textContent;button.disabled=true;button.textContent="生成中…";
   try{
     const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:userAnswers,skipped_user_info:skippedUserInfo}));
-    if(matchId!==null&&matchId!==state.selectedId)return;
+    if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed))return;
     area.hidden=false;area.replaceChildren();
     const blocked=result.generation_blocked||(!result.recommended&&(skippedUserInfo||result.skipped_user_info||!result.needs_user_info));
     if(blocked){
@@ -342,7 +385,9 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
       renderCards(area,result,generationTarget.allowSave!==false,matchId);
     }
     if(!generationTarget.container)$("chat-area").scrollTop=$("chat-area").scrollHeight;
-  }finally{button.disabled=false;button.textContent=before;}
+  }finally{
+    if(generationRequestTokens.get(button)===requestToken){button.disabled=false;button.textContent=before;}
+  }
 }
 async function generate(mode){
   const c=current();if(mode!=="like"&&!c)throw Error("相手を登録してください");

@@ -1524,3 +1524,22 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 修正前失敗の確認後、focused test 5 passed / 1273 deselected。最新プロンプト変更の実Gemini検証は行っていない。
 - 直前HEAD `1c9fae193f42bb64d369b3e0fbc0116bdc64d8f1`のPush/PR Actionsは同一SHAでsuccess、1369 passed / 1 warning。新しい変更のActionsは未実施。
 - 過去の実生成品質FAILは継続。総合NO-GO。
+
+
+## 2026-10-16 13:13 JST 追補
+
+- 不具合: `movie_preferences` の「ホラー映画だけは好きではない」等が対象ジャンルを肯定する根拠として扱われ、逆の肯定候補が送信可能だった。
+- 修正: 否定を伴う「だけ」表現を曖昧な根拠としてfail-closedにし、「しか」「以外」の明示的な排他表現のみ従来どおり肯定解釈する。4つの再現ケースは修正前に全件FAIL、修正後の映画嗜好focused suiteは58 passed。独立レビューで対象範囲の回帰なしを確認。
+- 最新ローカル回帰: Windowsでpytest **1557 passed in 222.77s**（Firefox UIを含む）。Python/JavaScript構文検査およびgit差分検査成功。最新変更のGitHub ActionsはPush後に確認する。
+- Gemini実通信は0回。継続指示に従い、実API、会話004、新しい会話HTMLを実施していない。過去のT369/QUALITY009実生成品質FAILは未解決。
+- 総合判定は引き続き **NO-GO**。本人事実検査は日本語全般の意味理解を保証せず、実モデルの自然さ・ミラーリング・候補多様性・誘い判断も未確認。現変更コミットSHA、Actions URL、PR状態はPush確認後に追記する。
+
+
+## 2026-10-16 13:55 JST 本人確認ゲート追加修正
+
+- 独立レビューで、否定形カフェ頻度「よく行かない」から肯定頻度を許可する問題、二重否定（「わけでもない」「ってわけでもない」「というわけではない」）を低頻度と誤認する問題、朝食の「取ってない／食べてない」を本人質問として分類しない問題を確認した。
+- 修正前の新しい再現テストは計8ケースが失敗。頻度の否定を肯定判定より先に扱い、二重否定・曖昧表現は確認済みの頻度根拠にしないようfail-closedにした。朝食の口語否定質問を本人情報として検出し、曖昧な短い回答には習慣の範囲を尋ねる確認を返す。
+- focused suite **12 passed**。最新Windows全pytest **1580 passed in 273.36s**（Firefox UI含む）。`python -m py_compile app.py scripts/simulate_conversation.py scripts/render_conversation_report.py`、`node --check app.js`、`git diff --check`成功。
+- Gemini実通信0回。実モデル文章品質の改善を確認したとは扱わない。既存T369/QUALITY009の実Gemini品質FAILは維持。
+- 最新マトリクスは389項目: PASS261 / FAIL14 / FIXED94 / BLOCKED5 / NOT_TESTED15。総合判定NO-GO。GitHub Actionsは今回HEADをPush後に確認し、URL・SHAを追記する。
+- PR #4はDraft・未マージを維持。conversation_004と新しい会話HTMLは実施していない。
