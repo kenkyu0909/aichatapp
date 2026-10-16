@@ -394,7 +394,11 @@ function mergeUserInfoAnswers(existing,incoming){
   [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(item=>{
     if(!item||typeof item.question!=="string"||typeof item.answer!=="string")return;
     const question=item.question.trim(),answer=item.answer.trim();
-    if(question&&answer)merged.set(question.normalize("NFKC").toLocaleLowerCase(),{question,answer});
+    if(question&&answer){
+      const entry={question,answer};
+      if(item.confirmed===true)entry.confirmed=true;
+      merged.set(question.normalize("NFKC").toLocaleLowerCase(),entry);
+    }
   });
   return [...merged.values()];
 }
@@ -500,7 +504,8 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
   const selectionEpoch=contactSelectionEpoch;
   const revision=conversationRevision;
   if(!clarificationSession){
-    clarificationSession={matchId,selectionEpoch,revision,answers:mergeUserInfoAnswers([],userAnswers)};
+    const sessionId=(typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function")?crypto.randomUUID():("s"+Date.now()+"-"+Math.random().toString(36).slice(2));
+    clarificationSession={matchId,selectionEpoch,revision,answers:mergeUserInfoAnswers([],userAnswers),sessionId};
   }else{
     if(clarificationSession.matchId!==matchId||clarificationSession.selectionEpoch!==selectionEpoch||clarificationSession.revision!==revision){
       throw Error("会話が更新されました。最新の内容からもう一度生成してください");
@@ -513,7 +518,7 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
   generationAreaTokens.set(area,requestToken);
   const before=button.textContent;button.disabled=true;button.textContent="生成中…";
   try{
-    const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:clarificationSession.answers,skipped_user_info:skippedUserInfo}));
+    const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:clarificationSession.answers,clarification_session_id:clarificationSession.sessionId,skipped_user_info:skippedUserInfo}));
     if(generationAreaTokens.get(area)!==requestToken||revision!==conversationRevision)return;
     if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed||mutatingContacts.has(matchId)))return;
     area.hidden=false;area.replaceChildren();

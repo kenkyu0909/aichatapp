@@ -1993,6 +1993,99 @@ def test_ephemeral_confirmation_question_ids_normalize_equivalents(client):
     assert first[0]["question_id"] != other[0]["question_id"]
 
 
+def test_confirmed_answers_persist_without_dropping_existing_profile_keys(client):
+    c, backend = client
+    c.put(
+        "/api/profile",
+        json={"content": json.dumps({"food": "和食", "availability": "週末"}), "avoid": ""},
+    )
+    records = backend.build_ephemeral_confirmations(
+        [{"question": "映画はお好きですか？", "answer": "洋画が好きです", "confirmed": True}],
+        match_id=1,
+        session_id="sess-1",
+    )
+    assert records[0]["confirmation_state"] == "confirmed"
+    assert records[0]["session_id"] == "sess-1"
+
+    assert backend.persist_confirmed_facts(records) == 1
+
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["food"] == "和食"
+    assert stored["availability"] == "週末"
+    assert stored["schema_version"] == 2
+    facts = stored["confirmed_facts"]
+    assert len(facts) == 1
+    entry = next(iter(facts.values()))
+    assert entry["value"] == "洋画が好きです"
+    assert entry["source"] == "user_confirmation"
+    assert entry["session_id"] == "sess-1"
+    assert entry["confirmed_at"]
+
+
+def test_unconfirmed_answers_do_not_touch_the_profile(client):
+    c, backend = client
+    before = c.get("/api/profile").json()
+    records = backend.build_ephemeral_confirmations(
+        [{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+        match_id=1,
+        session_id="sess-2",
+    )
+    assert records[0]["confirmation_state"] == "ephemeral"
+
+    assert backend.persist_confirmed_facts(records) == 0
+    assert c.get("/api/profile").json() == before
+
+
+def test_repeated_confirmation_updates_same_fact_without_duplicating(client):
+    c, backend = client
+    backend.persist_confirmed_facts(
+        backend.build_ephemeral_confirmations(
+            [{"question": "映画はお好きですか？", "answer": "洋画が好きです", "confirmed": True}],
+            match_id=1,
+            session_id="sess-a",
+        )
+    )
+    backend.persist_confirmed_facts(
+        backend.build_ephemeral_confirmations(
+            [{"question": "  映画はお好きですか？ ", "answer": "邦画が好きです", "confirmed": True}],
+            match_id=1,
+            session_id="sess-b",
+        )
+    )
+
+    facts = json.loads(c.get("/api/profile").json()["content"])["confirmed_facts"]
+    assert len(facts) == 1
+    entry = next(iter(facts.values()))
+    assert entry["value"] == "邦画が好きです"
+    assert entry["session_id"] == "sess-b"
+
+
+def test_generate_endpoint_persists_only_confirmed_answers(client):
+    c, _backend = client
+    mid = add_match(c, "永続化導線の架空人物")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画はお好きですか？"})
+
+    response = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "clarification_session_id": "sess-endpoint",
+        "user_answers": [
+            {"question": "映画はお好きですか？", "answer": "洋画が好きです", "confirmed": True},
+            {"question": "週末は何をしていますか？", "answer": "散歩です"},
+        ],
+    })
+
+    assert response.status_code == 200
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["schema_version"] == 2
+    facts = stored["confirmed_facts"]
+    assert len(facts) == 1
+    entry = next(iter(facts.values()))
+    assert entry["value"] == "洋画が好きです"
+    assert entry["session_id"] == "sess-endpoint"
+
+
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
     _, backend = client
     context = {
