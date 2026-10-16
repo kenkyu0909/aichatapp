@@ -1487,8 +1487,31 @@ def _verified_job_or_school_values(facts: dict, question: str) -> list[str]:
     return values
 
 
+def _confirmed_fact_covers_question(facts: dict, topic: str, question_text: str) -> bool:
+    """Treat a previously saved confirmation as verified for the same question.
+
+    A saved answer is only reused when the question being asked matches the
+    stored one by normalized id or by the same inferred slot, so a different
+    detail still triggers a fresh clarification.
+    """
+    confirmed = facts.get("confirmed_facts")
+    if not isinstance(confirmed, dict) or not confirmed:
+        return False
+    if not question_text.strip():
+        return False
+    asked = personal_fact_question(topic, question_text).question
+    question_id = _normalize_clarification_question_key(asked)
+    requested_slot = _optional_user_question_scope_key(asked)
+    for entry in confirmed.values():
+        if isinstance(entry, dict) and entry.get("requested_slot") == requested_slot:
+            return True
+    return question_id in confirmed
+
+
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
     facts = context["my_profile"].get("facts", {})
+    if _confirmed_fact_covers_question(facts, topic, question_text):
+        return True
     if topic == "年齢":
         return any(facts.get(key) for key in ("age", "年齢", "本人の年齢")) or any(
             answer.get("answer", "").strip()
@@ -4902,12 +4925,39 @@ def get_profile():
         return dict(db.execute("SELECT content, avoid FROM profile WHERE id=1").fetchone())
 
 
+def merge_profile_content_preserving_keys(existing_raw: str, incoming_raw: str) -> str:
+    """Keep unknown profile keys (for example confirmed_facts) across a save.
+
+    The UI sends the whole content it loaded, but scripts and the confirm-facts
+    writer can add keys the UI never knew about. When both sides are JSON
+    objects, incoming values win and existing-only keys are retained. Anything
+    that is not an object keeps the incoming value so legacy text and explicit
+    clears still replace.
+    """
+    try:
+        existing = json.loads(existing_raw)
+    except (json.JSONDecodeError, TypeError):
+        existing = None
+    try:
+        incoming = json.loads(incoming_raw)
+    except (json.JSONDecodeError, TypeError):
+        incoming = None
+    if not isinstance(existing, dict) or not isinstance(incoming, dict):
+        return incoming_raw
+    merged = {**existing, **incoming}
+    return json.dumps(merged, ensure_ascii=False)
+
+
 @app.put("/api/profile")
 def put_profile(data: ProfileInput):
     with database() as db:
+        row = db.execute("SELECT content FROM profile WHERE id=1").fetchone()
+        content = merge_profile_content_preserving_keys(
+            row["content"] if row else "", data.content
+        )
         db.execute(
             "UPDATE profile SET content=?, avoid=? WHERE id=1",
-            (data.content, data.avoid),
+            (content, data.avoid),
         )
     return {"ok": True}
 

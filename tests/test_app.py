@@ -2113,6 +2113,61 @@ def test_confirmed_facts_endpoint_saves_only_explicit_answers(client):
     assert entry["session_id"] == "sess-save"
 
 
+def test_put_profile_preserves_omitted_unknown_and_reserved_keys(client):
+    c, _backend = client
+    c.put("/api/profile", json={"content": json.dumps({
+        "name": "A",
+        "food": "和食",
+        "confirmed_facts": {"q1": {"value": "x"}},
+        "schema_version": 2,
+    }, ensure_ascii=False)})
+
+    c.put("/api/profile", json={"content": json.dumps({"name": "B"}, ensure_ascii=False)})
+
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["name"] == "B"
+    assert stored["food"] == "和食"
+    assert stored["schema_version"] == 2
+    assert stored["confirmed_facts"] == {"q1": {"value": "x"}}
+
+
+def test_put_profile_incoming_value_and_type_win(client):
+    c, _backend = client
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["読書", "カフェ巡り"]}, ensure_ascii=False)})
+
+    c.put("/api/profile", json={"content": json.dumps({"hobbies": ["映画"]}, ensure_ascii=False)})
+
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["hobbies"] == ["映画"]
+
+
+def test_put_profile_plain_text_still_replaces(client):
+    c, _backend = client
+    c.put("/api/profile", json={"content": json.dumps({"food": "和食"}, ensure_ascii=False)})
+
+    c.put("/api/profile", json={"content": "不明", "avoid": ""})
+
+    assert c.get("/api/profile").json()["content"] == "不明"
+
+
+def test_put_profile_keeps_confirmed_facts_after_ui_style_save(client):
+    c, _backend = client
+    c.post("/api/profile/confirmed-facts", json={
+        "answers": [{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+    })
+    facts_before = json.loads(c.get("/api/profile").json()["content"])["confirmed_facts"]
+
+    c.put("/api/profile", json={"content": json.dumps({
+        "hobbies": ["映画鑑賞"],
+        "favorite_places": "落ち着いたカフェ",
+    }, ensure_ascii=False)})
+
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["hobbies"] == ["映画鑑賞"]
+    assert stored["confirmed_facts"] == facts_before
+    assert stored["schema_version"] == 2
+
+
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
     _, backend = client
     context = {
@@ -3524,6 +3579,46 @@ def test_temporary_user_answer_resolves_only_its_matching_personal_fact_question
         user_answers=[{"question": "映画はお好きですか？", "answer": "映画が好きで洋画をよく観ます"}],
     ))
     assert backend.missing_personal_fact_question(answered) is None
+    assert c.get("/api/profile").json()["content"] == ""
+
+
+def test_confirmed_fact_suppresses_reasking_the_same_question(client):
+    c, backend = client
+    mid = add_match(c, "架空ほなみ")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    asked = backend.missing_personal_fact_question(context)
+    assert asked is not None
+    backend.persist_confirmed_facts(backend.build_ephemeral_confirmations(
+        [{"question": asked.question, "answer": "映画が好きで洋画をよく観ます", "confirmed": True}],
+        match_id=mid, session_id="sess-b1",
+    ))
+
+    reloaded = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(reloaded) is None
+
+
+def test_confirmed_fact_helper_matches_by_id_or_slot_only(client):
+    _c, backend = client
+    asked = backend.personal_fact_question("映画", "好きな映画は何ですか？").question
+    by_id = {"confirmed_facts": {backend._normalize_clarification_question_key(asked): {}}}
+    by_slot = {"confirmed_facts": {"some-other-id": {
+        "requested_slot": backend._optional_user_question_scope_key(asked),
+    }}}
+    assert backend._confirmed_fact_covers_question(by_id, "映画", "好きな映画は何ですか？") is True
+    assert backend._confirmed_fact_covers_question(by_slot, "映画", "好きな映画は何ですか？") is True
+    assert backend._confirmed_fact_covers_question({}, "映画", "好きな映画は何ですか？") is False
+    assert backend._confirmed_fact_covers_question(by_id, "映画", "") is False
+
+
+def test_confirmed_fact_does_not_touch_profile_without_explicit_save(client):
+    c, backend = client
+    mid = add_match(c, "架空ほなみ")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
+    backend.build_context(backend.GenerateInput(
+        mode="reply", match_id=mid, response_version=2,
+        user_answers=[{"question": "映画はお好きですか？", "answer": "映画が好きです"}],
+    ))
     assert c.get("/api/profile").json()["content"] == ""
 
 
