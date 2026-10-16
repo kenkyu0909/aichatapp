@@ -840,15 +840,28 @@ def _confirmed_current_student_status(facts: dict, context: dict | None = None) 
     return None
 
 
+def _is_user_relationship_status_question(text: str) -> bool:
+    """Recognize common direct questions about whether the user has a partner/friends."""
+    question = re.sub(r"\s+", "", text.strip())
+    return bool(re.match(
+        r"^(?:(?:今|現在|最近)?(?:付き合って(?:いる|る)|交際して(?:いる|る))人|"
+        r"恋人|彼氏|彼女|パートナー|友達|友人)(?:って|とは|は|が)?"
+        r"(?:いますか|いるの|いるんですか|いるん|いる|います|ある)?[?？]?$",
+        question,
+    ))
+
+
 def _topic_for_personal_question(text: str) -> str | None:
     # Do not mistake a question about a third party or a general service for
     # a request for the user's own information merely because it mentions a
     # personal topic.
-    if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", text):
-        return None
     third_party_subject = re.sub(
         r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)?\s*", "", text
     )
+    if _is_user_relationship_status_question(third_party_subject):
+        return "本人情報"
+    if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", text):
+        return None
     hypothetical_pet = re.search(r"(?:ペット|犬|猫).{0,10}飼う(?:なら|としたら|場合)", text)
     if hypothetical_pet:
         trailing_questions = re.split(r"(?<=[?？])", text)
@@ -4448,9 +4461,6 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
                 # habits. Permit a matching explicit rate when both the action
                 # and rate are present in trusted evidence.
                 sentence_start = max(text.rfind(mark, 0, match.start()) for mark in ("!", "！", "?", "？", "\n")) + 1
-                claim_context = text[sentence_start:match.end()]
-                if re.search(r"映画館|映画|洋画|邦画|読書|本|カフェ|喫茶店|旅行|旅|買い物|買物|食事|カレー|パン|外出|運動|料理", claim_context):
-                    continue
                 line_start = sentence_start
                 line_end = min(
                     (position for mark in ("!", "！", "?", "？", "\n")
@@ -4458,9 +4468,37 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
                     default=len(text),
                 )
                 clause = text[line_start:line_end].strip()
-                topics = re.findall(r"カフェ|喫茶店|映画館|映画|旅行|旅|運動|ランニング|ジョギング|ジム|買い物|買物|読書|本|料理|自炊|横浜|川崎|東京|大阪|札幌|名古屋|福岡|店", clause)
+                if re.search(r"映画|洋画|邦画", clause):
+                    # Movie-specific assertion checks below preserve the more
+                    # useful topic error while still rejecting unsupported
+                    # viewing frequency and genre claims.
+                    continue
+                topics = re.findall(r"カフェ|喫茶店|映画館|映画|旅行|旅|運動|ランニング|ジョギング|ジム|買い物|買物|読書|本|料理|自炊|食事|外食|食べ物|パン|カレー|朝食|昼食|夕食|外出|横浜|川崎|東京|大阪|札幌|名古屋|福岡|店", clause)
+                action_patterns = {
+                    "visit": r"行|通|出かけ|訪れ",
+                    "consume": r"食べ|飲み|食し",
+                    "purchase": r"買|購入",
+                    "read": r"読",
+                    "watch": r"観|見",
+                    "exercise": r"走|運動|泳|鍛え|トレーニング",
+                    "cook": r"料理|自炊|作",
+                    "use": r"使",
+                }
+                candidate_actions = {
+                    action for action, pattern in action_patterns.items()
+                    if re.search(pattern, clause)
+                }
                 if topics and any(
                     topic in source
+                    and topic in re.findall(
+                        r"カフェ|喫茶店|映画館|映画|旅行|旅|運動|ランニング|ジョギング|ジム|買い物|買物|読書|本|料理|自炊|食事|外食|食べ物|パン|カレー|朝食|昼食|夕食|外出|横浜|川崎|東京|大阪|札幌|名古屋|福岡|店",
+                        source,
+                    )
+                    and candidate_actions
+                    and candidate_actions.issubset({
+                        action for action, pattern in action_patterns.items()
+                        if re.search(pattern, source)
+                    })
                     and _frequency_claim_is_supported(clause, source)
                     for source in sources
                     for topic in topics
@@ -6358,6 +6396,8 @@ def _is_unclassified_direct_question(text: str) -> bool:
 def _is_unclassified_question_about_user(text: str) -> bool:
     """Limit clarification to unclassified questions that ask about the user."""
     question = re.sub(r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)??\s*", "", text.strip())
+    if _is_user_relationship_status_question(question):
+        return True
     third_party = (
         r"友達|友人|彼氏|彼女|彼|元彼|元彼女|夫|妻|旦那|奥さん|ご主人|子ども|子供|家族|親|父|母|兄|姉|弟|妹|"
         r"同僚|上司|先輩|後輩|先生|教師|知り合い|彼の友達"
