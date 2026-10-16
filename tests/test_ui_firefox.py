@@ -1871,6 +1871,125 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
     assert errors["runtime"] == []
     assert errors["console"] == []
 
+
+def test_firefox_profile_edit_preserves_extension_fields_and_array_types(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    profile = {
+        "name": "架空の本人",
+        "age": "28",
+        "hobbies": ["読書", "カフェ巡り"],
+        "food": {"favorite": "カレー", "avoid": ["辛すぎる料理"]},
+        "availability": ["日曜昼"],
+        "confirmed_facts": [{"value": "ミステリーが好き", "source": "user"}],
+    }
+    with urllib.request.urlopen(
+        urllib.request.Request(
+            local_app.url + "api/profile",
+            data=json.dumps({"content": json.dumps(profile, ensure_ascii=False), "avoid": "急な誘い"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="PUT",
+        ),
+        timeout=3,
+    ):
+        pass
+
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    profile_dialog = modal(driver)
+    profile_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
+    WebDriverWait(driver, 5).until(lambda browser: profile_dialog.get_attribute("open") is None)
+    with urllib.request.urlopen(local_app.url + "api/profile", timeout=3) as response:
+        saved = json.load(response)
+    assert json.loads(saved["content"]) == profile
+    errors = record_artifact("firefox-profile-extension-fields-roundtrip", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_message_drafts_are_isolated_per_contact(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空A")
+    driver.find_element(By.ID, "message-input").send_keys("Aだけの下書き")
+    add_fictional_contact(driver, "架空B")
+    assert driver.find_element(By.ID, "message-input").get_attribute("value") == ""
+    driver.find_element(By.ID, "message-input").send_keys("Bだけの下書き")
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空A")
+    assert driver.find_element(By.ID, "message-input").get_attribute("value") == "Aだけの下書き"
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空B")
+    assert driver.find_element(By.ID, "message-input").get_attribute("value") == "Bだけの下書き"
+    errors = record_artifact("firefox-contact-scoped-drafts", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_newer_generation_wins_across_modes_for_same_contact(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のひなた")
+    driver.find_element(By.ID, "message-input").send_keys("昨日はカフェに行きました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.execute_script("""
+      window.__heldModes = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body);
+          return new Promise(resolve => window.__heldModes.push(() => resolve(new Response(JSON.stringify({
+            recommended:{label:payload.mode,text:payload.mode === 'reply' ? '古い返信候補！' : '新しい追いメッセージ候補！'},
+            alternatives:[],reason:'競合テスト',demo:false
+          }),{status:200,headers:{'Content-Type':'application/json'}}))));
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__heldModes.length") == 1)
+    driver.find_element(By.ID, "follow-up").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__heldModes.length") == 2)
+    driver.execute_script("window.__heldModes[1]()")
+    WebDriverWait(driver, 5).until(lambda browser: "新しい追いメッセージ候補！" in browser.find_element(By.ID, "suggestion-list").text)
+    driver.execute_script("window.__heldModes[0]()")
+    time.sleep(0.3)
+    assert "新しい追いメッセージ候補！" in driver.find_element(By.ID, "suggestion-list").text
+    assert "古い返信候補！" not in driver.find_element(By.ID, "suggestion-list").text
+    errors = record_artifact("firefox-generation-latest-request-wins", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_message_change_invalidates_generation_for_old_history(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のすみれ")
+    driver.find_element(By.ID, "message-input").send_keys("最初の会話内容")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.execute_script("""
+      window.__resolveOldHistoryGeneration = null;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => String(url) === '/api/generate'
+        ? new Promise(resolve => window.__resolveOldHistoryGeneration = () => resolve(new Response(JSON.stringify({
+            recommended:{label:'古い履歴の候補',text:'古い会話に基づく候補！'},alternatives:[],reason:'履歴競合',demo:false
+          }),{status:200,headers:{'Content-Type':'application/json'}})))
+        : originalFetch(url, options);
+    """)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__resolveOldHistoryGeneration !== null"))
+    driver.find_element(By.ID, "message-input").send_keys("その後に届いた新しい発言")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 2)
+    driver.execute_script("window.__resolveOldHistoryGeneration()")
+    time.sleep(0.3)
+    assert "その後に届いた新しい発言" in driver.find_element(By.ID, "messages").text
+    assert not driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")
+    errors = record_artifact("firefox-generation-invalidated-by-history-change", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
     driver.refresh()
     WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のなな")
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
