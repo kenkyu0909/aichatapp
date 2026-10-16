@@ -1072,5 +1072,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T415 | 明示確認のプロフィール昇格（D03永続化サブステップ） | pytest。`confirmed_facts` の保存・既存キー保持・重複排除・非永続 | FIXED | `GenerateInput` に任意 `clarification_session_id` と任意 `confirmed` を追加（validatorは許可キーを question/answer/confirmed に限定）。`build_ephemeral_confirmations` は state を confirmed/ephemeral に分け session_id を保持。`persist_confirmed_facts` は confirmed のみを profile content の `confirmed_facts` へ upsert（`schema_version=2`、既存キー保持、同一 question_id は上書き）。未確認回答はプロフィールに触れない。ブラウザは session_id を送るが resume 回答は未確認のまま（一時回答のUI契約を維持、明示保存UIは製品判断待ち）。focused 7 passed。commit `b6983b4`。 |
 
-最新ID行: 415。T407〜T415をFIXEDとして追加。Actions: Push [38929535963](https://github.com/kenkyu0909/aichatapp/actions/runs/38929535963) / PR [38929543322](https://github.com/kenkyu0909/aichatapp/actions/runs/38929543322) は同一SHA `b6983b4` でsuccess（CI 1820 passed / 1 warning in ~236s）。
+| T416 | 確認回答の明示保存ボタン（D03） | pytest+Firefox。保存エンドポイントと自動非保存 | FIXED | `POST /api/profile/confirmed-facts` と `renderUserInfoQuestions` の「回答をプロフィールに保存」ボタンを追加。エンドポイントは回答を confirmed として `confirmed_facts` のみへupsert（他キー保持）。resume/skip は未確認のまま（一時回答契約を維持、roundtripテストでプロフィール不変を維持）。requiredパネルの文言を更新（optionalパネルは不変）。検証エージェント#6はPASS・回帰なし。focused 6、全pytest 1822 passed。commit `1fb32b6`。 |
+
+最新ID行: 416。T407〜T416をFIXEDとして追加。Actions: Push [38971266465](https://github.com/kenkyu0909/aichatapp/actions/runs/38971266465) / PR [38971272786](https://github.com/kenkyu0909/aichatapp/actions/runs/38971272786) は同一SHA `1fb32b6` でsuccess（CI 1822 passed）。
 

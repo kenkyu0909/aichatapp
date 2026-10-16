@@ -1741,3 +1741,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 要確認: 確認質問への回答を「明示確認」としてプロフィールへ保存してよいか（保存するならUI文言を変更）。それとも別途「プロフィールに保存」ボタンを設けるか。ユーザー判断を仰ぐ。
 - 次: D04（プロフィール保存時の未知キー消失の防止）と、確認済み事実の再質問抑止への接続。検証エージェントで次サブステップを確定する。
 
+### 2026-10-17 03:20 JST 明示保存ボタン（D03）と次サブステップ計画
+
+- ユーザー判断は「専用の保存ボタンを追加」。`POST /api/profile/confirmed-facts`（`ConfirmedFactsInput`、回答を confirmed 化して `persist_confirmed_facts`）と `renderUserInfoQuestions` の「回答をプロフィールに保存」ボタン（id=`save-user-info`）を追加。resume/skip は未確認のまま。requiredパネル文言を「保存したい回答だけ『回答をプロフィールに保存』を押してください」に更新（optionalパネルは不変）。`app.js` の `mergeUserInfoAnswers` は `confirmed` を保持。
+- 検証: focused 6 passed、全pytest **1822 passed in 413.29s**（Firefox UI含む）。`ast.parse(app.py)`・`node --check app.js` 成功。Gemini実通信0回。
+- Actions: Push [38971266465](https://github.com/kenkyu0909/aichatapp/actions/runs/38971266465) / PR [38971272786](https://github.com/kenkyu0909/aichatapp/actions/runs/38971272786) は同一SHA `1fb32b6` でsuccess。
+- 検証エージェント#6: PASS・回帰なし。エンドポイントは `confirmed_facts`/`schema_version` のみ書込み、他キー保持。resume の非永続を確認。D04はUI側（`app.js:622` spread）で既に保持済（`test_firefox_profile_edit_preserves_extension_fields_and_array_types`）だが、`put_profile`（`app.py:4907`）は素の上書きのためスクリプト・競合で欠落し得る（LOW）。
+- 計画エージェント: (A) `put_profile` に「両側dictなら `{**existing, **incoming}` でマージ」するread-modify-writeを追加（非dictなら置換維持、`avoid`は別列）。(B) `_topic_is_verified`（`app.py:1490`）に `confirmed_facts` 照合（`_normalize_clarification_question_key` と `_optional_user_question_scope_key`）を追加し、確認済み事実の再質問を抑止。順序は A→B、DBマイグレーション不要。
+- 次: A→Bを実装し、検証エージェントで確認。
+

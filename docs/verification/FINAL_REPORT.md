@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 03:20 JST 明示保存ボタン（D03）と次サブステップ計画
+
+- ユーザー判断により「専用の保存ボタン」を実装。`POST /api/profile/confirmed-facts` と「回答をプロフィールに保存」ボタンを追加し、押下時のみ `confirmed_facts` へ保存。resume/skip は未確認のまま（一時回答契約を維持）。
+- 検証: focused 6 passed、全pytest **1822 passed in 413.29s**（Firefox UI含む）。`ast.parse(app.py)`・`node --check app.js` 成功。Gemini実通信0回。検証エージェント#6はPASS・回帰なし。
+- Actions: Push [38971266465](https://github.com/kenkyu0909/aichatapp/actions/runs/38971266465) とPR [38971272786](https://github.com/kenkyu0909/aichatapp/actions/runs/38971272786) が同一SHA `1fb32b6` でsuccess。
+- 次: (A) `put_profile` のマージ化（未知キー保持）、(B) `_topic_is_verified` の `confirmed_facts` 照合（再質問抑止）。計画エージェントのfile:line計画に沿って実装。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。
