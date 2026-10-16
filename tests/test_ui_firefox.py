@@ -703,12 +703,17 @@ def test_firefox_optional_user_question_keeps_candidates_and_only_regenerates(lo
         if (String(url) === '/api/generate') {
           const payload = JSON.parse(options.body || '{}');
           window.__generateResponses.push(payload);
+          if (!window.__firstMatchId) window.__firstMatchId = payload.match_id;
           if (payload.user_answers?.length && window.__failNextAnswer) {
             window.__failNextAnswer = false;
             return new Response(JSON.stringify({detail:'一時的な再生成失敗'}), {status:503, headers:{'Content-Type':'application/json'}});
           }
           const callNumber = window.__generateResponses.length;
-          const optionalQuestion = payload.user_answers?.length ? {
+          const optionalQuestion = payload.match_id !== window.__firstMatchId ? {
+            question:'普段どんなジャンルの本を読みますか？',
+            scope_key:'reading.genre',
+            purpose:'本人の読書傾向に触れる返信を作るため'
+          } : payload.user_answers?.length ? {
             question:'このところ読んだ作品で印象に残ったものはありますか？',
             scope_key:'reading.recent',
             purpose:'具体的な本の話へ広げるため'
@@ -784,6 +789,26 @@ def test_firefox_optional_user_question_keeps_candidates_and_only_regenerates(lo
     driver.find_element(By.ID, "generate").click()
     WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 6)
     assert len(driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1
+    assert "好きな作家はいますか？" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
+    assert driver.execute_script("return window.__profileWrites") == []
+    assert driver.execute_script("return window.__messageWrites") == []
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+
+    add_fictional_contact(driver, "架空のみお")
+    driver.find_element(By.ID, "message-input").send_keys("最近小説を読みました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    driver.execute_script("window.__messageWrites = []")
+    next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のみお" in item.text).click()
+    WebDriverWait(driver, 5).until(lambda browser: "架空のみお" in browser.find_element(By.ID, "current-name").text)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 7)
+    assert "普段どんなジャンルの本を読みますか？" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のあおい" in item.text).click()
+    WebDriverWait(driver, 5).until(lambda browser: "架空のあおい" in browser.find_element(By.ID, "current-name").text)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 8)
     assert "好きな作家はいますか？" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
     assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
     assert driver.execute_script("return window.__profileWrites") == []

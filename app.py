@@ -683,6 +683,163 @@ def _past_activity_scope(text: str) -> tuple[tuple[str, ...], str] | None:
     return normalized_periods, intent
 
 
+CURRENT_STUDENT_STATUS_QUESTION = re.compile(
+    r"^(?:今|いま|現在)(?:は)?(?:大学院生|専門学校生|専門学生|大学生|高校生|中学生|学生)"
+    r"(?:ですか|なんですか|なのですか|なの|なん|でしょうか)?[?？]$"
+    r"|^(?:大学院生|専門学校生|専門学生|大学生|高校生|中学生|学生)"
+    r"(?:ですか|なんですか|なのですか|なの|なん|でしょうか)[?？]$"
+)
+CURRENT_STUDENT_STATUS_QUESTION_PROMPT = re.compile(
+    r"^(?:現在|今)(?:は)?(?:学生かどうか|学生か)教えてください[。！!]?$"
+)
+CURRENT_STUDENT_STATUS_KEYS = (
+    "student_status", "current_student_status", "enrollment_status",
+    "在学状況", "現在の在学状況", "現在の学生状況",
+)
+STUDENT_STATUS_LABELS = ("大学院生", "専門学校生", "専門学生", "大学生", "高校生", "中学生", "学生")
+
+
+def _is_current_student_status_question(text: str) -> bool:
+    normalized = re.sub(r"\s+", "", text)
+    return bool(
+        CURRENT_STUDENT_STATUS_QUESTION.fullmatch(normalized)
+        or CURRENT_STUDENT_STATUS_QUESTION_PROMPT.fullmatch(normalized)
+    )
+
+
+def _student_status_label(value: str) -> str | None:
+    normalized = re.sub(r"\s+", "", str(value))
+    if not normalized:
+        return None
+    if re.fullmatch(
+        r"(?:はい|うん|ええ)?(?:私は|自分は|僕は|俺は)?"
+        r"(?:(?:今|いま|現在)(?:は)?)?(?:もう|まだ)?"
+        r"(?:学生|大学生|大学院生|専門学生|専門学校生|高校生|中学生)"
+        r"(?:ではない|じゃない|ではありません|じゃありません|でない)(?:です)?[!！?？。]*",
+        normalized,
+    ):
+        return "not_student"
+    normalized = re.sub(
+        r"^(?:(?:はい|うん|ええ)?(?:私は|自分は|僕は|俺は)?(?:現在|今|いま)(?:は)?|"
+        r"(?:はい|うん|ええ)?(?:私は|自分は|僕は|俺は)?|実は|ちなみに)",
+        "",
+        normalized,
+    )
+    for label in STUDENT_STATUS_LABELS:
+        if re.fullmatch(
+            re.escape(label)
+            + r"(?:です|だよ|だ|でもあります|でもある|なんです|なのです)?[!！?？。]*",
+            normalized,
+        ):
+            return label
+    return None
+
+
+def _student_status_labels_in_text(value: str) -> list[str]:
+    labels: list[str] = []
+    for clause in re.split(r"[、,!?！？。\n]+", str(value)):
+        label = _student_status_label(clause.strip())
+        if label:
+            labels.append(label)
+    return labels
+
+
+def _student_status_answer_is_supported(text: str, expected_status: str) -> bool:
+    """Validate a direct status answer without licensing extra biography claims."""
+    clauses = [
+        clause.strip()
+        for clause in re.split(r"(?<=[!?！？。])|\n+", str(text))
+        if clause.strip()
+    ]
+    clauses = [
+        fragment.strip()
+        for clause in clauses
+        for fragment in re.split(r"[、,]", clause)
+        if fragment.strip()
+    ]
+    status_clauses = [
+        (clause, _student_status_label(clause))
+        for clause in clauses
+        if _student_status_label(clause) is not None
+    ]
+    if not status_clauses:
+        return False
+    for _, status in status_clauses:
+        if not (
+            status == expected_status
+            or (status == "学生" and expected_status in STUDENT_STATUS_LABELS)
+        ):
+            return False
+
+    neutral_acknowledgments = {
+        "はい", "うん", "ええ", "そうなんですね", "そうなんだ", "そうですね", "なるほど", "たしかに",
+        "確かに", "わかります", "分かります", "えーそうなんですね",
+        "へーそうなんですね", "そういうことなんですね",
+    }
+    for clause in clauses:
+        if _student_status_label(clause) is not None:
+            continue
+        compact = re.sub(r"[\s!！?？。☺😊😄😂🥲😭✨🌸❤️💕👍☕📚]", "", clause)
+        if compact in neutral_acknowledgments:
+            continue
+        if re.search(r"[?？]$|(?:ですか|ますか|ませんか|でしょうか)$", clause):
+            continue
+        # This direct-question flow only authorizes the status itself. Any
+        # other declarative clause is withheld unless it is a neutral
+        # acknowledgment; in particular, implied first-person claims such as
+        # campus attendance, major, or part-time work cannot ride along.
+        return False
+    return True
+
+
+def _current_student_status_values(facts: dict, context: dict | None = None) -> list[str]:
+    """Return explicit current-status evidence, excluding institution names alone."""
+    values: list[str] = []
+    for key in CURRENT_STUDENT_STATUS_KEYS:
+        value = facts.get(key)
+        if isinstance(value, bool):
+            value = "学生" if value else "学生ではない"
+        if value and _student_status_labels_in_text(str(value)):
+            values.append(str(value))
+    # Legacy occupation data can expressly state a current student role.  A
+    # school or university name by itself is never enough to infer enrollment.
+    for key in ("occupation", "job", "職業", "仕事", "school", "学校"):
+        value = facts.get(key)
+        if value and _student_status_labels_in_text(str(value)):
+            values.append(str(value))
+    if context:
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_question = str(answer.get("question", ""))
+            answer_text = str(answer.get("answer", "")).strip()
+            if (
+                answer_text
+                and _is_current_student_status_question(answer_question)
+                and _student_status_labels_in_text(answer_text)
+            ):
+                values.append(answer_text)
+    return values
+
+
+def _confirmed_current_student_status(facts: dict, context: dict | None = None) -> str | None:
+    labels = {
+        label
+        for value in _current_student_status_values(facts, context)
+        for label in _student_status_labels_in_text(value)
+    }
+    specific_student_labels = labels.intersection(set(STUDENT_STATUS_LABELS) - {"学生"})
+    if "not_student" in labels and ("学生" in labels or specific_student_labels):
+        return None
+    if len(specific_student_labels) > 1:
+        return None
+    if specific_student_labels:
+        return next(iter(specific_student_labels))
+    if "学生" in labels:
+        return "学生"
+    if "not_student" in labels:
+        return "not_student"
+    return None
+
+
 def _topic_for_personal_question(text: str) -> str | None:
     # Do not mistake a question about a third party or a general service for
     # a request for the user's own information merely because it mentions a
@@ -743,6 +900,8 @@ def _topic_for_personal_question(text: str) -> str | None:
         third_party_subject,
     ):
         return None
+    if _is_current_student_status_question(text):
+        return "本人情報"
     if (
         re.match(
             r"^[^?？\n]{0,16}(?:駅|水族館|美術館|博物館|公園|施設)(?:って|は|が)?"
@@ -1245,6 +1404,8 @@ def _is_generic_occupation_label(value: str) -> bool:
 
 
 def _verified_job_or_school_values(facts: dict, question: str) -> list[str]:
+    if _is_current_student_status_question(question):
+        return _current_student_status_values(facts)
     asks_school = bool(re.search(r"学校|大学|学生|学んで|専攻", question))
     asks_study_subject = bool(re.search(r"何を学|何を勉強|何を専攻|専攻", question))
     asks_industry = bool(re.search(r"業界|業種|分野.{0,6}(?:お仕事|仕事)", question))
@@ -1509,6 +1670,8 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             for answer in context.get("ephemeral_user_answers", [])
         )
     if topic == "本人情報":
+        if _is_current_student_status_question(question_text):
+            return _confirmed_current_student_status(facts, context) is not None
         requested_activity_scope = _same_day_activity_scope(question_text)
         if requested_activity_scope:
             return any(
@@ -1749,6 +1912,8 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
         return None
     if topic == "本人情報":
+        if _is_current_student_status_question(partner_messages[-1]):
+            return personal_fact_question(topic, partner_messages[-1])
         if SAME_DAY_ACTIVITY_QUESTION.search(partner_messages[-1]):
             return personal_fact_question(topic, partner_messages[-1])
         if FUTURE_ACTIVITY_QUESTION.search(partner_messages[-1]):
@@ -1811,6 +1976,8 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "相手に伝えてよい年齢を教えてください"
     elif topic == "職業":
         question = "相手に伝えてよい仕事や学校の情報を教えてください"
+    elif topic == "本人情報" and _is_current_student_status_question(source_question):
+        question = "現在学生かどうか教えてください"
     elif topic == "読書" and re.search(r"最近|この前|昨日|先週|何を読|読んだ本", source_question):
         question = "最近読んだ本があれば作品名や内容を教えてください"
     elif topic == "読書" and re.search(r"ジャンル|何系|どんな本", source_question):
@@ -3351,10 +3518,31 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
 
         return any(supports_claim(evidence, topic_is_confirmed) for evidence, topic_is_confirmed in evidence_sources)
     if topic == "職業":
-        values = [str(facts.get(key)) for key in ("occupation", "job", "職業", "仕事", "school", "学校", "education", "学歴", "専攻") if facts.get(key)]
+        latest_partner_question = next(
+            (
+                str(message.get("body", ""))
+                for message in reversed(context.get("history", []))
+                if message.get("role") == "them"
+            ),
+            "",
+        )
+        if _is_current_student_status_question(latest_partner_question):
+            expected_status = _confirmed_current_student_status(facts, context)
+            return bool(
+                expected_status is not None
+                and _student_status_answer_is_supported(text, expected_status)
+            )
+        values = [
+            str(facts.get(key))
+            for key in (
+                "occupation", "job", "職業", "仕事", "school", "学校", "education", "学歴", "専攻",
+                *CURRENT_STUDENT_STATUS_KEYS,
+            )
+            if facts.get(key)
+        ]
         values.extend(
             answer.get("answer", "") for answer in context.get("ephemeral_user_answers", [])
-            if answer.get("answer", "").strip() and re.search(r"仕事|職業|働いて|勤務|学校|大学", answer.get("question", ""))
+            if answer.get("answer", "").strip() and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生", answer.get("question", ""))
         )
         tenure_patterns = (
             r"(?:勤続|職歴|実務|勤務|業務)(?:経験)?\s*(?:年数)?\s*\d+年(?:目|間)?(?:以上|以下|未満|超|前後|ほど|くらい|ぐらい|程度|ちょっと|強|弱)?",
@@ -5460,6 +5648,14 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         # confirmation validator below only accepts ephemeral user answers.
         # Match concise answers to the exact profile value and keep additional
         # claims (such as unsupported tenure) fail-closed.
+        if _is_current_student_status_question(question):
+            expected_status = _confirmed_current_student_status(
+                context.get("my_profile", {}).get("facts", {}), context
+            )
+            return bool(
+                expected_status is not None
+                and _student_status_answer_is_supported(candidate.text, expected_status)
+            )
         if not re.search(r"何年|何年間|勤続|職歴|経験年数|会社名|どこの会社|勤務先|会社は", question):
             facts = context.get("my_profile", {}).get("facts", {})
             known_occupations = _verified_job_or_school_values(facts, question)
@@ -6514,6 +6710,7 @@ def generate(data: GenerateInput):
     fact_repair_used = False
     invite_repair_used = False
     candidate_repair_used = False
+    partial_candidate_repair_pending = False
     safe_candidate_fallback: SuggestionsV2 | None = None
     safe_candidate_fallback_notice = ""
     safe_candidate_fallback_provider: dict[str, str] | None = None
@@ -6670,13 +6867,11 @@ def generate(data: GenerateInput):
                         if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
                             parsed = safe_candidate_fallback.model_copy(deep=True)
                             filtered_result = filter_safe_candidates(parsed, data.count, context)
+                            partial_candidate_repair_pending = False
                             current_candidate_source = safe_candidate_fallback_provider or current_candidate_source
                             current_candidate_sources = safe_candidate_fallback_sources or current_candidate_sources
                             result_candidate_sources = current_candidate_sources.copy()
-                            candidate_notice = " ".join(filter(None, [
-                                safe_candidate_fallback_notice,
-                                "再生成で安全な候補を得られなかったため、先に確認済みの安全な候補を表示します。",
-                            ]))
+                            candidate_notice = "再生成で安全な候補を得られなかったため、先に確認済みの安全な候補を表示します。"
                         if filtered_result.get("generation_blocked"):
                             partner_messages = [
                                 message.get("body", "")
@@ -6762,7 +6957,44 @@ def generate(data: GenerateInput):
                                     *safe_candidates[:invitation_index],
                                     *safe_candidates[invitation_index + 1:],
                                 ]
-                        if had_safe_candidate_fallback and len(safe_candidates) < data.count:
+                        if partial_candidate_repair_pending and safe_candidate_fallback is not None:
+                            previous_safe_candidates = [
+                                safe_candidate_fallback.recommended,
+                                *safe_candidate_fallback.alternatives,
+                            ]
+                            safe_candidates = merge_safe_candidate_sets(
+                                previous_safe_candidates,
+                                [Candidate.model_validate(item) for item in safe_candidates],
+                                data.count,
+                            )
+                            result_candidate_sources = {
+                                re.sub(r"\s+", "", candidate.text): (
+                                    safe_candidate_fallback_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or current_candidate_sources.get(re.sub(r"\s+", "", candidate.text))
+                                    or current_candidate_source
+                                )
+                                for candidate in safe_candidates
+                            }
+                            remove_shortage = re.compile(
+                                r"安全確認後に表示できる候補は\d+案です（指定は\d+案）。不足分を不自然な候補で補っていません。?"
+                            )
+                            filtered_candidate_notice = " ".join(filter(None, [
+                                remove_shortage.sub("", safe_candidate_fallback_notice).strip(),
+                                remove_shortage.sub("", filtered_candidate_notice).strip(),
+                            ]))
+                            if len(safe_candidates) < data.count:
+                                filtered_candidate_notice = " ".join(filter(None, [
+                                    filtered_candidate_notice,
+                                    f"安全確認後に表示できる候補は{len(safe_candidates)}案です（指定は{data.count}案）。不足分を不自然な候補で補っていません。",
+                                    "安全な候補だけを保持して不足を通知しています。",
+                                ]))
+                            else:
+                                filtered_candidate_notice = " ".join(filter(None, [
+                                    filtered_candidate_notice,
+                                    "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+                                ]))
+                            partial_candidate_repair_pending = False
+                        elif had_safe_candidate_fallback and len(safe_candidates) < data.count:
                             fallback_candidates = [
                                 safe_candidate_fallback.recommended,
                                 *safe_candidate_fallback.alternatives,
@@ -6814,6 +7046,27 @@ def generate(data: GenerateInput):
                             safe_candidate_fallback_notice = candidate_notice
                             safe_candidate_fallback_provider = current_candidate_source
                             safe_candidate_fallback_sources = current_candidate_sources
+                        if (
+                            data.response_version == 2
+                            and len(safe_candidates) < data.count
+                            and not candidate_repair_used
+                        ):
+                            candidate_repair_used = True
+                            partial_candidate_repair_pending = True
+                            missing_count = data.count - len(safe_candidates)
+                            rejected_reasons = sorted({
+                                reason
+                                for item in filtered_result.get("candidate_rejections", [])
+                                for reason in item.get("reasons", [])
+                            })
+                            system_instruction += (
+                                f"\n【不足分の候補だけを補う1回限りの再生成】前回の生成では{data.count}案中{len(safe_candidates)}案だけが安全確認を通過しました。"
+                                f"安全な候補を作り直したり繰り返したりせず、不足している{missing_count}案だけを新しく生成してください。"
+                                "recommendedを1案、alternativesを不足数から1を引いた案数にしてください。"
+                                "各候補は通常どおりすべての事実・拒否・文体・重複検査を受けます。安全な候補が作れない場合は候補数不足のまま返してください。"
+                                + (" 除外理由: " + "、".join(rejected_reasons) + "。" if rejected_reasons else "")
+                            )
+                            continue
                         if (
                             data.response_version == 2
                             and data.count == 3
@@ -7167,6 +7420,68 @@ def generate(data: GenerateInput):
             raise last_rate_limit
         raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
+        if isinstance(exc, ProviderAttemptLimitError):
+            failure_message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
+            failure_code = "request_attempt_limit"
+        elif _is_rate_limit_error(exc):
+            failure_message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
+            failure_code = "all_models_rate_limited"
+        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("401", "403", "api_key")):
+            failure_message = "Gemini APIキーまたはモデルの利用権限を確認してください。"
+            failure_code = "api_permission_denied"
+        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("404", "not found")):
+            failure_message = "モデルが見つからないか、利用できません。APIモデルの利用状況を確認してください。"
+            failure_code = "model_unavailable"
+        elif isinstance(exc, (ValueError, json.JSONDecodeError)):
+            failure_message = "AIの応答形式が不正でした。再生成してください。"
+            failure_code = "invalid_response"
+        else:
+            failure_message = "Geminiとの通信に失敗しました。接続と設定を確認してください。"
+            failure_code = "gemini_connection_error"
+
+        if partial_candidate_repair_pending and safe_candidate_fallback is not None:
+            safe_fallback_result = filter_safe_candidates(
+                safe_candidate_fallback,
+                data.count,
+                context,
+            )
+            fallback_provider = safe_candidate_fallback_provider or {}
+            final_candidates = [
+                safe_fallback_result["recommended"],
+                *safe_fallback_result.get("alternatives", []),
+            ]
+            repair_notice = (
+                "不足候補の再生成は安全試行上限に達したため停止し、確認済みの安全な候補を残して不足を通知しています。"
+                if failure_code == "request_attempt_limit"
+                else "不足候補の再生成に失敗したため、確認済みの安全な候補を残して不足を通知しています。"
+            )
+            safe_fallback_result.update({
+                "demo": False,
+                "requested_candidate_count": data.count,
+                "skipped_user_info": False,
+                "generation_blocked": False,
+                "api_alias": fallback_provider.get("api_alias"),
+                "model": fallback_provider.get("model"),
+                "api_attempt_count": len(attempted_models),
+                "attempted_models": attempted_models,
+                "repair_status": "failed",
+                "repair_error_code": failure_code,
+                "repair_failure_notice": failure_message,
+                "candidate_notice": " ".join(filter(None, [
+                    safe_fallback_result.get("candidate_notice", ""),
+                    repair_notice,
+                ])),
+                "candidate_provenance": [
+                    {
+                        "candidate_index": index,
+                        **safe_candidate_fallback_sources.get(
+                            re.sub(r"\s+", "", candidate.get("text", "")), fallback_provider
+                        ),
+                    }
+                    for index, candidate in enumerate(final_candidates)
+                ],
+            })
+            return safe_fallback_result
         if isinstance(exc, ProviderAttemptLimitError) and safe_candidate_fallback is not None:
             safe_fallback_result = filter_safe_candidates(
                 safe_candidate_fallback,
@@ -7185,7 +7500,7 @@ def generate(data: GenerateInput):
                 "attempted_models": attempted_models,
                 "candidate_notice": " ".join(filter(None, [
                     safe_fallback_result.get("candidate_notice", ""),
-                    "候補の多様性を改善する再生成は安全試行上限に達したため、先に確認した安全候補を表示しています。",
+                    "候補の安全性・形式・多様性を改善する再生成は安全試行上限に達したため、先に確認した安全候補を表示しています。",
                 ])),
                 "candidate_provenance": [
                     {
@@ -7201,30 +7516,12 @@ def generate(data: GenerateInput):
                 ],
             })
             return safe_fallback_result
-        if isinstance(exc, ProviderAttemptLimitError):
-            message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
-            error_code = "request_attempt_limit"
-        elif _is_rate_limit_error(exc):
-            message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
-            error_code = "all_models_rate_limited"
-        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("401", "403", "api_key")):
-            message = "Gemini APIキーまたはモデルの利用権限を確認してください。"
-            error_code = "api_permission_denied"
-        elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("404", "not found")):
-            message = "モデルが見つからないか、利用できません。APIモデルの利用状況を確認してください。"
-            error_code = "model_unavailable"
-        elif isinstance(exc, (ValueError, json.JSONDecodeError)):
-            message = "AIの応答形式が不正でした。再生成してください。"
-            error_code = "invalid_response"
-        else:
-            message = "Geminiとの通信に失敗しました。接続と設定を確認してください。"
-            error_code = "gemini_connection_error"
         # Do not expose raw SDK errors: they may include user data or credentials.
         return JSONResponse(
             status_code=502,
             content={
-                "detail": message,
-                "error_code": error_code,
+                "detail": failure_message,
+                "error_code": failure_code,
                 "attempted_models": attempted_models,
                 "api_attempt_count": len(attempted_models),
             },

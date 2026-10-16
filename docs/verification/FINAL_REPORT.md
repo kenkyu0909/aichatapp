@@ -1605,3 +1605,12 @@ replyモードに限り、安全な返信候補を提示したうえで、本人
 FastAPI/SDKモックで同じ話題・詳細の言い換え質問を抑制し、異なる詳細の質問は残すことを確認した。Firefoxではskip・回答・失敗後の再試行・成功後の反復抑制、候補保持、無保存・無送信を確認した。Focused backend suite 19 passed、Firefox suite 2 passed。Gemini実通信は0回。topic/detail分類は限定的な話題ルールであり、未分類質問の意味的な言い換えは完全には抑制しない。全pytestとActionsは最新変更を含めた実行後に追記する。
 
 T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。Windows全pytestは1647 passed in 303.03sで、Firefox UIテストも含む。backend focused 19 passed、Firefox focused 2 passed。Python/JavaScript構文と`git diff --check`成功。Gemini実通信0回。コードSHA `a35f1d19a0b2cd0c5a720e7240e728fa4a71776d`の[Push Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38868726120)と[PR Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38868731579)はsuccess。各runは1647 passed / 1 warning。警告はStarlette/httpxの非推奨通知とGitHub runnerのNode.js 20移行通知。過去のT369・QUALITY009実生成品質FAILを変更していないため、総合判定は**NO-GO**のまま。PR #4はDraft・未マージ。conversation_004と新規会話HTMLは実施していない。
+### 2026-10-16 17:51 JST 追補：追加の部分候補・在学状況・相手別質問の検証
+
+- `reply`で一部の候補だけが安全フィルターを通過した場合、安全な候補を保持したまま不足数だけを最大1回補充する処理を追加。補充候補にも通常の検証・重複排除・出所記録を適用し、失敗時は不足を通知して安全候補を残す。
+- 本人情報ゲートに現在の学生／在学状況を追加。学校名だけでは在学を推定せず、確認済み情報の粒度を超える候補や、回答に便乗した追加の未確認事実は送信候補から除外する。否定回答の再質問抑制と一時回答の再利用も確認した。
+- Firefox UIテストで任意質問のskip状態が相手ごとに独立することを追加確認。別の架空相手では質問を表示し、元の相手では同じ範囲を再表示しない。
+- ローカル回帰: Windows `python -m pytest -q` **1668 passed in 303.15s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。変更コードは独立レビューAPPROVE。
+- Gemini実通信は0回。T369/QUALITY009の過去の実生成品質FAILは未解決として保持する。したがって本人情報の一般的な自然言語理解、実モデルの自然さ・ミラーリング・候補の意味的多様性・誘い判断は合格扱いにしない。
+- 現在のマトリクス: **398項目**（PASS 261 / FAIL 14 / FIXED 103 / BLOCKED 5 / NOT_TESTED 15）。総合判定は **NO-GO**。最新ローカル差分のGitHub ActionsはPush後に確認する。PR #4はOPEN/Draft/未マージ。会話004・新しい会話HTMLは実施していない。
+- 次の作業: 実APIを使わず、残るP0品質ケース（直接質問への回答完全性、既知情報の再質問、回答との矛盾、意味の異なる返信候補）を過去の失敗記録から再現し、送信前ゲートの安全性と誤ブロックを確認する。

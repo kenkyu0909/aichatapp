@@ -1329,3 +1329,16 @@ SHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](http
 本人に質問しなくても安全な候補がある場合は候補を残し、任意の本人経験を尋ねるパネルを追加する。回答の失敗時は入力を保持して再試行し、成功またはskip後に同じtopic/detail scopeの質問を繰り返さない。異なる詳細の質問は許容する。scope keyだけを相手別にページメモリへ保存し、回答値は保存しない。
 
 テスト: FastAPI/SDKモック 19 passed、Firefox focused suite 2 passed。独立レビューは最新scope対応に高・中リスクなし。Windows全pytest 1647 passed in 303.03s（Firefox UIを含む）。Python/JS構文とdiff check成功。Gemini API 0回。マトリクスT395を追加し395項目: PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。コードSHA `a35f1d19a0b2cd0c5a720e7240e728fa4a71776d`のPush Actions [38868726120](https://github.com/kenkyu0909/aichatapp/actions/runs/38868726120)とPR Actions [38868731579](https://github.com/kenkyu0909/aichatapp/actions/runs/38868731579)はsuccess、双方1647 passed / 1 warning。警告はStarlette/httpx deprecationとrunnerのNode.js 20移行通知。T369/QUALITY009実生成FAILが残るため総合NO-GO。次: Actions証拠を含む文書更新をpushし、最新HEADでもActionsを確認後、残るP0品質問題をオフラインで調査する。conversation_004と新規会話HTMLは実施しない。
+### 2026-10-16 17:51 JST 更新
+
+| ゴール | 現在の判定 | 今回の根拠 | 次の作業 |
+|---|---|---|---|
+| 本人情報の正確性 | 全体FAIL | 現在の学生状況について学校名だけを根拠にせず、明示的な回答のみを使うゲートと否定回答処理を追加。学生状態の限定ケースは確認したが、意味表現全般・T369の実生成FAILは未解決。 | 直接質問への回答完全性、確認済み事実との矛盾、過去のAI生成文との由来分離をオフラインで監査。 |
+| 句読点・改行 | 実生成未確認 | 今回は送信本文の句読点・改行処理を変更していない。 | 既存送信前検証とコピー・保存の回帰ケースを確認。実Gemini生成品質は未確認のまま扱う。 |
+| ミラーリング | 未達 | 今回の部分候補・在学状況テストは相手の文章量や温度差を評価しない。 | 保存済み会話の文章長と候補品質をオフラインで見直し、実生成結果なしにPASSとしない。 |
+| 共感の反復防止 | FAIL維持 | QUALITY009の実生成文に関する反復FAILは修正後の実APIで再評価していない。 | 相槌・話題進展の既存失敗ケースを評価ランナーで再点検。 |
+| 返信候補の多様性 | 部分改善 / 全体FAIL | 安全フィルターで候補が不足した場合の最大1回補充と重複排除を実装。意味的多様性の実生成品質は未解決。 | 過去候補セットの意味差判定と安全な候補不足通知を継続監査。 |
+| 食事への誘い判断 | 未達 | 今回は誘い判断を変更・検証していない。 | 保存済み条件ケースで内部判断と実候補の整合性を確認。 |
+| アプリ全体の安定性 | ローカルPASS / Actions未確認 | Windows全pytest 1668 passed（Firefox UI含む）。Python構文、JS構文、差分検査成功。最新差分のActionsは未実行。 | 変更をPushし、同一最新SHAのPush/PR Actionsを確認。 |
+
+作業内容: 部分候補補充の失敗時に安全候補を保持し、不足を通知する。本人の学生状況ゲートに否定回答・回答粒度・追加事実の検査を追加。Firefox UIで質問の相手別分離を確認。Gemini実通信0回。会話004と新しい会話HTMLは実施しない。総合判定 **NO-GO**。T369/QUALITY009の実生成品質FAILが未解決であり、ローカルテスト合格だけで実用品質を宣言できない。作業ブランチは `codex/full-system-verification`、PR #4はDraft・未マージ。

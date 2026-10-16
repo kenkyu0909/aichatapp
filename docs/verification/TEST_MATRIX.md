@@ -1026,3 +1026,9 @@ T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Ac
 | T395 | 安全な返信候補と任意の本人確認質問 | FastAPI/SDKモックとFirefox UI操作で回答・スキップ・失敗再試行・再質問抑制を確認（オフライン） | FIXED | 安全な候補を残したまま任意質問を最大1件表示。本人回答は一時送信だけでプロフィール保存・メッセージ送信なし。回答再生成が503で失敗した場合は質問と入力内容を保持し、再試行成功後に同じ情報範囲の質問をページ内の相手別状態で抑制する。バックエンドは認識可能な話題と詳細を使って同じ範囲の言い換えを抑制し、異なる詳細は維持。mandatory質問は従来どおり候補なしのブロッキング動作。focused backend 19 passed、Firefox 2 passed。Gemini実通信0回。|
 
 最新ID行: 395。累計: PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1647 passed in 303.03s**（Firefox UI含む）、backend focused 19 passed、Firefox focused 2 passed。Python構文、JavaScript構文、`git diff --check`成功。Gemini実通信0回。コードSHA `a35f1d19a0b2cd0c5a720e7240e728fa4a71776d`の[Push Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38868726120)と[PR Actions](https://github.com/kenkyu0909/aichatapp/actions/runs/38868731579)はsuccess、双方1647 passed / 1 warning。T369・QUALITY009実生成品質FAILは未解決のまま保持し、総合判定NO-GO。|
+
+| T396 | 部分的に安全な候補の不足分補完と失敗時の安全候補保持 | TestClient/SDKモック。安全候補を含む初回応答後に安全な補完・不安全な補完・ネットワーク失敗・全モデル429を再現 | FIXED | 安全候補を残して不足枠のみ1回再生成。再生成も通常の事実・拒否・形式検査を通す。重複・不安全候補は除外し、不足時は数を偽らず通知。ネットワーク・429で補完できない場合も先に通過した安全候補、試行数、API別名/モデルの由来を維持し、秘密の例外文字列は返さない。旧部分補完テストの12件はモック応答と試行数を新仕様に沿って明示し、すべてPASS。関連focused suite 96 passed。Gemini実通信0回。|
+| T397 | 「学生ですか？」への本人事実確認と追加主張検証 | TestClient/SDKモックと純関数テスト。確認前、確認回答、粒度違い、学校名のみ、否定回答、回答に続く主張を検証 | FIXED | 確認前はGeminiを呼ばず質問を提示。学校名だけでは現在の在学状況を推測しない。大学生等の具体情報は同じ粒度の確認済み情報だけで許可し、一般的な「学生」から大学院生等を推測しない。確認済み回答に補足質問を付けることは許し、未確認の通学習慣・専攻・アルバイト等を加えた候補は拒否。一般的な否定回答も確認済み回答として扱い再質問を避ける。独立レビューAPPROVE。Gemini実通信0回。|
+| T398 | 任意本人質問の連絡先間分離 | Firefox実UI操作。1人目で質問範囲をスキップ後、別の架空連絡先へ切り替えて同じ範囲の質問を確認 | FIXED | 1人目の質問抑制状態が2人目へ漏れず、2人目では同じ範囲の質問が表示された。再び1人目へ戻ると、その連絡先内の抑制だけが保たれる。Firefox実行1 passed。架空データのみ。Gemini実通信0回。|
+
+最新追加後のマトリクスは398項目: PASS261 / FAIL14 / FIXED103 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1668 passed in 303.15s**（Firefox UIを含む）。過去のT369/QUALITY009実Gemini生成品質FAILは維持し、モック・静的検査を実API品質PASSとして数えない。

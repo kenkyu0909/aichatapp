@@ -1599,3 +1599,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 ### 2026-10-16 — 伸ばし棒の文脈別プロンプト規則
 
 `prompts/common.txt`に「ー」は驚きや柔らかさが自然なときだけ使い、反復・真剣な話・不安・拒否では避ける規則を追加。`prompts/first.txt`では初回に驚きを作らず、自然な喜びや柔らかさに限る注記を追加した。pytestに5つの手書き会話例（明るい日常、本当の驚き、冗談、疲れ、慎重な断り）を加え、記号・句読点・空行を検査。独立レビューで空行検査の冗長なassertionを指摘されたため、実際に空行を検出する条件へ修正。最終focused suite **7 passed**。全pytest **1639 passed in 325.46s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Windowsのconsole `pytest.exe` は品質ランナーのnamespace importで失敗したが、`python -m pytest`では同じ品質ランナー10件と全スイートが成功。これは実行入口の差で、テスト/ソース欠落ではない。固定例と静的プロンプト契約だけでGemini実生成品質を示さない。今回のGemini通信は0回。次は資料検査後にPushし、最新SHAのActionsを確認する。過去のT369/QUALITY009品質FAILと総合NO-GOを維持する。PR #4はDraft・未マージ。
+
+### 2026-10-16 17:48 JST — 部分候補補完と本人の在学状況ゲート
+
+- 最新の指示ブランチ `codex/directive-control` は17:10 JSTに取得・確認。実Gemini API、会話004、新規会話HTMLは引き続き実施しない。
+- オフライン監査で、候補の一部が安全フィルターで除外された際に、通過した候補を残したまま不足枠を補えない問題を確認。部分候補のみ最大1回再生成し、再生成候補にも通常の安全・形式検査を適用する。不安全・重複候補は除外し、不足時は通知。ネットワーク障害・全モデル429でも先に通過した候補と試行情報を維持し、内部例外詳細を漏らさない。
+- 「学生ですか？」が本人への確認をすり抜ける問題も確認。回答前にGeminiを呼ばず確認質問を提示。学校名のみから在学を推測せず、確認済みの状態の粒度を守る。確認済みの直接回答に質問や短い受け止めを続けるのは許し、未確認の専攻・通学頻度・アルバイト等の追加主張は候補から除外。一般的な否定回答も認識し、確認を繰り返さない。
+- Firefoxの任意質問に連絡先ごとの状態分離テストを追加。1人目でのskip/回答は別の相手へ漏れず、元の相手へ戻るとその相手の抑制状態だけが残る。
+- 新しい部分補完で旧モックの期待が12箇所ずれ、初回全pytestは1651 passed / 12 failed。安全・誘い・句読点・改行・プレースホルダー・多様性の検査を緩めず、各モックへ限定再生成の応答と試行上限を明記して修正。以前の12失敗群は12 passed。関連ケース96 passed。独立レビューAPPROVE。
+- 最新全pytest **1668 passed in 303.15s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。Gemini API呼び出し0。
+- T396〜T398を追加。マトリクス398項目: PASS261 / FAIL14 / FIXED103 / BLOCKED5 / NOT_TESTED15。T369/QUALITY009の過去の実Gemini品質FAILを維持し、総合NO-GO。
+- 未実施: 今回変更を含むActions、最終秘密スキャン、PR #4 HEAD/Draft確認。次に文書lint・差分レビューを行い、保護対象の未追跡指示ファイルを除いてcommit/pushする。Push/PR Actionsが同一最新SHAで成功することとPRのOPEN/Draft/未マージ状態を確認する。
