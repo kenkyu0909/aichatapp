@@ -1937,6 +1937,45 @@ def test_confirmation_session_accepts_more_than_three_accumulated_answers(client
     assert len(context["ephemeral_user_answers"]) == 6
 
 
+def test_ephemeral_confirmations_are_structured_and_not_persisted(client):
+    c, backend = client
+    mid = add_match(c, "確認レコードの架空人物")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画はお好きですか？"})
+    before = c.get("/api/profile").json()
+    context = backend.build_context(backend.GenerateInput(
+        mode="reply",
+        match_id=mid,
+        response_version=2,
+        user_answers=[{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+    ))
+    records = context["ephemeral_confirmations"]
+    assert len(records) == len(context["ephemeral_user_answers"]) == 1
+    record = records[0]
+    assert record["confirmation_state"] == "ephemeral"
+    assert record["source"] == "user_confirmation"
+    assert record["match_id"] == mid
+    assert record["value"] == "洋画が好きです"
+    assert record["question_id"]
+    assert record["subject"]
+    assert record["requested_slot"]
+    assert c.get("/api/profile").json() == before
+
+
+def test_ephemeral_confirmation_question_ids_normalize_equivalents(client):
+    _, backend = client
+    first = backend.build_ephemeral_confirmations(
+        [{"question": "映画はお好きですか？", "answer": "はい"}], match_id=1
+    )
+    equivalent = backend.build_ephemeral_confirmations(
+        [{"question": "  映画はお好きですか？ ", "answer": "はい"}], match_id=1
+    )
+    other = backend.build_ephemeral_confirmations(
+        [{"question": "週末は何をしていますか？", "answer": "はい"}], match_id=1
+    )
+    assert first[0]["question_id"] == equivalent[0]["question_id"]
+    assert first[0]["question_id"] != other[0]["question_id"]
+
+
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
     _, backend = client
     context = {
