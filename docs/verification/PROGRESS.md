@@ -1723,3 +1723,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
 - 次: D03の永続化ステップ（明示確認時のみ confirmed_facts をプロフィールへ保存、schema version と移行/ロールバック規則、`superseded_by` 等での矛盾解消）と、エンドポイントの同一質問異回答400の扱い整理。検証エージェントで次サブステップを確定する。
 
+### 2026-10-17 01:55 JST 検証#4指摘の反映（プロンプト除外・誤字ガード一般化）
+
+- 検証エージェント#4（READ-ONLY）が `73c8bee` を検証し PARTIAL 判定。新キー `ephemeral_confirmations` が `app.py:7201` の `json.dumps(context)` を通じてGeminiプロンプト本文へ混入し、内部 `match_id` を露出しQ/Aを重複させる実バグを検出（HTTP応答・DBには非露出）。
+- 修正 `8ba307b`: `prompt_context(context)` を追加し内部専用キー `_INTERNAL_CONTEXT_KEYS={"ephemeral_confirmations"}` を唯一のモデル呼び出し地点（`app.py:7201`）で除去。プロンプトに含まれないことをテストで担保。
+- 併せてP0（ディレクティブのQUALITY009項）: `candidate_has_high_confidence_japanese_error` をリテラル `"雰囲い"` から正書法ルール `re.compile(r"雰囲(?!気)")` のテーブルへ一般化。`雰囲い`・`雰囲き`・`雰囲` を拒否し、正しい `雰囲気` は保持（同種の未知変形も捕捉）。`recent_movie_answered` の回避候補は既存どおり拒否（`tests/test_quality_checks_009.py` 不変）。
+- 検証: focused 13 passed、`tests/test_app.py`＋`test_quality_checks_009.py` 1715 passed、全pytest **1816 passed in 370.88s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。QUALITY009の実生成判定はFAIL/BLOCKEDのまま維持（CI緑で隠さない）。
+- Actions: Push [38925131517](https://github.com/kenkyu0909/aichatapp/actions/runs/38925131517) / PR [38925141284](https://github.com/kenkyu0909/aichatapp/actions/runs/38925141284) は同一SHA `8ba307b` でsuccess。PR #4はDraft・未マージ。
+- 次: 検証#4推奨の順序どおり、D03永続化はサーバ可視のセッションキー（`clarification_session_id` を `/generate` に追加、または初回 `needs_user_info` 応答でサーバがトークン発行）を導入してから。当面は P0 の実生成品質項目を継続。検証エージェントで次サブステップを確定する。
+

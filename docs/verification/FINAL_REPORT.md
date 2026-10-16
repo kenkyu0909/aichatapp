@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 01:55 JST 検証エージェント指摘の反映（プロンプト除外・誤字ガード一般化）
+
+- 検証エージェント#4が `73c8bee` を検証。新キー `ephemeral_confirmations` が `app.py:7201` の `json.dumps(context)` でGeminiプロンプト本文へ混入し、内部 `match_id` を露出しQ/Aを重複させる実バグを検出した。
+- `8ba307b`: `prompt_context` を追加し内部専用キーを唯一のモデル呼び出し地点で除去。プロンプト非含有をテストで担保。併せて `candidate_has_high_confidence_japanese_error` をリテラルから正書法ルール `雰囲(?!気)` へ一般化し、同種の未知変形を拒否しつつ正しい表記を保持。
+- 検証: focused 13 passed、`tests/test_app.py`＋`test_quality_checks_009.py` 1715 passed、全pytest **1816 passed in 370.88s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。QUALITY009の実生成判定はFAIL/BLOCKEDのまま維持。
+- Actions: Push [38925131517](https://github.com/kenkyu0909/aichatapp/actions/runs/38925131517) とPR [38925141284](https://github.com/kenkyu0909/aichatapp/actions/runs/38925141284) が同一SHA `8ba307b` でsuccess。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 01:15 JST D03サブステップ（一時確認の構造化レコード）
 
 - `build_ephemeral_confirmations` を追加し、各確認回答を `question_id`・`subject`・`requested_slot`・`question`・`value`・`source="user_confirmation"`・`confirmation_state="ephemeral"`・`match_id` を持つ構造化レコードとして提示する。`build_context` に `ephemeral_confirmations` を追加し、`ephemeral_user_answers` は不変に保つ。
