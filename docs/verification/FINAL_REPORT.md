@@ -1669,6 +1669,21 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - 次: (A) `put_profile` のマージ化（未知キー保持）、(B) `_topic_is_verified` の `confirmed_facts` 照合（再質問抑止）。計画エージェントのfile:line計画に沿って実装。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 03:55 JST D04と再質問抑止（A/B）の実装
+
+- (A) `put_profile` を read-modify-write 化（`merge_profile_content_preserving_keys`）、(B) `_confirmed_fact_covers_question` を `_topic_is_verified` に接続し確認済み事実の再質問を抑止（qid または slot 一致時のみ）。`1f322f3`。
+- 検証: `tests/test_app.py` **1719 passed in 57.24s**、全pytest **1828 passed（+1 Firefoxフレーク）in 471.21s**。フレークは単体再実行で pass。`ast.parse(app.py)` 成功。Gemini実通信0回。
+- Actions: Push [38973649569](https://github.com/kenkyu0909/aichatapp/actions/runs/38973649569) / PR [38973656179](https://github.com/kenkyu0909/aichatapp/actions/runs/38973656179)（同一SHA `1f322f3`）。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
+### 2026-10-17 04:40 JST 過剰抑止の是正とD03ブリッジ
+
+- 検証エージェントの指摘でT419を追加: 確認ファクトのslot一致を撤去し正規化id一致のみに変更（別トピック・別ディテールの過剰抑止を解消、`a2f82e2`）。
+- D03ブリッジ（`f382077`）: `_confirmed_fact_values_for_question` を追加し、直近の直接質問（正規化id一致）に対する確認ファクト値を `_answers_verified_single_partner_question` の証拠へ追加。`_trusted_fact_clauses` は `confirmed_facts` の `value` のみを接地に用い、メタ文字列を除外。
+- 検証: focused 183、`tests/test_app.py` **1724 passed in 58.62s**、全pytest **1834 passed in 422.73s**（Firefox UI含む、フレークなし）。`ast.parse(app.py)` 成功。Gemini実通信0回。
+- Actions: Push [38975820578](https://github.com/kenkyu0909/aichatapp/actions/runs/38975820578) / PR [38975827260](https://github.com/kenkyu0909/aichatapp/actions/runs/38975827260)（同一SHA `f382077`）。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。

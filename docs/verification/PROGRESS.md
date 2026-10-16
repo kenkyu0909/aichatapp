@@ -1750,3 +1750,25 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 計画エージェント: (A) `put_profile` に「両側dictなら `{**existing, **incoming}` でマージ」するread-modify-writeを追加（非dictなら置換維持、`avoid`は別列）。(B) `_topic_is_verified`（`app.py:1490`）に `confirmed_facts` 照合（`_normalize_clarification_question_key` と `_optional_user_question_scope_key`）を追加し、確認済み事実の再質問を抑止。順序は A→B、DBマイグレーション不要。
 - 次: A→Bを実装し、検証エージェントで確認。
 
+### 2026-10-17 03:55 JST D04と再質問抑止（A/B）の実装
+
+- 計画エージェントのfile:line計画に沿って2件を実装（`1f322f3`）。
+- (A) `merge_profile_content_preserving_keys` を追加（両側JSON objectなら `{**existing, **incoming}` で incoming 優先・既存のみキー保持、非objectは incoming 採用、`avoid` は別列）。`put_profile` を read-modify-write 化し、UI外の書き手（スクリプト・`persist_confirmed_facts`）との競合で `confirmed_facts`/`schema_version` が消える穴を閉じた。
+- (B) `_confirmed_fact_covers_question` を追加し `_topic_is_verified` の先頭で評価。正規化 `question_id` 一致 または `requested_slot` 一致のときのみ verified（別ディテールは再質問）。`question_text` が空なら照合しない。確認済み事実の再質問を抑止しつつ、未保存回答は非永続のまま。
+- 検証: `tests/test_app.py` **1719 passed in 57.24s**、全pytest **1828 passed（+1 Firefoxフレーク）in 471.21s**。フレーク `test_firefox_oversize_photo_is_rejected_before_creating_contact` は単体再実行で pass（既知のFirefoxフレーク群と同種）。`ast.parse(app.py)` 成功。Gemini実通信0回。
+- Actions: Push [38973649569](https://github.com/kenkyu0909/aichatapp/actions/runs/38973649569) / PR [38973656179](https://github.com/kenkyu0909/aichatapp/actions/runs/38973656179) は同一SHA `1f322f3`。
+- 次: 検証エージェントでA/Bを確認し、次サブステップ（D05以降）を確定する。
+- 検証エージェント結果: ITEM A は正しい。ITEM B は同一質問の抑止は正しいが、slot一致により別トピック（映画の確認が「最近読んだ本」を抑止）と別ディテール（作品名の確認が「ジャンル」を抑止）まで過剰抑止する新バグを検出（`_optional_user_question_scope_key` の topic誤分類に起因）。
+- 修正（`a2f82e2`）: `_confirmed_fact_covers_question` を正規化 `question_id` 一致のみに変更（slot一致を撤去）。ネガティブテスト2件追加（別トピック・別ディテール）、helper単体テストをqid一致のみの期待へ更新。focused 38、`tests/test_app.py` **1721 passed in 72.86s**。
+- 次: D03ブリッジ（保存済み `confirmed_facts` を pre-send 直接質問ゲートの証拠源にする）を実装する。調査エージェントのfile:line計画あり（`_answers_verified_single_partner_question` と `_trusted_fact_clauses`）。
+
+### 2026-10-17 04:40 JST D03ブリッジ（確認ファクトを直接質問の証拠源に）
+
+- `_confirmed_fact_values_for_question(context, topic, question_text)` を追加（`_confirmed_fact_covers_question` と同じ正規化id一致で value を返す）。
+- `_answers_verified_single_partner_question` の最近観た映画タイトル枝（`verified_recent_movies`）と汎用フォールバック（ephemeralループの後）に確認ファクト値を追加。
+- `_trusted_fact_clauses` の再帰収集で `confirmed_facts` を特別扱いし、`value` のみ収集（`question`/`session_id`/`source`/`requested_slot`/`confirmed_at` のメタ文字列を接地から除外）。
+- 効果: 保存済み回答で直接質問（例「最近観た映画は何ですか？」）に正しく答えた候補が「未回答」で却下されず、メタ文字列の捏造接地も防ぐ。fail-closed契約と再質問抑止は不変。
+- テスト追加3件（正答受理・回避却下・メタ文字列非接地。`_movie_confirmed_context` ヘルパ）。focused 183、`tests/test_app.py` **1724 passed in 58.62s**、全pytest **1834 passed in 422.73s**（Firefox UI含む、フレークなし）。
+- Actions: Push [38975820578](https://github.com/kenkyu0909/aichatapp/actions/runs/38975820578) / PR [38975827260](https://github.com/kenkyu0909/aichatapp/actions/runs/38975827260) は同一SHA `f382077` でsuccess。
+- commit `f382077`。次: 検証エージェントでD03ブリッジを確認し、次サブステップを確定する。
+
