@@ -1610,3 +1610,31 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 最新全pytest **1668 passed in 303.15s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。Gemini API呼び出し0。
 - T396〜T398を追加。マトリクス398項目: PASS261 / FAIL14 / FIXED103 / BLOCKED5 / NOT_TESTED15。T369/QUALITY009の過去の実Gemini品質FAILを維持し、総合NO-GO。
 - 未実施: 今回変更を含むActions、最終秘密スキャン、PR #4 HEAD/Draft確認。次に文書lint・差分レビューを行い、保護対象の未追跡指示ファイルを除いてcommit/pushする。Push/PR Actionsが同一最新SHAで成功することとPRのOPEN/Draft/未マージ状態を確認する。
+
+### 2026-10-16 18:40 JST — 継続検証
+
+- 指示ブランチ `codex/directive-control` を再取得。SHAは `e227f52e8a8e3c687e132fb65688e35635260c9b`。会話004・新規会話HTML・Gemini実通信は禁止継続。PR #4はDraft・未マージ。
+- 架空履歴で再現: 最近の料理を聞かれたのに頻度だけ質問する粒度ずれ、週3回という頻度回答を最近の料理回答として流用する問題、本人の回答に得意/頻度/家族情報を足す候補を検出。
+- 相手が答えた食べ物・最近の映画・旅行頻度・週末予定を聞き直す4例が送信前検査を通ることも再現。既知事実を記録する限定検知を追加し、深掘り質問を許す対照テストも追加。
+- 個人情報の分類外となった直接質問を「相槌+無関係な質問」だけで置換できる問題を再現。回答らしい節がない候補を拒否し、安全な回答候補を残す。短い肯定/否定は極性質問に限って許可し、WH質問や同意タグを区別する。
+- 変更: `app.py`, `tests/test_app.py`。新テスト群は料理範囲、既知情報の再質問/深掘り、分類外質問のすり替え、極性回答、同意タグを扱う。レビューで5件の境界欠陥を検出して追加修正。関連focused suiteは**43 passed**。
+- 検証: 直近の全pytestは追加境界修正前に **1707 passed in 301.50s**（Firefox UIを含む）。その後の4追加ケースを含む最新全pytestを実行中。Python構文、JavaScript構文、`git diff --check`は成功。Gemini実通信0回。
+- 最新コード変更を含むActionsは未確認（Push前）。既存T369/QUALITY009実生成品質FAILは未解決として保持し、総合NO-GO。
+- 次: 最新全pytestの結果とコードレビューを確定し、検証資料を更新して保護された未追跡指示ファイルを除外してcommit/push。Actions/PR状態を確認後、指示ブランチのP0「架空の本人回答による本人質問→回答→根拠ある自己開示のモック/Firefox E2E」に進む。
+
+### 2026-10-16 18:45 JST — 最終回帰結果
+
+- 最新作業ツリーのWindows全pytest **1711 passed in 299.72s**。Firefox UIテストを含む。
+- 直接質問・既知情報聞き直し・料理の範囲確認に関するfocused suite **33 passed**。
+- `python -m py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`すべて成功。
+- 変更の独立レビューで出た境界指摘（食べ物の強調表現、否定/対比、同意語尾）を追加し再テスト済み。最新コードに対するレビュー最終確認とActions実行はPush後。
+- Gemini実通信0回。過去の実生成品質FAIL T369/QUALITY009は未解決のまま。総合NO-GO。会話004/新しい会話HTMLなし。
+
+### 2026-10-16 — 独立レビュー後の直接質問・好物判定の修正
+
+- 並行コードレビューで2つの境界欠陥を確認: 未分類の直接WH質問に無関係な叙述文が通ること、否定形+頻度表現を好物の確定と誤認すること。
+- 修正前の再現テストは2件FAIL。直接質問は無関係な叙述を拒否するfail-closed判定にし、具体的な結果表現を含む回答・招待への明確な肯定・極性質問の短い回答は保持。好物判定は頻繁な摂取だけでは成立せず、否定表現も肯定事実として扱わない。
+- 追加テストT402/T403。修正後focused suite **34 passed**。修正後の全pytestを再実行中。過去の実Gemini品質FAILはそのまま保持し、API通信0回。会話004・新規会話HTMLなし。
+- 変更: `app.py`, `tests/test_app.py`。Push前に全pytest結果、`py_compile`、`node --check`、`git diff --check`、秘密情報diff検査、レビューを完了する。保護対象の未追跡指示ファイルはstageしない。
+- 回帰確認: 最初の修正後全pytestで既存2ケースがFAIL（映画の否定質問への確認済み回答、カフェの招待への肯定応答）。確認済み映画回答は質問分類へ追加し、招待肯定はWH質問用fail-closedから分離。該当を含むfocused suite 34 passed、再実行したWindows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- 変更HEADのActionsはPush後に確認する。Gemini通信0回。実生成品質FAIL T369/QUALITY009継続。次: 差分・秘密情報検査、commit/push、PR #4とActions確認。その後はdirective P0の質問→架空回答→根拠ある自己開示フローをFirefox/モックで監査する。

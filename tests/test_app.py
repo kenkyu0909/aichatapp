@@ -12038,3 +12038,348 @@ def test_cafe_atmosphere_clarification_uses_only_user_attributed_preference(
 
     assert backend._topic_is_verified("カフェ好み", context, question)
     assert backend._answers_verified_partner_question(candidate, context) is supported
+
+
+def test_recent_cooking_question_asks_for_recent_dish_not_habit(client):
+    _, backend = client
+
+    clarification = backend.personal_fact_question(
+        "料理習慣", "最近どんな料理を作りましたか？"
+    )
+
+    assert "最近" in clarification.question
+    assert "どんな料理" in clarification.question or "何を作った" in clarification.question
+    assert "頻度" not in clarification.question
+    assert "どのくらい" not in clarification.question
+
+
+def test_cooking_frequency_answer_does_not_answer_recent_dish_question(client):
+    _, backend = client
+    question = "最近どんな料理を作りましたか？"
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": question}],
+        "ephemeral_user_answers": [
+            {"question": "普段どのくらい料理や自炊をしますか？", "answer": "週に3回"}
+        ],
+    }
+
+    clarification = backend.missing_personal_fact_question(context)
+    candidate = backend.Candidate(label="頻度だけを返す", text="週に3回自炊しています！")
+
+    assert clarification is not None
+    assert "最近" in clarification.question
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+    clarification_answer = {
+        "question": clarification.question,
+        "answer": "最近はカレーを作りました",
+    }
+    context["ephemeral_user_answers"] = [clarification_answer]
+    matching_candidate = backend.Candidate(label="最近の料理に回答", text="最近はカレーを作りました！")
+    unrelated_candidate = backend.Candidate(label="頻度にすり替え", text="週に3回自炊しています！")
+
+    assert backend.missing_personal_fact_question(context) is None
+    assert backend._answers_verified_partner_question(matching_candidate, context)
+    assert not backend._answers_verified_partner_question(unrelated_candidate, context)
+
+
+@pytest.mark.parametrize(
+    "candidate_text",
+    [
+        "カレーを毎日作っています！",
+        "カレーが得意です！",
+        "カレーは週5回作っています！",
+        "カレーを実家で母と作りました！",
+    ],
+)
+def test_recent_dish_answer_does_not_authorize_extra_cooking_claims(client, candidate_text):
+    _, backend = client
+    question = "最近どんな料理を作りましたか？"
+    clarification = backend.personal_fact_question("料理習慣", question)
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": question}],
+        "ephemeral_user_answers": [{"question": clarification.question, "answer": "カレー"}],
+    }
+    candidate = backend.Candidate(label="追加主張つき", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "candidate_text",
+    [
+        "カレーを作りました！",
+        "最近カレーを作りました！",
+        "カレーです！",
+        "カレーを作ったんです！",
+    ],
+)
+def test_recent_dish_answer_allows_concise_grounded_wording(client, candidate_text):
+    _, backend = client
+    question = "最近どんな料理を作りましたか？"
+    clarification = backend.personal_fact_question("料理習慣", question)
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": question}],
+        "ephemeral_user_answers": [{"question": clarification.question, "answer": "カレー"}],
+    }
+    candidate = backend.Candidate(label="確認済み料理への短い回答", text=candidate_text)
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(
+    ("partner_message", "candidate_text", "expected_topic"),
+    [
+        ("プリンが好きでよく食べます！", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("プリンが好きです！", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("プリンが一番好きです！", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("プリンが好きなんです！", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("好きな食べ物はカレーです", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("好きな食べ物はカレーではなくラーメンです！", "好きな食べ物は何ですか？", "好きな食べ物"),
+        ("最近『架空の映画』を観ました！", "最近どんな映画を観ましたか？", "最近観た映画"),
+        ("最近『架空の映画』を観ました！", "どの映画を観たんですか？", "最近観た映画"),
+        ("最近『架空の映画』を観ました！", "何の映画を観たんですか？", "最近観た映画"),
+        ("最近『架空の映画』を観ました！", "何を観たんですか？", "最近観た映画"),
+        ("旅行は年に1回くらい行きます！", "旅行はどのくらいの頻度で行きますか？", "旅行の頻度"),
+        ("海外旅行は年に一度行きます！", "旅行はどのくらいの頻度で行きますか？", "旅行の頻度"),
+        ("今週末は友達と美術館へ行きます！", "今週末はどこへ行く予定ですか？", "今週末の予定"),
+        ("今度の土曜日は友達と美術館に行きます！", "今度の土曜日はどこへ行く予定ですか？", "今週末の予定"),
+        ("今度の土曜は友達と美術館に行きます！", "今度の土曜はどこへ行く予定ですか？", "今週末の予定"),
+        ("今週の日曜は友達と映画を観に行きます！", "今週の日曜は何をする予定ですか？", "今週末の予定"),
+    ],
+)
+def test_partner_known_answers_are_not_asked_again(client, partner_message, candidate_text, expected_topic):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="既知情報の再質問", text=candidate_text)
+
+    assert expected_topic in backend.repeated_partner_question_topics([candidate], context)
+    assert "相手の既知情報を再質問" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(
+    ("partner_message", "candidate_text"),
+    [
+        ("プリンが好きでよく食べます！", "プリン以外だとどんなスイーツが好きですか？"),
+        ("最近『架空の映画』を観ました！", "その映画はどんなところが面白かったですか？"),
+        ("旅行は年に1回くらい行きます！", "次はどんな場所に行ってみたいですか？"),
+        ("今週末は友達と美術館へ行きます！", "どんな展示を見る予定なんですか？"),
+    ],
+)
+def test_partner_known_facts_still_allow_deeper_questions(client, partner_message, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="既知情報の深掘り", text=candidate_text)
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "candidate_text",
+    [
+        "そうなんですね！最近カフェ行きますか？",
+        "それでどうなったんですか？最近カフェ行きますか？",
+        "その時どう感じたんですか？",
+        "うわそれはつらかったですね！最近カフェ行きますか？",
+    ],
+)
+def test_unclassified_direct_question_cannot_be_replaced_by_reaction_or_new_question(client, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "それでどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="質問回避", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "candidate_text",
+    [
+        "友達と話して解決しました！",
+        "嬉しかったです！その時はどんな感じだったんですか？",
+    ],
+)
+def test_unclassified_direct_question_accepts_answer_before_followup(client, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "それでどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="直接回答後に会話を続ける", text=candidate_text)
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_unclassified_wh_question_rejects_unrelated_statement(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "それでどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="無関係な話題", text="今日はいい天気ですね！")
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "partner_message",
+    [
+        "カレーが好きではないけどラーメンをよく食べます！",
+        "ラーメンは好きというわけではないけどよく食べます！",
+        "ラーメンをよく食べます！",
+    ],
+)
+def test_frequent_or_negated_food_consumption_does_not_establish_favorite(client, partner_message):
+    _, backend = client
+
+    candidate = backend.Candidate(label="好物を聞く", text="好きな食べ物は何ですか？")
+    context = {
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+    }
+    topics = backend.repeated_partner_question_topics([candidate], context)
+
+    assert "好きな食べ物" not in topics
+
+
+def test_unclassified_polar_question_accepts_short_affirmative_answer(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "このお店知ってますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="短い肯定回答", text="はい！")
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize("candidate_text", ["はい！", "知っています！"])
+def test_short_polar_answer_does_not_answer_wh_question(client, candidate_text):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "それでどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="極性だけの不十分な回答", text=candidate_text)
+
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_negated_food_preference_is_not_treated_as_known_favorite(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "好きな食べ物はカレーではないです"}],
+    }
+    candidate = backend.Candidate(label="未回答の好きな食べ物", text="好きな食べ物は何ですか？")
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+
+
+@pytest.mark.parametrize(
+    "partner_message",
+    [
+        "この映画面白かったよね？",
+        "この映画おもしろかったよね？",
+        "昨日の雨すごかったよね？",
+    ],
+)
+def test_agreement_question_with_colloquial_yone_does_not_require_literal_answer(client, partner_message):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_message}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="自然な同意", text="たしかに！")
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "partner_message",
+    ["映画が一番好きです！", "旅行が好きです！", "読書が一番好きなんです！"],
+)
+def test_nonfood_favorite_does_not_mark_favorite_food_as_known(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+    candidate = backend.Candidate(label="好きな食べ物への確認", text="好きな食べ物は何ですか？")
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+
+
+def test_agreement_seeking_tag_question_does_not_force_a_literal_answer(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "中野のカフェっていいところですよね？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="自然な同意", text="中野のカフェ気になりますね！")
+
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_filter_safe_candidates_keeps_direct_answer_and_drops_unknown_question_evasion(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "それでどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="話題すり替え", text="そうなんですね！最近カフェ行きますか？"),
+        alternatives=[
+            backend.Candidate(label="直接回答", text="友達と話して解決しました！"),
+            backend.Candidate(label="別の質問回避", text="その時どう感じたんですか？"),
+        ],
+        reason="直接質問に回答する",
+        strategy="相手の質問に答えてから続ける",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="会話を続ける",
+        next_action="質問に答える",
+    )
+
+    filtered = backend.filter_safe_candidates(value, 3, context)
+
+    assert filtered["recommended"]["text"] == "友達と話して解決しました！"
+    assert filtered["available_candidate_count"] == 1
+    assert "相手からの直接質問に未回答" in str(filtered["candidate_rejections"])

@@ -1071,6 +1071,8 @@ def _topic_for_personal_question(text: str) -> str | None:
     for topic, terms in PERSONAL_FACT_TOPICS.items():
         if any(term in text for term in terms):
             if topic == "映画":
+                if re.search(r"(?:映画|洋画|邦画).{0,10}(?:苦手|嫌い|好きではない|好きじゃない|好みではない|好みじゃない)", text):
+                    return "映画"
                 # Avoid treating broad modifiers in declarative statements as
                 # direct questions. Requests without punctuation are allowed
                 # only when they explicitly ask for an answer or recommendation.
@@ -1156,6 +1158,12 @@ def _personal_information_scope(topic: str | None, text: str) -> tuple[str, str]
     elif re.search(r"雰囲気|静か|落ち着|にぎやか|賑やか|広々|レトロ|おしゃれ|開放的", text):
         detail = "atmosphere"
     elif re.search(r"最近|この前|昨日|先週|観た映画|見た映画|読んだ本|行ったカフェ", text):
+        detail = "recent_experience"
+    elif topic == "料理習慣" and re.search(
+        r"(?:最近|この前|昨日|先週|先日).{0,16}(?:料理|ご飯|ごはん|作っ|作り)|"
+        r"(?:料理|ご飯|ごはん).{0,16}(?:最近|この前|昨日|先週|先日).{0,10}(?:作っ|作り)",
+        text,
+    ):
         detail = "recent_experience"
     elif re.search(r"ジャンル|何系|どんな.{0,8}(?:本|映画)|好きな.{0,8}(?:本|映画)|ミステリー|小説|漫画|マンガ|洋画|邦画|アニメ|ドキュメンタリー|アクション|恋愛|コメディ|SF", text):
         detail = "genre"
@@ -1510,10 +1518,21 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             and _personal_information_scope(topic, question_text) == _personal_information_scope(topic, answer.get("question", ""))
         )
     if topic == "料理習慣":
+        requested_scope = _personal_information_scope(topic, question_text)
+        if requested_scope == (topic, "recent_experience"):
+            recent_keys = ("recent_dishes", "recent_cooking", "recent_recipes", "最近作った料理", "最近の料理")
+            if any(facts.get(key) for key in recent_keys):
+                return True
+            return any(
+                answer.get("answer", "").strip()
+                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+                for answer in context.get("ephemeral_user_answers", [])
+            )
         return any(facts.get(key) for key in ("cooking_habits", "cooking_frequency", "料理習慣", "自炊頻度")) or any(
             answer.get("answer", "").strip()
             for answer in context.get("ephemeral_user_answers", [])
             if re.search(r"料理|自炊", answer.get("question", ""))
+            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
         )
     if topic == "カフェ最近":
         keys = ("recent_cafes", "recent_cafe_visits", "最近行ったカフェ")
@@ -2107,6 +2126,9 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         question = "どんな雰囲気のカフェが好きですか？"
     elif topic == "カフェ好み":
         question = "好きなカフェやお店の雰囲気があれば教えてください"
+    elif topic == "料理習慣" and re.search(r"最近|この前|昨日|先週|先日", source_question) and re.search(r"どんな|何|作っ|作り", source_question):
+        recency = next((term for term in ("昨日", "先週", "この前", "先日", "最近") if term in source_question), "最近")
+        question = f"{recency}どんな料理を作ったか教えてください"
     elif topic == "料理習慣" and re.search(r"しますか|作りますか", source_question):
         question = "普段料理や自炊はしますか？"
     elif topic == "運動習慣":
@@ -5115,6 +5137,38 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         )
         for clause in partner_clauses
     )
+    knows_recent_movie_watch = any(
+        re.search(
+            r"(?:最近|この前|昨日|先週|先日).{0,18}(?:映画|作品).{0,16}(?:観|見)(?:まし|た)"
+            r"|(?:映画|作品).{0,16}(?:最近|この前|昨日|先週|先日).{0,16}(?:観|見)(?:まし|た)",
+            clause,
+        )
+        for clause in partner_clauses
+    )
+    frequency_number = r"(?:\d+|[一二三四五六七八九十]+)"
+    frequency_unit = rf"{frequency_number}\s*(?:回|度)"
+    knows_travel_frequency = any(
+        re.search(rf"(?:旅行|旅).{{0,16}}(?:年|月|週)(?:に)?\s*{frequency_unit}|(?:年|月|週)(?:に)?\s*{frequency_unit}.{{0,16}}(?:旅行|旅)", clause)
+        for clause in partner_clauses
+    )
+    specific_weekend_period = r"(?:今週末|今度の週末|今度の土日|今週の土日|今度の(?:土|日)(?:曜(?:日)?)?|今週の(?:土|日)(?:曜(?:日)?)?)"
+    knows_specific_weekend_plan = any(
+        re.search(rf"{specific_weekend_period}.{{0,28}}(?:行|出かけ|訪れ|行く予定|行くつもり)", clause)
+        for clause in partner_clauses
+    )
+    knows_favorite_food = any(
+        re.search(
+            r"(?:プリン|カレー|ラーメン|寿司|すし|パスタ|ケーキ|チョコ(?:レート)?|焼肉|"
+            r"うどん|そば|パン|ハンバーグ|オムライス|唐揚げ|からあげ|餃子|ぎょうざ|"
+            r"スイーツ|お菓子|甘いもの|ラーメン|ハンバーガー)"
+            r"(?:が)?(?:一番|いちばん)?好き(?:なんです|なんだ|です|だ)?"
+            r"(?!ではない|じゃない|ではありません|じゃありません|というわけではない|というわけじゃない)"
+            r"(?=(?:で|だから|なので|[!！\s]|$))"
+            r"|(?:好きな食べ物|好物)(?:は|が)(?!何|なん|ありますか)(?![^！？?]{0,16}(?:ではない|じゃない|ではありません|じゃありません))[^！？?]{1,24}(?:です|だ|で好き)",
+            message,
+        )
+        for message in partner_messages
+    )
     exercise_topics = r"(?:ジム|筋トレ|運動|ランニング|スポーツ|トレーニング)"
     exercise_frequency_messages = [
         message for message in partner_messages
@@ -5138,6 +5192,27 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
             re.compile(
                 r"(?:最近|この前|昨日|先週).{0,14}(?:カフェ|喫茶店).{0,14}(?:行った|行きました|訪れた|寄った)"
                 r"|(?:カフェ|喫茶店).{0,14}(?:最近|この前|昨日|先週).{0,14}(?:行った|行きました|訪れた|寄った)"
+            ),
+        ),
+        (
+            "最近観た映画",
+            knows_recent_movie_watch,
+            re.compile(
+                r"(?:最近|この前|昨日|先週|先日).{0,12}(?:どんな|何の|どの).{0,8}(?:映画|作品).{0,8}(?:観|見)(?:た|ました)"
+                r"|(?:どんな|どの|何の)(?:映画|作品).{0,8}(?:を)?(?:観|見)(?:た|ました)|何を.{0,8}(?:観|見)(?:た|ました)"
+            ),
+        ),
+        (
+            "旅行の頻度",
+            knows_travel_frequency,
+            re.compile(r"(?:旅行|旅).{0,16}(?:どのくらい|どれくらい|何回|どんな頻度|頻度).{0,12}(?:行|出かけ)|(?:どのくらい|どれくらい|何回|どんな頻度|頻度).{0,12}(?:旅行|旅).{0,12}(?:行|出かけ)"),
+        ),
+        (
+            "今週末の予定",
+            knows_specific_weekend_plan,
+            re.compile(
+                rf"{specific_weekend_period}.{{0,18}}(?:どこ|何を|何し|何する|行く予定|予定).{{0,12}}(?:行|予定|する|過ご)"
+                rf"|{specific_weekend_period}.{{0,18}}(?:どこへ|どこに).{{0,8}}(?:行く|行きます)"
             ),
         ),
         (
@@ -5176,7 +5251,7 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         ),
         (
             "好きな食べ物",
-            any(re.search(r"(?:好きな食べ物|好物).{0,10}(?:カレー|ラーメン|寿司|パスタ|ケーキ)|(?:カレー|ラーメン|寿司|パスタ|ケーキ).{0,8}(?:が好き|が好物)", message) for message in partner_messages),
+            knows_favorite_food,
             re.compile(r"(?:好きな食べ物|好物).{0,8}(?:何|なんですか|ありますか)|何が好きですか"),
         ),
         (
@@ -5597,12 +5672,82 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         return False
     topic = _topic_for_personal_question(question)
     if not topic:
+        if _is_unclassified_direct_question(question):
+            # Invitations are requests for a yes/no response. Preserve a clear
+            # acceptance before a follow-up question instead of applying the
+            # fail-closed WH-answer rule.
+            if INVITATION_PATTERN.search(question) and re.search(
+                r"(?:ぜひ|行きたい|行こう|行けます|大丈夫|いいですね|いいですよ|お願いします|楽しみ)",
+                candidate.text,
+            ):
+                return True
+            if _candidate_has_bounded_polar_answer(candidate.text, question):
+                return True
+            # For outcome questions, accept only explicit outcome language.
+            # A merely grammatical or unrelated statement is not evidence of
+            # an answer. Unknown WH questions fail closed so the safe-candidate
+            # filter can retain any other grounded option and report shortage.
+            asks_outcome = bool(re.search(r"(?:どうなった|どうなりました|それでどう|その後どう)[^!?！？\n]*[?？]?$", question))
+            if asks_outcome:
+                answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+                if re.search(
+                    r"(?:解決|決まり|決着|終わり|終わりました|なりました|しました|できました|行けました|会えました|断られ|成功|失敗|嬉しかった|うまくいき|だめでした)",
+                    answer_prefix,
+                ):
+                    return True
+            return False
         return True
     if not _topic_is_verified(topic, context, question):
         # A recognized personal question without a confirmed answer must not
         # be treated as answered by an unrelated, evasive candidate. The API
         # preflight normally asks the user first; this is the final send guard.
         return False
+    if topic == "料理習慣" and _personal_information_scope(topic, question) == (topic, "recent_experience"):
+        facts = context.get("my_profile", {}).get("facts", {})
+        evidence = [
+            str(facts[key]).strip()
+            for key in ("recent_dishes", "recent_cooking", "recent_recipes", "最近作った料理", "最近の料理")
+            if facts.get(key)
+        ]
+        evidence.extend(
+            str(answer.get("answer", "")).strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if answer.get("answer", "").strip()
+            and _same_personal_information_scope(topic, question, answer.get("question", ""))
+        )
+        normalized = lambda value: re.sub(r"[\s、。！!？?😊☺️✨😄😂🥲😭🌸❤️💕👍☕📚]", "", value)
+        allowed_answer_remainder = re.compile(
+            r"(?:(?:最近|この前|昨日|先週|先日|この間|さっき)|(?:私|自分|僕|俺))?"
+            r"(?:は|が|を|で|に)?(?:料理)?(?:は|が|を|で|に)?"
+            r"(?:作りました|作っていました|作ってました|作ってみました|作った(?:んです|んだ)?|作り|作っ|ました|た)?"
+            r"(?:です|なんです|なんだ|ね|よ)?"
+        )
+        neutral_reactions = {"そうなんですね", "なるほど", "たしかに", "えーそうなんですね", "へーそうなんですね"}
+        matched_answer = False
+        for line in (part.strip() for part in candidate.text.splitlines() if part.strip()):
+            normalized_line = normalized(line)
+            matched_evidence = next(
+                (
+                    normalized(item)
+                    for item in evidence
+                    if normalized(item) and normalized(item) in normalized_line
+                ),
+                None,
+            )
+            if matched_evidence:
+                remainder = normalized_line.replace(matched_evidence, "", 1)
+                if not allowed_answer_remainder.fullmatch(remainder):
+                    return False
+                matched_answer = True
+                continue
+            if re.search(r"[?？]$", line) and _is_partner_directed_followup_question(line, question):
+                continue
+            if normalized_line in neutral_reactions:
+                continue
+            # A recent-dish answer does not authorize another declarative
+            # claim, even if the confirmed dish name appears in that sentence.
+            return False
+        return matched_answer
     if topic == "カフェ頻度":
         facts = context.get("my_profile", {}).get("facts", {})
         frequency_evidence = [
@@ -6072,6 +6217,67 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
     if not answer_segments or all(_reading_genre_segment_is_question_only(segment) for segment in answer_segments):
         return False
     return bool(re.search(marker, answer_prefix))
+
+
+def _is_unclassified_direct_question(text: str) -> bool:
+    """Recognize clear direct questions that are outside personal-fact topics."""
+    # Agreement-seeking tags ("いいところですよね？") are conversational
+    # invitations to agree, not requests for a concrete answer.
+    if re.search(
+        r"(?:ですよね|だよね|じゃないですか|ではないですか|"
+        r"(?:面白かった|おもしろかった|楽しかった|良かった|よかった|美味しかった|おいしかった|すごかった|凄かった|"
+        r"大変だった|疲れた|最高だった|いいところ|素敵だった|きれいだった|綺麗だった)よね)[?？]?\s*$",
+        text,
+    ):
+        return False
+    return bool(
+        re.search(r"[?？]\s*$", text)
+        or re.search(r"(?:ですか|ますか|んですか|のですか|どうでしたか|どうなったんですか|どうなりましたか)\s*$", text)
+    )
+
+
+def _candidate_contains_substantive_answer_clause(text: str) -> bool:
+    """Require answer-like content before accepting a topic-switching question.
+
+    This intentionally does not attempt to prove semantic correctness. It only
+    prevents a bare reaction or a new question from replacing a direct partner
+    question whose subject is not classified by the personal-fact gate.
+    """
+    reaction_only = re.compile(
+        r"^(?:そうなんですね|そうなんだ|なるほど|たしかに|えーそうなんですね|"
+        r"へーそうなんですね|えーいいですね|それは大変ですね|それは大変でしたね|"
+        r"いいですね|素敵ですね|面白そうですね|それは面白そうですね|そうですよね|"
+        r"わかります|分かります|はい|うん|ええ|いいえ|いや|そうです|違います|"
+        r"知っています|知ってます|知りません|それはすごいですね|お疲れ様です|お疲れさまです|"
+        r"うわそれは(?:つら|辛|大変|しんど|悲し|怖|残念|きつ).{0,8}(?:ですね|でしたね)|"
+        r"それは(?:つら|辛|大変|しんど|悲し|怖|残念|きつ).{0,8}(?:ですね|でしたね))(?:笑)?$"
+    )
+    clauses = re.split(r"[!?！？\n]+", text)
+    for clause in clauses:
+        value = clause.strip()
+        if not value:
+            continue
+        # The closing question mark was removed by the clause split above;
+        # do not mistake the body of a follow-up question for an answer.
+        if value.endswith("か"):
+            continue
+        value = re.sub(r"^(?:えー|えっ|へー|あー|なるほど|たしかに|そうなんですね|そうなんだ|わかります|分かります)[\s　]*", "", value)
+        value = re.sub(r"(?:ですか|ますか|んですか|のですか|でしょうか|かな？|かな\?)\s*$", "", value)
+        value = re.sub(r"[\s　😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+$", "", value)
+        if len(value) >= 4 and not reaction_only.fullmatch(value):
+            return True
+    return False
+
+
+def _candidate_has_bounded_polar_answer(candidate_text: str, question: str) -> bool:
+    """Allow a concise yes/no answer to an unclassified polar question."""
+    if re.search(r"(?:何|なに|どこ|どの|どんな|だれ|誰|どなた|いつ|どう|なぜ|何故|いくら|どれ|どちら|どっち)", question):
+        return False
+    if not re.search(r"(?:ですか|ますか|んですか|のですか)[?？]?\s*$", question):
+        return False
+    allowed = {"はい", "うん", "ええ", "いいえ", "いや", "そうです", "違います", "知っています", "知ってます", "知りません", "知ってますよ"}
+    clauses = re.split(r"[!?！？\n]+", candidate_text)
+    return any(re.sub(r"[\s　😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]", "", clause) in allowed for clause in clauses)
 
 
 def _answers_verified_partner_question(candidate: Candidate, context: dict) -> bool:
