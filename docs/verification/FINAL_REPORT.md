@@ -1503,3 +1503,9 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 変更前失敗を確認したfocusedテストは変更後3 passed / 1273 deselected。first APIコンテキストの架空相手名も確認。これはオフライン試験であり、実Gemini文章品質のPASSではない。
 - 実API追加通信0回。T369の実生成品質FAILおよび総合NO-GOを維持。
 - 前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f`のPush/PR Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) / [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は同一SHAでsuccess。今回の追補コミットのCIは未実施。
+
+
+## 2026-10-16 10:25 JST 追補：相槌と絵文字
+
+- 平板な反応の再発を減らすため、共通プロンプトに状況別の相槌と相槌を付けない選択を追加。明るい通常会話では3候補中1候補以上に自然な絵文字を検討し、深刻・不安・拒否・断りでは強制しない。
+- 修正前のプロンプト契約テストFAILを確認し、修正後は5 passed / 1272 deselected。Gemini実通信は0回で、実生成の自然さ改善は未確認。過去の品質009 FAILと総合NO-GOを維持。

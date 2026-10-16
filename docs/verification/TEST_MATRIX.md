@@ -953,3 +953,7 @@ QUALITY009再生focused監査（既存項目の補足、件数の重複加算な
 | T371 | 初回メッセージで確定済み相手名を使う指示 | プロンプト契約・APIコンテキストテスト（pytest、オフライン） | PASS | `other.name` は `/api/generate` の既存コンテキストにあり、first用指示に「名前が確認できる場合は自然に使用し、不明なら省略・プレースホルダー禁止」を追加。プロンプト契約・固定デモ候補・first APIコンテキストのfocused test 3 passed / 1273 deselected。Gemini実通信0回のためモデル追従品質は未検証。変更HEADとActionsはコミット後に追記。 |
 
 最新ID行: 371。累計: PASS259 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。T369実生成品質FAILは維持。
+
+| T372 | 文脈に合う相槌と絵文字の検討 | 共通プロンプト契約テスト（pytest、オフライン） | PASS | 明るい通常会話では3案中1案以上の絵文字を積極的に検討し、文脈に合う相槌・相槌なし・同義反復の回避・深刻/拒否場面での抑制を明記。修正前は相槌例がなく focused testがFAIL。修正後は共通プロンプトを4モードで読むfocused suite 5 passed / 1272 deselected。実Gemini品質は未検証。 |
+
+最新ID行: 372。累計: PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。T369の実生成品質FAILは維持。

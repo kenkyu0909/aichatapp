@@ -1450,3 +1450,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - オフラインfocused test 3 passed / 1273 deselected。firstのAPIコンテキストに架空相手名が含まれることも確認。Gemini APIは0回。実モデルの初回生成で名前が自然に使われるかは未検証。
 - 直前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f` のPush Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) とPR Actions [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は両方success、同一HEAD。pytest 1368 passed、JavaScript構文検査とartifact保存成功。
 - 次: このprompt/test/docs変更をdiff確認後にコミット・Pushし、最新SHAの両Actionsを確認。その後は本人の架空体験質問と回答、履歴・直接質問回答に関するオフライン回帰へ進む。会話004/新規HTML/Gemini追加通信は実施しない。
+
+
+### 2026-10-16 10:25 JST 相槌と絵文字の判断指示
+
+- ユーザーのHTMLレビューで見えた平板さに対応。現行共通プロンプトは相槌の具体例がなく、絵文字を控える方向だけが明記されていたため、相槌の選び方と絵文字を積極的に検討する条件をテストで再現（修正前FAIL）。
+- `prompts/common.txt`を修正。明るい通常会話では3案の少なくとも1案に自然な絵文字を検討し、相手の実際の内容に応じて「えーそうなんですね！」「なるほど！」や相槌なしを選択。深刻・不安・拒否・断りは例外として明るさを強制しない。
+- focused test 5 passed / 1272 deselected（4モード共通prompt契約を含む）。実API通信0回。静的指示の確認で、実生成の自然さ・頻度改善は未確認。
+- T372を追加。総372項目: PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
+- 次: 差分と関連プロンプトの矛盾を確認しコミット・Push。Actionsを最新SHAで確認後、保存済み生成の質問回答漏れと候補多様性をオフラインで次に監査する。会話004/新規HTML/Gemini通信なし。

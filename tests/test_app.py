@@ -1890,6 +1890,17 @@ def test_first_demo_candidates_include_interest_and_match_happiness(client):
     assert any(emoji in candidates[0]["text"] for emoji in ("😊", "☺️"))
 
 
+def test_shared_prompt_uses_contextual_interjections_and_considers_emojis(client):
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+
+    assert "えーそうなんですね" in prompt
+    assert "相槌なし" in prompt
+    assert "同じ相槌" in prompt
+    assert "3案なら少なくとも1案" in prompt
+    assert "深刻な話" in prompt and "断り" in prompt
+
+
 def test_candidate_validation_rejects_japanese_comma_and_period(client):
     _, backend = client
     value = backend.Suggestions(
