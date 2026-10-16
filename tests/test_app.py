@@ -7337,6 +7337,9 @@ def test_general_meal_and_pet_questions_are_not_misclassified_as_personal(questi
     "最近の映画ランキングで何が人気ですか？",
     "今話題の映画は何ですか？",
     "最新の映画の興行収入はどれくらいですか？",
+    "映画ランキングを見て決めたいのですが、何が人気ですか？",
+    "映画のレビューを見て選ぶなら、どの作品が人気ですか？",
+    "映画の口コミを見て、人気の作品は何ですか？",
 ])
 def test_general_movie_popularity_questions_are_not_misclassified_as_personal(question, client):
     _, backend = client
