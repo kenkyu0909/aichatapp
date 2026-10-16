@@ -544,7 +544,13 @@ function likeModal(){
   });
 }
 async function profileModal(){
-  state.profile=await api("/profile");
+  try{
+    state.profile=await api("/profile");
+  }catch(error){
+    // The startup copy keeps the form available during a temporary outage;
+    // failed saves leave the user's edits open for retry after recovery.
+    if(!state.profile||typeof state.profile.content!=="string")throw error;
+  }
   showModal("📋 自分の情報",body=>{
     body.append(node("p","modal-description","文章生成時に使用するご自身の情報です。後から編集できます。"));
     let fields={};

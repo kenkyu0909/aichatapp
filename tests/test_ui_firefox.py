@@ -522,6 +522,7 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 0
 
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     profile_dialog = modal(driver)
     profile_field = profile_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")[0]
     profile_field.send_keys("再起動後も保持する架空プロフィール")
@@ -1958,7 +1959,6 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
 
 def test_firefox_profile_edit_preserves_extension_fields_and_array_types(local_app, firefox):
     driver = firefox
-    driver.get(local_app.url)
     profile = {
         "name": "架空の本人",
         "age": "28",
@@ -1978,7 +1978,10 @@ def test_firefox_profile_edit_preserves_extension_fields_and_array_types(local_a
     ):
         pass
 
+    driver.get(local_app.url)
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "相手を選択")
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     profile_dialog = modal(driver)
     profile_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
     WebDriverWait(driver, 5).until(lambda browser: profile_dialog.get_attribute("open") is None)
