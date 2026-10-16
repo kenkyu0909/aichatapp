@@ -1014,3 +1014,7 @@ CI確認追記: 検証コードSHA `ad764f01dca47135800f3d230d1b262261d6e016`の
 2026-10-16 15:10 JST 最新HEADでの再検証: 全pytest **1605 passed in 303.57s**。追加focused suite `tests/test_quality_checks_009.py` **8 passed**、保存候補再評価 `tests/test_app.py -k quality009_recorded_redundant_reactions_are_detected` **1 passed**。全pytestにはFirefox UIテストが含まれる。Python構文、JavaScript構文、`git diff --check`成功。追跡対象の認証情報パターンスキャンは一致なし。Gemini実通信0回。コード・文書は未コミットで、GitHub ActionsはPush後に確認する。|
 
 T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)とPR Actions [38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)は両方success。同じSHAの各runで**1605 passed / 1 warning**。JavaScript構文検査とoffline-test-results artifact保存も成功。警告はGitHub runnerのNode.js 20・ubuntu-latest移行通知。 |
+
+| T393 | first候補の必須要素と否定表現を送信前に検査 | 架空プロフィールを使うpytest、候補フィルター、独立コードレビュー | FIXED | first候補に挨拶・本人への軽い好意・マッチ成立の喜び・プロフィール由来の話題・質問1つを個別に要求。欠落・質問0/複数・肯定表現の否定形（タイプじゃない/だった/思わない、好みというわけではない、気になっていない、嬉しくない/思えない/限らない/わけじゃない/しくもない/しくはありません等）は送信候補から除外。安全な完全候補は維持し、案数不足通知を残す。first以外のモードには影響しない。focused first suite 30 passed。全pytest 1633 passed in 299.26s（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。独立レビューで代表的な否定形を再現後、修正を確認。これは限定された文字列ガードであり、日本語の意味を完全に判定するものではない。Gemini実通信0回。|
+
+最新ID行: 393。累計: PASS261 / FAIL14 / FIXED98 / BLOCKED5 / NOT_TESTED15。最新Windows全pytest **1633 passed in 299.26s**、Firefox UIを含む。初回文focused suite **30 passed**。Gemini実通信0回。Actionsは最新変更のPush後に確認する。T369とQUALITY009の実生成品質FAILは維持し、総合NO-GO。 |

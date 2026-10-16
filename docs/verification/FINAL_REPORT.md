@@ -1585,3 +1585,11 @@ T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_
 ### GitHub Actions
 
 検証コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`を対象に、[Push Actions 38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)と[PR Actions 38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)が成功。各runは1605 passed / 1 warning、JavaScript構文検査とoffline-test-results artifact保存が成功した。警告はGitHubホストランナーのNode.js 20とUbuntu移行通知。
+
+### 2026-10-16 15:50 JST 追加検証：first候補の要件ガード
+
+以前は初回メッセージに挨拶・軽い好意・マッチの喜び・プロフィールへの言及・質問が欠けていても、候補として表示されることがあった。バックエンドのfirst専用フィルターで各要素と質問数を検査し、不完全候補を送信可能状態にしないよう修正した。プロフィール根拠は保存文または一時回答に限定する。
+
+否定文を肯定要件と誤認する問題を独立レビューで見つけ、代表的な口語・過去形・丁寧形の否定パターンにテストを追加した。focused first suiteは30 passed、全pytestは1633 passed in 299.26s（Firefox UIを含む）。Python・JavaScript構文と差分チェック成功。Gemini実通信は0回で、実生成品質は未確認。文字列ガードは限定的で、否定や皮肉を含むすべての日本語の意味を判定できるとは主張しない。
+
+テストマトリクスは393項目: PASS261 / FAIL14 / FIXED98 / BLOCKED5 / NOT_TESTED15。過去の実Gemini品質FAIL T369/QUALITY009が残るため総合NO-GO。今回HEADのGitHub Actionsはcommit/push後に確認する。

@@ -1574,3 +1574,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 ### 2026-10-16 15:15 JST 最新SHAのActions
 
 コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush run [38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)とPR run [38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)はともにsuccess。双方のpytestは1605 passed / 1 warning、JavaScript構文検査とoffline-test-results artifact保存も成功。警告はNode.js 20とubuntu-latestの将来移行通知。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`で未マージ。実Gemini API通信0回。
+
+### 2026-10-16 15:50 JST 初回メッセージ候補の不足要素を送信前に除外
+
+- 再現: first用プロンプトが求める挨拶・好意・マッチできた喜び・相手プロフィールの話題・質問1つを欠く候補でも、バックエンドの安全フィルターを通過してUIに表示できた。
+- `app.py`へfirst専用の候補検査を追加し、必須要素の欠落・質問数0または複数を候補ごとに拒否する。プロフィール用語は保存プロフィールまたは一時回答から抽出し、候補に根拠語がなければ除外。一般的な好意・喜び表現の明白な否定形も認識する。
+- 否定検出について独立レビューで過去形・節否定・「わけではない」・「思えない」等の抜けを見つけ、回帰ケースとガードを追加。適切な肯定候補は通過し、他候補が不完全でも安全候補は残して不足案通知を維持する。
+- first focused **30 passed**。全pytest **1633 passed in 299.26s**（Windows Firefox UI込み）。Python/JavaScript構文と`git diff --check`成功。独立レビューは追加した代表的否定形を確認。ガードは限定的な語句照合で、意味の完全理解を保証しない。
+- Gemini実通信0回。`conversation_004`と新しい会話HTMLは実施しない。protected untracked指示ファイルには触れていない。
+- 変更: `app.py`、`tests/test_app.py`、検証資料。テストケース変更により、過去のfirstモック候補を必須要素に合わせて更新。
+- 次: レポートとPR説明を更新し、作業対象ファイルだけcommit/push。PushとPRの最新SHA Actionsを確認し、PR #4をDraft/未マージのまま維持する。

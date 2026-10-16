@@ -5931,6 +5931,91 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
     return _candidate_sentence_count(candidate.text) > maximum_sentences
 
 
+def _first_message_required_content_reasons(text: str, context: dict) -> list[str]:
+    """Require the explicit first-message elements from the prompt.
+
+    These checks are intentionally narrow lexical guards, not a semantic proof
+    that a message is charming or that every profile paraphrase is understood.
+    They prevent plainly incomplete openers from being shown as sendable.
+    """
+    reasons: list[str] = []
+    normalized = re.sub(r"\s+", " ", text)
+    negation_after_expression = re.compile(
+        r"^(?:じゃない|ではない|じゃなく|ではなく|じゃありません|ではありません|"
+        r"じゃなかった|ではなかった|くない|くありません|しくない|しくありません|"
+        r"しくはない|しくはありません|しくもない|しいとは思わない|しいとは思いません|"
+        r"しいとは思えない|しいとは思えません|"
+        r"しいとは思っていない|"
+        r"しいとは言えない|しいとは言えません|しいわけではない|しいわけじゃない|"
+        r"しい気分ではない|しいとは限らない|しい気がしない|"
+        r"いない|いません|(?:という|といった)?わけでは(?:ない|ありません|なかった)|"
+        r"(?:だ)?と思わない|(?:だ)?と思いません|(?:だ)?と思っていない|"
+        r"(?:だ)?と思っていません|(?:だ)?と思えない|(?:だ)?と思えません|"
+        r"気がしない|気がしません|ないです|ない|"
+        r"(?:だ)?とは(?:思わない|思いません|思わず|思わなかった|思わなかったです|思えない|思えません)|"
+        r"(?:だ)?とは言え(?:ない|ません|なかった))"
+    )
+
+    def has_affirmed_expression(pattern: str) -> bool:
+        return any(
+            not negation_after_expression.search(normalized[match.end() : match.end() + 14])
+            for match in re.finditer(pattern, normalized)
+        )
+
+    if not re.search(
+        r"(?:はじめまして|初めまして|こんにちは|マッチありがとうございます|"
+        r"マッチしてくれてありがとうございます)",
+        normalized,
+    ):
+        reasons.append("初回メッセージの挨拶不足")
+
+    if not has_affirmed_expression(
+        r"(?:タイプ|好み|素敵|すてき|魅力的|惹か|好印象|かわいい|可愛い)"
+        r"|(?:プロフィール|雰囲気).{0,10}気にな(?:って|った)",
+    ):
+        reasons.append("初回メッセージの好意表現不足")
+
+    match_joy = False
+    for expression in re.finditer(r"(?:うれ|嬉|よかった|幸せ|光栄|喜び)", normalized):
+        suffix = normalized[expression.end() : expression.end() + 14]
+        if negation_after_expression.search(suffix):
+            continue
+        nearby = normalized[max(0, expression.start() - 24) : expression.end() + 24]
+        if "マッチ" in nearby:
+            match_joy = True
+            break
+    if not match_joy:
+        reasons.append("初回メッセージのマッチ成立の喜び不足")
+
+    other = context.get("other") or {}
+    profile_sources = [str(other.get("description", ""))]
+    profile_sources.extend(
+        str(value)
+        for value in other.get("temporary_user_supplied_profile_facts", [])
+    )
+    profile_terms: set[str] = set()
+    generic_terms = {
+        "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
+        "です", "ます", "多い", "います", "あります", "プロフィール",
+    }
+    for source in profile_sources:
+        chunks = re.split(
+            r"[、。！!？?\s]+|(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
+            source,
+        )
+        for term in chunks:
+            term = term.strip()
+            term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
+            if len(term) >= 2 and term not in generic_terms:
+                profile_terms.add(term)
+    if not profile_terms or not any(term in normalized for term in profile_terms):
+        reasons.append("初回メッセージのプロフィール話題不足")
+
+    if len(re.findall(r"[?？]", text)) != 1:
+        reasons.append("初回メッセージの質問数不正")
+    return reasons
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -5940,6 +6025,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
         reasons.append("未完成プレースホルダー")
+    if context.get("mode") == "first":
+        reasons.extend(_first_message_required_content_reasons(text, context))
     if candidate_has_missing_sentence_break(text):
         reasons.append("文の区切り不足")
     if candidate_has_high_confidence_japanese_error(text):

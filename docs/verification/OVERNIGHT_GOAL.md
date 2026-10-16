@@ -1292,6 +1292,12 @@ T392を追加。累計392: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15�
 
 T392までの累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。Gemini実通信は0回。実生成品質FAILが残るため総合NO-GO。conversation_004と新しい会話HTMLは行わない。PR #4はDraft・未マージ。
 
+### 2026-10-16 15:50 JST 初回メッセージ候補の要件検査
+
+追加でfirst候補ごとに挨拶・軽い好意・マッチの喜び・プロフィール由来の話題・質問1つを検査する。欠落または代表的な否定形は送信可能候補から除き、安全な残り候補と不足通知は維持する。回帰テストに否定形の好意・喜びを含め、focused suite 30 passed。全pytest 1633 passed in 299.26s（Firefox UI込み）。独立レビューで複数の否定形の誤受理を再現し、修正後の対象ケースを確認した。
+
+この検査は限定された文字列パターンであり、自然言語全体の意味判定ではない。実Gemini品質は未検証、通信0回。既存のT369/QUALITY009実生成品質FAILが残るため、総合NO-GOを維持する。次は文書lint・差分・秘密情報検査後、資料をcommit/pushし、最新SHAのPush/PR Actionsを確認する。会話004・新規会話HTMLは引き続き行わない。
+
 ### 2026-10-16 15:15 JST 最新Actions確認
 
 SHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)とPR Actions [38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)はsuccess。各runで1605 passed / 1 warning、JavaScript構文検査・artifact保存が成功。警告はランナーのNode.js 20およびUbuntu移行通知。PR #4はOPEN/Draft。Gemini実通信は0回。総合NO-GOの理由は過去の実生成品質FAILが未解消であること。
