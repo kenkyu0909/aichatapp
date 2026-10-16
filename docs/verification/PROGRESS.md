@@ -1668,3 +1668,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持（QUALITY009の実生成自然さ・意味的多様性FAIL、T369継続）。保護対象の未追跡指示ファイル3件は保持。
 - 次: D02残（`近いうちに会いませんか？`の誘い意思確認）、D12相手フォームの二重保存ロック、D01〜D03確認契約。
 
+### 2026-10-16 22:35 JST D02回帰修正（丁寧過去形）とD12（相手フォーム二重送信・写真事前検証）
+
+- 検証エージェント#2の独立確認: `b73ac65` に自己導入の偽陽性を検出。除外形が `(?:観|見)た|ますか|る` のみで丁寧過去形が漏れ、`人気の映画を観ましたか？` などの本人体験質問がtopic=Noneへ降格し確認質問が消えていた。D12（相手フォームの二重保存・写真失敗の孤児）も未修正と判定。次指示はD12。
+- D02回帰修正 `d3f1c23`: `_topic_for_personal_question` の除外形を `(?:観|見)(?:た|て|ま|る|れ)` へ拡張し本人確認を回復。一般情報（ランキング/話題/興行収入）はNone維持。`tests/test_app.py` **1678 passed**。
+- D12修正 `17aef51`: `modalFooter` に送信中ロックを追加し二重クリックでの `POST /api/matches` 重複を防止。`openContactForm` は写真のサイズ・形式をPOST前に検証し、作成済みidを再利用して再試行をPUTへ切替（孤児相手の増加を防止）。
+- 検証: 新規Firefoxテスト2件pass、全pytest **1787 passed in 373.92s**（Firefox UI含む）。`node --check app.js`、`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) / PR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) は同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持（QUALITY009の実生成自然さ・意味的多様性FAIL、T369継続）。保護対象の未追跡指示ファイル3件は保持。
+- 次: D03（confirmed_facts/confirmation_state の永続化）、D02残（誘い意思確認 `近いうちに会いませんか？`・第三者質問）、次作業単位後の検証エージェント起動。
+

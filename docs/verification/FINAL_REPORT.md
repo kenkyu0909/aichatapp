@@ -1652,3 +1652,12 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38905548862](https://github.com/kenkyu0909/aichatapp/actions/runs/38905548862)（GitHub pytest 1782 passed / 1 warning）とPR [38905556271](https://github.com/kenkyu0909/aichatapp/actions/runs/38905556271) が同一SHA `dfc3659` でsuccess。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAIL（自然さ・候補意味多様性）は未解決。conversation_004・新会話HTML・Gemini実通信は未実施。未追跡指示ファイル3件は保持。
 
+### 2026-10-16 22:35 JST D02の回帰修正とD12（相手保存の二重送信・写真事前検証）
+
+- 検証エージェント#2が `b73ac65` の自己導入偽陽性を検出。一般情報ガードの除外形が `(?:観|見)た|ますか|る` のみで丁寧過去形が漏れ、`人気の映画を観ましたか？` など本人体験の質問がtopic=Noneへ降格していた。同時にD12（相手フォームの二重保存・写真失敗の孤児）が未修正と判定された。
+- `d3f1c23`: 除外形を `(?:観|見)(?:た|て|ま|る|れ)` へ拡張し、丁寧過去形の映画視聴質問を本人確認として回復。一般情報（ランキング・話題・興行収入）はNoneを維持。`tests/test_app.py` **1678 passed**。
+- `17aef51`: `modalFooter` に送信中ロックを追加して相手フォームの二重クリックによる `POST /api/matches` の重複を防止。`openContactForm` は写真のサイズ・形式をPOST前に検証し、作成済みidを再利用して再試行をPUTへ切り替え、孤児相手の増加を防ぐ。
+- 検証: 新規Firefoxテスト2件pass、全pytest **1787 passed in 373.92s**（Firefox UI含む）。`node --check app.js`、`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
