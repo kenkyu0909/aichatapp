@@ -226,11 +226,19 @@ function field(body,label,value="",multi=false){
 }
 function modalFooter(body,label,onSave,includeCancel=true){
   const bar=node("div","modal-actions");
+  let cancel=null;
   if(includeCancel){
-    const cancel=node("button","","キャンセル");cancel.type="button";cancel.onclick=()=>$("modal").close();bar.append(cancel);
+    cancel=node("button","","キャンセル");cancel.type="button";cancel.onclick=()=>$("modal").close();bar.append(cancel);
   }
   const save=node("button","confirm",label);save.type="button";
-  save.onclick=()=>safe(onSave);bar.append(save);body.append(bar);
+  save.onclick=async()=>{
+    if(save.disabled)return;
+    save.disabled=true;
+    if(cancel)cancel.disabled=true;
+    try{await safe(onSave);}
+    finally{save.disabled=false;if(cancel)cancel.disabled=false;}
+  };
+  bar.append(save);body.append(bar);
 }
 function showMessageEditor(m){
   const contactId=state.selectedId;
@@ -278,6 +286,7 @@ async function addMessage(role,override){
 }
 async function openContactForm(edit=false){
   const old=edit?current():null;
+  let createdId=old?old.id:null;
   showModal(edit?"相手のプロフィールを編集":"相手を追加",body=>{
     body.append(node("p","modal-description","名前・プロフィール・識別用の写真を登録します。写真はGeminiへ送信しません。"));
     const name=field(body,"名前（必須）",old?.name||"");
@@ -295,10 +304,14 @@ async function openContactForm(edit=false){
     }
     modalFooter(body,"保存",async()=>{
       if(!name.value.trim())throw Error("名前を入力してください");
-      const data=await api(old?"/matches/"+old.id:"/matches",json(old?"PUT":"POST",{name:name.value.trim(),description:description.value}));
       const upload=file.files?.[0];
       if(upload){
-        if(upload.size>5*1024*1024)throw Error("写真は5MB以下にしてください。名前とプロフィールは保存済みです。");
+        if(upload.size>5*1024*1024)throw Error("写真は5MB以下にしてください");
+        if(!["image/jpeg","image/png","image/webp"].includes(upload.type))throw Error("写真はJPEG/PNG/WebPにしてください");
+      }
+      const data=await api(createdId?"/matches/"+createdId:"/matches",json(createdId?"PUT":"POST",{name:name.value.trim(),description:description.value}));
+      createdId=data.id;
+      if(upload){
         const form=new FormData();form.append("file",upload);
         await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});
       }

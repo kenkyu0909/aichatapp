@@ -2167,3 +2167,70 @@ def test_firefox_message_change_invalidates_generation_for_old_history(local_app
     assert errors["runtime"] == []
     assert errors["console"] == []
 
+
+def test_firefox_contact_save_button_locks_during_inflight_submit(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    driver.find_element(By.ID, "new-contact").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_elements(By.CSS_SELECTOR, "#modal-body input:not([type=file])")[0].send_keys("一度だけ追加する架空人物")
+    driver.execute_script("""
+      window.__matchPostCount = 0;
+      window.__resolveMatchPosts = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (String(url) === '/api/matches' && options.method === 'POST') {
+          window.__matchPostCount += 1;
+          return new Promise(resolve => window.__resolveMatchPosts.push(async () => resolve(await originalFetch(url, options))));
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    driver.execute_script("""
+      const button = document.querySelector('#modal-body button.confirm');
+      button.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+      button.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    """)
+    time.sleep(0.3)
+    assert driver.execute_script("return window.__matchPostCount") == 1
+    driver.execute_script("window.__resolveMatchPosts[0]()")
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".contact-item")) == 1
+    )
+    with urllib.request.urlopen(local_app.url + "api/matches", timeout=3) as response:
+        matches = json.load(response)
+    assert len([item for item in matches if item["name"] == "一度だけ追加する架空人物"]) == 1
+    errors = record_artifact("firefox-contact-save-lock", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_oversize_photo_is_rejected_before_creating_contact(local_app, firefox, tmp_path):
+    driver = firefox
+    driver.get(local_app.url)
+    oversize = tmp_path / "oversize.jpg"
+    oversize.write_bytes(b"\xff\xd8\xff" + b"\x00" * (5 * 1024 * 1024))
+    driver.find_element(By.ID, "new-contact").click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    modal(driver).find_elements(By.CSS_SELECTOR, "#modal-body input:not([type=file])")[0].send_keys("写真検証の架空人物")
+    file_input = modal(driver).find_element(By.CSS_SELECTOR, "#modal-body input[type=file]")
+    file_input.send_keys(str(oversize))
+    if driver.find_element(By.ID, "toast").is_displayed():
+        driver.execute_script("document.getElementById('toast').hidden = true")
+    modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
+    visible_toast(driver, "写真は5MB以下にしてください")
+    assert modal(driver).get_attribute("open") is not None
+    with urllib.request.urlopen(local_app.url + "api/matches", timeout=3) as response:
+        assert json.load(response) == []
+    driver.execute_script("arguments[0].value = ''", file_input)
+    modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".contact-item")) == 1
+    )
+    with urllib.request.urlopen(local_app.url + "api/matches", timeout=3) as response:
+        matches = json.load(response)
+    assert len([item for item in matches if item["name"] == "写真検証の架空人物"]) == 1
+    errors = record_artifact("firefox-oversize-photo-rejected-before-insert", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
