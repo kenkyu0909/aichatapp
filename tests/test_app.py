@@ -3598,17 +3598,51 @@ def test_confirmed_fact_suppresses_reasking_the_same_question(client):
     assert backend.missing_personal_fact_question(reloaded) is None
 
 
-def test_confirmed_fact_helper_matches_by_id_or_slot_only(client):
+def test_confirmed_fact_helper_matches_by_normalized_id_only(client):
     _c, backend = client
     asked = backend.personal_fact_question("映画", "好きな映画は何ですか？").question
     by_id = {"confirmed_facts": {backend._normalize_clarification_question_key(asked): {}}}
-    by_slot = {"confirmed_facts": {"some-other-id": {
+    slot_only = {"confirmed_facts": {"some-other-id": {
         "requested_slot": backend._optional_user_question_scope_key(asked),
     }}}
     assert backend._confirmed_fact_covers_question(by_id, "映画", "好きな映画は何ですか？") is True
-    assert backend._confirmed_fact_covers_question(by_slot, "映画", "好きな映画は何ですか？") is True
+    assert backend._confirmed_fact_covers_question(slot_only, "映画", "好きな映画は何ですか？") is False
     assert backend._confirmed_fact_covers_question({}, "映画", "好きな映画は何ですか？") is False
     assert backend._confirmed_fact_covers_question(by_id, "映画", "") is False
+
+
+def test_confirmed_fact_does_not_suppress_an_unrelated_topic(client):
+    c, backend = client
+    mid = add_match(c, "架空ほなみ")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近観た映画は何ですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    asked = backend.missing_personal_fact_question(context)
+    assert asked is not None
+    backend.persist_confirmed_facts(backend.build_ephemeral_confirmations(
+        [{"question": asked.question, "answer": "最近は『青い灯台』を観ました", "confirmed": True}],
+        match_id=mid, session_id="sess-unrelated",
+    ))
+
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近読んだ本は何ですか？"})
+    reloaded = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(reloaded) is not None
+
+
+def test_confirmed_fact_does_not_suppress_a_different_detail(client):
+    c, backend = client
+    mid = add_match(c, "架空ほなみ")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "好きな映画は何ですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    asked = backend.missing_personal_fact_question(context)
+    assert asked is not None
+    backend.persist_confirmed_facts(backend.build_ephemeral_confirmations(
+        [{"question": asked.question, "answer": "『青い灯台』が好きです", "confirmed": True}],
+        match_id=mid, session_id="sess-detail",
+    ))
+
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "どんな映画が好きですか？"})
+    reloaded = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert backend.missing_personal_fact_question(reloaded) is not None
 
 
 def test_confirmed_fact_does_not_touch_profile_without_explicit_save(client):

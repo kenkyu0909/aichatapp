@@ -1490,9 +1490,9 @@ def _verified_job_or_school_values(facts: dict, question: str) -> list[str]:
 def _confirmed_fact_covers_question(facts: dict, topic: str, question_text: str) -> bool:
     """Treat a previously saved confirmation as verified for the same question.
 
-    A saved answer is only reused when the question being asked matches the
-    stored one by normalized id or by the same inferred slot, so a different
-    detail still triggers a fresh clarification.
+    Only an exact normalized-question match counts. Slot-only matching was
+    rejected because ``_optional_user_question_scope_key`` can collide across
+    topics and details, which silently suppressed unrelated clarifications.
     """
     confirmed = facts.get("confirmed_facts")
     if not isinstance(confirmed, dict) or not confirmed:
@@ -1500,12 +1500,7 @@ def _confirmed_fact_covers_question(facts: dict, topic: str, question_text: str)
     if not question_text.strip():
         return False
     asked = personal_fact_question(topic, question_text).question
-    question_id = _normalize_clarification_question_key(asked)
-    requested_slot = _optional_user_question_scope_key(asked)
-    for entry in confirmed.values():
-        if isinstance(entry, dict) and entry.get("requested_slot") == requested_slot:
-            return True
-    return question_id in confirmed
+    return _normalize_clarification_question_key(asked) in confirmed
 
 
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
