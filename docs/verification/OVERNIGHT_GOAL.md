@@ -1170,3 +1170,11 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - Windowsローカル全pytest **1369 passed in 234.27s**。GitHub Actionsは最新HEAD `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`のPush [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552)・PR [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980)ともsuccess、CI pytest 1369 passed、JavaScript構文検査成功。
 - ゴール7のオフライン回帰はPASS。実生成自然さ・意味的多様性の既存FAILがあるため総合はNO-GOを維持。ゴール1〜6も網羅ベンチマーク全体が再評価済みではない。
 - PR #4はOPEN/Draft・未マージ。次は保存済みQUALITY009の本人回答済み直接質問に答えない候補、候補の意味的重複、共感反復を限定的に監査する。
+
+
+### 2026-10-16 10:35 JST 候補数プロンプト監査
+
+- 1・3・5案設定に対して固定の3案指示がfirst/commonにあり、プロンプト契約テストで再現。案数固定を外し、要求数に従って各候補を点検するよう修正。
+- T373 PASS（focused 5 passed）。これはオフラインのプロンプト整合性確認であり、実モデルが各案数を正しく生成する証拠ではない。
+- 直前HEAD `1c9fae193f42bb64d369b3e0fbc0116bdc64d8f1`のPush/PR Actions成功。今回変更のCIは次のPush後に確認。
+- 実Gemini品質のFAILと総合NO-GOは維持。

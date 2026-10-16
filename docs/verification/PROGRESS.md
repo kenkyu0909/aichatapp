@@ -1467,3 +1467,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Windowsローカル全pytest 1369 passed in 234.27s。Firefox UIテストを含む全suite。今回のテストはAPI・UIオフライン検証のみで、Gemini実通信0回。
 - T371/T372の累計: 372件、PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。過去の品質009実生成自然さ・候補多様性FAILは維持。
 - PR #4は最新SHAでOPEN/Draft・未マージ。次は保存済み品質009出力を使い、本人回答済みの直接質問に各候補が答えることと候補方針の差を再監査する。会話004・新HTML・Gemini通信は行わない。
+
+
+### 2026-10-16 10:35 JST 候補数の固定指示を解消
+
+- first用プロンプトに「3案/3候補」が残り、1案・5案のUI設定と矛盾することを特定。共通プロンプトにも3案固定の絵文字・相槌・reply_move記述が残っていた。動的候補数のテストを追加し、修正前にFAILを再現。
+- first/commonともリクエスト案数へ従う表現に変更。firstモードの全候補を個別点検し、複数案のみ切り口を変える。絵文字は複数案で1案以上を自然に検討する。
+- first prompt specの例を、架空名「あかり」、主観的好意、喜び、プロフィール言及、質問、文ごとの改行を含む新仕様に更新。ユーザー指定例の雰囲気を反映。
+- focused suite 5 passed / 1273 deselected。Gemini実通信0回。実際の1/3/5案生成品質は未検証。
+- T373を追加。累計373: PASS261 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
+- 直前HEAD `1c9fae193f42bb64d369b3e0fbc0116bdc64d8f1`のPush [38835470570](https://github.com/kenkyu0909/aichatapp/actions/runs/38835470570)・PR [38835475731](https://github.com/kenkyu0909/aichatapp/actions/runs/38835475731)は同一SHAでsuccess。CI pytest 1369 passed / 1 warning、JavaScript syntax・artifact成功。今回の変更を含むActionsは未実施。
+- 次: diff check、commit/push、最新SHA Push/PR Actions確認。会話004、新会話HTML、Gemini追加通信は行わない。

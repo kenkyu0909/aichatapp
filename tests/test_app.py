@@ -690,8 +690,8 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert "初回" in backend.read_prompt("first")
     assert "軽い好意" in backend.read_prompt("first")
     assert "マッチできた喜び" in backend.read_prompt("first")
-    assert "3候補では" in backend.read_prompt("first")
-    assert "3候補を別々に点検" in backend.read_prompt("first")
+    assert "複数候補では" in backend.read_prompt("first")
+    assert "要求された案数ぶんの候補を別々に点検" in backend.read_prompt("first")
     assert "句読点チェックも各候補" in backend.read_prompt("first")
     assert "主観的な褒め言葉とマッチできた喜び" in backend.read_prompt("first")
     assert "マッチ前" in backend.read_prompt("like")
@@ -1870,6 +1870,15 @@ def test_first_prompt_requires_subjective_interest_and_match_happiness(client):
     assert "相手の名前がプロフィールで確認できる場合" in prompt
 
 
+def test_first_prompt_respects_requested_candidate_count(client):
+    _, backend = client
+    prompt = (backend.PROMPTS / "first.txt").read_text(encoding="utf-8")
+
+    assert "要求された案数" in prompt
+    assert "3候補" not in prompt
+    assert "3案すべて" not in prompt
+
+
 def test_first_demo_candidates_include_interest_and_match_happiness(client):
     _, backend = client
     result = backend.demo_suggestions("first", 5)
@@ -1897,7 +1906,7 @@ def test_shared_prompt_uses_contextual_interjections_and_considers_emojis(client
     assert "えーそうなんですね" in prompt
     assert "相槌なし" in prompt
     assert "同じ相槌" in prompt
-    assert "3案なら少なくとも1案" in prompt
+    assert "複数案なら少なくとも1案" in prompt
     assert "深刻な話" in prompt and "断り" in prompt
 
 

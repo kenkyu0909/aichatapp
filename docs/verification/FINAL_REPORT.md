@@ -1516,3 +1516,11 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 最新コードHEAD `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`に対するPush Actions [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552) とPR Actions [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980) が同一SHAでsuccess。CI pytest 1369 passed / 1 warning、JavaScript構文検査・テストartifact保存も成功。
 - Windowsローカル全pytestは1369 passed in 234.27s。今回の変更はオフラインで確認し、Gemini通信は0回。過去T369/QUALITY009の文章品質FAILは未解決。
 - 現時点の総合判定はNO-GO。会話004、新しい会話HTML、PRマージはいずれも行っていない。
+
+
+## 2026-10-16 10:35 JST 候補数設定の整合性
+
+- 生成モードのプロンプトに固定の「3案/3候補」が残り、UIの1案・5案設定と矛盾する点を修正。候補数の要求に従う文言へ変更し、初回の架空例も名前・好意・喜びを明示する形に更新。
+- 修正前失敗の確認後、focused test 5 passed / 1273 deselected。最新プロンプト変更の実Gemini検証は行っていない。
+- 直前HEAD `1c9fae193f42bb64d369b3e0fbc0116bdc64d8f1`のPush/PR Actionsは同一SHAでsuccess、1369 passed / 1 warning。新しい変更のActionsは未実施。
+- 過去の実生成品質FAILは継続。総合NO-GO。

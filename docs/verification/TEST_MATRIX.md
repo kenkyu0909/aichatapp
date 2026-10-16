@@ -960,3 +960,7 @@ QUALITY009再生focused監査（既存項目の補足、件数の重複加算な
 
 
 T371/T372最新HEAD CI追補: `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`のPush Actions [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552)とPR Actions [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980)は同一SHAでsuccess。CI pytest **1369 passed / 1 warning**、`node --check app.js`成功、offline-test-results artifact保存成功。Windowsローカル全pytest **1369 passed in 234.27s**。これはオフラインテストで、T369の実Gemini品質FAILを解消しない。
+
+| T373 | 1・3・5案の要求数とプロンプト指示の整合性 | first/commonプロンプト契約（pytest、オフライン） | PASS | first専用・共通プロンプトに固定の「3案/3候補」が残る欠陥を検出し、要求案数に従う表現へ修正。旧期待値のテストが修正前FAIL、修正後は初回好意/案数/固定デモ/相槌契約のfocused suite 5 passed / 1273 deselected。Gemini実通信0回。最新Actionsはコミット後に確認。 |
+
+最新ID行: 373。累計: PASS261 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。T369の実生成品質FAILは維持。
