@@ -195,3 +195,20 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 4. 変更ごとにpytest・Firefox・構文検査を実行し、TEST_MATRIX / PROGRESS / FINAL_REPORT / OVERNIGHT_GOALへ証拠を追記する。コミットをPush後、最新SHAのPush/PR ActionsとPR Draft状態を再確認する。
 
 **制約:** Gemini実APIは0回で継続し、会話004・新しい会話HTMLは実施しない。既存DB・APIキー・課金設定に触れず、Firefoxを使用してChromeを起動しない。PR #4はDraftのまま、マージ禁止。
+
+
+## 2026-10-16 09:00 JST — 毎時進捗監査・次の作業
+
+**確認済み:** 作業ブランチのコード・検証HEAD `a941ac478dd443bb525928e2e17f473acb774575` のPush Actions [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR Actions [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) は同一SHAでsuccess。JUnit artifactは1366 tests / 0 failures / 0 errors / 0 skipped。Firefox T368の待機修正後、focused T365/T367/T368は3 passed、T368単独も3回連続成功。T367で本人情報の確認→一時回答→実FastAPI再生成をFirefox経由で確認。Gemini実通信は今回0回。
+
+進捗文書を追補して `0bbf99cc27be3479fcdcf1c1e59169e5842fdef2` と時刻修正の `27c6b2c933363b13e42eb67d481c87871f3131d5` をPushした。`27c6b2c`のPush Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) とPR Actions [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188) は確認時点で実行中。結果を成功扱いせず、完了後に同じhead SHAか確認すること。PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。
+
+**保存済みQUALITY009の監査:** 直接質問に対する不適切な代替2候補、未確認本人事実、断り後の不安を軽く扱う候補は、現行フィルター再生テストで除外され、安全な候補と不足通知を維持する。限定再生は2 passed。新たな具体的P0漏れは見つからなかった。一方、これら不適切な文面を実Geminiが生成した歴史的品質FAIL、意味的に似た候補の不足、自然さの不合格は未解決。日本語ルールベース検査は未知の言い換え全般を保証しない。
+
+**次の優先作業:**
+1. `27c6b2c`のPush/PR Actionsが同一HEADで成功するか確認し、JUnit件数とPR #4のOPEN/Draftを再確認する。
+2. PR本文へT367/T368、最新テスト・Actionsリンク、Gemini通信0回、未解決QUALITY009 FAILを追記する。PRはDraftのままにする。
+3. 保存済みQUALITY009を根拠に、実利用上の別P0があるかオフラインで絞って監査する。安全案は残し不足を通知する。確認済み事実・回答との矛盾、直接質問への未回答、会話終了意思を優先する。新たなテスト数を増やすこと自体を目標にしない。
+4. 実生成の自然さ・候補多様性FAILはFAILのまま保持し、許可のないGemini実通信で解消したと扱わない。会話004、新しい会話HTML、APIキー/課金/本番DB変更、Chrome起動、PRマージは禁止。
+
+作業ブランチは `codex/full-system-verification` のまま。変更後はPROGRESS / TEST_MATRIX / FINAL_REPORT / OVERNIGHT_GOALへ事実と再開手順を記録し、push後に最新SHA Actionsを確認する。
