@@ -1858,10 +1858,41 @@ def test_neutral_reassurance_with_respectful_pacing_survives_meeting_unease(clie
     "今度ご飯でもどうですか？",
     "よかったらカフェでお茶しませんか？",
     "中野のカフェ気になりますね！\n今度一緒に行ってみませんか？",
+    "近いうちに会いませんか？",
+    "近々お会いしませんか？",
+    "そのうちご飯でも行きません？",
 ])
 def test_invitation_matcher_catches_common_food_and_cafe_phrases(client, invite):
     _, backend = client
     assert backend.INVITATION_PATTERN.search(invite)
+
+
+@pytest.mark.parametrize("invite", [
+    "近いうちに会いませんか？",
+    "近々お会いしませんか？",
+])
+def test_near_future_meeting_invitation_requests_user_intent(client, invite):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": invite}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_for_personal_question(invite) is None
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "どう返したいか" in clarification.question
+    assert "誘い" in clarification.purpose
+
+
+@pytest.mark.parametrize("statement", [
+    "近いうちに映画が公開されるらしいよ",
+    "そのうち新しいカフェができるみたい",
+])
+def test_near_future_statement_is_not_treated_as_invitation(client, statement):
+    _, backend = client
+    assert not backend.INVITATION_PATTERN.search(statement)
 
 
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
