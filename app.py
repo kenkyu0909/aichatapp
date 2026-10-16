@@ -4405,7 +4405,7 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
     """
     patterns = (
         re.compile(r"(?:実は|実わ)?[^!?！？\n]{0,24}(?:を|に)?(?:\d+年|何年も)?(?:習って(?:います|ます|いる|る)|習っていた|習ってました)"),
-        re.compile(r"(?:毎朝|毎晩|毎週|毎日|普段は|最近は|いつも|よく|たまに|週に\d+回|月に\d+回)[^!?！？\n]{0,28}(?:走|運動|通|行|出かけ|買|食べ|読|観|見|使)[^!?！？\n]{0,8}(?:しています|してます|している|してる|います|ます|いる|る|いません|ません|いない|ない|ました|した)"),
+        re.compile(r"(?:毎朝|毎晩|毎週|毎日|普段は|いつも|よく|たまに|週に\d+回|月に\d+回)[^!?！？\n]{0,28}(?:走|運動|通|行|出かけ|買|食べ|読|観|見|使)[^!?！？\n]{0,8}(?:しています|してます|している|してる|います|ます|いる|る|いません|ません|いない|ない|ました|した)"),
         re.compile(r"(?:犬|猫|花粉|小麦|卵|乳製品|そば|甲殻類)?アレルギー(?:なんです|です|があります|がある|ではありません|じゃありません|ではない|じゃない)?"),
         re.compile(r"(?:お気に入り|行きつけ)の[^!?！？\n]{1,24}(?:店|お店|場所|カフェ)(?:が|は)(?:あります|ある|なんです|です)"),
         re.compile(r"[^!?！？\n]{0,18}(?:行ったこと|見たこと|観たこと|食べたこと|使ったこと)(?:が)?(?:あります|ある|ない|ありません)"),
@@ -4420,7 +4420,7 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
             if message.get("role") == "them"
         ],
     ]
-    for pattern in patterns:
+    for pattern_index, pattern in enumerate(patterns):
         for match in pattern.finditer(text):
             claim = match.group(0).strip()
             if not claim or _candidate_claim_is_interrogative(text, match):
@@ -4442,6 +4442,47 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
             normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
             if any(normalized_claim and normalized_claim in source for source in normalized_sources):
                 continue
+            if pattern_index == 1:
+                # A topic-specific validator already checks whether a frequency
+                # claim is supported; this broader guard only handles uncovered
+                # habits. Permit a matching explicit rate when both the action
+                # and rate are present in trusted evidence.
+                sentence_start = max(text.rfind(mark, 0, match.start()) for mark in ("!", "！", "?", "？", "\n")) + 1
+                claim_context = text[sentence_start:match.end()]
+                if re.search(r"映画館|映画|洋画|邦画|読書|本|カフェ|喫茶店|旅行|旅|買い物|買物|食事|カレー|パン|外出|運動|料理", claim_context):
+                    continue
+                line_start = sentence_start
+                line_end = min(
+                    (position for mark in ("!", "！", "?", "？", "\n")
+                     if (position := text.find(mark, match.end())) >= 0),
+                    default=len(text),
+                )
+                clause = text[line_start:line_end].strip()
+                topics = re.findall(r"カフェ|喫茶店|映画館|映画|旅行|旅|運動|ランニング|ジョギング|ジム|買い物|買物|読書|本|料理|自炊|横浜|川崎|東京|大阪|札幌|名古屋|福岡|店", clause)
+                if topics and any(
+                    topic in source
+                    and _frequency_claim_is_supported(clause, source)
+                    for source in sources
+                    for topic in topics
+                ):
+                    continue
+            if pattern_index == 4:
+                # A scoped answer to the partner's explicit question supports
+                # that same experience only. It does not ground unrelated
+                # experience claims elsewhere in the message.
+                latest_question = next((
+                    str(message.get("body", ""))
+                    for message in reversed(context.get("history", []))
+                    if message.get("role") == "them"
+                ), "")
+                topic_tokens = re.findall(r"朝ごはん|朝食|昼ごはん|昼食|夕ごはん|夕食|ペット|犬|猫|旅行|映画|映画館|本|読書|カフェ|喫茶店|料理|買い物", claim)
+                candidate = Candidate(label="事実確認", text=text)
+                if (
+                    latest_question
+                    and any(token in latest_question for token in topic_tokens)
+                    and _answers_verified_partner_question(candidate, context)
+                ):
+                    continue
             return True
     return False
 
