@@ -1495,3 +1495,11 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 料金・残りクォータは確認していないため断定しない。課金設定は変更していない。再通信なし。
 - この結果は過去QUALITY009のFAILを取り消さず、総合NO-GOを維持する。会話004、新規HTML、PRマージは実施していない。
 - 報告HEAD `b5204913bc2c5ec9e0176acda66b94c3d3e6c4e5`のPush Actions [38828310999](https://github.com/kenkyu0909/aichatapp/actions/runs/38828310999)とPR Actions [38828315505](https://github.com/kenkyu0909/aichatapp/actions/runs/38828315505)は同一SHAでsuccess。pytest 1366 passed / 1 warning、JavaScript構文検査成功。PR #4はOPEN/Draft、未マージ。
+
+
+## 2026-10-16 10:22 JST 追補
+
+- 初回メッセージで、登録済みの相手名を自然に使うようプロンプト指示を追加。不明な名前は省略しプレースホルダーを出さない。
+- 変更前失敗を確認したfocusedテストは変更後2 passed / 1274 deselected。これはプロンプト契約と固定デモ候補のオフライン試験であり、実Gemini文章品質のPASSではない。
+- 実API追加通信0回。T369の実生成品質FAILおよび総合NO-GOを維持。
+- 前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f`のPush/PR Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) / [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は同一SHAでsuccess。今回の追補コミットのCIは未実施。

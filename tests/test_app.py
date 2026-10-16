@@ -1866,6 +1866,7 @@ def test_first_prompt_requires_subjective_interest_and_match_happiness(client):
     assert "マッチできた喜び" in prompt
     assert "推奨候補" in prompt and "絵文字" in prompt
     assert "相手の容姿や服装" in prompt
+    assert "相手の名前がプロフィールで確認できる場合" in prompt
 
 
 def test_first_demo_candidates_include_interest_and_match_happiness(client):

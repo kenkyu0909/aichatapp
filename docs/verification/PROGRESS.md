@@ -1441,3 +1441,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 最初のfocused試験で新しい初回文例2項目が失敗し、仕様の欠落を再現。その後の実装で修正した。既存の初回プロンプト文言を検査する回帰テストが旧記述を期待して1件失敗したため、新しい仕様の文言を検査するよう更新し、focused suiteは7 passed。
 - 全pytestは1回目に1367 passed / 1 failed（旧文言の固定期待値）だった。期待値更新後の再実行は**1368 passed in 230.78s**。Firefox UI専用suiteは**14 passed in 194.79s**。`py_compile app.py scripts/simulate_conversation.py`、`node --check app.js`、`git diff --check`成功。
 - Gemini API追加通信0回。過去の実Gemini品質FAILは未解決で、GO判定には至らない。次は同一HEADのActionsを確認し、実運用の自己開示質問が既存UI/APIで安全に表現できるか調べる。PR #4はDraftのまま維持する。
+
+
+### 2026-10-16 10:22 JST 初回メッセージの相手名活用指示
+
+- 品質レビューで、firstモードの生成コンテキストには相手名が渡っている一方、プロンプトが確定済みの名前を使うよう明示していない点を特定。回帰テストへ要求を追加し、修正前に1件FAILすることを確認した。
+- `prompts/first.txt`へ、相手名がプロフィールで確定していれば自然な呼びかけに使い、不明なら省略してplaceholderを作らない規則を追加。`prompt_spec.md`にも記録。候補生成ロジックや人物事実の検査は緩めていない。
+- オフラインfocused test 2 passed / 1274 deselected。Gemini APIは0回。実モデルの初回生成で名前が自然に使われるかは未検証。
+- 直前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f` のPush Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) とPR Actions [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は両方success、同一HEAD。pytest 1368 passed、JavaScript構文検査とartifact保存成功。
+- 次: このprompt/test/docs変更をdiff確認後にコミット・Pushし、最新SHAの両Actionsを確認。その後は本人の架空体験質問と回答、履歴・直接質問回答に関するオフライン回帰へ進む。会話004/新規HTML/Gemini追加通信は実施しない。

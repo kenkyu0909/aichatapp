@@ -949,3 +949,7 @@ QUALITY009再生focused監査（既存項目の補足、件数の重複加算な
 - QUALITY009保存候補の安全再生・直接質問・拒否後候補に関するfocused監査は9 passed。具体的な既知不適切候補は除外され、安全な候補を残して不足を通知する。未解決の実生成自然さ・意味的多様性FAILは維持。Gemini実通信0回。
 - Windows `127.0.0.1:8765`はPID 39504のWindows Store版Python 3.12が待受。read-only `/api/status`はアプリ識別フィールドがnull。所有アプリと特定できないため停止・変更せず、T02はBLOCKED、T69はNOT_TESTEDのまま。T286の一時データ/8767/Firefox隔離起動PASSは別結果として維持。
 - PR本文はT367/T368およびQUALITY009監査の結果を追補済み。
+
+| T371 | 初回メッセージで確定済み相手名を使う指示 | プロンプト契約テスト（pytest、オフライン） | PASS | `other.name` は `/api/generate` の既存コンテキストにあり、first用指示に「名前が確認できる場合は自然に使用し、不明なら省略・プレースホルダー禁止」を追加。プロンプト契約と固定デモ候補のfocused test 2 passed / 1274 deselected。Gemini実通信0回のためモデル追従品質は未検証。変更HEADとActionsはコミット後に追記。 |
+
+最新ID行: 371。累計: PASS259 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。T369実生成品質FAILは維持。
