@@ -1500,6 +1500,6 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 ## 2026-10-16 10:22 JST 追補
 
 - 初回メッセージで、登録済みの相手名を自然に使うようプロンプト指示を追加。不明な名前は省略しプレースホルダーを出さない。
-- 変更前失敗を確認したfocusedテストは変更後2 passed / 1274 deselected。これはプロンプト契約と固定デモ候補のオフライン試験であり、実Gemini文章品質のPASSではない。
+- 変更前失敗を確認したfocusedテストは変更後3 passed / 1273 deselected。first APIコンテキストの架空相手名も確認。これはオフライン試験であり、実Gemini文章品質のPASSではない。
 - 実API追加通信0回。T369の実生成品質FAILおよび総合NO-GOを維持。
 - 前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f`のPush/PR Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) / [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は同一SHAでsuccess。今回の追補コミットのCIは未実施。

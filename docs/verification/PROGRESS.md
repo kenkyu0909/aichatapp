@@ -1447,6 +1447,6 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 
 - 品質レビューで、firstモードの生成コンテキストには相手名が渡っている一方、プロンプトが確定済みの名前を使うよう明示していない点を特定。回帰テストへ要求を追加し、修正前に1件FAILすることを確認した。
 - `prompts/first.txt`へ、相手名がプロフィールで確定していれば自然な呼びかけに使い、不明なら省略してplaceholderを作らない規則を追加。`prompt_spec.md`にも記録。候補生成ロジックや人物事実の検査は緩めていない。
-- オフラインfocused test 2 passed / 1274 deselected。Gemini APIは0回。実モデルの初回生成で名前が自然に使われるかは未検証。
+- オフラインfocused test 3 passed / 1273 deselected。firstのAPIコンテキストに架空相手名が含まれることも確認。Gemini APIは0回。実モデルの初回生成で名前が自然に使われるかは未検証。
 - 直前HEAD `640ea5aa49dd0a83716a0993a5d034433a9b524f` のPush Actions [38834365862](https://github.com/kenkyu0909/aichatapp/actions/runs/38834365862) とPR Actions [38834371054](https://github.com/kenkyu0909/aichatapp/actions/runs/38834371054) は両方success、同一HEAD。pytest 1368 passed、JavaScript構文検査とartifact保存成功。
 - 次: このprompt/test/docs変更をdiff確認後にコミット・Pushし、最新SHAの両Actionsを確認。その後は本人の架空体験質問と回答、履歴・直接質問回答に関するオフライン回帰へ進む。会話004/新規HTML/Gemini追加通信は実施しない。

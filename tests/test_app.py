@@ -686,6 +686,7 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     context = backend.build_context(backend.GenerateInput(mode="first", match_id=mid))
     assert context["mode"] == "first"
     assert context["history"] == []
+    assert context["other"]["name"] == "架空あかり"
     assert "初回" in backend.read_prompt("first")
     assert "軽い好意" in backend.read_prompt("first")
     assert "マッチできた喜び" in backend.read_prompt("first")
