@@ -1593,3 +1593,8 @@ T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_
 否定文を肯定要件と誤認する問題を独立レビューで見つけ、代表的な口語・過去形・丁寧形の否定パターンにテストを追加した。focused first suiteは30 passed、全pytestは1633 passed in 299.26s（Firefox UIを含む）。Python・JavaScript構文と差分チェック成功。Gemini実通信は0回で、実生成品質は未確認。文字列ガードは限定的で、否定や皮肉を含むすべての日本語の意味を判定できるとは主張しない。
 
 テストマトリクスは393項目: PASS261 / FAIL14 / FIXED98 / BLOCKED5 / NOT_TESTED15。過去の実Gemini品質FAIL T369/QUALITY009が残るため総合NO-GO。今回HEADのGitHub Actionsはcommit/push後に確認する。
+### 2026-10-16 追加検証：伸ばし棒の文脈別使用
+
+共通プロンプトと初回メッセージプロンプトに、「ー」は驚きや柔らかさが自然なときだけ使い、同じ会話で反復せず、深刻な話・不安・断りには使わない規則を追加。5つの架空の手書き例でオフライン検査し、句読点や空行の禁止、場面別の「ー」「笑」「絵文字」使用を確認した。focused suite **6 passed**。Gemini実通信0回。これはプロンプトと固定例の検査であり、AIの生成品質合格を示さない。
+
+TEST_MATRIXはT394を追加し、394項目（PASS261 / FAIL14 / FIXED99 / BLOCKED5 / NOT_TESTED15）。今回HEADの全pytestは **1639 passed in 325.46s**（Firefox UI含む）。focused suiteは7 passed、Python/JavaScript構文検査とdiff checkも成功。GitHub ActionsはPush後に確認する。保存済み実Gemini品質FAIL T369/QUALITY009は未解決のため総合判定NO-GOを維持する。|

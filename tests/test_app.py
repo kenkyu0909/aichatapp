@@ -2090,6 +2090,39 @@ def test_shared_prompt_uses_contextual_interjections_and_considers_emojis(client
     assert "深刻な話" in prompt and "断り" in prompt
 
 
+def test_shared_prompt_explains_contextual_long_vowel_mark_use(client):
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+
+    assert "伸ばし棒「ー」" in prompt
+    assert "えーそうなんですね！" in prompt
+    assert "驚きや柔らかさ" in prompt
+    assert "続けて使わず" in prompt
+    assert "真剣な話" in prompt and "断り" in prompt
+
+
+@pytest.mark.parametrize(
+    ("context", "candidate", "use_long_vowel", "use_laugh", "use_emoji"),
+    [
+        ("明るい日常", "えーいいですね！😊\n最近行ってよかったお店ありますか？", True, False, True),
+        ("本当の驚き", "えーそうなんですね！\nそれは初めて知りました", True, False, False),
+        ("軽い冗談", "それは休日の使い方として最高ですね笑", False, True, False),
+        ("仕事の疲れ", "それは大変ですね\nあまり無理しないでくださいね", False, False, False),
+        ("会うことへの慎重な断り", "そうですよね\n無理に急がなくて大丈夫です", False, False, False),
+    ],
+)
+def test_offline_style_examples_use_interjections_by_context(
+    context, candidate, use_long_vowel, use_laugh, use_emoji
+):
+    # Curated examples exercise the written style contract only; they are not model outputs.
+    assert "、" not in candidate and "。" not in candidate, context
+    assert all(line.strip() for line in candidate.split("\n")), context
+    assert "\n\n" not in candidate, context
+    assert ("ー" in candidate) is use_long_vowel, context
+    assert ("笑" in candidate) is use_laugh, context
+    assert any(mark in candidate for mark in ("😊", "☺️", "😂", "😆", "✨")) is use_emoji, context
+
+
 def test_candidate_validation_rejects_japanese_comma_and_period(client):
     _, backend = client
     value = backend.Suggestions(

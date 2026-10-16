@@ -1584,3 +1584,6 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Gemini実通信0回。`conversation_004`と新しい会話HTMLは実施しない。protected untracked指示ファイルには触れていない。
 - 変更: `app.py`、`tests/test_app.py`、検証資料。テストケース変更により、過去のfirstモック候補を必須要素に合わせて更新。
 - 次: レポートとPR説明を更新し、作業対象ファイルだけcommit/push。PushとPRの最新SHA Actionsを確認し、PR #4をDraft/未マージのまま維持する。
+### 2026-10-16 — 伸ばし棒の文脈別プロンプト規則
+
+`prompts/common.txt`に「ー」は驚きや柔らかさが自然なときだけ使い、反復・真剣な話・不安・拒否では避ける規則を追加。`prompts/first.txt`では初回に驚きを作らず、自然な喜びや柔らかさに限る注記を追加した。pytestに5つの手書き会話例（明るい日常、本当の驚き、冗談、疲れ、慎重な断り）を加え、記号・句読点・空行を検査。独立レビューで空行検査の冗長なassertionを指摘されたため、実際に空行を検出する条件へ修正。最終focused suite **7 passed**。全pytest **1639 passed in 325.46s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Windowsのconsole `pytest.exe` は品質ランナーのnamespace importで失敗したが、`python -m pytest`では同じ品質ランナー10件と全スイートが成功。これは実行入口の差で、テスト/ソース欠落ではない。固定例と静的プロンプト契約だけでGemini実生成品質を示さない。今回のGemini通信は0回。次は資料検査後にPushし、最新SHAのActionsを確認する。過去のT369/QUALITY009品質FAILと総合NO-GOを維持する。PR #4はDraft・未マージ。

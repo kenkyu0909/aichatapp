@@ -1301,3 +1301,16 @@ T392までの累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED
 ### 2026-10-16 15:15 JST 最新Actions確認
 
 SHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)とPR Actions [38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)はsuccess。各runで1605 passed / 1 warning、JavaScript構文検査・artifact保存が成功。警告はランナーのNode.js 20およびUbuntu移行通知。PR #4はOPEN/Draft。Gemini実通信は0回。総合NO-GOの理由は過去の実生成品質FAILが未解消であること。
+### 追加作業：伸ばし棒の文脈選択（2026-10-16）
+
+| ゴール | 判定 | 根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 全体FAIL維持 | 今回は変更なし。|
+| 句読点・改行 | 契約例PASS / 実生成未達 | 句読点なしと空行なしの5固定例をオフライン確認。Gemini実生成は0回。|
+| ミラーリング | FAIL/未検証維持 | 今回の5例では文章量の品質評価をしていない。|
+| 共感の反復防止 | FAIL/未検証維持 | 「ー」反復禁止を指示に追加。保存済み実生成の反復問題は未修正。|
+| 返信候補の多様性 | FAIL維持 | 今回未検証。|
+| 食事への誘い判断 | FAIL/未検証維持 | 今回未検証。|
+| アプリ安定性 | ローカルPASS / Actions待ち | focused 7 passed。全pytest 1639 passed in 325.46s（Firefox UI含む）、Python/JavaScript構文とdiff check成功。今回HEADのActionsを確認する。|
+
+変更: `prompts/common.txt`, `prompts/first.txt`, `tests/test_app.py`, および4つの検証文書。T394、累計394: PASS261 / FAIL14 / FIXED99 / BLOCKED5 / NOT_TESTED15。Gemini実通信0回。独立レビュー完了。未コミット変更は現在の作業のみ。全pytest・Firefox・構文検査は成功。次にPR #4へPushし、Actionsを確認する。T369/QUALITY009の実生成FAILがあるので総合判定はNO-GOのまま。会話004/新規HTMLは実施しない。
