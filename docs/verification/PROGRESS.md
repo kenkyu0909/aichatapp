@@ -1658,3 +1658,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 保護対象のユーザー未追跡指示ファイル3件はstageせず維持。過去QUALITY009の実Gemini自然さ・候補意味多様性FAIL、T369の実生成品質FAILは未解決。総合NO-GO。
 - 次: 最新SHA `4263e52` のPush/PR Actionsを確認。その後、引き継ぎ書の段階B（D12 写真失敗・二重保存）と段階C（D01〜D03の確認契約）へ進む。
 
+### 2026-10-16 22:12 JST D02（一般情報/第三者質問の誤分類）修正とFirefoxフレーク安定化
+
+- 検証エージェントの独立確認: `de2f021`（下書き分離・送信ロック）と `321259a`（交際状況質問・個人主張のスコープ）は妥当。P0状況はD01/D04/D05/D06修正済み、D02部分修正、D03未実装、D12は相手フォーム未ロック。
+- D02修正 `b73ac65`: 映画・ドラマのランキング/人気/興行収入など一般情報の質問を本人質問ゲートから除外し、`その友達`等の所有格付き第三者主語を本人質問として扱わない（`app.py`, `tests/test_app.py`）。
+- Firefox安定化 `dfc3659`: 全pytest時に `test_firefox_saved_profile_is_available_during_first_and_reply_generation` がモーダル描画前にフィールドを読んで1件FAIL（単体実行はpass）。`open`待機と入力/テキストエリア描画待機を追加（`tests/test_ui_firefox.py`）。
+- 検証: 新規D02テスト10 passed、`tests/test_app.py` 1675 passed、全pytest **1782 passed in 354.40s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38905548862](https://github.com/kenkyu0909/aichatapp/actions/runs/38905548862) success（GitHub pytest **1782 passed / 1 warning in 220.46s**）、PR [38905556271](https://github.com/kenkyu0909/aichatapp/actions/runs/38905556271) success。PR #4はDraft・未マージ。
+- 総合NO-GO維持（QUALITY009の実生成自然さ・意味的多様性FAIL、T369継続）。保護対象の未追跡指示ファイル3件は保持。
+- 次: D02残（`近いうちに会いませんか？`の誘い意思確認）、D12相手フォームの二重保存ロック、D01〜D03確認契約。
+

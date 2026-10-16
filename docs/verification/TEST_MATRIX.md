@@ -1056,3 +1056,10 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 - `app.py`（D01/D02 未確認本人主張の誤検出削減）と `app.js`（一時的な `/profile` 失敗時の入力保持）を分離コミット `4a47a66` / `4263e52` としてPush。
 - focused 608 passed、Firefox以外の全pytest 1733 passed、変更Firefoxテスト 2 passed。構文・diff検査成功。Gemini実通信0回。新規テストIDは増やしていない（既存回帰の再実行）。
 
+### 2026-10-16 22:12 JST D02一般情報/第三者質問の誤分類修正
+
+| T405 | 一般情報の映画質問を本人質問ゲートから除外 | pytest。`_topic_for_personal_question`/`missing_personal_fact_question`の固定ケースと全pytest | FIXED | 「最近の映画ランキングで何が人気ですか？」「今話題の映画は何ですか？」「最新の映画の興行収入はどれくらいですか？」はtopic=Noneかつ確認質問なし。対照の「おすすめの映画ありますか？」「最近観た映画は何ですか？」「どんな映画が好きですか？」は本人確認を維持。「その友達はどうなったんですか？」は第三者質問として確認なし。新規focused 10 passed、`tests/test_app.py` 1675 passed、全pytest `1782 passed in 354.40s`（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。commit `b73ac65`。 |
+| T406 | Firefoxプロフィール保存テストの描画競合安定化 | Firefox E2E。モーダルopen待機と入力/textarea描画待機を追加し単体3回反復 | FIXED | 全pytest実行時に `test_firefox_saved_profile_is_available_during_first_and_reply_generation` が保存前のフィールド読取で1件FAIL（単体はpass）。描画待機を追加後、単体3回連続pass、全pytest `1782 passed`。commit `dfc3659`。 |
+
+最新ID行: 406。T405/T406をFIXEDとして追加（状態別の累計集計は次回まとめて更新する）。Actions: Push [38905548862](https://github.com/kenkyu0909/aichatapp/actions/runs/38905548862) / PR [38905556271](https://github.com/kenkyu0909/aichatapp/actions/runs/38905556271) は同一SHA `dfc3659` でsuccess（1782 passed / 1 warning）。
+

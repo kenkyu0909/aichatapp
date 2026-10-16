@@ -1643,3 +1643,12 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - focused 608 passed / Firefox以外の全pytest 1733 passed / 変更Firefoxテスト 2 passed。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
 - 過去のQUALITY009実生成品質FAIL（自然さ・候補意味多様性）とT369 FAILは未解決で総合NO-GO。PR #4はDraft・未マージ。
 
+### 2026-10-16 22:12 JST D02（一般情報/第三者質問）の修正とFirefoxフレーク安定化
+
+- 独立検証エージェントの確認で、`de2f021`/`321259a` は妥当、P0はD01/D04/D05/D06修正済み・D02部分修正・D03未実装・D12は相手フォーム未ロックと判定。
+- `b73ac65`: 一般情報の映画/ドラマ質問（ランキング・人気・興行収入等）を本人質問ゲートから除外し、所有格付き第三者主語（その友達等）を本人質問として扱わない。
+- `dfc3659`: 全pytest時に描画競合で1件FAILしたFirefoxプロフィール保存E2Eに、モーダルopenとフィールド描画の待機を追加。
+- 検証: 新規focused 10 passed、`tests/test_app.py` 1675 passed、全pytest **1782 passed in 354.40s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38905548862](https://github.com/kenkyu0909/aichatapp/actions/runs/38905548862)（GitHub pytest 1782 passed / 1 warning）とPR [38905556271](https://github.com/kenkyu0909/aichatapp/actions/runs/38905556271) が同一SHA `dfc3659` でsuccess。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAIL（自然さ・候補意味多様性）は未解決。conversation_004・新会話HTML・Gemini実通信は未実施。未追跡指示ファイル3件は保持。
+
