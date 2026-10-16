@@ -36,6 +36,23 @@
 - 次: 再レビュー後、秘密情報スキャンとドキュメント差分確認を行い、意図した追跡ファイルだけをコミット・Pushする。Push後は同一最新SHAのActionsとPR #4のDraft/未マージ状態を確認して記録する。
 - 再開制約: 実API、conversation_004、新しいHTMLは別指示がない限り行わない。Firefoxのみを使い、ユーザーの本番データには触れない。
 
+### 2026-10-16 13:58 JST 最新HEAD Actions
+
+- 検証コードHEAD `ad764f01dca47135800f3d230d1b262261d6e016` のPush Actions [38852603579](https://github.com/kenkyu0909/aichatapp/actions/runs/38852603579) とPR Actions [38852606544](https://github.com/kenkyu0909/aichatapp/actions/runs/38852606544) は同一SHAでsuccess。
+- 両runでpytest **1580 passed / 1 warning**、JavaScript構文検査、Firefox環境確認、結果artifact保存が成功。warningはGitHub runnerのNode 20移行とUbuntuイメージ更新告知で、jobはsuccess。
+- PR #4はOPEN/Draft、head `ad764f01dca47135800f3d230d1b262261d6e016`、base `feat/ui-local-backend-v1`。マージしていない。
+- 今回の最新検証はオフラインのみ。Gemini API 0回、conversation_004・新規会話HTMLなし。次は保存済みQUALITY009を使った直接質問回答・候補多様性の限定監査を続ける。
+
+### 2026-10-16 14:10 JST カフェ頻度の過剰な重複判定を修正
+
+- 独立レビューで、一度だけ友人とカフェへ行った発言から「友人とカフェに行く頻度」を既知とみなし、未確認の頻度質問まで拒否する問題を確認した。
+- 「先週は友人とカフェに行きました」「この前友達と喫茶店へ行ってきました！」の再現ケースを追加。修正前は2件ともFAIL。
+- 頻度・習慣を表す語が同じ相手発言にある場合だけ友人とのカフェ頻度を既知とするよう`app.py`を修正。習慣が既知の場合の再質問ブロックと、店の雰囲気などを尋ねる深掘り質問は維持した。
+- カフェ関連focused suite **91 passed**。最新全pytest **1585 passed in 272.74s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。秘密情報パターンスキャンは対象コード・文書で一致なし。
+- T390を追加し、累計390項目（PASS261 / FAIL14 / FIXED95 / BLOCKED5 / NOT_TESTED15）。この変更のGemini実通信は0回。T369の実Gemini品質FAILとNO-GO判定を維持する。
+- 変更と検証記録は未コミット。次は差分を見直し、変更した日本語文書のlintを行ってから対象ファイルだけをコミット・Pushし、最新SHAのActionsとPR #4のDraft状態を確認する。ユーザー提供の未追跡指示ファイルはステージしない。
+- 再開制約: Gemini実通信、conversation_004、新しい会話HTML、PRマージは行わない。ユーザーの本番データに触れず、Firefoxのみ使用する。
+
 ## 2026-10-14 最終修正・実API会話検証（継続中）
 
 - 開始時にリモートをfetchし、`codex/full-system-verification`のHEADが`4cb01c4e72de745295ed163c01802c60deda2273`であることを確認。PR #4は`feat/ui-local-backend-v1`宛てDraftで、マージなし。既存PROGRESS/TEST_MATRIX/FINAL_REPORT/prompt_specと共通・各モードのプロンプトを確認。Chromeは起動・操作していない。
@@ -1526,3 +1543,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 最新全pytest（Firefox UIを含む）は **1557 passed in 222.77s**。Python構文検査、JavaScript構文検査、`git diff --check`も成功。Gemini実通信0回。
 - T386を追加。集計は386項目: PASS261 / FAIL14 / FIXED91 / BLOCKED5 / NOT_TESTED15。過去の実Gemini生成品質FAIL T369は維持し、総合判定はNO-GO。
 - 最新コードのActionsとPR #4のOPEN/Draft状態は未確認。次は文書を確定し、保護対象の未追跡指示ファイルを除いてコミット・Pushし、最新SHAのActionsとPR状態を確認する。続いてQUALITY009の本人回答済み直接質問・候補多様性・共感反復を限定監査する。
+
+
+### 2026-10-16 14:50 JST 友人カフェ習慣の節スコープ判定
+
+- `codex/directive-control` 最新版を再取得。優先事項はP0導線・候補安全性・Firefox・最新Actions。Gemini実通信、conversation_004、新しい会話HTMLは今回実施しない。
+- 既知情報判定で別活動の頻度を友人とのカフェ習慣に誤適用する問題を独立レビューで発見。例: `休日に友人とカフェに行きましたが、普段は週末に映画をよく観ます`から、未確認の友人カフェ頻度が既知になる。過去の友人カフェ習慣と現在のカフェ好きも別の次元だが頻度の根拠に誤用される。
+- 修正前の新規テストは別活動混同2件と好み/頻度混同1件が失敗。続けて読点後の短い話題導入（`休日は、友達と...`）を見落とすケースも1件再現。節分割に短い話題導入の引継ぎを加え、カフェの好みだけでは訪問頻度を既知としないよう修正。修正中に既存の過去→現在のカフェ嗜好ケース1件が回帰したため、現在節で嗜好語が省略された場合と別嗜好が明記された場合を区別して復旧。
+- focused suite **69 passed**。Windows全pytest **1601 passed in 283.24s**。Firefox UI専用 **18 passed in 233.83s**。Python構文、JavaScript構文、`git diff --check`成功。追跡ソース・文書の認証情報パターンスキャン一致なし。Gemini実通信0回。
+- 独立コードレビューは最新差分をAPPROVE。句読点含む短い話題導入、過去→現在の嗜好、カフェ頻度と別の映画習慣の境界を確認。
+- T391追加。累計391項目: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。T369/QUALITY009実Gemini文章品質FAILは維持し、総合NO-GO。PR #4はOPEN/Draft/未マージ。
+- 次: 日本語文書lint、差分・秘密情報・ブランチ状態の最終確認後、許可対象ファイルのみコミット・Push。最新SHAのPush/PR Actions成功とPR状態を確認し、進捗・最終報告へ記録する。別節の他トピックでも同様の混同がないか、オフラインで次のP0監査を継続する。

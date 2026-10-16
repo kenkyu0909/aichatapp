@@ -4767,26 +4767,121 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         message.get("body", "") for message in context.get("history", [])
         if message.get("role") == "them"
     ]
-    knows_friend_cafe_frequency = any(
-        re.search(r"友達と.{0,14}(?:カフェ|喫茶店).{0,18}(?:行|出かけ)", message)
-        or re.search(r"(?:カフェ|喫茶店).{0,14}友達と.{0,14}(?:行|出かけ)", message)
-        for message in partner_messages
+    friend_terms = r"(?:友達|友人|友だち)"
+    routine_evidence = re.compile(
+        r"(?:よく|頻繁(?:に)?|いつも|毎週|毎月|週に\s*\d+\s*回|月に\s*\d+\s*回).{0,12}(?:行|出かけ|訪れ|通う|過ごす|見|観|読|寝)"
+        r"|(?:行|出かけ|訪れ|通う|過ごす|見|観|読|寝).{0,12}こと(?:が)?多い"
     )
+    past_routine_marker = re.compile(r"(?:昔は|以前(?:は|の)|学生の頃|学生時代|前は|当時|かつて)")
+    current_routine_marker = re.compile(r"(?:今も|現在も|今でも|最近も|今は|現在は|最近は)")
+    clause_separator = re.compile(
+        r"(?:ましたが|でしたが|たが|だったが|ですが|けれども|けれど|だけど|けど|一方で|ただし|でも|[、,。！？!?\n])"
+    )
+
+    def activity_clauses(message: str) -> list[str]:
+        """Keep routine evidence attached to the activity that supports it."""
+        parts = [part.strip() for part in clause_separator.split(message) if part.strip()]
+        clauses: list[str] = []
+        topic_leadin = re.compile(
+            r"(?:休日|休みの日|週末|カフェ|喫茶店|旅行|映画|読書)(?:は|には|なら|だと|って)?"
+        )
+        for part in parts:
+            if clauses and topic_leadin.fullmatch(clauses[-1]):
+                # Japanese often separates a short topic lead-in with a comma:
+                # "休日は、友達とカフェに行くことが多い".
+                clauses[-1] += part
+            else:
+                clauses.append(part)
+        return clauses
+
+    partner_clauses = [
+        clause for message in partner_messages for clause in activity_clauses(message)
+    ]
+    routine_topics = {
+        "cafe": re.compile(r"(?:カフェ|喫茶店)"),
+        "movie": re.compile(r"映画"),
+        "travel": re.compile(r"旅行"),
+        "reading": re.compile(r"(?:読書|本|小説)"),
+        "friend": re.compile(r"(?:友達|友人|友だち)"),
+        "weekend": re.compile(r"(?:休日|休みの日|週末)"),
+        # Keep the compound activity together: a current weekend movie habit
+        # must not make a past weekend cafe habit look current.
+        "friend_cafe_weekend": re.compile(
+            rf"(?:休日|休みの日|週末).{{0,24}}{friend_terms}.{{0,18}}(?:カフェ|喫茶店).{{0,18}}(?:行|出かけ|過ご)"
+        ),
+        "home": re.compile(r"(?:家|自宅)"),
+        "sleep": re.compile(r"(?:寝|眠)"),
+    }
+
+    def is_past_only_routine(message: str, topic: str | None = None) -> bool:
+        past_match = past_routine_marker.search(message)
+        if not past_match:
+            return False
+        current_match = current_routine_marker.search(message, past_match.end())
+        if not current_match:
+            return True
+        current_suffix = message[current_match.start():]
+        has_current_positive = re.search(
+            r"(?:よく|頻繁(?:に)?|いつも|毎週|毎月|週に\s*\d+\s*回|月に\s*\d+\s*回|こと(?:が)?多い|好き|嫌い|苦手|得意|趣味)",
+            current_suffix,
+        )
+        if not has_current_positive:
+            return True
+        past_topics = {
+            topic for topic, pattern in routine_topics.items()
+            if pattern.search(message[past_match.end():current_match.start()])
+        }
+        current_topics = {
+            topic for topic, pattern in routine_topics.items()
+            if pattern.search(current_suffix)
+        }
+        if topic and current_topics:
+            return topic not in current_topics
+        return bool(past_topics and current_topics and not (past_topics & current_topics))
+
+    knows_friend_cafe_frequency = any(
+        (
+            re.search(rf"{friend_terms}と.{{0,14}}(?:カフェ|喫茶店).{{0,18}}(?:行|出かけ)", clause)
+            or re.search(rf"(?:カフェ|喫茶店).{{0,14}}{friend_terms}と.{{0,14}}(?:行|出かけ)", clause)
+        )
+        and routine_evidence.search(clause)
+        and not is_past_only_routine(clause, "friend_cafe_weekend")
+        for clause in partner_clauses
+    )
+    cafe_interest_pattern = re.compile(
+        r"(?:カフェ|喫茶店).{0,18}(?:好き|趣味|行くことが多い|よく行く)|(?:好き|趣味).{0,12}(?:カフェ|喫茶店)"
+    )
+    other_interest_topic = re.compile(r"(?:映画|旅行|読書|小説|本)")
     knows_cafe_interest = any(
-        re.search(r"(?:カフェ|喫茶店).{0,18}(?:好き|趣味|行くことが多い|よく行く)|(?:好き|趣味).{0,12}(?:カフェ|喫茶店)", message)
+        cafe_interest_pattern.search(clause)
+        and not is_past_only_routine(clause, "cafe")
+        for clause in partner_clauses
+    ) or any(
+        any(
+            re.search(r"(?:昔は|以前は|学生時代|前は|当時|かつて)", previous)
+            and cafe_interest_pattern.search(previous)
+            for previous in clauses[:index]
+        )
+        and current_routine_marker.search(clause)
+        and re.search(r"(?:好き|趣味|行くことが多い|よく行く)", clause)
+        and not other_interest_topic.search(clause)
         for message in partner_messages
+        for clauses in [activity_clauses(message)]
+        for index, clause in enumerate(clauses)
     )
     knows_friend_weekend_activity = any(
-        re.search(r"(?:休日|休みの日|週末).{0,24}友達と.{0,18}(?:カフェ|喫茶店|出かけ|行く)", message)
-        for message in partner_messages
+        re.search(rf"(?:休日|休みの日|週末).{{0,24}}{friend_terms}と.{{0,18}}(?:カフェ|喫茶店|出かけ|行く|過ごす)", clause)
+        and routine_evidence.search(clause)
+        and not is_past_only_routine(clause, "friend_cafe_weekend")
+        for clause in partner_clauses
     )
     knows_recent_cafe_visit = any(
         re.search(
             r"(?:最近|この前|昨日|先週).{0,14}(?:カフェ|喫茶店).{0,14}(?:行|訪れ|寄っ)"
             r"|(?:カフェ|喫茶店).{0,14}(?:最近|この前|昨日|先週).{0,14}(?:行|訪れ|寄っ)",
-            message,
+            clause,
         )
-        for message in partner_messages
+        for clause in partner_clauses
     )
     exercise_topics = r"(?:ジム|筋トレ|運動|ランニング|スポーツ|トレーニング)"
     exercise_frequency_messages = [
@@ -4816,7 +4911,7 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         (
             "友達とカフェに行く頻度",
             knows_friend_cafe_frequency,
-            re.compile(r"(?:友達と.{0,14}(?:行く|行きます|出かける|出かけます).{0,14}(?:ですか|ますか|多い)|(?:誰と|どなたと).{0,10}(?:カフェ|喫茶店|行く|出かけ)|(?:カフェ|喫茶店).{0,18}(?:(?:よく|頻繁|何回|どのくらい|どれくらい).{0,12}(?:行|出かけ)|(?:行く|行きます|出かける).{0,10}(?:ですか|ますか|んですか|？|\?)))"),
+            re.compile(rf"(?:{friend_terms}と.{{0,14}}(?:カフェ|喫茶店).{{0,12}}(?:よく|頻繁|何回|どのくらい|どれくらい).{{0,8}}(?:行|出かけ)|{friend_terms}と.{{0,14}}(?:カフェ|喫茶店)に?(?:行く|行きます|出かける|出かけます)こと(?:が)?多い(?:んですか|ですか|？|\?)|{friend_terms}と.{{0,14}}(?:行く|行きます|出かける|出かけます)こと(?:が)?多い(?:んですか|ですか|？|\?)|{friend_terms}と.{{0,12}}よく(?:行く|行きます|出かける|出かけます)(?:んですか|ですか|？|\?)|(?:誰と|どなたと).{{0,10}}(?:カフェ|喫茶店|行く|出かけ)|(?:カフェ|喫茶店).{{0,18}}(?:(?:よく|頻繁|何回|どのくらい|どれくらい).{{0,12}}(?:行|出かけ)|(?:行く|行きます|出かける).{{0,10}}(?:ですか|ますか|んですか|？|\?)))"),
         ),
         (
             "カフェへの関心",
@@ -4827,19 +4922,24 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
             "休日の友人との過ごし方",
             knows_friend_weekend_activity,
             re.compile(
-                r"(?:休日|休みの日|週末).{0,14}(?:友達と.{0,14}(?:会う|出かけ|カフェに行く|過ごす).{0,10}(?:ですか|ますか|多い|んですか|？|\?)|"
+                rf"(?:休日|休みの日|週末).{{0,14}}(?:{friend_terms}と.{{0,14}}(?:会う|出かけ|カフェに行く|過ごす).{{0,10}}(?:ですか|ますか|多い|んですか|？|\?)|"
                 r"(?:誰と|どなたと).{0,12}(?:過ご|一緒にいる|出かけ|会う).{0,12}(?:ことが多い|普段|よく|いつも).{0,10}(?:ですか|ますか|？|\?)|"
                 r"(?:過ご|一緒にいる|出かけ|会う).{0,12}(?:誰と|どなたと).{0,8}(?:ことが多い|普段|よく|いつも).{0,10}(?:ですか|ますか|？|\?))"
             ),
         ),
         (
             "休日の過ごし方",
-            any(re.search(r"(?:休日|休みの日|週末).{0,22}(?:友達|家|自宅|カフェ|映画|読書|旅行|寝)", message) for message in partner_messages),
+            any(
+                re.search(r"(?:休日|休みの日|週末).{0,22}(?:友達|家|自宅|カフェ|映画|読書|旅行|寝)", clause)
+                and routine_evidence.search(clause)
+                and not is_past_only_routine(clause, "weekend")
+                for clause in partner_clauses
+            ),
             re.compile(r"(?:休日|休みの日|週末).{0,14}(?:何して|何をして|どう過ご|どんなふうに過ご).{0,8}(?:ですか|ますか|？|\?)"),
         ),
         (
             "趣味の好み",
-            any(re.search(r"(?:映画|旅行|読書|カフェ巡り|カフェ).{0,12}(?:好き|趣味|よく行)", message) for message in partner_messages),
+            True,
             re.compile(r"(?:映画|旅行|読書|カフェ巡り|カフェ).{0,10}(?:好きですか|好きなんですか|趣味ですか|よく行きますか)"),
         ),
         (
@@ -4860,6 +4960,33 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
     ]
     repeated: list[str] = []
     for topic, known, pattern in repeat_rules:
+        if topic == "趣味の好み":
+            hobby_terms = {
+                "cafe": re.compile(r"(?:カフェ巡り|カフェ|喫茶店)"),
+                "movie": re.compile(r"映画"),
+                "travel": re.compile(r"旅行"),
+                "reading": re.compile(r"(?:読書|本|小説)"),
+            }
+            for candidate in candidates:
+                for hobby, hobby_pattern in hobby_terms.items():
+                    if not hobby_pattern.search(candidate.text):
+                        continue
+                    evidence = re.compile(
+                        rf"(?:{hobby_pattern.pattern}).{{0,12}}(?:好き|趣味|よく(?:行|観|読))"
+                        rf"|(?:好き|趣味).{{0,12}}(?:{hobby_pattern.pattern})"
+                    )
+                    if any(
+                        evidence.search(message)
+                        and not is_past_only_routine(message, hobby)
+                        for message in partner_messages
+                    ):
+                        clauses = re.split(r"(?<=[!?！？])|\n+", candidate.text)
+                        if any(pattern.search(clause) for clause in clauses):
+                            repeated.append(topic)
+                            break
+                if topic in repeated:
+                    break
+            continue
         if not known:
             continue
         for candidate in candidates:

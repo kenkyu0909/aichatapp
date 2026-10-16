@@ -1226,3 +1226,40 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 
 - T389まで累計389項目: PASS261 / FAIL14 / FIXED94 / BLOCKED5 / NOT_TESTED15。Gemini通信0回。総合判定はNO-GO。
 - 次: 最終レビュー、秘密情報スキャン、対象ファイルだけをコミット・Pushし、最新ActionsとPR #4 Draft/未マージを確認。実API・conversation_004・新HTMLはユーザーの別指示まで行わない。
+
+### 2026-10-16 13:58 JST Actions確認
+
+- Code SHA `ad764f01dca47135800f3d230d1b262261d6e016` のPush [Actions 38852603579](https://github.com/kenkyu0909/aichatapp/actions/runs/38852603579) とPR [Actions 38852606544](https://github.com/kenkyu0909/aichatapp/actions/runs/38852606544) は同一HEADでsuccess。各1580 passed / 1 warning、JavaScript構文検査・Firefox準備・artifact保存成功。
+- PR #4 OPEN/Draft、未マージ。T369の実Gemini生成品質FAILが残るため、GO条件は未達。Gemini実通信0回。
+
+### 2026-10-16 14:10 JST 友人とのカフェ頻度の既知判定
+
+| ゴール | 判定 | 最新根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 部分修正PASS / 全体FAIL | 一度きりのカフェ訪問だけで「よく行く頻度」を既知扱いする誤検出を2件再現して修正。習慣・頻度の表現が同じ相手発言にある場合だけ既知とする。全日本語の意味理解や自由文の事実保証は未達。 |
+| 句読点・改行 | 未達維持 | この修正では変更・再評価なし。 |
+| ミラーリング | 未達維持 | 実Gemini出力の再評価なし。 |
+| 共感の反復防止 | 未達維持 | QUALITY009の実生成FAILを保持。 |
+| 返信候補の多様性 | 未達維持 | 実生成品質未確認。 |
+| 食事への誘い判断 | 未達維持 | 今回変更・確認なし。 |
+| アプリ安定性 | ローカル回帰PASS / 新HEAD Actions待ち | カフェ関連focused 91 passed、全pytest 1585 passed（Firefox UI含む）。Python/JavaScript構文と差分検査成功。新HEADのActionsはPush後に確認する。 |
+
+- T390を追加。累計390項目: PASS261 / FAIL14 / FIXED95 / BLOCKED5 / NOT_TESTED15。Gemini実通信0回、conversation_004・新しい会話HTMLは未実施。総合判定NO-GOを維持する。
+- 次: 最終差分と日本語文書lintを確認し、保護対象の未追跡ファイルを除いてコミット・Push。Push/PR ActionsとPR #4のDraft状態を同一HEADで確認する。
+
+
+## 2026-10-16 14:50 JST — 相手の既知習慣を節・話題ごとに限定
+
+| ゴール | 状況 | 根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 部分修正PASS / 全体FAIL | 相手のカフェ頻度判定で別節の映画習慣や現在のカフェ嗜好を流用する問題を修正。短い休日話題の読点区切りも検知。全pytest 1601 passed、限定ルールのため自由文全般は未保証。 |
+| 句読点・改行 | 未達を維持 | 今回変更・再評価なし。 |
+| ミラーリング | 未達を維持 | 今回実API確認なし。 |
+| 共感の反復防止 | 未達を維持 | QUALITY009の実生成FAILを保持。 |
+| 返信候補の多様性 | 未達を維持 | 実生成の候補多様性は未検証。 |
+| 食事への誘い判断 | 未達を維持 | 今回変更なし。 |
+| アプリ安定性 | ローカルPASS / 最新Actions待ち | 全pytest 1601 passed、Firefox UI専用18 passed。Python/JavaScript構文、差分検査成功。Push後に最新HEAD Actionsが必要。 |
+
+- 追加回帰ケース: 友人との一度きりのカフェ訪問＋別節の現在映画習慣、過去の友人カフェ頻度＋現在カフェ好き、読点後の休日話題の3パターンを修正前FAILとして再現し修正。関連focused 69 passed。独立レビューAPPROVE。
+- T391追加。累計391: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。GitHub Actions未確認。Gemini通信0回、conversation_004・新しい会話HTML未実施。総合NO-GOを維持。
+- 次: 文書lintと最終差分/秘密スキャン、対象ファイルのみcommit・push、最新ActionsとPR #4のOPEN/Draft/未マージを確認。残りのP0品質監査を続ける。

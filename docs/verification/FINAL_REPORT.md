@@ -1543,3 +1543,25 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - Gemini実通信0回。実モデル文章品質の改善を確認したとは扱わない。既存T369/QUALITY009の実Gemini品質FAILは維持。
 - 最新マトリクスは389項目: PASS261 / FAIL14 / FIXED94 / BLOCKED5 / NOT_TESTED15。総合判定NO-GO。GitHub Actionsは今回HEADをPush後に確認し、URL・SHAを追記する。
 - PR #4はDraft・未マージを維持。conversation_004と新しい会話HTMLは実施していない。
+
+### 同一検証HEADのGitHub Actions
+
+検証コードSHA `ad764f01dca47135800f3d230d1b262261d6e016` を対象にした[Push Actions 38852603579](https://github.com/kenkyu0909/aichatapp/actions/runs/38852603579)と[PR Actions 38852606544](https://github.com/kenkyu0909/aichatapp/actions/runs/38852606544)は、どちらもsuccess。各runのpytestは1580 passed / 1 warningで、JavaScript構文検査、Firefox準備、結果artifact保存も成功。PR #4はOPEN/Draftで、未マージ。
+
+### 2026-10-16 14:10 JST 友人とのカフェ頻度の重複判定修正
+
+- 原因: 相手発言に友人・カフェ・移動の語があるだけで、頻度情報も既知とみなしていた。そのため、一度きりの外出を話した相手へ習慣の頻度を尋ねる候補までブロックしていた。
+- 修正: `app.py`の重複質問判定で、同じ発言に「よく」「毎週」「ことが多い」などの習慣・頻度表現があることも要求。確認済みの習慣への再質問は引き続きブロックし、店の雰囲気などへの深掘りは許可する。
+- 再現ケース2件は修正前FAIL。修正後はカフェ関連pytest 91 passed、Windows全pytest **1585 passed in 272.74s**（Firefox UI込み）。Python構文、JavaScript構文、`git diff --check`成功。秘密情報パターンスキャン対象から一致なし。
+- Gemini実通信0回。実生成品質の向上は未確認。過去のT369/QUALITY009実Gemini品質FAILを維持し、総合判定はNO-GO。
+- 最新のコード・文書変更はActions未確認。次は変更をコミット・Pushし、最新HEADのPush/PR Actions成功とPR #4のDraft・未マージを確認する。
+
+
+### 2026-10-16 14:50 JST 友人カフェ習慣の別節混同修正
+
+- 既知情報判定が、別節にある現在の映画習慣を一度きりの友人カフェ訪問へ結び付け、未確認のカフェ頻度を既知として再質問を拒否する問題を修正。過去の友人カフェ習慣と、現在カフェが好きという嗜好情報も区別する。
+- 読点による節分割で「休日は、友達とカフェに行くことが多いです」の話題語を失う反対方向の問題も再現し、短い話題導入だけ次節へ引き継ぐ。
+- 新規回帰テストでは、別活動の週末頻度2件と好み/頻度混同1件を修正前に再現。読点で話題導入を失うケースも修正前に失敗。修正中に過去→現在のカフェ嗜好の既存ケースが回帰したため同じ全体テストで検出・復旧。最終の関連focused suite **69 passed**。独立レビュー APPROVE。最新Windows全pytest **1601 passed in 283.24s**、Firefox UI専用 **18 passed in 233.83s**。Python/JavaScript構文検査、`git diff --check`成功。追跡ソース・文書から認証情報パターン一致なし。
+- 変更ファイル: `app.py`、`tests/test_app.py`、`docs/verification/TEST_MATRIX.md`、`docs/verification/PROGRESS.md`、`docs/verification/OVERNIGHT_GOAL.md`、`docs/verification/prompt_spec.md`、本報告。
+- Gemini実通信0回。実生成品質009の過去FAILを解決したとは扱わない。句読点/改行・文章の自然さ・ミラーリング・候補多様性・誘い判断の実API再検証は未実施。総合判定は **NO-GO**。
+- T391を追加。391項目: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。今回のコミット・最新SHA Actions URLはPush後に追記する。PR #4はDraft・未マージを維持する。

@@ -991,3 +991,13 @@ T371/T372最新HEAD CI追補: `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`のPush 
 | T389 | カフェ頻度の複合二重否定を曖昧として扱う | 架空プロフィール・候補を使ったpytest（オフライン、修正前後比較） | FIXED | レビューで「わけでもない」「ってわけでもない」「というわけではない」が低頻度の根拠として通る3件を再現。これらを曖昧として分類し、低頻度候補の根拠に使用できないよう修正。関連focused suite 12 passed、最新全pytest 1580 passed。Gemini実通信0回。 |
 
 最新ID行: 389。累計: PASS261 / FAIL14 / FIXED94 / BLOCKED5 / NOT_TESTED15。最新ローカル全pytest **1580 passed in 273.36s**（Windows、Firefox UI含む）。該当focused suite **12 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini通信0回。今回のcommit SHA/ActionsはPush後に追記。T369の実Gemini品質FAILは維持。 |
+
+CI確認追記: 検証コードSHA `ad764f01dca47135800f3d230d1b262261d6e016`のPush Actions [38852603579](https://github.com/kenkyu0909/aichatapp/actions/runs/38852603579) とPR Actions [38852606544](https://github.com/kenkyu0909/aichatapp/actions/runs/38852606544) は同一SHAでsuccess。各run pytest 1580 passed / 1 warning、JavaScript構文検査・Firefox準備・artifact保存成功。 |
+
+| T390 | 一度きりの友人とのカフェ訪問から頻度を既知扱いしない | 架空の会話履歴を使ったpytest（オフライン、修正前後比較） | FIXED | 「先週は友人とカフェに行きました」「この前友達と喫茶店へ行ってきました！」だけでは、「友達とカフェに行くことが多いんですか？」を再質問として拒否してしまう問題を2ケースで再現。修正前2件FAIL。習慣・頻度の明示語が同じ発言にある場合だけ友人とのカフェ頻度を既知扱いする。修正後カフェ関連suite 91 passed、全pytest 1585 passed（Firefox UI含む）。Gemini実通信0回。 |
+
+最新ID行: 390。累計: PASS261 / FAIL14 / FIXED95 / BLOCKED5 / NOT_TESTED15。最新全pytest **1585 passed in 272.74s**（Windows、Firefox UI含む）。カフェ関連focused suite **91 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini通信0回。最新SHAとActionsはPush後に追記。T369の実Gemini品質FAILは維持。 |
+
+| T391 | 友人・カフェ・休日習慣の根拠を同じ活動・節に限定する | Windowsのpytest、架空履歴を使った修正前後比較、独立コードレビュー | FIXED | 別節にある週末映画の頻度を一度きりの友人カフェ訪問へ誤適用する2ケース、現在のカフェ嗜好を過去の友人同行頻度へ流用する1ケースを修正前に再現。さらに「休日は、友達とカフェに行くことが多いです！」の読点で既知情報を見落とすケースも再現。修正中に過去→現在のカフェ嗜好ケースの回帰を見つけて復旧。履歴を節単位で分け、短い話題導入のみ次節に保持し、好みと頻度を区別。関連focused suite 69 passed、独立レビュー APPROVE、最新全pytest 1601 passed、Firefox専用18 passed。Gemini実通信0回。 |
+
+最新ID行: 391。累計: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。Windowsの最新全pytest **1601 passed in 283.24s**。`tests/test_ui_firefox.py` **18 passed in 233.83s**。`py_compile`、`node --check app.js`、`git diff --check`成功。追跡ファイルの認証情報パターンスキャンは一致なし。Gemini通信0回。最新SHAとActionsはPush後に追記。T369の実Gemini品質FAILを維持。 |

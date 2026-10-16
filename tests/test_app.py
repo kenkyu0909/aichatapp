@@ -2097,6 +2097,193 @@ def test_repeat_question_about_known_friend_cafe_activity_is_detected(client):
     assert backend.repeated_partner_question_topics([deeper], context) == []
 
 
+@pytest.mark.parametrize(("partner_text", "candidate_text"), [
+    (
+        "休日は友人と喫茶店へ出かけることが多いです！",
+        "お休みの日って友人とカフェに行くことが多いんですか？",
+    ),
+    (
+        "休みの日は友人と喫茶店によく行きます",
+        "誰と喫茶店に行くことが多いですか？",
+    ),
+])
+def test_known_friend_cafe_routine_is_not_reasked_with_synonyms_or_paraphrase(
+    client, partner_text, candidate_text
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    candidate = backend.Candidate(label="既知習慣の再質問", text=candidate_text)
+
+    assert "友達とカフェに行く頻度" in backend.repeated_partner_question_topics(
+        [candidate], context
+    )
+    assert "相手の既知情報を再質問" in backend._candidate_rejection_reasons(
+        candidate, context
+    )
+
+
+def test_deeper_cafe_question_remains_allowed_after_known_friend_routine(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "休日は友人と喫茶店へ出かけることが多いです！"}],
+    }
+    deeper = backend.Candidate(
+        label="雰囲気への深掘り", text="友人と行く喫茶店はどんな雰囲気が多いですか？"
+    )
+
+    assert backend.repeated_partner_question_topics([deeper], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        deeper, context
+    )
+
+
+@pytest.mark.parametrize("partner_text", [
+    "先週は友人とカフェに行きました",
+    "この前友達と喫茶店へ行ってきました！",
+    "休日は友人と喫茶店へ出かけました！",
+])
+def test_one_time_cafe_visit_does_not_establish_friend_visit_frequency(
+    client, partner_text
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    frequency_question = backend.Candidate(
+        label="未確認の頻度を聞く", text="友達とカフェに行くことが多いんですか？"
+    )
+
+    assert backend.repeated_partner_question_topics([frequency_question], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        frequency_question, context
+    )
+
+
+def test_one_time_weekend_cafe_outing_does_not_establish_weekend_routine(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "休日は友人と喫茶店へ出かけました！"}],
+    }
+    routine_question = backend.Candidate(
+        label="未確認の休日習慣を聞く",
+        text="休日って友人と喫茶店に出かけることが多いんですか？",
+    )
+
+    assert backend.repeated_partner_question_topics([routine_question], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        routine_question, context
+    )
+
+
+@pytest.mark.parametrize("candidate_text", [
+    "休日って友達とカフェに行くことが多いんですか？",
+    "カフェには今もよく行きますか？",
+])
+def test_past_friend_cafe_routine_does_not_establish_current_habit(
+    client, candidate_text
+):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "昔は休日に友達とカフェへよく行ってました"}],
+    }
+    current_routine_question = backend.Candidate(
+        label="現在の習慣を確認", text=candidate_text
+    )
+
+    assert backend.repeated_partner_question_topics([current_routine_question], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        current_routine_question, context
+    )
+
+
+@pytest.mark.parametrize(("partner_text", "candidate_text", "expected_topic"), [
+    ("昔はカフェが好きでした", "カフェ好きなんですか？", None),
+    ("昔はカフェが好きでしたが今も好きです", "カフェ好きなんですか？", "カフェへの関心"),
+    ("昔からカフェが好きです", "カフェ好きなんですか？", "カフェへの関心"),
+    ("以前は旅行が趣味でしたが今も好きです", "旅行は好きですか？", "趣味の好み"),
+    ("昔はカフェが好きでしたが今は映画が好きです", "映画は好きですか？", "趣味の好み"),
+])
+def test_current_preferences_are_distinguished_from_past_preferences(
+    client, partner_text, candidate_text, expected_topic
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    candidate = backend.Candidate(label="好みを確認", text=candidate_text)
+
+    topics = backend.repeated_partner_question_topics([candidate], context)
+    if expected_topic:
+        assert expected_topic in topics
+        assert "相手の既知情報を再質問" in backend._candidate_rejection_reasons(
+            candidate, context
+        )
+    else:
+        assert topics == []
+        assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+            candidate, context
+        )
+
+
+@pytest.mark.parametrize(("partner_text", "candidate_text"), [
+    ("昔はカフェが好きでしたが今は映画が好きです", "カフェ好きなんですか？"),
+    (
+        "昔は休日に友達とカフェへよく行ってましたが今は映画をよく見ます",
+        "休日って友達とカフェに行くことが多いんですか？",
+    ),
+    (
+        "昔は休日に友達とカフェへよく行ってましたが今は週末に映画をよく見ます",
+        "休日って友達とカフェに行くことが多いんですか？",
+    ),
+])
+def test_current_fact_about_another_topic_does_not_confirm_past_cafe_habit(
+    client, partner_text, candidate_text
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    candidate = backend.Candidate(label="過去カフェ習慣の確認", text=candidate_text)
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        candidate, context
+    )
+
+
+@pytest.mark.parametrize("partner_text", [
+    "休日に友人とカフェに行きましたが、普段は週末に映画をよく観ます",
+    "休日に友人とカフェに行きました\n普段は週末に映画をよく観ます",
+])
+def test_unrelated_current_weekend_habit_does_not_confirm_one_time_friend_cafe_visit(
+    client, partner_text
+):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_text}]}
+    candidate = backend.Candidate(
+        label="一度の友人カフェ訪問を習慣として聞き直す",
+        text="休日って友人とカフェに出かけることが多いんですか？",
+    )
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        candidate, context
+    )
+
+
+def test_current_cafe_interest_does_not_confirm_past_friend_cafe_frequency(client):
+    _, backend = client
+    context = {
+        "history": [{
+            "role": "them",
+            "body": "昔は休日に友人とカフェへよく行っていましたが今もカフェが好きです",
+        }],
+    }
+    candidate = backend.Candidate(
+        label="友人との現在頻度を確認",
+        text="友人とカフェに行くことが多いんですか？",
+    )
+
+    assert backend.repeated_partner_question_topics([candidate], context) == []
+    assert "相手の既知情報を再質問" not in backend._candidate_rejection_reasons(
+        candidate, context
+    )
+
+
 @pytest.mark.parametrize("candidate_text", [
     "カフェってよく行きますか？",
     "喫茶店にはよく行くんですか？",
@@ -9260,6 +9447,21 @@ def test_partner_known_weekend_companion_is_not_reasked_but_cafe_details_are_all
     assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics([paraphrased], context)
     assert backend.repeated_partner_question_topics([preference], context) == []
     assert backend.repeated_partner_question_topics([deeper], context) == []
+
+
+def test_weekend_topic_leadin_before_comma_stays_attached_to_known_routine(client):
+    _, backend = client
+    context = {
+        "history": [{"role": "them", "body": "休日は、友達とカフェに行くことが多いです！"}],
+    }
+    repeated = backend.Candidate(
+        label="既知の休日習慣の再質問",
+        text="休日は誰と過ごすことが多いんですか？",
+    )
+
+    assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics(
+        [repeated], context
+    )
 
 
 def test_unconfirmed_movie_habit_is_rejected_even_without_first_person_subject(client):
