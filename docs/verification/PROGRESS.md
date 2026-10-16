@@ -1594,6 +1594,7 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 独立レビュー: 先行レビューで回答再生成失敗後の誤抑制と、完全一致文字列だけを抑制する点を検出。失敗時のscope rollbackとbackend由来のtopic/detail keyを追加。最新レビューでは高・中リスク指摘なし。
 - 制約: topic/detail scopeは既存の限定的な日本語話題分類に基づく。未分類の質問は正規化した文面一致だけで抑制され、意味的な同一質問を完全に判定するものではない。Gemini実通信0回であり、モデルが任意質問を自然に選ぶ品質は未評価。
 - 全pytest **1647 passed in 303.03s**（Windows Firefox UIを含む）。backend focused 19 passed、Firefox focused 2 passed、Python/JS構文と`git diff --check`成功。Gemini実通信0回。
+- コードSHA `a35f1d19a0b2cd0c5a720e7240e728fa4a71776d`はPush Actions [38868726120](https://github.com/kenkyu0909/aichatapp/actions/runs/38868726120)とPR Actions [38868731579](https://github.com/kenkyu0909/aichatapp/actions/runs/38868731579)がsuccess。双方1647 passed / 1 warning。警告はStarlette/httpx deprecationとGitHub runnerのNode.js 20移行通知。
 - 次: yomiyasu確認と秘密情報・差分監査後、保護対象の未追跡指示ファイルを除外してpushする。最新SHA Actions・PR #4 OPEN/Draft/未マージを確認する。続いてQUALITY009/T369の実生成品質FAILは維持したまま、残るオフラインP0を調査する。
 ### 2026-10-16 — 伸ばし棒の文脈別プロンプト規則
 
