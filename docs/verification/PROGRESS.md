@@ -1687,3 +1687,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
 - 次: D03（confirmed_facts/confirmation_state の永続化）着手。D02残として誘い意思確認 `近いうちに会いませんか？` の `INVITATION_PATTERN`/`_is_unclassified_question_about_user` 拡張も検討。
 
+### 2026-10-16 23:30 JST D02残（近未来の誘い表現）修正
+
+- `INVITATION_PATTERN` に近未来ブランチを追加: `(?:近いうちに|近々|そのうち|近日|いずれ).{0,20}(?:ませんか|ません|ましょう|おう|てみません|てみましょう)`。誘いの提案語尾に限定し、`近いうちに映画が公開されるらしいよ` 等の非誘い文は除外。
+- `近いうちに会いませんか？`・`近々お会いしませんか？` が誘い意思確認（`相手の「…」にどう返したいか教えてください` / purpose=`相手からの誘いへの本人の意思を確認します`）を返すように修正。`そのうちご飯でも行きません？` も誘いとして認識。
+- 検証: 誘いマッチャ/意思確認/負例 focused 11 passed、`tests/test_app.py` 1688 passed、全pytest **1797 passed in 367.73s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38913876732](https://github.com/kenkyu0909/aichatapp/actions/runs/38913876732) / PR [38913884548](https://github.com/kenkyu0909/aichatapp/actions/runs/38913884548) は同一SHA `32db88a` でsuccess（CI **1797 passed / 1 warning in 246.68s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
+- 次: D03（confirmed_facts/confirmation_state の永続化）着手。
+
