@@ -1678,3 +1678,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持（QUALITY009の実生成自然さ・意味的多様性FAIL、T369継続）。保護対象の未追跡指示ファイル3件は保持。
 - 次: D03（confirmed_facts/confirmation_state の永続化）、D02残（誘い意思確認 `近いうちに会いませんか？`・第三者質問）、次作業単位後の検証エージェント起動。
 
+### 2026-10-16 23:05 JST 検証#2指摘の反映（一般情報ガードの接続動詞）
+
+- 検証エージェント#2の独立検証: `17aef51`（D12）は妥当・完全。`d3f1c23` は丁寧過去形は回復したが、除外 `(?:観|見)(?:た|て|ま|る|れ)` が接続の「を見て」まで除外し、`映画ランキングを見て決めたいのですが、何が人気ですか？` 等の世界情報質問を本人確認へ昇格させる新偽陽性を導入、と判定。
+- 修正 `11c6dbc`: 除外を `(?:観|見)(?:た|ま|る|れ)` に限定し、接続動詞は一般情報のまま保持。丁寧過去形（`観ましたか`等）の本人確認は維持。接続動詞の対照ケース3件を一般情報テストへ追加。
+- 検証: focused 13 passed、`tests/test_app.py` 1681 passed、全pytest **1790 passed in 371.84s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38911863000](https://github.com/kenkyu0909/aichatapp/actions/runs/38911863000) / PR [38911869652](https://github.com/kenkyu0909/aichatapp/actions/runs/38911869652) は同一SHA `11c6dbc` でsuccess（CI **1790 passed / 1 warning in 225.80s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
+- 次: D03（confirmed_facts/confirmation_state の永続化）着手。D02残として誘い意思確認 `近いうちに会いませんか？` の `INVITATION_PATTERN`/`_is_unclassified_question_about_user` 拡張も検討。
+

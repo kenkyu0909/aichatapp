@@ -1661,3 +1661,11 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-16 23:05 JST 検証エージェント指摘の反映（一般情報ガードの接続動詞）
+
+- 独立検証エージェントの確認: `17aef51`（相手保存の二重送信防止・写真事前検証）は妥当でD12の範囲を満たす。`d3f1c23` は丁寧過去形の本人確認を回復した一方、除外 `(?:観|見)(?:た|て|ま|る|れ)` が接続の「を見て」まで除外し、`映画ランキングを見て決めたいのですが、何が人気ですか？` のような世界情報質問を本人確認へ昇格させる新たな偽陽性を生んでいた。
+- `11c6dbc`: 除外を `(?:観|見)(?:た|ま|る|れ)` に限定して接続動詞を一般情報のまま保持し、丁寧過去形の本人確認は維持。接続動詞の対照ケース3件を追加。
+- 検証: focused 13 passed、`tests/test_app.py` 1681 passed、全pytest **1790 passed in 371.84s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38911863000](https://github.com/kenkyu0909/aichatapp/actions/runs/38911863000) とPR [38911869652](https://github.com/kenkyu0909/aichatapp/actions/runs/38911869652) が同一SHA `11c6dbc` でsuccess（CI **1790 passed / 1 warning in 225.80s**）。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
