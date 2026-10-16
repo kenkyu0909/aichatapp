@@ -929,3 +929,6 @@ T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPus
 
 
 T368最終CI追補: 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush Actions [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR Actions [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) は同一head SHAでsuccess。Push artifactのJUnitは1366件 / 失敗0 / error0 / skipped0。PR #4はOPEN/Draft・未マージ。これはオフライン検証であり、QUALITY009実Gemini自然さ・意味的多様性FAILは未解決。
+
+
+QUALITY009再生focused監査（既存項目の補足、件数の重複加算なし）: `tests/test_quality_checks_009.py`と直接質問/拒否後候補フィルターを合わせて9 passed in 1.68s。未確認事実・質問すり替え・不安を軽く扱う既知候補の除外と安全候補不足通知を確認。最新検証HEAD `27c6b2c933363b13e42eb67d481c87871f3131d5` のPush Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) / PR Actions [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188) は同一SHAでsuccess。JUnit: 1366 / 0 failures / 0 errors / 0 skipped。

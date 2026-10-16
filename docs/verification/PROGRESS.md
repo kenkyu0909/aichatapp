@@ -1408,3 +1408,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - PR #4はOPEN/Draft、head `a941ac478dd443bb525928e2e17f473acb774575`、base `feat/ui-local-backend-v1`。マージなし。
 - T368の修正後安定性は確認済み。一方、QUALITY009に保存された実Gemini出力の自然さ・候補の意味的多様性FAILは未解決で、総合判定NO-GOを維持する。モック/UI/CI成功で実生成品質をPASSへ変更しない。
 - 次: 最新検証結果を他の報告書とPR本文へ反映し、そのあと保存済みFAILへのオフライン分析を継続する。会話004と新しい会話HTMLは実施しない。
+
+
+### 2026-10-16 09:02 JST 監査追補・最新docs HEAD CI完了
+
+- 最新検証HEAD `27c6b2c933363b13e42eb67d481c87871f3131d5` のPush Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) とPR Actions [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188) は、同一SHAでsuccess。Push artifactのJUnitは**1366 tests / 0 failures / 0 errors / 0 skipped**。
+- QUALITY009の保存済み候補を現行フィルターへ再投入するfocused監査と、直接質問・拒否後候補フィルターを含む重点セットは**9 passed in 1.68s**。具体的な既知の危険候補は除外され、安全候補を残して不足通知する。新しいTest IDは増やしていない。
+- 保存済み実Gemini出力の代替案すり替え・未確認本人事実・断り後の不安軽視は当時の品質FAILとして残す。現行フィルターでの除外はオフライン回帰であり、修正後の実Gemini品質PASSを示さない。実API 0回。
+- PR本文へT367/T368結果と現時点の制約を追記済み。PR #4はOPEN/Draft、未マージ。

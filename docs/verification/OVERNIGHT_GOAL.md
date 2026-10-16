@@ -1118,3 +1118,10 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush run [38826220985](https://github.com/kenkyu0909/aichatapp/actions/runs/38826220985) とPR run [38826226808](https://github.com/kenkyu0909/aichatapp/actions/runs/38826226808) が同一SHAでsuccess。JUnit artifactは1366件 / failures 0 / errors 0 / skipped 0。
 - ゴール7のオフライン回帰とFirefox安定性はこのHEADでPASS。実Gemini自然さ・候補意味多様性の保存済みFAILが残るためゴール全体および総合判定はNO-GOのまま。Gemini通信0回。
 - PR #4はOPEN/Draft・未マージ。次の作業は品質009保存出力を使った安全なオフライン分析。conversation_004 / 新しい会話HTMLは禁止。
+
+
+##### 2026-10-16 09:02 JST: 保存済みQUALITY009の安全フィルター監査
+
+- `quality_checks_009.json`内の直接質問代替、未確認の本人事実、不安を軽く扱う候補を現行パイプラインで再確認。既知の不適切案は除外され、安全な案を残して不足を通知する。保存JSONの回帰と直接質問/拒否候補のfocused確認は9 passed in 1.68s。Test IDの重複加算なし。
+- 最新docs HEAD `27c6b2c933363b13e42eb67d481c87871f3131d5`のPush/PR Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) / [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188)は同一SHAでsuccess。JUnit 1366件、fail/error/skipped各0。
+- 保存済み実Gemini出力に由来する自然さ・意味的多様性FAILは未解決。オフラインのフィルター合格で実生成品質を合格扱いしない。実API 0回。PR本文の更新済み。次は最新作業HEADへの本追補、Actions再確認、および実利用上の追加P0がないか限定監査。会話004・新HTMLは禁止。
