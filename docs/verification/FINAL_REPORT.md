@@ -1598,3 +1598,10 @@ T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_
 共通プロンプトと初回メッセージプロンプトに、「ー」は驚きや柔らかさが自然なときだけ使い、同じ会話で反復せず、深刻な話・不安・断りには使わない規則を追加。5つの架空の手書き例でオフライン検査し、句読点や空行の禁止、場面別の「ー」「笑」「絵文字」使用を確認した。focused suite **6 passed**。Gemini実通信0回。これはプロンプトと固定例の検査であり、AIの生成品質合格を示さない。
 
 TEST_MATRIXはT394を追加し、394項目（PASS261 / FAIL14 / FIXED99 / BLOCKED5 / NOT_TESTED15）。今回HEADの全pytestは **1639 passed in 325.46s**（Firefox UI含む）。focused suiteは7 passed、Python/JavaScript構文検査とdiff checkも成功。GitHub ActionsはPush後に確認する。保存済み実Gemini品質FAIL T369/QUALITY009は未解決のため総合判定NO-GOを維持する。|
+### 2026-10-16 16:30 JST 追記: 任意質問と安全候補の併用
+
+replyモードに限り、安全な返信候補を提示したうえで、本人の具体的経験を一時的に使うと会話が明確に豊かになる場合に、任意の本人向け質問を最大1件追加できるようにした。候補は回答を待たずに使える。本人回答はプロフィール・会話履歴へ保存せず、送信候補にも自動反映して送信しない。回答付き再生成が失敗した場合は、入力欄と質問を保持して再試行できる。
+
+FastAPI/SDKモックで同じ話題・詳細の言い換え質問を抑制し、異なる詳細の質問は残すことを確認した。Firefoxではskip・回答・失敗後の再試行・成功後の反復抑制、候補保持、無保存・無送信を確認した。Focused backend suite 19 passed、Firefox suite 2 passed。Gemini実通信は0回。topic/detail分類は限定的な話題ルールであり、未分類質問の意味的な言い換えは完全には抑制しない。全pytestとActionsは最新変更を含めた実行後に追記する。
+
+T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。Windows全pytestは1647 passed in 303.03sで、Firefox UIテストも含む。backend focused 19 passed、Firefox focused 2 passed。Python/JavaScript構文と`git diff --check`成功。Gemini実通信0回。GitHub ActionsはPush後に確認する。過去のT369・QUALITY009実生成品質FAILを変更していないため、総合判定は**NO-GO**のまま。PR #4はDraft・未マージ。conversation_004と新規会話HTMLは実施していない。

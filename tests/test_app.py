@@ -934,6 +934,210 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     assert c.get(f"/api/matches/{mid}/messages").json() == messages_before
 
 
+def test_optional_self_disclosure_question_is_returned_with_sendable_reply(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "休日はカフェに行くことが多いです！"})
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [{
+                    "question": "最近行ったカフェで印象に残ったお店はありますか？",
+                    "purpose": "本人の経験を一時的に共有できれば会話に具体性が出るため",
+                }],
+                "user_info_reason": "",
+                "recommended": {"label": "自然な反応", "text": "カフェいいですね！\nどんなお店によく行くんですか？"},
+                "alternatives": [],
+                "reason": "相手の話題に自然に反応する",
+                "strategy": "カフェの話を続ける",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "会話を広げている段階です",
+                "next_action": "相手の好みを聞きます",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["needs_user_info"] is False
+    assert body["recommended"]["text"] == "カフェいいですね！\nどんなお店によく行くんですか？"
+    assert body["optional_user_questions"] == [{
+        "question": "最近行ったカフェで印象に残ったお店はありますか？",
+        "purpose": "本人の経験を一時的に共有できれば会話に具体性が出るため",
+        "scope_key": "topic:カフェ|detail:recent_experience",
+    }]
+
+
+def test_optional_self_disclosure_question_is_dropped_when_skipped_or_already_answered(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空みお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日は友達とカフェに行きました！"})
+    response_payload = {
+        "needs_user_info": False,
+        "user_questions": [],
+        "optional_user_questions": [{
+            "question": "最近行ったカフェで印象に残ったお店はありますか？",
+            "purpose": "一時的な本人の経験を会話に活かすため",
+        }],
+        "user_info_reason": "",
+        "recommended": {"label": "自然な反応", "text": "楽しそうですね！\nどんなカフェに行ったんですか？"},
+        "alternatives": [],
+        "reason": "相手の話題を広げる",
+        "strategy": "相手の話を聞く",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "自然な会話を続ける段階です",
+        "next_action": "相手の話題に応じます",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(response_payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    skipped = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "skipped_user_info": True,
+    })
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["recommended"] is not None
+    assert skipped.json()["optional_user_questions"] == []
+
+    answered = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [{
+            "question": "最近行ったカフェで印象に残ったお店はありますか？",
+            "answer": "先週行った喫茶店が印象に残っています",
+        }],
+    })
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["recommended"] is not None
+    assert answered.json()["optional_user_questions"] == []
+
+
+def test_blocking_user_info_question_has_no_optional_question(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空ゆい")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画は好きですか？"})
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": True,
+                "user_questions": [{"question": "映画は好きですか？", "purpose": "質問に回答するため"}],
+                "optional_user_questions": [{"question": "最近観た作品はありますか？", "purpose": "経験の共有を促すため"}],
+                "user_info_reason": "本人の好みが未確認です",
+                "recommended": None,
+                "alternatives": [],
+                "reason": "",
+                "strategy": "確認後に返信します",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "本人情報が必要です",
+                "next_action": "本人に確認します",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert body["optional_user_questions"] == []
+
+
+def test_optional_user_question_is_limited_to_one_and_reply_mode(client):
+    _, backend = client
+    question = backend.UserQuestion(
+        question="最近印象に残った本はありますか？",
+        purpose="任意の経験共有を会話に活かすため",
+    )
+    assert backend.filter_optional_user_questions(
+        [question], mode="first", needs_user_info=False, skipped_user_info=False,
+        has_safe_candidates=True, user_answers=[],
+    ) == []
+    assert backend.filter_optional_user_questions(
+        [question], mode="reply", needs_user_info=False, skipped_user_info=False,
+        has_safe_candidates=False, user_answers=[],
+    ) == []
+    with pytest.raises(ValueError):
+        backend.SuggestionsV2(
+            needs_user_info=False,
+            optional_user_questions=[question, question],
+            recommended=backend.Candidate(label="返信", text="本の話いいですね！"),
+            reason="会話を続ける",
+        )
+
+
+def test_optional_question_contract_is_explicitly_present_in_reply_prompt(client):
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+    assert "optional_user_questions" in prompt
+    assert "任意回答がなくても候補だけで会話を続けられる" in prompt
+    assert "user_answers と同じ内容を聞き直し" in prompt
+
+
+def test_optional_question_suppresses_paraphrase_with_same_topic_and_detail(client):
+    _, backend = client
+    prior_answer = {
+        "question": "最近行ったカフェで印象に残ったお店はありますか？",
+        "answer": "先週行った喫茶店が印象に残っています",
+    }
+    paraphrase = backend.UserQuestion(
+        question="最近心に残った喫茶店はありますか？",
+        purpose="経験の共有を会話に活かすため",
+    )
+
+    assert backend._optional_user_question_scope_key(paraphrase.question) == (
+        backend._optional_user_question_scope_key(prior_answer["question"])
+    )
+    assert backend.filter_optional_user_questions(
+        [paraphrase], mode="reply", needs_user_info=False, skipped_user_info=False,
+        has_safe_candidates=True, user_answers=[prior_answer],
+    ) == []
+
+
+def test_optional_question_keeps_distinct_detail_and_returns_internal_scope_key(client):
+    _, backend = client
+    prior_answer = {
+        "question": "最近行ったカフェで印象に残ったお店はありますか？",
+        "answer": "先週行った喫茶店が印象に残っています",
+    }
+    distinct_detail = backend.UserQuestion(
+        question="普段どんな雰囲気のカフェが好きですか？",
+        purpose="本人の好みを任意で共有できるため",
+    )
+
+    result = backend.filter_optional_user_questions(
+        [distinct_detail], mode="reply", needs_user_info=False, skipped_user_info=False,
+        has_safe_candidates=True, user_answers=[prior_answer],
+    )
+
+    assert len(result) == 1
+    assert result[0]["question"] == distinct_detail.question
+    assert result[0]["scope_key"] == "topic:カフェ|detail:atmosphere"
+
+
 def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monkeypatch):
     from google import genai
 

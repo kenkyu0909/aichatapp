@@ -5,6 +5,7 @@ const $ = id => document.getElementById(id);
 const state = { matches:[],selectedId:null,messages:[],loadingConversation:false,conversationLoadFailed:false,profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
 let timer;
 let contactSelectionEpoch=0;
+const optionalUserQuestionHistory=new Map();
 let generationRequestSequence=0;
 const generationRequestTokens=new WeakMap();
 function node(tag,cls,txt) {
@@ -355,6 +356,65 @@ function renderUserInfoQuestions(container,payload,options,matchId,generationTar
   });
   actions.append(resume,skip);panel.append(actions);container.append(panel);
 }
+function renderOptionalUserQuestion(container,payload,options,matchId,generationTarget){
+  const scope=matchId===null?"mode:"+(options.mode||"default"):"match:"+String(matchId);
+  const handled=optionalUserQuestionHistory.get(scope)||new Set();
+  const question=(Array.isArray(payload.optional_user_questions)?payload.optional_user_questions:[])
+    .find(item=>item&&typeof item.question==="string"&&item.question.trim()&&!handled.has(optionalUserQuestionKey(item)));
+  if(!question)return;
+  const questionKey=optionalUserQuestionKey(question);
+  const rememberQuestion=()=>{
+    let keys=optionalUserQuestionHistory.get(scope);
+    if(!keys){keys=new Set();optionalUserQuestionHistory.set(scope,keys);}
+    keys.add(questionKey);
+  };
+  const forgetQuestion=()=>{
+    const keys=optionalUserQuestionHistory.get(scope);
+    if(!keys)return;
+    keys.delete(questionKey);
+    if(!keys.size)optionalUserQuestionHistory.delete(scope);
+  };
+  const panel=node("section","optional-user-question");
+  panel.setAttribute("aria-labelledby","optional-user-question-title");
+  panel.append(node("h3","","任意の確認（本人向け）"));
+  panel.lastChild.id="optional-user-question-title";
+  panel.append(node("p","optional-user-safe","上の候補はこのまま使えます。この質問への回答は任意です。"));
+  const label=node("label","",question.question.trim());
+  label.htmlFor="optional-user-answer";
+  const answer=node("textarea","optional-user-answer");
+  answer.id="optional-user-answer";answer.rows=2;answer.setAttribute("aria-label",question.question.trim());
+  panel.append(label,answer);
+  if(typeof question.purpose==="string"&&question.purpose.trim())panel.append(node("small","optional-user-purpose","確認する理由："+question.purpose.trim()));
+  panel.append(node("p","optional-user-privacy","回答はこの生成リクエストの再生成にだけ使います。プロフィールには保存しません。メッセージも自動送信しません。"));
+  const actions=node("div","user-info-actions");
+  const regenerate=node("button","action-green","回答して再生成");
+  regenerate.type="button";regenerate.id="answer-and-regenerate-optional";
+  regenerate.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    const value=answer.value.trim();
+    if(!value){notice("回答を入力するか「あとで回答する」を選んでください");answer.focus();return;}
+    rememberQuestion();
+    regenerate.disabled=true;skip.disabled=true;
+    try{
+      await requestGeneration(options,matchId,[{question:question.question.trim(),answer:value}],generationTarget);
+    }catch(error){
+      forgetQuestion();
+      throw error;
+    }
+    finally{regenerate.disabled=false;skip.disabled=false;}
+  });
+  const skip=node("button","action-outline","あとで回答する");
+  skip.type="button";skip.id="skip-optional-user-question";
+  skip.onclick=()=>{rememberQuestion();panel.remove();};
+  actions.append(regenerate,skip);panel.append(actions);container.append(panel);
+}
+function normalizeOptionalUserQuestion(question){
+  return String(question||"").normalize("NFKC").toLocaleLowerCase().replace(/\s+/g," ").trim();
+}
+function optionalUserQuestionKey(item){
+  const scopeKey=typeof item?.scope_key==="string"?item.scope_key.trim():"";
+  return scopeKey?normalizeOptionalUserQuestion(scopeKey):normalizeOptionalUserQuestion(item?.question);
+}
 async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false){
   const button=generationTarget.button||$(options.mode==="followup"?"follow-up":options.mode==="first"?"first-message":"generate");
   const area=generationTarget.container||$("suggestion-list");
@@ -383,6 +443,7 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
       const title=options.mode==="first"?"✦ 初回メッセージ候補":options.mode==="followup"?"✦ 追いメッセージの提案":options.mode==="like"?"✦ メッセージ付きいいね候補":"✦ 返信候補";
       area.append(node("div","suggestion-heading",title));
       renderCards(area,result,generationTarget.allowSave!==false,matchId);
+      renderOptionalUserQuestion(area,result,options,matchId,generationTarget);
     }
     if(!generationTarget.container)$("chat-area").scrollTop=$("chat-area").scrollHeight;
   }finally{

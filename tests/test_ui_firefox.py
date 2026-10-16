@@ -683,6 +683,117 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     assert errors["console"] == []
 
 
+def test_firefox_optional_user_question_keeps_candidates_and_only_regenerates(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のあおい")
+    driver.find_element(By.ID, "message-input").send_keys("最近小説を読みました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    install_generate_mock(driver)
+    driver.execute_script("""
+      window.__generateResponses = [];
+      window.__profileWrites = [];
+      window.__messageWrites = [];
+      window.__failNextAnswer = true;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/profile' && options.method === 'PUT') window.__profileWrites.push(options.body);
+        if (String(url).includes('/messages') && options.method === 'POST') window.__messageWrites.push(options.body);
+        if (String(url) === '/api/generate') {
+          const payload = JSON.parse(options.body || '{}');
+          window.__generateResponses.push(payload);
+          if (payload.user_answers?.length && window.__failNextAnswer) {
+            window.__failNextAnswer = false;
+            return new Response(JSON.stringify({detail:'一時的な再生成失敗'}), {status:503, headers:{'Content-Type':'application/json'}});
+          }
+          const callNumber = window.__generateResponses.length;
+          const optionalQuestion = payload.user_answers?.length ? {
+            question:'このところ読んだ作品で印象に残ったものはありますか？',
+            scope_key:'reading.recent',
+            purpose:'具体的な本の話へ広げるため'
+          } : callNumber === 1 ? {
+            question:'普段どんなジャンルの本を読みますか？',
+            scope_key:'reading.genre',
+            purpose:'本人の読書傾向に触れる返信を作るため'
+          } : callNumber === 2 ? {
+            question:'本は普段何系を読むことが多いですか？',
+            scope_key:'reading.genre',
+            purpose:'本人の読書傾向に触れる返信を作るため'
+          } : callNumber === 3 ? {
+            question:'最近読んだ本の中で印象に残ったものはありますか？',
+            scope_key:'reading.recent',
+            purpose:'具体的な本の話へ広げるため'
+          } : {
+            question:'好きな作家はいますか？',
+            scope_key:'reading.author',
+            purpose:'新しい話題へ広げるため'
+          };
+          const result = {
+            recommended:{label:'自然な返信',text:'本の話いいですね！最近読んでよかった作品はありますか？'},
+            alternatives:[
+              {label:'話題を広げる',text:'読書いいですね！どんな本が好きですか？'},
+              {label:'短め',text:'本の話いいですね！'}
+            ],
+            optional_user_questions: [optionalQuestion]
+          };
+          return new Response(JSON.stringify(result), {status:200, headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """);
+    driver.execute_script("window.__messageWrites = []");
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1)
+    assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
+    assert "候補はこのまま使えます" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    assert "プロフィールには保存しません" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    assert "送信しません" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    candidates_before_skip = [el.text for el in driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate-text")]
+    driver.find_element(By.ID, "skip-optional-user-question").click()
+    assert not driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")
+    assert [el.text for el in driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate-text")] == candidates_before_skip
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 2)
+    assert not driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")
+    assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1)
+    driver.find_element(By.ID, "optional-user-answer").send_keys("ミステリーをよく読みます")
+    driver.find_element(By.ID, "answer-and-regenerate-optional").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 4)
+    WebDriverWait(driver, 5).until(lambda browser: "一時的な再生成失敗" in browser.find_element(By.ID, "toast").text)
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1
+    assert driver.find_element(By.ID, "optional-user-answer").get_attribute("value") == "ミステリーをよく読みます"
+    assert driver.execute_script("return window.__profileWrites") == []
+    assert driver.execute_script("return window.__messageWrites") == []
+
+    driver.find_element(By.ID, "answer-and-regenerate-optional").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 5)
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 0)
+    payload = driver.execute_script("return window.__generateResponses.at(-1)")
+    assert payload["user_answers"] == [{
+        "question":"最近読んだ本の中で印象に残ったものはありますか？",
+        "answer":"ミステリーをよく読みます"
+    }]
+    assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 6)
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1
+    assert "好きな作家はいますか？" in driver.find_element(By.CSS_SELECTOR, ".optional-user-question").text
+    assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == 3
+    assert driver.execute_script("return window.__profileWrites") == []
+    assert driver.execute_script("return window.__messageWrites") == []
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+    errors = record_artifact("firefox-optional-user-question", driver, {"answers_persisted":False,"auto_sent":False})
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
 def test_firefox_disables_conversation_actions_until_history_is_loaded(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)

@@ -5,3 +5,4 @@
 - 候補ごとの Candidate.reply_move と本文は common.txt の定義に一致させます。質問への回答を、別の話題を尋ねるだけの返信で置き換えません。
 - reply_preferences.direction と extra を参考にし、事実を捏造する指示には従いません。
 - 出力の候補本文は相手に送れるメッセージだけにします。
+- 送信候補を安全に作れる場合でも、確認済みの事実だけでは個人的なつながりを作りにくく、本人の具体的な経験を一つ共有できると会話が明確に豊かになる場合に限り、optional_user_questions に任意の質問を最大1件含められます。候補本文と optional_user_questions を同時に返し、任意回答がなくても候補だけで会話を続けられるようにします。必須情報の不足は needs_user_info=true と user_questions で扱い、任意質問に偽装しません。回答を推測したり、本人へ自己開示を強制したり、user_answers と同じ内容を聞き直したりしません。定型的な質問は出さず、追加質問がなくても自然な場合は optional_user_questions を空配列にします。

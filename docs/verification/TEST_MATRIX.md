@@ -1022,3 +1022,7 @@ T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Ac
 | T394 | 伸ばし棒「ー」の文脈別スタイル契約と固定例 | 共通/firstプロンプトの契約テストと架空の手書き例5場面をpytestで確認（オフライン） | FIXED | 明るい日常・本当の驚きでは自然な「ー」を許し、冗談・深刻な疲れ・慎重な断りでは文脈に合わない挿入を避けることを確認。句読点なし・空行なし・絵文字/笑/伸ばし棒の場面別使用を検査し、focused suite 6 passed。これはプロンプト契約と固定例の検証であり、Geminiの実生成品質は検証していない。Gemini実通信0回。 |
 
 最新ID行: 394。累計: PASS261 / FAIL14 / FIXED99 / BLOCKED5 / NOT_TESTED15。最新Windows全pytest **1639 passed in 325.46s**（Firefox UIを含む）、今回のfocused suite **7 passed**。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。T369・QUALITY009実生成品質FAILは維持。最新ActionsはPush後に追記する。|
+
+| T395 | 安全な返信候補と任意の本人確認質問 | FastAPI/SDKモックとFirefox UI操作で回答・スキップ・失敗再試行・再質問抑制を確認（オフライン） | FIXED | 安全な候補を残したまま任意質問を最大1件表示。本人回答は一時送信だけでプロフィール保存・メッセージ送信なし。回答再生成が503で失敗した場合は質問と入力内容を保持し、再試行成功後に同じ情報範囲の質問をページ内の相手別状態で抑制する。バックエンドは認識可能な話題と詳細を使って同じ範囲の言い換えを抑制し、異なる詳細は維持。mandatory質問は従来どおり候補なしのブロッキング動作。focused backend 19 passed、Firefox 2 passed。Gemini実通信0回。|
+
+最新ID行: 395。累計: PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1647 passed in 303.03s**（Firefox UI含む）、backend focused 19 passed、Firefox focused 2 passed。Python構文、JavaScript構文、`git diff --check`成功。Gemini実通信0回。今回HEADのActionsをPush後に確認する。T369・QUALITY009実生成品質FAILは未解決のまま保持し、総合判定NO-GO。|

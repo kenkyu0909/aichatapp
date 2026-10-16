@@ -1314,3 +1314,18 @@ SHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](http
 | アプリ安定性 | ローカルPASS / Actions待ち | focused 7 passed。全pytest 1639 passed in 325.46s（Firefox UI含む）、Python/JavaScript構文とdiff check成功。今回HEADのActionsを確認する。|
 
 変更: `prompts/common.txt`, `prompts/first.txt`, `tests/test_app.py`, および4つの検証文書。T394、累計394: PASS261 / FAIL14 / FIXED99 / BLOCKED5 / NOT_TESTED15。Gemini実通信0回。独立レビュー完了。未コミット変更は現在の作業のみ。全pytest・Firefox・構文検査は成功。次にPR #4へPushし、Actionsを確認する。T369/QUALITY009の実生成FAILがあるので総合判定はNO-GOのまま。会話004/新規HTMLは実施しない。
+### 2026-10-16 16:30 JST: 安全な候補を保つ任意の本人確認質問
+
+| ゴール | 判定 | 根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 部分改善 / 全体FAIL維持 | 任意質問の回答は再生成リクエスト内だけに使い、プロフィールや会話履歴に保存しない。既存の厳格な確認質問と分けた。topic/detail判定は限定ルールで、意味理解全般は未検証。 |
+| 句読点・改行 | 未変更・実生成未達 | 本変更では扱わず、Gemini実通信0回。T369の実生成FAILは維持。 |
+| ミラーリング | 未変更・未達 | 本変更では実文章評価なし。 |
+| 共感の反復防止 | 未変更・未達 | QUALITY009実生成FAILを維持。 |
+| 返信候補の多様性 | 安全性維持・品質FAIL | 任意質問は候補と並行できるが、候補意味多様性の過去FAILは未解決。 |
+| 食事への誘い判断 | 未変更・未達 | 今回の任意質問フローに限定し、誘い判断を再検証していない。 |
+| アプリ安定性 | focused PASS / 全体確認中 | backend 19 passed、Firefox 2 passed、構文とdiff check成功。全pytestとActionsは今回差分を含めた確認が必要。 |
+
+本人に質問しなくても安全な候補がある場合は候補を残し、任意の本人経験を尋ねるパネルを追加する。回答の失敗時は入力を保持して再試行し、成功またはskip後に同じtopic/detail scopeの質問を繰り返さない。異なる詳細の質問は許容する。scope keyだけを相手別にページメモリへ保存し、回答値は保存しない。
+
+テスト: FastAPI/SDKモック 19 passed、Firefox focused suite 2 passed。独立レビューは最新scope対応に高・中リスクなし。Windows全pytest 1647 passed in 303.03s（Firefox UIを含む）。Python/JS構文とdiff check成功。Gemini API 0回。マトリクスT395を追加し395項目: PASS261 / FAIL14 / FIXED100 / BLOCKED5 / NOT_TESTED15。T369/QUALITY009実生成FAILが残るため総合NO-GO。今回の最新HEADでGitHub Actionsは未確認。次: 変更をpushしActionsを確認後、残るP0品質問題をオフラインで調査する。conversation_004と新規会話HTMLは実施しない。

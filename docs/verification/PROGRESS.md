@@ -1584,6 +1584,17 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Gemini実通信0回。`conversation_004`と新しい会話HTMLは実施しない。protected untracked指示ファイルには触れていない。
 - 変更: `app.py`、`tests/test_app.py`、検証資料。テストケース変更により、過去のfirstモック候補を必須要素に合わせて更新。
 - 次: レポートとPR説明を更新し、作業対象ファイルだけcommit/push。PushとPRの最新SHA Actionsを確認し、PR #4をDraft/未マージのまま維持する。
+
+### 2026-10-16 16:30 JST 任意の本人情報確認を安全候補と並行表示
+
+- 問題: 本人の個人的な経験を加えると会話が豊かになる場合でも、必須情報確認の仕組みしかなく、必須でない質問を安全な返信候補と一緒に提示できなかった。
+- 対応: replyモードに限り、安全な候補と最大1件の任意質問を返せるようにした。回答はその再生成リクエストだけで使い、プロフィールや会話履歴へ保存しない。回答またはスキップ済みの情報範囲を再度尋ねない。
+- UI: 安全候補をそのまま使えると伝え、本人回答は任意と表示。回答失敗時は入力を残して再試行可能。候補カードは回答前から利用でき、回答で自動送信しない。相手ごとの質問scope keyだけをページ内メモリに保持する。
+- 検証: backend focused suite 19 passed、Firefox focused suite 2 passed（候補保持、skip、同じscopeの言い換え抑制、異なるscopeの表示、回答503後の再試行、プロフィール/履歴へ未保存、自動送信なし）。Python/JS構文、`git diff --check`成功。Gemini実通信0回。
+- 独立レビュー: 先行レビューで回答再生成失敗後の誤抑制と、完全一致文字列だけを抑制する点を検出。失敗時のscope rollbackとbackend由来のtopic/detail keyを追加。最新レビューでは高・中リスク指摘なし。
+- 制約: topic/detail scopeは既存の限定的な日本語話題分類に基づく。未分類の質問は正規化した文面一致だけで抑制され、意味的な同一質問を完全に判定するものではない。Gemini実通信0回であり、モデルが任意質問を自然に選ぶ品質は未評価。
+- 全pytest **1647 passed in 303.03s**（Windows Firefox UIを含む）。backend focused 19 passed、Firefox focused 2 passed、Python/JS構文と`git diff --check`成功。Gemini実通信0回。
+- 次: yomiyasu確認と秘密情報・差分監査後、保護対象の未追跡指示ファイルを除外してpushする。最新SHA Actions・PR #4 OPEN/Draft/未マージを確認する。続いてQUALITY009/T369の実生成品質FAILは維持したまま、残るオフラインP0を調査する。
 ### 2026-10-16 — 伸ばし棒の文脈別プロンプト規則
 
 `prompts/common.txt`に「ー」は驚きや柔らかさが自然なときだけ使い、反復・真剣な話・不安・拒否では避ける規則を追加。`prompts/first.txt`では初回に驚きを作らず、自然な喜びや柔らかさに限る注記を追加した。pytestに5つの手書き会話例（明るい日常、本当の驚き、冗談、疲れ、慎重な断り）を加え、記号・句読点・空行を検査。独立レビューで空行検査の冗長なassertionを指摘されたため、実際に空行を検出する条件へ修正。最終focused suite **7 passed**。全pytest **1639 passed in 325.46s**（Firefox UIを含む）。`python -m py_compile app.py tests/test_app.py`、`node --check app.js`、`git diff --check`成功。Windowsのconsole `pytest.exe` は品質ランナーのnamespace importで失敗したが、`python -m pytest`では同じ品質ランナー10件と全スイートが成功。これは実行入口の差で、テスト/ソース欠落ではない。固定例と静的プロンプト契約だけでGemini実生成品質を示さない。今回のGemini通信は0回。次は資料検査後にPushし、最新SHAのActionsを確認する。過去のT369/QUALITY009品質FAILと総合NO-GOを維持する。PR #4はDraft・未マージ。

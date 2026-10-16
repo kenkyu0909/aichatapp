@@ -218,6 +218,49 @@ def _deduplicate_user_answers(answers: list[dict[str, str]]) -> list[dict[str, s
     return result
 
 
+def _optional_user_question_scope_key(question: str) -> str:
+    """Derive a conservative topic/detail key, falling back to normalized text."""
+    topic = _question_topic(question)
+    scope = _personal_information_scope(topic, question) if topic and topic != "本人情報" else None
+    if scope and scope[1] != "general":
+        canonical_topic, detail = scope
+        return f"topic:{canonical_topic}|detail:{detail}"
+    normalized = _normalize_clarification_question_key(question)
+    return f"exact:{normalized}"
+
+
+def filter_optional_user_questions(
+    questions: list[UserQuestion],
+    *,
+    mode: str,
+    needs_user_info: bool,
+    skipped_user_info: bool,
+    has_safe_candidates: bool,
+    user_answers: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Expose at most one optional self-disclosure prompt when it is safe.
+
+    Optional prompts enrich an available reply; they never replace it. The
+    conservative answer checks intentionally suppress same-topic follow-ups
+    when the topic can be recognized locally.
+    """
+    if mode != "reply" or needs_user_info or skipped_user_info or not has_safe_candidates:
+        return []
+
+    answered_scope_keys = {
+        _optional_user_question_scope_key(answer.get("question", ""))
+        for answer in user_answers
+        if answer.get("question", "").strip()
+    }
+
+    for question in questions[:1]:
+        scope_key = _optional_user_question_scope_key(question.question)
+        if scope_key in answered_scope_keys:
+            continue
+        return [{**question.model_dump(), "scope_key": scope_key}]
+    return []
+
+
 class Candidate(BaseModel):
     label: str = Field(min_length=1, max_length=50)
     text: str = Field(min_length=1, max_length=1000)
@@ -246,6 +289,7 @@ class UserQuestion(BaseModel):
 class SuggestionsV2(BaseModel):
     needs_user_info: bool
     user_questions: list[UserQuestion] = Field(default_factory=list, max_length=3)
+    optional_user_questions: list[UserQuestion] = Field(default_factory=list, max_length=1)
     user_info_reason: str = Field(default="", max_length=500)
     recommended: Candidate | None = None
     alternatives: list[Candidate] = Field(default_factory=list, max_length=4)
@@ -6324,6 +6368,7 @@ def user_info_question_response(question: str, purpose: str, reason: str) -> dic
         "skipped_user_info": False,
         "generation_blocked": False,
         "user_questions": [{"question": question, "purpose": purpose}],
+        "optional_user_questions": [],
         "user_info_reason": reason,
         "recommended": None,
         "alternatives": [],
@@ -6356,6 +6401,7 @@ def blocked_user_info_response(
         "generation_blocked": True,
         "blocking_reason": reason,
         "user_questions": [],
+        "optional_user_questions": [],
         "user_info_reason": reason,
         "recommended": None,
         "alternatives": [],
@@ -6443,7 +6489,7 @@ def generate(data: GenerateInput):
                 )
             if result.get("needs_user_info"):
                 return {**result, "needs_user_info": True, "conversation_stage": "Stage 1", "invite_decision": "do_not_invite", "decision_reason": "プロフィール情報が不足しています", "next_action": "本人が分かる範囲で回答してください", "api_alias": None, "model": None, "api_attempt_count": 0}
-            return {**result, "needs_user_info": False, "skipped_user_info": False, "generation_blocked": False, "user_questions": [], "user_info_reason": "", "conversation_stage": "Stage 1" if data.mode == "first" else "Stage 2", "invite_decision": "do_not_invite" if data.mode == "first" else "continue_conversation", "decision_reason": "APIキー未設定時の固定デモです", "next_action": "デモ候補を確認してください", "api_alias": None, "model": None, "api_attempt_count": 0}
+            return {**result, "needs_user_info": False, "skipped_user_info": False, "generation_blocked": False, "user_questions": [], "optional_user_questions": [], "user_info_reason": "", "conversation_stage": "Stage 1" if data.mode == "first" else "Stage 2", "invite_decision": "do_not_invite" if data.mode == "first" else "continue_conversation", "decision_reason": "APIキー未設定時の固定デモです", "next_action": "デモ候補を確認してください", "api_alias": None, "model": None, "api_attempt_count": 0}
         return result
 
     response_model = SuggestionsV2 if data.response_version == 2 else Suggestions
@@ -6451,7 +6497,7 @@ def generate(data: GenerateInput):
         f"\n【今回の出力指定】候補は必ず合計{data.count}案にしてください。"
         f"recommendedが1案、alternativesが{data.count-1}案です。"
         "理由 reason は短く日本語で記述してください。"
-        + ("response_version=2では不足情報がある場合 needs_user_info=true と質問だけを返し、recommendedはnull、alternativesは空配列にしてください。回答はプロフィールに保存せず、今回の文脈だけで利用してください。skipped_user_info=trueなら同じ質問を繰り返さず、その情報なしでも安全な代替候補を作れる場合だけneeds_user_info=falseで候補を返してください。代替候補を安全に作れない場合はneeds_user_info=trueで返し、サーバーが質問を終了状態へ変換します。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
+        + ("response_version=2では不足情報がある場合 needs_user_info=true と質問だけを返し、recommendedはnull、alternativesは空配列、optional_user_questionsは空配列にしてください。候補を返せるときは optional_user_questions を最大1件まで返せますが、これはreplyモードだけの任意の本人向け質問です。optional_user_questions があっても候補を必ず返し、needs_user_infoはfalseにしてください。回答はプロフィールに保存せず、今回の文脈だけで利用してください。skipped_user_info=trueなら同じ質問を繰り返さず、その情報なしでも安全な代替候補を作れる場合だけneeds_user_info=falseで候補を返してください。代替候補を安全に作れない場合はneeds_user_info=trueで返し、サーバーが質問を終了状態へ変換します。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
            "stageはStage 1からStage 6、invite_decisionはdo_not_invite/continue_conversation/consider_invite/invite_gently/wait/respect_no/ask_user_info/do_not_repeat_invite/schedule_after_acceptance/continue_or_closeのいずれかです。"
            if data.response_version == 2 else "strategyは無理のない提案を1文で記述してください。")
     )
@@ -6603,7 +6649,7 @@ def generate(data: GenerateInput):
                                 api_alias=account,
                                 model=model,
                             )
-                        return {**parsed.model_dump(), "demo": False, "skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models}
+                        return {**parsed.model_dump(), "optional_user_questions": [], "demo": False, "skipped_user_info": False, "generation_blocked": False, "api_alias": account, "model": model, "api_attempt_count": len(attempted_models), "attempted_models": attempted_models}
                     if data.response_version == 2 and (len(parsed.user_questions) > 0 or parsed.recommended is None):
                         raise ValueError("生成結果の形式が不正です")
                     if data.response_version == 2:
@@ -7081,6 +7127,18 @@ def generate(data: GenerateInput):
                         "candidate_notice": candidate_notice,
                     })
                     if data.response_version == 2:
+                        optional_questions = [
+                            UserQuestion.model_validate(question)
+                            for question in result.get("optional_user_questions", [])
+                        ]
+                        result["optional_user_questions"] = filter_optional_user_questions(
+                            optional_questions,
+                            mode=data.mode,
+                            needs_user_info=bool(result.get("needs_user_info")),
+                            skipped_user_info=data.skipped_user_info,
+                            has_safe_candidates=bool(result.get("recommended")) and not result.get("generation_blocked"),
+                            user_answers=data.user_answers,
+                        )
                         result_candidates = [result["recommended"], *result.get("alternatives", [])]
                         if not result_candidate_sources:
                             result_candidate_sources = current_candidate_sources
