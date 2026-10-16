@@ -5112,6 +5112,23 @@ def build_ephemeral_confirmations(
     return confirmations
 
 
+_INTERNAL_CONTEXT_KEYS = frozenset({"ephemeral_confirmations"})
+
+
+def prompt_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Drop derived, internal-only keys before the context becomes a prompt.
+
+    The confirmation records restate ``ephemeral_user_answers`` for local logic,
+    so they must not add the internal partner id or a duplicated Q/A block to the
+    model call.
+    """
+    return {
+        key: value
+        for key, value in context.items()
+        if key not in _INTERNAL_CONTEXT_KEYS
+    }
+
+
 def build_context(data: GenerateInput) -> dict:
     """Never include photos, local paths, API keys or other matches."""
     with database() as db:
@@ -6573,13 +6590,21 @@ def candidate_has_meeting_related_question(text: str) -> bool:
     )
 
 
-def candidate_has_high_confidence_japanese_error(text: str) -> bool:
-    """Catch a narrow, high-confidence malformed word in venue descriptions.
+_HIGH_CONFIDENCE_MALFORMED_WORDS = (
+    re.compile(r"雰囲(?!気)"),
+)
 
-    This is intentionally a rejection check, not an automatic correction or a
-    claim of general Japanese spell-check coverage.
+
+def candidate_has_high_confidence_japanese_error(text: str) -> bool:
+    """Catch narrow, high-confidence malformed words in venue descriptions.
+
+    Each rule validates a short compound against its correct orthography rather
+    than a single literal, so unseen variants of the same malformation are caught
+    while the correct spelling passes. This is intentionally a rejection check,
+    not an automatic correction or a claim of general Japanese spell-check
+    coverage.
     """
-    return "雰囲い" in text
+    return any(rule.search(text) for rule in _HIGH_CONFIDENCE_MALFORMED_WORDS)
 
 
 def _candidate_sentence_count(text: str) -> int:
@@ -7198,7 +7223,7 @@ def generate(data: GenerateInput):
                     attempted_models.append({"api_alias": account, "model": model})
                     response = client.models.generate_content(
                         model=model,
-                        contents=json.dumps(context, ensure_ascii=False),
+                        contents=json.dumps(prompt_context(context), ensure_ascii=False),
                         config=types.GenerateContentConfig(
                             system_instruction=system_instruction,
                             temperature=0.8,

@@ -1942,13 +1942,14 @@ def test_ephemeral_confirmations_are_structured_and_not_persisted(client):
     mid = add_match(c, "確認レコードの架空人物")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画はお好きですか？"})
     before = c.get("/api/profile").json()
+    answers = [{"question": "映画はお好きですか？", "answer": "洋画が好きです"}]
     context = backend.build_context(backend.GenerateInput(
         mode="reply",
         match_id=mid,
         response_version=2,
-        user_answers=[{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+        user_answers=answers,
     ))
-    records = context["ephemeral_confirmations"]
+    records = backend.build_ephemeral_confirmations(answers, match_id=mid)
     assert len(records) == len(context["ephemeral_user_answers"]) == 1
     record = records[0]
     assert record["confirmation_state"] == "ephemeral"
@@ -1959,6 +1960,22 @@ def test_ephemeral_confirmations_are_structured_and_not_persisted(client):
     assert record["subject"]
     assert record["requested_slot"]
     assert c.get("/api/profile").json() == before
+
+
+def test_ephemeral_confirmations_are_not_sent_to_the_model(client):
+    c, backend = client
+    mid = add_match(c, "プロンプト除外の架空人物")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画はお好きですか？"})
+    context = backend.build_context(backend.GenerateInput(
+        mode="reply",
+        match_id=mid,
+        response_version=2,
+        user_answers=[{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+    ))
+    assert "ephemeral_confirmations" in context
+    prompt = backend.prompt_context(context)
+    assert "ephemeral_confirmations" not in prompt
+    assert "ephemeral_user_answers" in prompt
 
 
 def test_ephemeral_confirmation_question_ids_normalize_equivalents(client):
@@ -8846,6 +8863,8 @@ def test_supported_photo_formats_are_accepted(client, fmt, mime, extension):
 @pytest.mark.parametrize("bad_text", [
     "どんな雰囲いのお店によく行くんですか？",
     "お店の雰囲いが落ち着きます！",
+    "どんな雰囲きのお店によく行くんですか？",
+    "落ち着いた雰囲のお店が好きです！",
 ])
 def test_high_confidence_japanese_typo_is_rejected_without_rewriting(client, bad_text):
     _, backend = client
