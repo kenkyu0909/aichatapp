@@ -282,3 +282,8 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 - 既存の隔離DB/Firefox E2Eで、絵文字・『ー』・『笑』・実改行がコピー/保存/履歴再表示で欠損しないことを確認する。`conversation_004` と**新規会話HTMLの作成・実行は、ユーザーの別途許可が出るまでしない**。既存HTMLを読むことは可能。実APIが許可上限で使えない場合はモックによるオフライン検証に切り替える。
 - P0を妨げず、本日の夜（2026-10-16 JST）の完成期限を維持。検証結果と未達をPROGRESS/TEST_MATRIX/FINAL_REPORTへ正直に記録、最新コードHEADのActionsを確認し、CI PASSだけで生成品質PASSとしない。PR #4はDraft・未マージを維持し、作業ブランチには指示書の写しをコミットしない。
 - Codexは毎時10分（JST）と稼働中15〜20分ごとに `codex/directive-control` をfetch/showしてこの節を読み、修正・テストが一区切りついたら次のP0/P1へ自律的に進む。
+
+
+## 2026-10-16 18:00 JST 監査追記
+
+作業ブランチHEAD `9bdd6ad7037d9751cd39db1e977e612696928c98`、Draft PR #4未マージ、PR Actions 38876699757成功、pytest 1668件成功・警告1件。検証資料4件を確認し、398項目（PASS261 / FAIL14 / FIXED103 / BLOCKED5 / NOT_TESTED15）。保存済み実Gemini品質009の手動FAILは未解消であり、総合NO-GO。今夜の完成期限を優先し、次の順序で進める：①本人への質問→架空回答→根拠のある自己開示の短いFirefox/モックE2E、②映画名など相手の直接質問への全候補回答と未確認事実の抑止、③first/reply/followup/likeの生成・コピー・保存・履歴のFirefox回帰、④誤字・意味的重複・相槌・褒め言葉・絵文字の実際の文章評価、⑤全pytest・Actionsと記録更新。細かな語句パターンやテスト件数の増加よりP0を優先する。Codexは毎時10分JSTと稼働中15〜20分ごとに本指示を再取得し、各タスク後も次のP0へ自律的に進む。既存の制約、会話004・新会話HTMLの禁止、PR Draft維持、未検証の実Gemini品質をPASSとしない方針は継続する。
