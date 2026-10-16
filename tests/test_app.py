@@ -1895,6 +1895,40 @@ def test_near_future_statement_is_not_treated_as_invitation(client, statement):
     assert not backend.INVITATION_PATTERN.search(statement)
 
 
+def test_confirmation_session_accumulates_and_dedupes_user_answers(client):
+    c, backend = client
+    mid = add_match(c, "累積確認の架空人物")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画はお好きですか？"})
+    context = backend.build_context(backend.GenerateInput(
+        mode="reply",
+        match_id=mid,
+        response_version=2,
+        user_answers=[
+            {"question": "映画はお好きですか？", "answer": "洋画が好きです"},
+            {"question": "週末は何をしていますか？", "answer": "カフェ巡りをしています"},
+            {"question": "映画はお好きですか？", "answer": "邦画が好きです"},
+        ],
+    ))
+    answers = context["ephemeral_user_answers"]
+    assert len(answers) == 2
+    assert answers[0] == {"question": "映画はお好きですか？", "answer": "邦画が好きです"}
+    assert answers[1]["answer"] == "カフェ巡りをしています"
+
+
+def test_confirmation_session_accepts_more_than_three_accumulated_answers(client):
+    c, backend = client
+    mid = add_match(c, "多数確認の架空人物")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "週末は何をしていますか？"})
+    request = backend.GenerateInput(
+        mode="reply",
+        match_id=mid,
+        response_version=2,
+        user_answers=[{"question": f"確認{i}", "answer": f"回答{i}"} for i in range(6)],
+    )
+    context = backend.build_context(request)
+    assert len(context["ephemeral_user_answers"]) == 6
+
+
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
     _, backend = client
     context = {
