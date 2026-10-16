@@ -957,6 +957,18 @@ def _topic_for_personal_question(text: str) -> str | None:
         return "本人情報"
     if "映画館" in text and re.search(r"どこにあります|どこにある|場所.{0,8}(?:あります|ある)|どこ(?:ですか|でしょうか)", text) and not re.search(r"行く|行った|通う|利用|普段|よく|行きつけ|どの映画館|どこの映画館", text):
         return None
+    # Questions about the broader popularity or ranking of films, dramas, and
+    # similar works ask about the world at large, not about the user's own
+    # taste or experience, so they must not trigger a personal-fact question.
+    if (
+        re.search(r"ランキング|人気|話題|興行収入|売り上げ|売上|口コミ|評価|レビュー|上映中|公開中", text)
+        and re.search(r"映画|ドラマ|アニメ|作品|俳優|女優|番組|歌手|アーティスト", text)
+        and not re.search(
+            r"あなた|君|きみ|普段|最近(?:観|見)|(?:観|見)た|(?:観|見)ますか|(?:観|見)る|好き|お好き|おすすめ|お気に入り|自分|行きつけ",
+            text,
+        )
+    ):
+        return None
     explicit_movie_request = "映画" in text and re.search(
         r"好きな映画.{0,8}(?:教えて|何(?:ですか|でしょうか|でしたか))|"
         r"(?:面白かった|良かった|よかった)映画.{0,8}何(?:ですか|でしょうか|でしたか)|"
@@ -6404,7 +6416,7 @@ def _is_unclassified_question_about_user(text: str) -> bool:
     )
     if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", question):
         return False
-    if re.match(rf"^(?:私の|僕の|俺の|自分の)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が|の|と|って|とは)", question):
+    if re.match(rf"^(?:私の|僕の|俺の|自分の|その|あの|この|うちの)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が|の|と|って|とは)", question):
         return False
     if re.match(r"^(?:世界|日本|海外|いろんな国|多くの国|水泳|スポーツ|水の沸点|横浜駅|.+駅|水族館|美術館|博物館|公園|この店|このお店)", question) and re.search(
         r"(?:何語|何度|どこ(?:にある|です)?|何時に|どう練習|ルール|何のスポーツ|開店|営業して|猫はいます)", question

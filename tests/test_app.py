@@ -7333,6 +7333,52 @@ def test_general_meal_and_pet_questions_are_not_misclassified_as_personal(questi
     assert backend._topic_for_personal_question(question) is None
 
 
+@pytest.mark.parametrize("question", [
+    "最近の映画ランキングで何が人気ですか？",
+    "今話題の映画は何ですか？",
+    "最新の映画の興行収入はどれくらいですか？",
+])
+def test_general_movie_popularity_questions_are_not_misclassified_as_personal(question, client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_for_personal_question(question) is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
+@pytest.mark.parametrize("question", [
+    "おすすめの映画ありますか？",
+    "最近観た映画は何ですか？",
+    "どんな映画が好きですか？",
+])
+def test_genuinely_personal_movie_questions_still_require_confirmation(question, client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_for_personal_question(question) is not None
+    assert backend.missing_personal_fact_question(context) is not None
+
+
+def test_third_party_possessive_question_is_not_treated_as_user_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "その友達はどうなったんですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_for_personal_question(context["history"][-1]["body"]) is None
+    assert backend.missing_personal_fact_question(context) is None
+
+
 def test_mixed_hypothetical_and_personal_pet_question_still_triggers_preflight(client):
     _, backend = client
     context = {
