@@ -1861,6 +1861,10 @@ def test_neutral_reassurance_with_respectful_pacing_survives_meeting_unease(clie
     "近いうちに会いませんか？",
     "近々お会いしませんか？",
     "そのうちご飯でも行きません？",
+    "近いうちに食事でもどうですか？",
+    "そのうちご飯でもどうですか？",
+    "近いうちにカフェでもどうですか？",
+    "近々お茶でもどうですか？",
 ])
 def test_invitation_matcher_catches_common_food_and_cafe_phrases(client, invite):
     _, backend = client
@@ -1889,6 +1893,10 @@ def test_near_future_meeting_invitation_requests_user_intent(client, invite):
 @pytest.mark.parametrize("statement", [
     "近いうちに映画が公開されるらしいよ",
     "そのうち新しいカフェができるみたい",
+    "近日中には間に合いません",
+    "近いうちに来ませんね",
+    "そのうち雨が降りませんかね",
+    "近いうちにまた連絡しましょう",
 ])
 def test_near_future_statement_is_not_treated_as_invitation(client, statement):
     _, backend = client
@@ -7425,6 +7433,10 @@ def test_general_movie_popularity_questions_are_not_misclassified_as_personal(qu
     "人気の映画を観ましたか？",
     "話題の映画、もう見ましたか？",
     "評価が高い映画、観ましたか？",
+    "観てる映画の評価はどれですか？",
+    "見てる映画の口コミは気にしますか？",
+    "よく見てる映画の評価はどれですか？",
+    "見ている映画のレビューは？",
 ])
 def test_genuinely_personal_movie_questions_still_require_confirmation(question, client):
     _, backend = client
