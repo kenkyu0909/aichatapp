@@ -1581,3 +1581,7 @@ T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_
 `smoke_scope`を新規実行・再開した実行・smoke-only実行の成果JSONに保存し、基礎的な実応答/安全検査と意味的多様性の評価範囲を明示しました。smoke-onlyでは品質FAILを終了コード2に、完全PASSを`SMOKE_PASS`と終了コード0に対応させます。独立レビューで状態の曖昧さがないことを確認しました。
 
 最新ローカル全pytestは1605件成功（303.57秒、Firefox UIを含む）。focused runner suiteは8件、保存候補再評価は1件成功。Python・JavaScript構文と差分検査も成功。Gemini実通信は0回で、T369/QUALITY009の実生成品質FAILは解消扱いにしません。T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。総合判定はNO-GO。変更をPush後、最新SHAのActionsを確認する。
+
+### GitHub Actions
+
+検証コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`を対象に、[Push Actions 38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)と[PR Actions 38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)が成功。各runは1605 passed / 1 warning、JavaScript構文検査とoffline-test-results artifact保存が成功した。警告はGitHubホストランナーのNode.js 20とUbuntu移行通知。

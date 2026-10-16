@@ -1012,3 +1012,5 @@ CI確認追記: 検証コードSHA `ad764f01dca47135800f3d230d1b262261d6e016`の
 最新ID行: 392。累計: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。QUALITY009の元JSONにある過去の自動PASSは履歴として維持し、保存済み候補の意味的重複は今回の再評価でFAILと判定。T369の実Gemini文章品質FAILも維持。今回の全pytest・Actions結果は実行後に追記する。Gemini実通信0回。
 
 2026-10-16 15:10 JST 最新HEADでの再検証: 全pytest **1605 passed in 303.57s**。追加focused suite `tests/test_quality_checks_009.py` **8 passed**、保存候補再評価 `tests/test_app.py -k quality009_recorded_redundant_reactions_are_detected` **1 passed**。全pytestにはFirefox UIテストが含まれる。Python構文、JavaScript構文、`git diff --check`成功。追跡対象の認証情報パターンスキャンは一致なし。Gemini実通信0回。コード・文書は未コミットで、GitHub ActionsはPush後に確認する。|
+
+T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](https://github.com/kenkyu0909/aichatapp/actions/runs/38859815003)とPR Actions [38859820028](https://github.com/kenkyu0909/aichatapp/actions/runs/38859820028)は両方success。同じSHAの各runで**1605 passed / 1 warning**。JavaScript構文検査とoffline-test-results artifact保存も成功。警告はGitHub runnerのNode.js 20・ubuntu-latest移行通知。 |
