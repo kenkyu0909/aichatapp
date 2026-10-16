@@ -7354,6 +7354,9 @@ def test_general_movie_popularity_questions_are_not_misclassified_as_personal(qu
     "おすすめの映画ありますか？",
     "最近観た映画は何ですか？",
     "どんな映画が好きですか？",
+    "人気の映画を観ましたか？",
+    "話題の映画、もう見ましたか？",
+    "評価が高い映画、観ましたか？",
 ])
 def test_genuinely_personal_movie_questions_still_require_confirmation(question, client):
     _, backend = client
