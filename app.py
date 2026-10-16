@@ -1503,6 +1503,29 @@ def _confirmed_fact_covers_question(facts: dict, topic: str, question_text: str)
     return _normalize_clarification_question_key(asked) in confirmed
 
 
+def _confirmed_fact_values_for_question(context: dict, topic: str, question_text: str) -> list[str]:
+    """Return saved confirmation values that answer the same normalized question.
+
+    This reuses the exact id-based match from ``_confirmed_fact_covers_question``
+    so a saved answer counts as evidence for a directly asked question without
+    loosening the fail-closed checks.
+    """
+    facts = context.get("my_profile", {}).get("facts", {})
+    confirmed = facts.get("confirmed_facts")
+    if not isinstance(confirmed, dict) or not confirmed or not question_text.strip():
+        return []
+    asked = personal_fact_question(topic, question_text).question
+    entry = confirmed.get(_normalize_clarification_question_key(asked))
+    if not isinstance(entry, dict):
+        return []
+    value = entry.get("value")
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
 def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bool:
     facts = context["my_profile"].get("facts", {})
     if _confirmed_fact_covers_question(facts, topic, question_text):
@@ -3414,7 +3437,12 @@ def _trusted_fact_clauses(context: dict, *, include_negated: bool = False) -> li
             for item in value:
                 collect(item)
         elif isinstance(value, dict):
-            for item in value.values():
+            for key, item in value.items():
+                if key == "confirmed_facts" and isinstance(item, dict):
+                    for record in item.values():
+                        if isinstance(record, dict):
+                            collect(record.get("value"))
+                    continue
                 collect(item)
 
     collect(context.get("my_profile", {}).get("facts", {}))
@@ -6451,6 +6479,9 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             and re.search(r"最近|この前|昨日|先週", answer.get("question", ""))
             and re.search(r"映画|観|見|作品", answer.get("question", ""))
         )
+        verified_recent_movies.extend(
+            _confirmed_fact_values_for_question(context, topic, question)
+        )
         compact_candidate = re.sub(r"\s+", "", candidate.text)
         recent_rewatch_pattern = re.compile(
             r"(?:最近|この前|昨日|先週).{0,18}(?:また|もう一度).{0,18}(?:観|見)(?:た|ました)|"
@@ -6551,6 +6582,17 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
             answer_title = re.search(r"[『「]([^』」]{1,40})[』」]", answer_text)
             if answer_title and re.sub(r"\s+", "", answer_title.group(1)) in re.sub(r"\s+", "", answer_prefix):
+                return True
+    for confirmed_value in _confirmed_fact_values_for_question(context, topic, question):
+        normalized_confirmed = re.sub(r"\s+", "", confirmed_value)
+        if normalized_confirmed and normalized_confirmed in normalized_candidate:
+            return True
+        if topic == "映画":
+            confirmed_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+            confirmed_title = re.search(r"[『「]([^』」]{1,40})[』」]", confirmed_value)
+            if confirmed_title and re.sub(r"\s+", "", confirmed_title.group(1)) in re.sub(
+                r"\s+", "", confirmed_prefix
+            ):
                 return True
     answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
     patterns = {

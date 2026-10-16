@@ -3645,6 +3645,57 @@ def test_confirmed_fact_does_not_suppress_a_different_detail(client):
     assert backend.missing_personal_fact_question(reloaded) is not None
 
 
+def _movie_confirmed_context(backend, question, value, session_id="sess-bridge"):
+    asked = backend.personal_fact_question("映画", question).question
+    return {
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"confirmed_facts": {
+            backend._normalize_clarification_question_key(asked): {
+                "question": asked,
+                "value": value,
+                "subject": "映画",
+                "source": "user_confirmation",
+                "session_id": session_id,
+            },
+        }}},
+    }
+
+
+def test_confirmed_fact_answers_recent_movie_question_is_accepted(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="確認済み回答", text="最近は『青い灯台』を観ました")
+
+    reasons = backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in reasons
+    assert "未確認の本人事実" not in reasons
+
+
+def test_evasive_answer_to_confirmed_movie_question_is_rejected(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="回避", text="週末は家でのんびりしていました")
+
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_confirmed_fact_metadata_is_not_trusted_fact_evidence(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました", session_id="sess-meta"
+    )
+
+    clauses = backend._trusted_fact_clauses(context)
+    assert any("青い灯台" in clause for clause in clauses)
+    assert "最近観た映画は何ですか？" not in clauses
+    assert "sess-meta" not in clauses
+    assert "user_confirmation" not in clauses
+
+
 def test_confirmed_fact_does_not_touch_profile_without_explicit_save(client):
     c, backend = client
     mid = add_match(c, "架空ほなみ")
