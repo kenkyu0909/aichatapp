@@ -114,6 +114,24 @@ class ProfileInput(BaseModel):
     avoid: str = Field(default="", max_length=4000)
 
 
+class ConfirmedFactsInput(BaseModel):
+    match_id: int | None = None
+    clarification_session_id: str | None = Field(default=None, max_length=64)
+    answers: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+
+    @field_validator("answers")
+    @classmethod
+    def validate_answers(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        for answer in value:
+            if not {"question", "answer"} <= set(answer) or set(answer) - {"question", "answer"}:
+                raise ValueError("回答にはquestionとanswerが必要です")
+            if not str(answer["question"]).strip() or not str(answer["answer"]).strip():
+                raise ValueError("質問と回答を入力してください")
+            if len(str(answer["question"])) > 300 or len(str(answer["answer"])) > 1000:
+                raise ValueError("質問または回答が長すぎます")
+        return value
+
+
 class MatchInput(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=12000)
@@ -4892,6 +4910,18 @@ def put_profile(data: ProfileInput):
             (data.content, data.avoid),
         )
     return {"ok": True}
+
+
+@app.post("/api/profile/confirmed-facts")
+def add_confirmed_facts(data: ConfirmedFactsInput):
+    """Persist answers the user explicitly chose to save to the profile."""
+    records = build_ephemeral_confirmations(
+        [{**answer, "confirmed": True} for answer in data.answers],
+        match_id=data.match_id,
+        session_id=data.clarification_session_id,
+    )
+    saved = persist_confirmed_facts(records)
+    return {"ok": True, "saved": saved}
 
 
 @app.get("/api/matches")

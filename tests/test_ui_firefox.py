@@ -1312,6 +1312,55 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
         app.stop()
 
 
+def test_firefox_user_info_save_button_persists_only_when_pressed(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空の保存")
+    driver.find_element(By.ID, "message-input").send_keys("最近どんな本を読みますか？")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+
+    with urllib.request.urlopen(local_app.url + "api/profile", timeout=3) as response:
+        profile_before = json.load(response)
+
+    driver.execute_script("""
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          return new Response(JSON.stringify({needs_user_info:true,recommended:null,alternatives:[],user_questions:[{question:'普段どんなジャンルの本を読みますか？'}]}), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """)
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_elements(By.CSS_SELECTOR, ".user-info-question"))
+    driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys("ミステリーが好きです")
+    driver.find_element(By.ID, "save-user-info").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: "保存しました" in browser.find_element(By.ID, "toast").text
+    )
+
+    with urllib.request.urlopen(local_app.url + "api/profile", timeout=3) as response:
+        profile_after = json.load(response)
+    assert profile_after != profile_before
+    stored = json.loads(profile_after["content"])
+    facts = stored["confirmed_facts"]
+    assert len(facts) == 1
+    entry = next(iter(facts.values()))
+    assert entry["value"] == "ミステリーが好きです"
+
+    errors = record_artifact(
+        "firefox-user-info-explicit-save",
+        driver,
+        {"saved_facts": len(facts), "resume_saved_to_profile": False},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
 def test_firefox_required_clarification_keeps_answers_across_multiple_questions(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)

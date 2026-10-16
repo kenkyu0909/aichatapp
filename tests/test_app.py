@@ -2086,6 +2086,33 @@ def test_generate_endpoint_persists_only_confirmed_answers(client):
     assert entry["session_id"] == "sess-endpoint"
 
 
+def test_confirmed_facts_endpoint_saves_only_explicit_answers(client):
+    c, _backend = client
+    c.put("/api/profile", json={"content": json.dumps({"food": "和食"}), "avoid": ""})
+
+    empty = c.post("/api/profile/confirmed-facts", json={"answers": []})
+    assert empty.status_code == 200
+    assert empty.json()["saved"] == 0
+    assert json.loads(c.get("/api/profile").json()["content"])["food"] == "和食"
+
+    response = c.post("/api/profile/confirmed-facts", json={
+        "match_id": 1,
+        "clarification_session_id": "sess-save",
+        "answers": [{"question": "映画はお好きですか？", "answer": "洋画が好きです"}],
+    })
+    assert response.status_code == 200
+    assert response.json()["saved"] == 1
+
+    stored = json.loads(c.get("/api/profile").json()["content"])
+    assert stored["food"] == "和食"
+    assert stored["schema_version"] == 2
+    facts = stored["confirmed_facts"]
+    assert len(facts) == 1
+    entry = next(iter(facts.values()))
+    assert entry["value"] == "洋画が好きです"
+    assert entry["session_id"] == "sess-save"
+
+
 def test_negative_movie_field_does_not_support_positive_preference_claim(client):
     _, backend = client
     context = {

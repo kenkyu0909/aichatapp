@@ -406,7 +406,7 @@ function renderUserInfoQuestions(container,payload,options,matchId,generationTar
   const panel=node("section","user-info-panel");
   panel.append(node("h3","","返信を作る前に確認したいこと"));
   panel.append(node("p","user-info-reason",payload.user_info_reason||"本人情報を確認して、事実を作らずに返信するための質問です。"));
-  panel.append(node("p","user-info-privacy","以下の回答はこの生成リクエストに一時的に使います。プロフィールには保存しません。返信候補とも別に表示します。"));
+  panel.append(node("p","user-info-privacy","以下の回答は「回答して再生成」ではこの生成リクエストに一時的に使います。保存したい回答だけ「回答をプロフィールに保存」を押してください。返信候補とも別に表示します。"));
   const questions=(Array.isArray(payload.user_questions)?payload.user_questions:[]).slice(0,3);
   const inputs=[];
   questions.forEach((item,index)=>{
@@ -432,7 +432,18 @@ function renderUserInfoQuestions(container,payload,options,matchId,generationTar
     try{await requestGeneration(options,matchId,[],generationTarget,true,clarificationSession);}
     finally{resume.disabled=false;skip.disabled=false;}
   });
-  actions.append(resume,skip);panel.append(actions);container.append(panel);
+  const save=node("button","action-outline","回答をプロフィールに保存");save.type="button";save.id="save-user-info";
+  save.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    const answers=inputs.map(({item,input})=>({question:item.question||"",answer:input.value.trim()})).filter(x=>x.answer);
+    if(!answers.length){notice("保存する回答を入力してください");return;}
+    save.disabled=true;resume.disabled=true;skip.disabled=true;
+    try{
+      const result=await api("/profile/confirmed-facts",json("POST",{match_id:matchId,clarification_session_id:clarificationSession&&clarificationSession.sessionId,answers}));
+      notice((result&&result.saved)>0?"回答をプロフィールに保存しました":"保存できる回答がありませんでした");
+    }finally{save.disabled=false;resume.disabled=false;skip.disabled=false;}
+  });
+  actions.append(resume,save,skip);panel.append(actions);container.append(panel);
 }
 function renderOptionalUserQuestion(container,payload,options,matchId,generationTarget){
   const scope=matchId===null?"mode:"+(options.mode||"default"):"match:"+String(matchId);
