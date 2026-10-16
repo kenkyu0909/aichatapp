@@ -3,12 +3,15 @@
 (() => {
 const $ = id => document.getElementById(id);
 const state = { matches:[],selectedId:null,messages:[],loadingConversation:false,conversationLoadFailed:false,profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
-const draftsByContact=new Map();
 let timer;
 let contactSelectionEpoch=0;
+let conversationRevision=0;
+const messageDrafts=new Map();
+const mutatingContacts=new Set();
 const optionalUserQuestionHistory=new Map();
 let generationRequestSequence=0;
 const generationRequestTokens=new WeakMap();
+const generationAreaTokens=new WeakMap();
 function node(tag,cls,txt) {
   const e=document.createElement(tag);
   if(cls)e.className=cls;
@@ -63,10 +66,10 @@ function photoAvatar(c,large=false){
 }
 async function loadMatches(prefer){
   state.matches=await api("/matches");
-  if(prefer!==undefined)state.selectedId=prefer;
-  if(!current())state.selectedId=state.matches[0]?.id||null;
+  let target=prefer!==undefined?prefer:state.selectedId;
+  if(!state.matches.some(c=>c.id===target))target=state.matches[0]?.id||null;
+  await selectContact(target,false);
   renderContacts();
-  await selectContact(state.selectedId,false);
 }
 function renderContacts(){
   const list=$("contacts");list.replaceChildren();
@@ -87,12 +90,17 @@ function renderContacts(){
   });
 }
 async function selectContact(id,relist=true){
-  contactSelectionEpoch+=1;
-  const selectionEpoch=contactSelectionEpoch;
   const previousId=state.selectedId;
-  if(previousId!==null&&previousId!==id)draftsByContact.set(previousId,$("message-input").value);
+  if(previousId!==null&&previousId!==undefined){
+    const draft=$("message-input").value;
+    if(draft)messageDrafts.set(previousId,draft);
+    else messageDrafts.delete(previousId);
+  }
+  contactSelectionEpoch+=1;
+  conversationRevision+=1;
+  const selectionEpoch=contactSelectionEpoch;
   state.selectedId=id;
-  if(previousId!==id)$("message-input").value=draftsByContact.get(id)||"";
+  $("message-input").value=messageDrafts.get(id)||"";
   const generationButtons=[
     [$("first-message"),"🌱 初回メッセージを生成"],
     [$("generate"),$("count").value+"案を生成"],
@@ -146,6 +154,7 @@ function renderMessages(){
   if(state.conversationLoadFailed){holder.append(node("p","empty-chat","会話履歴を読み込めませんでした。通信状態を確認して相手を選び直してください"));return;}
   if(!hasConversation){holder.append(node("p","empty-chat",current()?"まだ会話がありません。初回メッセージを生成するか、下の入力欄から履歴を追加してください。":"左側の＋から相手を登録してください。"));return;}
   state.messages.forEach(m=>{
+    const messageContactId=state.selectedId;
     const wrap=node("article","chat-message "+m.role);
     const bubble=node("div","bubble",m.body);
     const stamp=node("span","message-time",(m.role==="me"?"自分":"相手")+" · "+(m.created_at||""));
@@ -155,8 +164,13 @@ function renderMessages(){
     const del=node("button","","削除");del.type="button";
     del.onclick=()=>safe(async()=>{
       if(!confirm("このメッセージを削除しますか？"))return;
-      await api("/matches/"+state.selectedId+"/messages/"+m.id,{method:"DELETE"});
-      await refreshConversation();notice("メッセージを削除しました");
+      invalidateGenerationResults();
+      mutatingContacts.add(messageContactId);
+      try{
+        await api("/matches/"+messageContactId+"/messages/"+m.id,{method:"DELETE"});
+        if(state.selectedId===messageContactId)await refreshConversation();
+        notice("メッセージを削除しました");
+      }finally{mutatingContacts.delete(messageContactId);}
     });
     actions.append(edit,del);wrap.append(bubble,stamp,actions);holder.append(wrap);
   });
@@ -215,21 +229,34 @@ function showMessageEditor(m){
     const text=field(body,"本文",m.body,true);
     modalFooter(body,"保存",async()=>{
       if(!["them","me"].includes(role.value))throw Error("発言者は me または them にしてください");
-      await api("/matches/"+contactId+"/messages/"+m.id,json("PUT",{role:role.value,body:text.value}));
-      $("modal").close();await refreshConversation();notice("履歴を更新しました");
+      invalidateGenerationResults();
+      mutatingContacts.add(contactId);
+      try{
+        await api("/matches/"+contactId+"/messages/"+m.id,json("PUT",{role:role.value,body:text.value}));
+        $("modal").close();
+        if(state.selectedId===contactId)await refreshConversation();
+        notice("履歴を更新しました");
+      }finally{mutatingContacts.delete(contactId);}
     });
   });
 }
 async function addMessage(role,override){
   const c=current();if(!c)throw Error("先に相手を登録してください");
-  const body=(override===undefined?$("message-input").value:override).trim();
+  const contactId=c.id;
+  const draftValue=override===undefined?$("message-input").value:null;
+  const body=(override===undefined?draftValue:override).trim();
   if(!body)throw Error("メッセージを入力してください");
-  generationRequestSequence+=1;
-  $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
-  await api("/matches/"+c.id+"/messages",json("POST",{role,body}));
-  if(override===undefined){$("message-input").value="";draftsByContact.set(c.id,"");}
-  await refreshConversation();
-  notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
+  invalidateGenerationResults();
+  mutatingContacts.add(contactId);
+  try{
+    await api("/matches/"+contactId+"/messages",json("POST",{role,body}));
+    if(override===undefined&&state.selectedId===contactId&&$("message-input").value===draftValue){
+      $("message-input").value="";
+      messageDrafts.delete(contactId);
+    }
+    if(state.selectedId===contactId)await refreshConversation();
+    notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
+  }finally{mutatingContacts.delete(contactId);}
 }
 async function openContactForm(edit=false){
   const old=edit?current():null;
@@ -244,6 +271,7 @@ async function openContactForm(edit=false){
       remove.type="button";remove.style.color="#c24b68";remove.onclick=()=>safe(async()=>{
         if(!confirm("相手の情報・写真・会話を完全に削除しますか？"))return;
         await api("/matches/"+old.id,{method:"DELETE"});
+        messageDrafts.delete(old.id);
         $("modal").close();await loadMatches();notice("相手を削除しました");
       });body.append(remove);
     }
@@ -330,7 +358,16 @@ function renderStrategy(container,payload){
   if(payload.strategy)panel.append(node("div","strategy-row",typeof payload.strategy==="string"?payload.strategy:JSON.stringify(payload.strategy)));
   container.append(panel);
 }
-function renderUserInfoQuestions(container,payload,options,matchId,generationTarget){
+function mergeUserInfoAnswers(existing,incoming){
+  const merged=new Map();
+  [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(item=>{
+    if(!item||typeof item.question!=="string"||typeof item.answer!=="string")return;
+    const question=item.question.trim(),answer=item.answer.trim();
+    if(question&&answer)merged.set(question.normalize("NFKC").toLocaleLowerCase(),{question,answer});
+  });
+  return [...merged.values()];
+}
+function renderUserInfoQuestions(container,payload,options,matchId,generationTarget,clarificationSession){
   const panel=node("section","user-info-panel");
   panel.append(node("h3","","返信を作る前に確認したいこと"));
   panel.append(node("p","user-info-reason",payload.user_info_reason||"本人情報を確認して、事実を作らずに返信するための質問です。"));
@@ -350,14 +387,14 @@ function renderUserInfoQuestions(container,payload,options,matchId,generationTar
     if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
     const answers=inputs.map(({item,input})=>({question:item.question||"",answer:input.value.trim()})).filter(x=>x.answer);
     resume.disabled=true;skip.disabled=true;
-    try{await requestGeneration(options,matchId,answers,generationTarget);}
+    try{await requestGeneration(options,matchId,answers,generationTarget,false,clarificationSession);}
     finally{resume.disabled=false;skip.disabled=false;}
   });
   const skip=node("button","action-outline","回答をスキップして安全に作成");skip.type="button";skip.id="skip-user-info";
   skip.onclick=()=>safe(async()=>{
     if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
     resume.disabled=true;skip.disabled=true;
-    try{await requestGeneration(options,matchId,[],generationTarget,true);}
+    try{await requestGeneration(options,matchId,[],generationTarget,true,clarificationSession);}
     finally{resume.disabled=false;skip.disabled=false;}
   });
   actions.append(resume,skip);panel.append(actions);container.append(panel);
@@ -421,17 +458,33 @@ function optionalUserQuestionKey(item){
   const scopeKey=typeof item?.scope_key==="string"?item.scope_key.trim():"";
   return scopeKey?normalizeOptionalUserQuestion(scopeKey):normalizeOptionalUserQuestion(item?.question);
 }
-async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false){
+function invalidateGenerationResults(){
+  conversationRevision+=1;
+  const area=$("suggestion-list");
+  if(area){area.hidden=true;area.replaceChildren();}
+}
+async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false,clarificationSession=null){
   const button=generationTarget.button||$(options.mode==="followup"?"follow-up":options.mode==="first"?"first-message":"generate");
   const area=generationTarget.container||$("suggestion-list");
   const selectionEpoch=contactSelectionEpoch;
+  const revision=conversationRevision;
+  if(!clarificationSession){
+    clarificationSession={matchId,selectionEpoch,revision,answers:mergeUserInfoAnswers([],userAnswers)};
+  }else{
+    if(clarificationSession.matchId!==matchId||clarificationSession.selectionEpoch!==selectionEpoch||clarificationSession.revision!==revision){
+      throw Error("会話が更新されました。最新の内容からもう一度生成してください");
+    }
+    clarificationSession.answers=mergeUserInfoAnswers(clarificationSession.answers,userAnswers);
+  }
+  if(matchId!==null&&mutatingContacts.has(matchId))throw Error("会話履歴を保存しています。完了後にもう一度お試しください");
   const requestToken=++generationRequestSequence;
   generationRequestTokens.set(button,requestToken);
+  generationAreaTokens.set(area,requestToken);
   const before=button.textContent;button.disabled=true;button.textContent="生成中…";
   try{
-    const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:userAnswers,skipped_user_info:skippedUserInfo}));
-    if(requestToken!==generationRequestSequence)return;
-    if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed))return;
+    const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:clarificationSession.answers,skipped_user_info:skippedUserInfo}));
+    if(generationAreaTokens.get(area)!==requestToken||revision!==conversationRevision)return;
+    if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed||mutatingContacts.has(matchId)))return;
     area.hidden=false;area.replaceChildren();
     const blocked=result.generation_blocked||(!result.recommended&&(skippedUserInfo||result.skipped_user_info||!result.needs_user_info));
     if(blocked){
@@ -445,12 +498,13 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
       area.append(node("p","user-info-terminal",result.user_info_reason||result.blocking_reason||result.detail||"未確認の本人情報を使わずに返信を作れないため、ここで停止しました。プロフィールを確認してから再度お試しください。"));
     }else if(result.needs_user_info){
       area.append(node("div","suggestion-heading","✦ 本人情報の確認"));
-      renderUserInfoQuestions(area,result,options,matchId,generationTarget);
+      renderUserInfoQuestions(area,result,options,matchId,generationTarget,clarificationSession);
     }else{
       const title=options.mode==="first"?"✦ 初回メッセージ候補":options.mode==="followup"?"✦ 追いメッセージの提案":options.mode==="like"?"✦ メッセージ付きいいね候補":"✦ 返信候補";
       area.append(node("div","suggestion-heading",title));
       renderCards(area,result,generationTarget.allowSave!==false,matchId);
       renderOptionalUserQuestion(area,result,options,matchId,generationTarget);
+      clarificationSession.answers=[];
     }
     if(!generationTarget.container)$("chat-area").scrollTop=$("chat-area").scrollHeight;
   }finally{
@@ -489,31 +543,51 @@ function likeModal(){
     action.style.marginTop="12px";body.append(action,feedback);
   });
 }
-function profileModal(){
+async function profileModal(){
+  state.profile=await api("/profile");
   showModal("📋 自分の情報",body=>{
     body.append(node("p","modal-description","文章生成時に使用するご自身の情報です。後から編集できます。"));
     let fields={};
-    try{fields=JSON.parse(state.profile.content||"{}");}
-    catch{fields={memo:state.profile.content};}
+    try{
+      const parsed=JSON.parse(state.profile.content||"{}");
+      fields=parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:{memo:state.profile.content};
+    }catch{fields={memo:state.profile.content};}
+    const displayProfileValue=value=>{
+      if(Array.isArray(value))return value.every(item=>typeof item==="string")?value.join(", "):JSON.stringify(value,null,2);
+      if(value&&typeof value==="object")return JSON.stringify(value,null,2);
+      return value??"";
+    };
     const meta=[
       ["name","名前"],["age","年齢"],["area","居住地域"],["job","学校・仕事"],
       ["hobbies","趣味・好きなこと"],["personality","性格"],["style","話し方の好み"],
       ["goal","どのような関係を望むか"],["memo","その他の情報・自己紹介"]
     ];
     const inputs={};
-    meta.forEach(([key,label])=>{
-      const original=fields[key];
-      const displayValue=Array.isArray(original)?original.join("\n"):(original??"");
-      inputs[key]=field(body,label,displayValue,key==="hobbies"||key==="memo"||key==="goal");
-    });
+    meta.forEach(([key,label])=>inputs[key]=field(body,label,displayProfileValue(fields[key]),key==="memo"||key==="goal"||typeof fields[key]==="object"));
     const avoid=field(body,"言ってほしくないこと・避けたい表現",state.profile.avoid,true);
     modalFooter(body,"プロフィールを保存",async()=>{
       const content={...fields};
-      meta.forEach(([key])=>{
-        const value=inputs[key].value.trim();
-        if(!Object.prototype.hasOwnProperty.call(fields,key)&&!value)return;
-        content[key]=Array.isArray(fields[key])?value.split(/\r?\n/).map(item=>item.trim()).filter(Boolean):value;
-      });
+      for(const [key] of meta){
+        const inputValue=inputs[key].value.trim();
+        const previous=fields[key];
+        const previousDisplay=String(displayProfileValue(previous)).trim();
+        if(!Object.prototype.hasOwnProperty.call(fields,key)&&!inputValue)continue;
+        if(inputValue===previousDisplay){content[key]=previous;continue;}
+        if(Array.isArray(previous)){
+          if(previous.every(item=>typeof item==="string"))content[key]=inputValue?inputValue.split(",").map(item=>item.trim()).filter(Boolean):[];
+          else{
+            let parsed;
+            try{parsed=JSON.parse(inputValue||"[]");}catch{throw Error("「"+key+"」はJSON形式で入力してください");}
+            if(!Array.isArray(parsed))throw Error("「"+key+"」には配列形式のJSONを入力してください");
+            content[key]=parsed;
+          }
+        }else if(previous&&typeof previous==="object"){
+          let parsed;
+          try{parsed=JSON.parse(inputValue||"{}");}catch{throw Error("「"+key+"」はJSON形式で入力してください");}
+          if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw Error("「"+key+"」にはオブジェクト形式のJSONを入力してください");
+          content[key]=parsed;
+        }else content[key]=inputValue;
+      }
       await api("/profile",json("PUT",{content:JSON.stringify(content),avoid:avoid.value}));
       state.profile={content:JSON.stringify(content),avoid:avoid.value};
       $("modal").close();notice("自分のプロフィールを保存しました");
@@ -584,13 +658,16 @@ function exportCurrent(){
 }
 function attach(){
   $("search").addEventListener("input",renderContacts);
+  $("message-input").addEventListener("input",()=>{
+    if(state.selectedId===null)return;
+    const draft=$("message-input").value;
+    if(draft)messageDrafts.set(state.selectedId,draft);
+    else messageDrafts.delete(state.selectedId);
+  });
   $("new-contact").onclick=()=>safe(()=>openContactForm());
   $("edit-contact").onclick=()=>safe(()=>openContactForm(true));
   $("send-them").onclick=()=>safe(()=>addMessage("them"));
   $("send-me").onclick=()=>safe(()=>addMessage("me"));
-  $("message-input").addEventListener("input",()=>{
-    if(state.selectedId!==null)draftsByContact.set(state.selectedId,$("message-input").value);
-  });
   $("message-input").addEventListener("keydown",e=>{
     if(e.ctrlKey&&e.key==="Enter"){e.preventDefault();safe(()=>addMessage("them"));}
   });
@@ -607,9 +684,9 @@ function attach(){
     state.tone=b.dataset.tone;
     document.querySelectorAll("[data-tone]").forEach(x=>x.classList.toggle("on",x===b));
   });
-  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>({
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>safe(()=>( {
     guide:guideModal,like:likeModal,profile:profileModal,settings:settingsModal
-  })[b.dataset.open]?.());
+  })[b.dataset.open]?.()));
 }
 async function start(){
   attach();

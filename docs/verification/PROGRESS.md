@@ -1638,3 +1638,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 変更: `app.py`, `tests/test_app.py`。Push前に全pytest結果、`py_compile`、`node --check`、`git diff --check`、秘密情報diff検査、レビューを完了する。保護対象の未追跡指示ファイルはstageしない。
 - 回帰確認: 最初の修正後全pytestで既存2ケースがFAIL（映画の否定質問への確認済み回答、カフェの招待への肯定応答）。確認済み映画回答は質問分類へ追加し、招待肯定はWH質問用fail-closedから分離。該当を含むfocused suite 34 passed、再実行したWindows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。
 - 変更HEADのActionsはPush後に確認する。Gemini通信0回。実生成品質FAIL T369/QUALITY009継続。次: 差分・秘密情報検査、commit/push、PR #4とActions確認。その後はdirective P0の質問→架空回答→根拠ある自己開示フローをFirefox/モックで監査する。
+- 追加レビューで、汎用動詞「しました」が無関係なWH回答として許可される問題と、「好きでない」の否定形が好物として検出される問題を特定。T402/T403へ失敗例を追加し、結果語の範囲を狭め、否定形を追加。最新focused suite **37 passed**。この追加差分の全pytestを再実行中で、前回の1720件を最新HEADの結果として扱わない。
+- 二巡目のレビューで、結果語だけでは質問との関連性を確かめられず、逆に自然な言い回しを除外すること、また「好きな食べ物は特にない/苦手」も既知好物と誤認するケースを確認。分類外WH質問は完全一致する一時本人回答を含む候補だけを許可し、回答がなければ安全な不足へ移行。好物は明示的な肯定・具体的食品名に限定し、否定/未設定を除外。回帰テスト44 passed。全pytestはこの最終変更後に実行中。
+
+### 2026-10-16 19:39 JST — 直接質問のスコープ整合と最終回帰
+
+- ユーザー指定の `docs/verification/simulations/指示.txt` を確認。今夜は本人の直接質問と4生成モードのFirefox導線を優先。Gemini実通信、conversation_004、新しい会話HTMLは引き続き行わない。
+- 独立レビューで確認質問の事前判定と送信直前ゲートの範囲がずれている点を修正。第三者・一般知識には本人確認を求めず、本人の体験/意見を問う分類外質問には対応する確認を提示する。相手の誘いに対する承諾候補も本人の意思確認後だけ許可。好物の訂正「カレーではなく特にない/ラーメン」を区別。
+- 関連pytest **117 passed**。最新全pytest **1743 passed in 303.58s**（Firefox UIを含む）。追加Firefox 4件（任意本人質問、FastAPI一時回答の再生成、first→replyのコピー/送信記録/履歴、first/followup/like経路）**4 passed in 49.77s**。
+- Gemini実通信0回。T369/QUALITY009の実生成品質FAILは未解決。総合NO-GOを維持。会話004/新規会話HTMLは作成していない。
+- 次: py_compile、node構文、diff/秘密情報確認を実施し、PROGRESS/TEST_MATRIX/FINAL_REPORT/OVERNIGHT_GOALを更新。保護対象の未追跡指示書3件を除いてコミット・Pushし、最新SHAのActionsとPR #4のOPEN/Draft状態を検証する。その後、指示書の残るコアP0を進める。

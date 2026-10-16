@@ -1041,6 +1041,7 @@ def test_firefox_uses_real_fastapi_generate_route_with_only_gemini_sdk_mocked(
     assert errors["console"] == []
 
 
+
 def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
     local_app_with_mocked_gemini, firefox
 ):
@@ -1308,6 +1309,67 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
         assert errors["console"] == []
     finally:
         app.stop()
+
+
+def test_firefox_required_clarification_keeps_answers_across_multiple_questions(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空のゆい")
+    driver.find_element(By.ID, "message-input").send_keys("最近どんな本を読みますか？")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+
+    driver.execute_script("""
+      window.__clarificationRequests = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) !== '/api/generate') return originalFetch(url, options);
+        const payload = JSON.parse(options.body || '{}');
+        window.__clarificationRequests.push(payload);
+        const index = window.__clarificationRequests.length;
+        const body = index === 1
+          ? {needs_user_info:true,recommended:null,alternatives:[],user_questions:[{question:'普段どんなジャンルの本を読みますか？'}]}
+          : index === 2
+            ? {needs_user_info:true,recommended:null,alternatives:[],user_questions:[{question:'最近読んだ本はありますか？'}]}
+            : {needs_user_info:false,recommended:{label:'自然な案',text:'ミステリーを読むことが多いです！'},alternatives:[{label:'別案',text:'最近はミステリーが多いです！'},{label:'短め',text:'ミステリーが好きです！'}],reason:'モック応答',available_candidate_count:3};
+        return new Response(JSON.stringify(body), {status:200,headers:{'Content-Type':'application/json'}});
+      };
+    """)
+
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_elements(By.CSS_SELECTOR, ".user-info-question"))
+    driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys("ミステリーが好きです")
+    driver.find_element(By.ID, "resume-generation").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.execute_script("return window.__clarificationRequests.length") == 2
+        and browser.find_elements(By.CSS_SELECTOR, ".user-info-question")
+    )
+    driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys("最近は架空の『青い栞』を読みました")
+    driver.find_element(By.ID, "resume-generation").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: browser.execute_script("return window.__clarificationRequests.length") == 3
+        and browser.find_elements(By.CSS_SELECTOR, ".candidate")
+    )
+    requests = driver.execute_script("return window.__clarificationRequests")
+    assert requests[0].get("user_answers", []) == []
+    assert requests[1]["user_answers"] == [
+        {"question":"普段どんなジャンルの本を読みますか？", "answer":"ミステリーが好きです"}
+    ]
+    assert requests[2]["user_answers"] == [
+        {"question":"普段どんなジャンルの本を読みますか？", "answer":"ミステリーが好きです"},
+        {"question":"最近読んだ本はありますか？", "answer":"最近は架空の『青い栞』を読みました"},
+    ]
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 3
+    assert "user-info-panel" not in driver.find_element(By.ID, "suggestion-list").get_attribute("innerHTML")
+    errors = record_artifact(
+        "firefox-multistep-user-info-answers-retained",
+        driver,
+        {"clarification_rounds": 2, "answers_accumulated_for_same_generation": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
 
 
 def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_history(local_app, firefox):
@@ -1872,6 +1934,28 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
     assert errors["console"] == []
 
 
+    driver.refresh()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のなな")
+    driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    restored_dialog = modal(driver)
+    restored_inputs = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
+    assert [field.get_attribute("value") for field in restored_inputs[:7]] == input_values
+    restored_textareas = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")
+    assert [field.get_attribute("value") for field in restored_textareas] == [
+        "自然な会話を大切にしたいです",
+        "休日は本屋やカフェへ行きます",
+        "急な誘いは避けたい",
+    ]
+    with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
+        assert json.load(response) == saved_profile
+    errors = record_artifact(
+        "firefox-profile-retained-after-reload",
+        driver,
+        {"profile_retained_after_reload": True},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
 def test_firefox_profile_edit_preserves_extension_fields_and_array_types(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)
@@ -1990,24 +2074,3 @@ def test_firefox_message_change_invalidates_generation_for_old_history(local_app
     assert errors["runtime"] == []
     assert errors["console"] == []
 
-    driver.refresh()
-    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のなな")
-    driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
-    restored_dialog = modal(driver)
-    restored_inputs = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
-    assert [field.get_attribute("value") for field in restored_inputs[:7]] == input_values
-    restored_textareas = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")
-    assert [field.get_attribute("value") for field in restored_textareas] == [
-        "自然な会話を大切にしたいです",
-        "休日は本屋やカフェへ行きます",
-        "急な誘いは避けたい",
-    ]
-    with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
-        assert json.load(response) == saved_profile
-    errors = record_artifact(
-        "firefox-profile-retained-after-reload",
-        driver,
-        {"profile_retained_after_reload": True},
-    )
-    assert errors["runtime"] == []
-    assert errors["console"] == []

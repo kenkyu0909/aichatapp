@@ -1928,6 +1928,33 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     topic = _topic_for_personal_question(partner_messages[-1])
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
+    if not topic and _is_unclassified_direct_question(partner_messages[-1]) and _is_unclassified_question_about_user(partner_messages[-1]):
+        question_text = partner_messages[-1]
+        quoted_question = question_text.strip().replace("\n", " ")[:180]
+        if INVITATION_PATTERN.search(question_text):
+            return UserQuestion(
+                question=f"相手の「{quoted_question}」にどう返したいか教えてください",
+                purpose="相手からの誘いへの本人の意思を確認します",
+            )
+        if re.search(r"どう思|どう感じ", question_text):
+            return UserQuestion(
+                question=f"相手の「{quoted_question}」についてどう思うか教えてください",
+                purpose="本人の意見を確認し、未確認の考えを代わりに答えないため",
+            )
+        if re.search(r"どうして|なぜ|理由", question_text):
+            return UserQuestion(
+                question=f"相手の「{quoted_question}」についてそう思った理由を教えてください",
+                purpose="本人がそう考えた理由を確認するため",
+            )
+        if re.search(r"いつから|何歳から|何年目から", question_text):
+            return UserQuestion(
+                question=f"相手の「{quoted_question}」についていつ頃からか教えてください",
+                purpose="本人の経験や習慣の開始時期を確認するため",
+            )
+        return UserQuestion(
+            question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
+            purpose="直接質問への本人の回答が未確認のため確認します",
+        )
     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
         return None
     if topic == "本人情報":
@@ -4175,6 +4202,8 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     found: list[str] = []
     for candidate in candidates:
         text = candidate.text
+        if _has_unverified_general_personal_claim(text, context):
+            found.append("未確認の本人事実")
         if _has_unverified_pet_claim(text, context):
             found.append("ペット")
         trusted_clauses = [
@@ -4365,6 +4394,56 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
         if _movie_assertion_segments(text) and not _claim_supported_by_trusted_fact("映画", text, context):
             found.append("映画")
     return list(dict.fromkeys(found))
+
+
+def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
+    """Catch common concrete personal claims outside the topic-specific catalog.
+
+    This is a narrow fail-closed safety net, not a Japanese semantic parser.
+    A claim must be evidenced by the trusted profile or a temporary user answer;
+    seeing the same topic word alone does not count as evidence.
+    """
+    patterns = (
+        re.compile(r"(?:実は|実わ)?[^!?！？\n]{0,24}(?:を|に)?(?:\d+年|何年も)?(?:習って(?:います|ます|いる|る)|習っていた|習ってました)"),
+        re.compile(r"(?:毎朝|毎晩|毎週|毎日|普段は|最近は|いつも|よく|たまに|週に\d+回|月に\d+回)[^!?！？\n]{0,28}(?:走|運動|通|行|出かけ|買|食べ|読|観|見|使)[^!?！？\n]{0,8}(?:しています|してます|している|してる|います|ます|いる|る|いません|ません|いない|ない|ました|した)"),
+        re.compile(r"(?:犬|猫|花粉|小麦|卵|乳製品|そば|甲殻類)?アレルギー(?:なんです|です|があります|がある|ではありません|じゃありません|ではない|じゃない)?"),
+        re.compile(r"(?:お気に入り|行きつけ)の[^!?！？\n]{1,24}(?:店|お店|場所|カフェ)(?:が|は)(?:あります|ある|なんです|です)"),
+        re.compile(r"[^!?！？\n]{0,18}(?:行ったこと|見たこと|観たこと|食べたこと|使ったこと)(?:が)?(?:あります|ある|ない|ありません)"),
+    )
+    sources = _trusted_fact_clauses(context, include_negated=True)
+    normalized_sources = [re.sub(r"[\s、。！!？?]", "", source) for source in sources]
+    partner_sources = [
+        str(context.get("other", {}).get("description", "")),
+        *[
+            str(message.get("body", ""))
+            for message in context.get("history", [])
+            if message.get("role") == "them"
+        ],
+    ]
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            claim = match.group(0).strip()
+            if not claim or _candidate_claim_is_interrogative(text, match):
+                continue
+            left = max(text.rfind(mark, 0, match.start()) for mark in ("!", "！", "?", "？", "\n"))
+            right_boundaries = [text.find(mark, match.end()) for mark in ("!", "！", "?", "？", "\n")]
+            right = min((position for position in right_boundaries if position >= 0), default=len(text))
+            clause = text[left + 1:right].strip()
+            attribution = re.search(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね)$", clause)
+            if attribution:
+                attributed = re.sub(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね)$", "", clause)
+                attributed = re.sub(r"(?:ています|てます|ている|てる|です|ます|る)$", "", attributed)
+                attributed = re.sub(r"[\s、。！!？?がはもをにで]", "", attributed)
+                if attributed and any(
+                    attributed in re.sub(r"[\s、。！!？?がはもをにで]", "", source)
+                    for source in partner_sources
+                ):
+                    continue
+            normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
+            if any(normalized_claim and normalized_claim in source for source in normalized_sources):
+                continue
+            return True
+    return False
 
 
 def _pet_claim_is_supported_partner_attribution(
@@ -5156,15 +5235,22 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
         re.search(rf"{specific_weekend_period}.{{0,28}}(?:行|出かけ|訪れ|行く予定|行くつもり)", clause)
         for clause in partner_clauses
     )
+    food_terms = (
+        r"(?:プリン|カレー|ラーメン|寿司|すし|パスタ|ケーキ|チョコ(?:レート)?|焼肉|"
+        r"うどん|そば|パン|ハンバーグ|オムライス|唐揚げ|からあげ|餃子|ぎょうざ|"
+        r"スイーツ|お菓子|甘いもの|ハンバーガー)"
+    )
     knows_favorite_food = any(
         re.search(
-            r"(?:プリン|カレー|ラーメン|寿司|すし|パスタ|ケーキ|チョコ(?:レート)?|焼肉|"
-            r"うどん|そば|パン|ハンバーグ|オムライス|唐揚げ|からあげ|餃子|ぎょうざ|"
-            r"スイーツ|お菓子|甘いもの|ラーメン|ハンバーガー)"
-            r"(?:が)?(?:一番|いちばん)?好き(?:なんです|なんだ|です|だ)?"
-            r"(?!ではない|じゃない|ではありません|じゃありません|というわけではない|というわけじゃない)"
-            r"(?=(?:で|だから|なので|[!！\s]|$))"
-            r"|(?:好きな食べ物|好物)(?:は|が)(?!何|なん|ありますか)(?![^！？?]{0,16}(?:ではない|じゃない|ではありません|じゃありません))[^！？?]{1,24}(?:です|だ|で好き)",
+            food_terms
+            + r"(?:が)?(?:一番|いちばん)?好き(?:なんです|なんだ|です|だ)?"
+            + r"(?!ではない|でない|じゃない|ではありません|じゃありません|というわけではない|というわけじゃない)"
+            + r"(?=(?:で|だから|なので|[!！\s]|$))"
+            + r"|(?:好きな食べ物|好物)(?:は|が)"
+            + r"(?!特にない|特にありません|ない(?:です)?(?=[!！\s]|$)|ありません)"
+            + rf"[^\s、。！？!?]{{0,12}}{food_terms}"
+            + r"(?![^！？?]*(?:ではなく(?:て)?(?:特に)?(?:好きなものは)?ない|じゃなく(?:て)?(?:特に)?(?:好きなものは)?ない|ではない|じゃない|ではありません|じゃありません|でない|でありません|苦手|嫌い|好きではない|好きでない|好きじゃない|好みではない|好みじゃない))"
+            + r"[^！？?]{0,12}(?:です|だ|で好き)",
             message,
         )
         for message in partner_messages
@@ -5672,29 +5758,21 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         return False
     topic = _topic_for_personal_question(question)
     if not topic:
-        if _is_unclassified_direct_question(question):
-            # Invitations are requests for a yes/no response. Preserve a clear
-            # acceptance before a follow-up question instead of applying the
-            # fail-closed WH-answer rule.
-            if INVITATION_PATTERN.search(question) and re.search(
-                r"(?:ぜひ|行きたい|行こう|行けます|大丈夫|いいですね|いいですよ|お願いします|楽しみ)",
-                candidate.text,
+        if _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):
+            # Unknown WH questions need a matching, explicit user answer.
+            # No lexical answer class can establish relevance across unknown
+            # questions. The preflight asks the user and the exact answer must
+            # be reflected in the candidate.
+            normalize = lambda value: re.sub(r"[\s　、。！!？?]", "", str(value))
+            normalized_question = normalize(question)
+            answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+            if any(
+                answer.get("answer", "").strip()
+                and normalized_question in normalize(answer.get("question", ""))
+                and normalize(answer.get("answer", "")) in normalize(answer_prefix)
+                for answer in context.get("ephemeral_user_answers", [])
             ):
                 return True
-            if _candidate_has_bounded_polar_answer(candidate.text, question):
-                return True
-            # For outcome questions, accept only explicit outcome language.
-            # A merely grammatical or unrelated statement is not evidence of
-            # an answer. Unknown WH questions fail closed so the safe-candidate
-            # filter can retain any other grounded option and report shortage.
-            asks_outcome = bool(re.search(r"(?:どうなった|どうなりました|それでどう|その後どう)[^!?！？\n]*[?？]?$", question))
-            if asks_outcome:
-                answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
-                if re.search(
-                    r"(?:解決|決まり|決着|終わり|終わりました|なりました|しました|できました|行けました|会えました|断られ|成功|失敗|嬉しかった|うまくいき|だめでした)",
-                    answer_prefix,
-                ):
-                    return True
             return False
         return True
     if not _topic_is_verified(topic, context, question):
@@ -6234,6 +6312,32 @@ def _is_unclassified_direct_question(text: str) -> bool:
         re.search(r"[?？]\s*$", text)
         or re.search(r"(?:ですか|ますか|んですか|のですか|どうでしたか|どうなったんですか|どうなりましたか)\s*$", text)
     )
+
+
+def _is_unclassified_question_about_user(text: str) -> bool:
+    """Limit clarification to unclassified questions that ask about the user."""
+    question = re.sub(r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)??\s*", "", text.strip())
+    third_party = (
+        r"友達|友人|彼氏|彼女|彼|元彼|元彼女|夫|妻|旦那|奥さん|ご主人|子ども|子供|家族|親|父|母|兄|姉|弟|妹|"
+        r"同僚|上司|先輩|後輩|先生|教師|知り合い|彼の友達"
+    )
+    if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", question):
+        return False
+    if re.match(rf"^(?:私の|僕の|俺の|自分の)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が|の|と|って|とは)", question):
+        return False
+    if re.match(r"^(?:世界|日本|海外|いろんな国|多くの国|水泳|スポーツ|水の沸点|横浜駅|.+駅|水族館|美術館|博物館|公園|この店|このお店)", question) and re.search(
+        r"(?:何語|何度|どこ(?:にある|です)?|何時に|どう練習|ルール|何のスポーツ|開店|営業して|猫はいます)", question
+    ):
+        return False
+    return bool(INVITATION_PATTERN.search(question) or re.search(
+        r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
+        r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
+        r"それでどうなった|どうなりました|どうなったんですか|何してた|何をした|どこに行った|どこ行った|"
+        r"誰と行った|誰と行きました|覚えて(?:います|ます)|経験(?:が)?あります|"
+        r"どう思(?:います|う)|どう感じ(?:ます|た)|どうしてそう思|なぜそう思|いつから(?:です|なの|始めた|好き)|"
+        r"(?:それ|その映画|その作品|その話).{0,8}(?:どうでした|どう感じ|どう思いました))",
+        question,
+    ))
 
 
 def _candidate_contains_substantive_answer_clause(text: str) -> bool:

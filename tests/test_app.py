@@ -9452,6 +9452,12 @@ def test_invitation_acceptance_is_not_misclassified_as_cafe_preference_question(
     candidate = backend.Candidate(label="前向きに返答", text="ぜひ行きたいです！\n土曜日とかどうですか？")
 
     assert backend._topic_for_personal_question(context["history"][-1]["body"]) is None
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+    context["ephemeral_user_answers"] = [
+        {"question": clarification.question, "answer": "ぜひ行きたいです"}
+    ]
     assert backend._answers_verified_partner_question(candidate, context)
 
 
@@ -12219,10 +12225,13 @@ def test_unclassified_direct_question_cannot_be_replaced_by_reaction_or_new_ques
     "candidate_text",
     [
         "友達と話して解決しました！",
-        "嬉しかったです！その時はどんな感じだったんですか？",
+        "昨日は友達と会えました！",
+        "準備ができました！",
+        "友達と相談して行くことになりました！",
+        "話し合って来週に決めました！",
     ],
 )
-def test_unclassified_direct_question_accepts_answer_before_followup(client, candidate_text):
+def test_unclassified_wh_question_requires_matching_confirmed_answer(client, candidate_text):
     _, backend = client
     context = {
         "mode": "reply",
@@ -12232,10 +12241,40 @@ def test_unclassified_direct_question_accepts_answer_before_followup(client, can
     }
     candidate = backend.Candidate(label="直接回答後に会話を続ける", text=candidate_text)
 
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_unclassified_wh_question_allows_the_matching_temporary_user_answer(client):
+    _, backend = client
+    question = "それでどうなったんですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{"question": clarification.question, "answer": "友達と話して解決しました"}],
+    }
+    candidate = backend.Candidate(label="本人確認済みの結果", text="友達と話して解決しました！")
+
     assert backend._answers_verified_partner_question(candidate, context)
 
 
-def test_unclassified_wh_question_rejects_unrelated_statement(client):
+@pytest.mark.parametrize(
+    "candidate_text",
+    [
+        "今日はいい天気ですね！",
+        "今日は友達と買い物しました！",
+        "今日は気分転換に散歩しました！",
+    ],
+)
+def test_unclassified_wh_question_rejects_unrelated_statement(client, candidate_text):
     _, backend = client
     context = {
         "mode": "reply",
@@ -12243,7 +12282,7 @@ def test_unclassified_wh_question_rejects_unrelated_statement(client):
         "my_profile": {"facts": {}},
         "ephemeral_user_answers": [],
     }
-    candidate = backend.Candidate(label="無関係な話題", text="今日はいい天気ですね！")
+    candidate = backend.Candidate(label="無関係な話題", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
@@ -12254,7 +12293,11 @@ def test_unclassified_wh_question_rejects_unrelated_statement(client):
     [
         "カレーが好きではないけどラーメンをよく食べます！",
         "ラーメンは好きというわけではないけどよく食べます！",
+        "ラーメンが好きでないけどよく食べます！",
         "ラーメンをよく食べます！",
+        "好きな食べ物は特にないです！",
+        "好きな食べ物はないです！",
+        "好きな食べ物はカレーが苦手です！",
     ],
 )
 def test_frequent_or_negated_food_consumption_does_not_establish_favorite(client, partner_message):
@@ -12270,7 +12313,48 @@ def test_frequent_or_negated_food_consumption_does_not_establish_favorite(client
     assert "好きな食べ物" not in topics
 
 
-def test_unclassified_polar_question_accepts_short_affirmative_answer(client):
+@pytest.mark.parametrize(
+    "partner_message",
+    [
+        "好きな食べ物はカレーではなく特にないです！",
+        "好きな食べ物はカレーじゃなくて特にないです！",
+        "好きな食べ物はカレーではなくラーメンです！",
+    ],
+)
+def test_corrected_food_preference_only_marks_replacement_as_known(client, partner_message):
+    _, backend = client
+    context = {"history": [{"role": "them", "body": partner_message}]}
+    candidate = backend.Candidate(label="好物の確認", text="好きな食べ物は何ですか？")
+
+    topics = backend.repeated_partner_question_topics([candidate], context)
+    if "特にない" in partner_message:
+        assert "好きな食べ物" not in topics
+    else:
+        assert "好きな食べ物" in topics
+
+
+def test_partner_invitation_requires_user_choice_before_acceptance_candidate(client):
+    _, backend = client
+    question = "今度一緒にカフェ行きませんか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の承諾", text="ぜひ行きたいです！")
+
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+    clarification = backend.missing_personal_fact_question(context)
+    context["ephemeral_user_answers"] = [
+        {"question": clarification.question, "answer": "ぜひ行きたいです"}
+    ]
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+def test_unclassified_polar_question_requires_user_confirmation(client):
     _, backend = client
     context = {
         "mode": "reply",
@@ -12280,7 +12364,103 @@ def test_unclassified_polar_question_accepts_short_affirmative_answer(client):
     }
     candidate = backend.Candidate(label="短い肯定回答", text="はい！")
 
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_unclassified_polar_question_allows_matching_temporary_answer(client):
+    _, backend = client
+    question = "このお店知ってますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    context["ephemeral_user_answers"] = [{"question": clarification.question, "answer": "知っています"}]
+    candidate = backend.Candidate(label="本人が確認した回答", text="はい！そのお店知っています！")
+
     assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(
+    ("question", "candidate_text", "requires_confirmation"),
+    [
+        ("それはどう感じましたか？", "結構うれしかったです！", True),
+        ("それについてどう思いますか？", "自分はいいと思います！", True),
+        ("どうしてそう思ったんですか？", "実際に体験してよかったからです！", True),
+        ("それはいつからですか？", "去年くらいからです！", True),
+        ("その映画どうでしたか？", "結構面白かったです！", True),
+        ("友達はどうなったんですか？", "友達は無事に帰れました！", False),
+    ],
+)
+def test_unclassified_question_scope_matches_preflight_and_send_gate(
+    client, question, candidate_text, requires_confirmation
+):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="質問の範囲に沿った回答", text=candidate_text)
+
+    clarification = backend.missing_personal_fact_question(context)
+    if requires_confirmation:
+        assert clarification is not None
+        assert not backend._answers_verified_partner_question(candidate, context)
+        context["ephemeral_user_answers"] = [
+            {"question": clarification.question, "answer": candidate_text.rstrip("！")}
+        ]
+        assert backend._answers_verified_partner_question(candidate, context)
+    else:
+        assert clarification is None
+    assert backend._answers_verified_partner_question(candidate, context)
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "実はバイオリンを10年習ってます！",
+        "毎朝5キロ走っています！",
+        "犬アレルギーなんです",
+        "最近は横浜のほうによく行きます！",
+        "お気に入りのお店があるんです！",
+    ],
+)
+def test_unclassified_first_person_facts_are_not_sendable_without_evidence(client, claim):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "今日は天気がよかったですね！"}],
+        "my_profile": {"facts": {"hobbies": ["読書", "カフェ巡り"]}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の本人事実", text=claim)
+
+    assert backend._has_unverified_general_personal_claim(claim, context)
+    assert backend.unsupported_personal_claim_topics([candidate], context)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_general_personal_claim_gate_keeps_partner_attribution_and_verified_claim(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "バイオリンを10年習ってます！"}],
+        "my_profile": {"facts": {"running_habit": "毎朝5キロ走っています"}},
+        "ephemeral_user_answers": [],
+    }
+    partner_attribution = backend.Candidate(label="相手への反応", text="バイオリンを10年習ってるんですね！")
+    verified_claim = backend.Candidate(label="確認済み習慣", text="毎朝5キロ走っています！")
+    contradiction = backend.Candidate(label="否定事実との矛盾", text="毎朝5キロ走っていません")
+
+    assert "未確認の本人事実" not in backend.unsupported_personal_claim_topics([partner_attribution], context)
+    assert not backend.unsupported_personal_claim_topics([verified_claim], context)
+    assert backend.unsupported_personal_claim_topics([contradiction], context)
 
 
 @pytest.mark.parametrize("candidate_text", ["はい！", "知っています！"])
@@ -12297,10 +12477,21 @@ def test_short_polar_answer_does_not_answer_wh_question(client, candidate_text):
     assert not backend._answers_verified_partner_question(candidate, context)
 
 
-def test_negated_food_preference_is_not_treated_as_known_favorite(client):
+@pytest.mark.parametrize(
+    "partner_message",
+    [
+        "好きな食べ物はカレーではないです",
+        "好きな食べ物はカレーじゃないです",
+        "好物はカレーではないです！",
+        "好きな食べ物は特にないです！",
+        "好きな食べ物はないです！",
+        "好きな食べ物はカレーが苦手です！",
+    ],
+)
+def test_negated_or_absent_food_preference_is_not_treated_as_known_favorite(client, partner_message):
     _, backend = client
     context = {
-        "history": [{"role": "them", "body": "好きな食べ物はカレーではないです"}],
+        "history": [{"role": "them", "body": partner_message}],
     }
     candidate = backend.Candidate(label="未回答の好きな食べ物", text="好きな食べ物は何ですか？")
 
@@ -12353,7 +12544,7 @@ def test_agreement_seeking_tag_question_does_not_force_a_literal_answer(client):
     assert backend._answers_verified_partner_question(candidate, context)
 
 
-def test_filter_safe_candidates_keeps_direct_answer_and_drops_unknown_question_evasion(client):
+def test_filter_safe_candidates_drops_unknown_direct_answers_without_user_confirmation(client):
     _, backend = client
     context = {
         "mode": "reply",
@@ -12380,6 +12571,7 @@ def test_filter_safe_candidates_keeps_direct_answer_and_drops_unknown_question_e
 
     filtered = backend.filter_safe_candidates(value, 3, context)
 
-    assert filtered["recommended"]["text"] == "友達と話して解決しました！"
-    assert filtered["available_candidate_count"] == 1
+    assert filtered["recommended"] is None
+    assert filtered["generation_blocked"] is True
+    assert filtered["available_candidate_count"] == 0
     assert "相手からの直接質問に未回答" in str(filtered["candidate_rejections"])

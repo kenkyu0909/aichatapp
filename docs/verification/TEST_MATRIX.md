@@ -1043,9 +1043,10 @@ T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Ac
 
 T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14 / FIXED106 / BLOCKED5 / NOT_TESTED15）。Windows全pytestの最終再実行と最新Actionsは実行/Push後に追記する。過去のT369/QUALITY009実Gemini生成FAILは維持。|
 
-| T402 | 分類外のWH直接質問へ無関係な叙述を返す候補を送信前に拒否 | pytest。架空質問「それでどうなったんですか？」と無関係な候補を使用 | FIXED | 独立レビューで「今日はいい天気ですね！」が回答済みと誤判定されることを再現。成果・進展を表す限定的な回答表現以外は拒否し、無関係候補だけの場合は送信可能な候補なしとして扱う。招待への明確な肯定と極性質問への短い回答は別経路で維持。focused suiteで再確認。Gemini実通信0回。|
-| T403 | 食べる頻度や否定表現を好物の確定情報と誤認しない | pytest。否定・対比・頻度のみの架空プロフィール文3件 | FIXED | 「カレーが好きではないけどラーメンをよく食べます」「好きというわけではない」「ラーメンをよく食べるだけ」を好物既知と扱わない。肯定された好物の再質問抑制は回帰テストで維持。focused suiteで再確認。Gemini実通信0回。|
+| T402 | 分類外のWH直接質問へ根拠のない回答を送信前に拒否 | pytest。架空質問「それでどうなったんですか？」と根拠なし/確認済み候補を使用 | FIXED | 汎用の「しました」「できました」等で無関係な経験を回答扱いする問題、自然な結果表現を誤って許可する問題を再現。分類外WH質問は同じ質問に対する本人の一時回答が候補に含まれる場合だけ許可し、それ以外は安全な候補不足にする。カフェ招待への明確な肯定と確認済み映画回答は回帰維持。focused suiteで再確認。Gemini実通信0回。|
+| T403 | 摂取頻度・否定・好物なし・苦手を肯定的な好物と誤認しない | pytest。架空の否定・対比・頻度・未設定文7件 | FIXED | 「カレーが好きではないけどラーメンをよく食べます」「好きというわけではない」「好きでない」「ラーメンをよく食べるだけ」「好きな食べ物は特にない/ない」「カレーが苦手」を好物既知と扱わない。肯定された好物と「好きな食べ物はカレーではなくラーメン」の再質問抑制は回帰テストで維持。focused suiteで再確認。Gemini実通信0回。|
+| T404 | 未分類の本人質問・相手の誘いの確認範囲を事前質問と送信ゲートで一致させる | 架空の質問によるpytest。本人の体験・意見・招待、第三者・一般知識との対照を確認 | FIXED | 一般知識や第三者への質問まで本人確認を要求する誤検出と、「友達はどうなった」「その映画どうでした」などの事前質問/最終ゲートのずれを再現。本人の体験・意見・誘いへの意思確認だけに対象を限定し、第三者・公共情報は個人質問ゲートの対象外とした。誘いへの承諾候補は本人の一時回答があるまで通さない。食べ物の訂正「カレーではなく特にない/ラーメン」も区別。focused suite **117 passed**。|
 
-最新項目数403。状態集計はPASS261 / FAIL14 / FIXED108 / BLOCKED5 / NOT_TESTED15。修正後Windows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。実APIのT369/QUALITY009品質FAILは未解決として維持する。|
+最新項目数403。状態集計はPASS261 / FAIL14 / FIXED108 / BLOCKED5 / NOT_TESTED15。直近の全pytest **1723 passed in 298.56s** は、追加レビュー指摘の修正前HEAD。今回の追加修正focused suite **44 passed**。最新差分を含む全pytestは再実行中。実APIのT369/QUALITY009品質FAILは未解決として維持する。|
 
-2026-10-16 18:45 JST — 最新コードによる再検証: Windows `python -m pytest -q` **1711 passed in 299.72s**（Firefox UIテストを含む）。関連境界focused suite **33 passed**。`py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。マトリクス: **401項目**（PASS261 / FAIL14 / FIXED106 / BLOCKED5 / NOT_TESTED15）。この差分のActionsはPush後に確認する。過去のT369/QUALITY009実生成FAILを維持。
+2026-10-16 19:39 JST 最新項目数404。状態集計はPASS261 / FAIL14 / FIXED109 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1743 passed in 303.58s**（Firefox UI含む）。追加のFirefox E2E 4件（任意本人質問、FastAPI一時回答、first→reply/コピー/送信記録/履歴、first/followup/like経路）は個別実行中。Python/JS構文、diff検査、最新HEAD Actionsは実行後に記録する。Gemini実通信0回。T369/QUALITY009実生成品質FAILは維持。
