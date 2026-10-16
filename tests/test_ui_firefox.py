@@ -1979,7 +1979,9 @@ def test_firefox_profile_edit_preserves_extension_fields_and_array_types(local_a
         pass
 
     driver.get(local_app.url)
-    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "相手を選択")
+    WebDriverWait(driver, 8).until(
+        lambda browser: "UI" not in browser.find_element(By.CSS_SELECTOR, ".version").text
+    )
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
     WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     profile_dialog = modal(driver)
