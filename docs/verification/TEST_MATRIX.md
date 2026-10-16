@@ -1001,3 +1001,14 @@ CI確認追記: 検証コードSHA `ad764f01dca47135800f3d230d1b262261d6e016`の
 | T391 | 友人・カフェ・休日習慣の根拠を同じ活動・節に限定する | Windowsのpytest、架空履歴を使った修正前後比較、独立コードレビュー | FIXED | 別節にある週末映画の頻度を一度きりの友人カフェ訪問へ誤適用する2ケース、現在のカフェ嗜好を過去の友人同行頻度へ流用する1ケースを修正前に再現。さらに「休日は、友達とカフェに行くことが多いです！」の読点で既知情報を見落とすケースも再現。修正中に過去→現在のカフェ嗜好ケースの回帰を見つけて復旧。履歴を節単位で分け、短い話題導入のみ次節に保持し、好みと頻度を区別。関連focused suite 69 passed、独立レビュー APPROVE、最新全pytest 1601 passed、Firefox専用18 passed。Gemini実通信0回。 |
 
 最新ID行: 391。累計: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。Windowsの最新全pytest **1601 passed in 283.24s**。`tests/test_ui_firefox.py` **18 passed in 233.83s**。`py_compile`、`node --check app.js`、`git diff --check`成功。追跡ファイルの認証情報パターンスキャンは一致なし。Gemini通信0回。最新SHAとActionsはPush後に追記。T369の実Gemini品質FAILを維持。 |
+
+### Latest test addition
+
+| ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
+|---|---|---|---|---|
+
+| T392 | 品質ランナーの意味的候補重複判定とsmoke-only終了状態 | 保存済みQUALITY009候補を現行ゲートで再評価し、pytestで分類・終了コードを確認（オフライン） | FIXED | 保存済み`joke_mirroring`候補の「休日に休むことへの共感」2案は意味が重複し、従来のランナーが完全一致だけを見て自動PASSにしていた。JSON原本は変更せず、アプリの意味的多様性ゲートを品質判定に適用してFAILにする。安全な候補の保持と品質FAILを分離。smoke-onlyで安全な実応答があっても意味的多様性FAILなら総合status=FAIL・終了コード2、全品質PASSならSMOKE_PASS・終了コード0となることを検証し、`smoke_scope`を成果JSONに保存する。focused suite 7 passed。Gemini実通信0回。全pytestと最新Actionsは今回HEADで確認後に追記。 |
+
+最新ID行: 392。累計: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。QUALITY009の元JSONにある過去の自動PASSは履歴として維持し、保存済み候補の意味的重複は今回の再評価でFAILと判定。T369の実Gemini文章品質FAILも維持。今回の全pytest・Actions結果は実行後に追記する。Gemini実通信0回。
+
+2026-10-16 15:10 JST 最新HEADでの再検証: 全pytest **1605 passed in 303.57s**。追加focused suite `tests/test_quality_checks_009.py` **8 passed**、保存候補再評価 `tests/test_app.py -k quality009_recorded_redundant_reactions_are_detected` **1 passed**。全pytestにはFirefox UIテストが含まれる。Python構文、JavaScript構文、`git diff --check`成功。追跡対象の認証情報パターンスキャンは一致なし。Gemini実通信0回。コード・文書は未コミットで、GitHub ActionsはPush後に確認する。|

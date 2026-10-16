@@ -1263,3 +1263,31 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 追加回帰ケース: 友人との一度きりのカフェ訪問＋別節の現在映画習慣、過去の友人カフェ頻度＋現在カフェ好き、読点後の休日話題の3パターンを修正前FAILとして再現し修正。関連focused 69 passed。独立レビューAPPROVE。
 - T391追加。累計391: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。GitHub Actions未確認。Gemini通信0回、conversation_004・新しい会話HTML未実施。総合NO-GOを維持。
 - 次: 文書lintと最終差分/秘密スキャン、対象ファイルのみcommit・push、最新ActionsとPR #4のOPEN/Draft/未マージを確認。残りのP0品質監査を続ける。
+
+### 2026-10-16 14:58 JST QUALITY009の候補多様性を再評価
+
+| ゴール | 判定 | 根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 部分修正PASS / 全体FAIL | 今回の変更なし。|
+| 句読点・改行 | 未達維持 | 今回の変更なし。|
+| ミラーリング | 未達維持 | 今回の変更なし。|
+| 共感の反復防止 | FAILを明確化 | 保存済み実生成候補2案が休日の休息に対する共感として意味的に重複。以前のランナーが誤ってPASSを付けたため、アプリと同じ意味的重複ゲートを評価へ適用した。実生成品質自体は修正・再検証していない。|
+| 返信候補の多様性 | FAILを明確化 | 保存済みケースの実質的な重複をFAILとして扱う。候補を安全に残せることと品質PASSを区別する。|
+| 食事への誘い判断 | 未達維持 | 今回の変更なし。|
+| アプリ安定性 | focusedテストPASS / 全体確認待ち | runner状態遷移・終了コードfocused suite 7 passed。全pytestと最新Actionsはこれから。|
+
+T392を追加。累計392: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。Gemini実通信0回。T369を含む実Gemini品質FAILが残るため総合NO-GO。次は全pytest・Firefox・構文チェック・最新Actionsを確認する。conversation_004と新しい会話HTMLは行わない。
+
+### 2026-10-16 15:10 JST 評価ランナーの品質状態を修正
+
+| ゴール | 判定 | 根拠・次の作業 |
+|---|---|---|
+| 本人情報の正確性 | 部分修正PASS / 全体FAIL | 今回変更なし。|
+| 句読点・改行 | 未達 | 今回変更なし。|
+| ミラーリング | 未達 | 今回実生成再評価なし。|
+| 共感の反復防止 | 実生成FAILを正確に反映 | 保存済み候補の意味的重複に旧ランナーが誤ってPASSを付けていた。現在のゲートでFAILと判定する。 |
+| 返信候補の多様性 | 実生成FAILを正確に反映 | 安全に表示できる候補も意味的に重複する場合は品質FAILにする。|
+| 食事への誘い判断 | 未達 | 今回変更なし。|
+| アプリ安定性 | ローカル回帰PASS / Actions待ち | 全pytest1605 passed、Firefox UIを含む。focused runner 8 passed。構文・差分検査成功。ActionsはPush後に確認する。|
+
+T392までの累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。Gemini実通信は0回。実生成品質FAILが残るため総合NO-GO。conversation_004と新しい会話HTMLは行わない。PR #4はDraft・未マージ。

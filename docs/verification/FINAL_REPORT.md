@@ -1565,3 +1565,19 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 変更ファイル: `app.py`、`tests/test_app.py`、`docs/verification/TEST_MATRIX.md`、`docs/verification/PROGRESS.md`、`docs/verification/OVERNIGHT_GOAL.md`、`docs/verification/prompt_spec.md`、本報告。
 - Gemini実通信0回。実生成品質009の過去FAILを解決したとは扱わない。句読点/改行・文章の自然さ・ミラーリング・候補多様性・誘い判断の実API再検証は未実施。総合判定は **NO-GO**。
 - T391を追加。391項目: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。今回のコミット・最新SHA Actions URLはPush後に追記する。PR #4はDraft・未マージを維持する。
+
+### 2026-10-16 14:58 JST 保存済み候補の意味的多様性FAILを評価へ反映
+
+QUALITY009の保存済み`joke_mirroring`2候補はどちらも休日の休息への共感で、アプリの意味的多様性ゲートは重複と判定する。旧評価ランナーは完全一致だけを検査していたため、意味が近い候補のケースをPASSとしていた。元のJSONは保持し、現在の再評価結果をFAILとして追記する。
+
+ランナーはアプリの意味的多様性判定を品質結果に含める。安全な候補を表示できることと、候補セットの品質が合格することは区別する。smoke-onlyの成果JSONにはsmokeの対象範囲を記録し、意味的多様性FAILを総合FAIL・終了コード2へ反映する。品質評価PASSの場合のみ`SMOKE_PASS`と終了コード0を返す。状態保存までを含むfocused suiteは7 passed。全pytestとActionsは今回のHEADで未確認。Gemini実通信は0回。
+
+T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。過去のT369およびQUALITY009の実生成品質FAILは維持する。総合判定はNO-GO。PR #4はDraft・未マージ。次に全回帰テストと最新HEAD Actionsを確認する。
+
+### 2026-10-16 15:10 JST QUALITY009候補重複の誤PASSを修正
+
+保存済み品質記録の休日会話候補2案は、意味的に同じ共感を繰り返しています。旧ランナーは文字列が完全一致しないことだけを確認し、このケースをPASSにしていました。アプリの意味的多様性判定を評価ランナーへ追加し、実質的に重複した候補セットはFAILとして扱うよう修正しました。元のJSONは上書きしていません。
+
+`smoke_scope`を新規実行・再開した実行・smoke-only実行の成果JSONに保存し、基礎的な実応答/安全検査と意味的多様性の評価範囲を明示しました。smoke-onlyでは品質FAILを終了コード2に、完全PASSを`SMOKE_PASS`と終了コード0に対応させます。独立レビューで状態の曖昧さがないことを確認しました。
+
+最新ローカル全pytestは1605件成功（303.57秒、Firefox UIを含む）。focused runner suiteは8件、保存候補再評価は1件成功。Python・JavaScript構文と差分検査も成功。Gemini実通信は0回で、T369/QUALITY009の実生成品質FAILは解消扱いにしません。T392を追加し、累計392項目: PASS261 / FAIL14 / FIXED97 / BLOCKED5 / NOT_TESTED15。総合判定はNO-GO。変更をPush後、最新SHAのActionsを確認する。

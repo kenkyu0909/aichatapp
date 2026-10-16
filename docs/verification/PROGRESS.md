@@ -1554,3 +1554,19 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 独立コードレビューは最新差分をAPPROVE。句読点含む短い話題導入、過去→現在の嗜好、カフェ頻度と別の映画習慣の境界を確認。
 - T391追加。累計391項目: PASS261 / FAIL14 / FIXED96 / BLOCKED5 / NOT_TESTED15。T369/QUALITY009実Gemini文章品質FAILは維持し、総合NO-GO。PR #4はOPEN/Draft/未マージ。
 - 次: 日本語文書lint、差分・秘密情報・ブランチ状態の最終確認後、許可対象ファイルのみコミット・Push。最新SHAのPush/PR Actions成功とPR状態を確認し、進捗・最終報告へ記録する。別節の他トピックでも同様の混同がないか、オフラインで次のP0監査を継続する。
+
+### 2026-10-16 14:58 JST 保存済み候補の多様性評価を修正
+
+- QUALITY009の保存済み`joke_mirroring`候補2案を現行フィルターで再評価したところ、どちらも休日に休む話への共感で、返信方針が実質同じだった。過去のJSONは変更せず、旧ランナーが完全一致だけを見てPASSとしていた誤評価を特定。
+- 評価ランナーをアプリの意味的多様性ゲートに接続。安全な候補の表示可否と、品質評価の多様性FAILを別々に扱う。smoke-onlyでは品質FAILを総合FAIL・終了コード2へ反映し、品質PASSのみSMOKE_PASS・終了コード0とする。保存データにsmoke_scopeも記録し、煙試験の対象範囲を明記。
+- focusedテスト7件成功。API通信なし。独立レビューで旧状態の曖昧さを指摘されたため、成果JSONの範囲説明と総合判定を併せて検証するテストを追加した。
+- 現在の未コミット変更: `scripts/run_quality_checks_009.py`、`tests/test_quality_checks_009.py`、`tests/test_app.py`、QUALITY009分析と検証文書。保護対象の3つの未追跡指示ファイルは変更・追加しない。
+- 次: 全`tests/test_quality_checks_009.py`と全pytest、Python/JavaScript構文、差分・秘密情報チェックを実行。文書を更新して対象ファイルだけをcommit/pushし、最新SHAのActionsとPR #4 OPEN/Draft/未マージを確認する。T369の実Gemini品質FAILは維持。実Gemini通信0回、conversation_004・新しい会話HTMLは実施しない。
+
+### 2026-10-16 15:10 JST 品質ランナーの意味的重複判定
+
+- 保存済み候補2案の意味的な重複を、実行ランナーが完全一致判定だけで見逃していた。元の実Gemini記録は変更せず、現行ゲートの再評価でFAILと判定。
+- smoke-onlyでは実応答の基礎検査と総合品質を分け、候補多様性FAILなら全体FAIL・終了コード2、品質PASSなら`SMOKE_PASS`・終了コード0を返す。`smoke_scope`は新規・再開時・smoke-onlyの全成果JSONに保存。
+- 保存済み候補再評価テスト1 passed、ランナーfocused suite 8 passed、全pytest **1605 passed in 303.57s**（Firefox UI込み）。Python/JavaScript構文と差分検査成功。yomiyasu lintは6文書を個別実行。既存履歴を含む長文文書の箇条書き比率や、文脈上必要な否定・絵文字について警告がある。内容を損なう機械的な書き換えはしない。
+- `codex/directive-control` SHA `c83a29e45746560bdddad6080146fee9cd20991c`を再確認。P0品質とFirefox、最新Actionsを優先する指示で更新なし。Gemini通信0回。
+- PR #4はOPEN/Draft、base `feat/ui-local-backend-v1`、未マージを確認。今回の変更は未コミット。次は最終diff/秘密情報確認、対象ファイルだけをコミット・Push、Actionsの最新結果を確認して資料へ追記する。

@@ -22,6 +22,7 @@ OUTPUT = ROOT / "docs/verification/simulations/quality_checks_009.json"
 API_DIR = Path(os.environ.get("MRA_API_DIR") or (ROOT.parent / "API")).expanduser()
 MAX_LOGICAL = 12
 MAX_PROVIDER = 24
+SMOKE_SCOPE = "Live provider response and baseline safety/content checks; excludes semantic diversity."
 PROFILE = {
     "name": "架空の水野けい", "age": 29, "region": "東京都練馬区",
     "occupation": "建築会社の事務", "hobbies": ["読書", "カフェ巡り"],
@@ -85,6 +86,64 @@ def record_candidates(
     ]
 
 
+def candidate_set_has_semantic_redundancy(
+    candidates: list[dict[str, Any]], backend_module: Any
+) -> bool:
+    """Use the application's semantic-redundancy gate in the quality verdict."""
+    if len(candidates) < 2:
+        return False
+    parsed = [
+        backend_module.Candidate.model_validate(candidate)
+        for candidate in candidates
+    ]
+    return bool(backend_module._candidate_set_needs_diversity_repair(parsed))
+
+
+def quality_case_result(
+    content_pass: bool,
+    diversity_violation: bool,
+    http_status: int,
+    error_code: str | None,
+) -> str:
+    """A safe response can still fail the separate quality-diversity check."""
+    if content_pass:
+        return "FAIL" if diversity_violation else "PASS"
+    if http_status >= 500 or error_code:
+        return "BLOCKED"
+    return "FAIL"
+
+
+def smoke_only_status(state: dict[str, Any]) -> str:
+    """Report the quality verdict of smoke-only runs without conflating it with connectivity."""
+    if state.get("smoke") != "PASS":
+        return "BLOCKED" if state.get("blocking_reason") else "FAIL"
+    smoke_evaluation = next(
+        (
+            item.get("evaluation", {})
+            for item in state.get("tests", [])
+            if item.get("id") == "smoke_reply"
+        ),
+        {},
+    )
+    result = smoke_evaluation.get("result")
+    if result == "PASS":
+        return "SMOKE_PASS"
+    if result in {"FAIL", "BLOCKED"}:
+        return result
+    return "FAIL"
+
+
+def finalize_smoke_only_state(state: dict[str, Any]) -> None:
+    """Persist the distinction between live-safe smoke and the overall quality verdict."""
+    state["smoke_scope"] = SMOKE_SCOPE
+    state["status"] = smoke_only_status(state)
+
+
+def quality_run_exit_code(status: str) -> int:
+    """Treat a fully evaluated smoke-only pass as successful process completion."""
+    return 0 if status in {"PASS", "SMOKE_PASS"} else 2
+
+
 def save(state: dict[str, Any]) -> None:
     tmp = OUTPUT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -118,6 +177,7 @@ def main() -> int:
     configured = [{"api_alias": alias, "model": model} for alias, _secret, model in configs]
     if continuing:
         state = json.loads(OUTPUT.read_text(encoding="utf-8"))
+        state.setdefault("smoke_scope", SMOKE_SCOPE)
         retryable_connection = (
             retry_smoke_once
             and state.get("status") == "BLOCKED"
@@ -152,6 +212,7 @@ def main() -> int:
         "provider_attempt_limit": MAX_PROVIDER, "logical_requests": 0, "app_generate_requests": 0,
         "provider_attempts": 0, "tests": [], "temporary_database_isolated": True,
         }
+        state["smoke_scope"] = SMOKE_SCOPE
     save(state)
     with TestClient(app_module.app) as client:
         saved_profile = client.put("/api/profile", json={"content": json.dumps(PROFILE, ensure_ascii=False), "avoid": PROFILE["avoid"]})
@@ -210,6 +271,9 @@ def main() -> int:
                 facts = app_module.unsupported_personal_claim_topics(
                     [app_module.Candidate(label=x.get("label", ""), text=x.get("text", "")) for x in candidates], context
                 )
+            diversity_violation = candidate_set_has_semantic_redundancy(
+                candidates, app_module
+            )
             direct_question = body.get("needs_user_info") is True and bool(body.get("user_questions")) and not candidates
             no_punctuation = all("、" not in text and "。" not in text for text in texts)
             no_placeholders = all(not app_module.candidate_has_placeholder(text) for text in texts)
@@ -228,6 +292,8 @@ def main() -> int:
                 "punctuation_violation": not no_punctuation, "placeholder_violation": not no_placeholders,
                 "missing_sentence_break_violation": not no_missing_breaks,
                 "candidate_count": len(candidates), "candidate_distinct_count": len(set(norm)),
+                "semantic_diversity_violation": diversity_violation,
+                "semantic_diversity_result": "FAIL" if diversity_violation else "PASS",
                 **({"candidate_set_status": smoke_candidate_status} if smoke_candidate_status else {}),
                 "unsupported_personal_claim_topics": facts,
                 "text_lengths": [len(text) for text in texts],
@@ -262,13 +328,17 @@ def main() -> int:
                     re.search(r"(?:よかったら|今度|一緒に).{0,30}(?:行きません|行ってみません|どうですか|行けたら)", text, re.S)
                     for text in texts
                 )
-            if content_pass:
-                evaluation["result"] = "PASS"
-            elif result.status_code >= 500 or body.get("error_code"):
-                evaluation["result"] = "BLOCKED"
-            else:
-                evaluation["result"] = "FAIL"
-            if not content_pass:
+            evaluation["result"] = quality_case_result(
+                content_pass,
+                diversity_violation,
+                result.status_code,
+                body.get("error_code"),
+            )
+            if content_pass and diversity_violation:
+                evaluation["failure_notes"] = [
+                    "The application's semantic-diversity checker found substantially similar candidate reactions or reply moves."
+                ]
+            elif not content_pass:
                 if result.status_code >= 500 or body.get("error_code"):
                     evaluation["failure_notes"] = [
                         f"Provider/application request failed with classified code {body.get('error_code', 'http_error')}; no candidate was returned."
@@ -295,8 +365,8 @@ def main() -> int:
                 state["status"] = "BLOCKED"
                 state["blocking_reason"] = "Stopped after a provider, output safety, or generation error"
                 break
-    if state["status"] == "RUNNING" and "--smoke-only" in sys.argv and state.get("smoke") == "PASS":
-        state["status"] = "SMOKE_PASS"
+    if state["status"] == "RUNNING" and "--smoke-only" in sys.argv:
+        finalize_smoke_only_state(state)
     if state["status"] == "RUNNING":
         results_by_id = {
             item.get("id"): item.get("evaluation", {}).get("result")
@@ -334,7 +404,7 @@ def main() -> int:
             print(f"  {candidate['label']}: {candidate['text']}")
         if ev.get("user_questions"):
             print(f"  user_questions: {json.dumps(ev['user_questions'], ensure_ascii=False)}")
-    return 0 if state["status"] == "PASS" else 2
+    return quality_run_exit_code(state["status"])
 
 
 if __name__ == "__main__":

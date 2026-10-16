@@ -5887,6 +5887,27 @@ def test_repeated_rest_empathy_from_quality009_is_reported_as_low_diversity(clie
     assert "中心的な反応が似ている可能性" in filtered["candidate_notice"]
 
 
+def test_quality009_recorded_redundant_reactions_are_detected_as_diversity_failure(client):
+    import json
+    from scripts.run_quality_checks_009 import candidate_set_has_semantic_redundancy
+
+    _, backend = client
+    report = json.loads(
+        (Path(__file__).resolve().parents[1] / "docs/verification/simulations/quality_checks_009.json")
+        .read_text(encoding="utf-8")
+    )
+    case = next(item for item in report["tests"] if item["id"] == "joke_mirroring")
+    candidates = [
+        backend.Candidate(label=item["label"], text=item["text"])
+        for item in case["evaluation"]["candidates"]
+    ]
+
+    assert backend._candidate_set_needs_diversity_repair(candidates)
+    assert candidate_set_has_semantic_redundancy(
+        case["evaluation"]["candidates"], backend
+    )
+
+
 def test_quality009_rest_empathy_pair_triggers_one_diversity_repair(client, monkeypatch):
     from google import genai
 

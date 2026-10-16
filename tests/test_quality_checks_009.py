@@ -1,6 +1,10 @@
 from scripts.run_quality_checks_009 import (
     CASES,
+    SMOKE_SCOPE,
+    quality_case_result,
+    quality_run_exit_code,
     record_candidates,
+    finalize_smoke_only_state,
     smoke_candidate_set_status,
     smoke_has_live_valid_response,
 )
@@ -143,3 +147,52 @@ def test_fictional_movie_fixture_does_not_put_test_label_in_user_answer():
 
     assert answer == "最近は『青い灯台』を観ました"
     assert "架空作品" not in answer
+
+
+def test_semantically_redundant_live_candidates_fail_quality_verdict():
+    assert quality_case_result(
+        content_pass=True,
+        diversity_violation=True,
+        http_status=200,
+        error_code=None,
+    ) == "FAIL"
+    assert quality_case_result(
+        content_pass=True,
+        diversity_violation=False,
+        http_status=200,
+        error_code=None,
+    ) == "PASS"
+    assert quality_case_result(
+        content_pass=False,
+        diversity_violation=False,
+        http_status=502,
+        error_code="gemini_error",
+    ) == "BLOCKED"
+
+
+def test_smoke_only_status_matches_semantic_quality_verdict_and_exit_code():
+    redundant_safe_live_response = {
+        "smoke": "PASS",
+        "tests": [{"id": "smoke_reply", "evaluation": {"result": "FAIL"}}],
+    }
+    finalize_smoke_only_state(redundant_safe_live_response)
+    assert redundant_safe_live_response["status"] == "FAIL"
+    assert "excludes semantic diversity" in redundant_safe_live_response["smoke_scope"]
+    assert quality_run_exit_code(redundant_safe_live_response["status"]) == 2
+
+    quality_pass = {
+        "smoke": "PASS",
+        "tests": [{"id": "smoke_reply", "evaluation": {"result": "PASS"}}],
+    }
+    finalize_smoke_only_state(quality_pass)
+    assert quality_pass["status"] == "SMOKE_PASS"
+    assert quality_run_exit_code(quality_pass["status"]) == 0
+
+    blocked = {"smoke": "NOT_RUN", "blocking_reason": "provider unavailable", "tests": []}
+    finalize_smoke_only_state(blocked)
+    assert blocked["status"] == "BLOCKED"
+    assert quality_run_exit_code(blocked["status"]) == 2
+
+
+def test_smoke_scope_is_explicit_for_full_and_smoke_only_artifacts():
+    assert "excludes semantic diversity" in SMOKE_SCOPE
