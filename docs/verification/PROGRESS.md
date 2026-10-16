@@ -1696,3 +1696,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
 - 次: D03（confirmed_facts/confirmation_state の永続化）着手。
 
+### 2026-10-16 23:55 JST D03第一歩（確認回答のセッション蓄積）
+
+- D03の「別の確認が続いても以前の一時回答を蓄積」を阻害していた `GenerateInput.user_answers` の上限3を12へ緩和し、`merge_user_answers` を追加（NFKC正規化した質問文でキー化・最新回答採用・初出順保持、ブラウザ側 `mergeUserInfoAnswers` と一致）。
+- `build_context` の `ephemeral_user_answers` に適用。同一質問の再回答は最新のみ、6件など4件超の蓄積も受理。
+- 検証: focused 13 passed、`tests/test_app.py` 1690 passed、全pytest **1799 passed in 370.17s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38915924483](https://github.com/kenkyu0909/aichatapp/actions/runs/38915924483) / PR [38915934785](https://github.com/kenkyu0909/aichatapp/actions/runs/38915934785) は同一SHA `08560dc` でsuccess（CI **1799 passed / 1 warning in 246.66s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
+- 次: D03の構造化（fact_id/subject/predicate/value/polarity/time_scope/source/confirmation_state と question_id/requested_slot/scope の最小モデル、confirmed_facts の明示確認時のみ永続化）。検証エージェントで次サブステップを確定する。
+

@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-16 23:55 JST D03第一歩（確認回答のセッション蓄積）
+
+- D03の要件「別の確認が続いても以前の一時回答を蓄積する」を阻害していた `GenerateInput.user_answers` の上限3を12へ緩和し、`merge_user_answers` を追加した。NFKC正規化した質問文でキー化し最新回答を採用、初出順を保持する（ブラウザ側 `mergeUserInfoAnswers` と一致）。
+- `build_context` の `ephemeral_user_answers` に適用。同一質問の再回答は最新のみ、4件を超える蓄積も受理する。
+- 検証: focused 13 passed、`tests/test_app.py` 1690 passed、全pytest **1799 passed in 370.17s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38915924483](https://github.com/kenkyu0909/aichatapp/actions/runs/38915924483) とPR [38915934785](https://github.com/kenkyu0909/aichatapp/actions/runs/38915934785) が同一SHA `08560dc` でsuccess（CI **1799 passed / 1 warning in 246.66s**）。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-16 23:30 JST D02残（近未来の誘い表現）
 
 - `INVITATION_PATTERN` は `一緒に`/`今度`/`よかったら` 条件に依存し、`近いうちに会いませんか？` のような近未来の誘いを見落とし、相手の誘いに対する意思確認が出なかった。
