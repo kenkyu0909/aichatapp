@@ -1648,3 +1648,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 関連pytest **117 passed**。最新全pytest **1743 passed in 303.58s**（Firefox UIを含む）。追加Firefox 4件（任意本人質問、FastAPI一時回答の再生成、first→replyのコピー/送信記録/履歴、first/followup/like経路）**4 passed in 49.77s**。
 - Gemini実通信0回。T369/QUALITY009の実生成品質FAILは未解決。総合NO-GOを維持。会話004/新規会話HTMLは作成していない。
 - 次: py_compile、node構文、diff/秘密情報確認を実施し、PROGRESS/TEST_MATRIX/FINAL_REPORT/OVERNIGHT_GOALを更新。保護対象の未追跡指示書3件を除いてコミット・Pushし、最新SHAのActionsとPR #4のOPEN/Draft状態を検証する。その後、指示書の残るコアP0を進める。
+
+### 2026-10-16 20:50 JST 未コミットD01/D02の検証と分離コミット
+
+- 引き継ぎ書の前提を再確認。ローカルHEADは `b9cece7`（= origin と同一）で、originのD04/D05/D06（`d38235c`/`a9aef87`/`b9cece7`）は取り込み済み。かつて報告された「別実装（messageDrafts等）」は作業ツリーに残っていない。
+- 未コミット差分は小さい。`app.py` +43/-2（`_has_unverified_general_personal_claim`: 頻度パターンから「最近は」を除外し、頻度一致・回答スコープ一致の例外を追加 = D01/D02）、`app.js` +8/-1（`profileModal` が一時的な `/profile` 取得失敗でも入力を保持）、`tests/test_ui_firefox.py` +5/-1（Firefox待機強化）。
+- 検証: 対象キーワードfocused **608 passed**、Firefox以外の全pytest **1733 passed in 67.79s**、変更したFirefoxテスト2件 **2 passed in 49.97s**。`python -m py_compile app.py`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
+- glm指示どおり分離コミットしてPush: `4a47a66`（app.py D01/D02）、`4263e52`（app.js＋Firefoxテスト）。`b9cece7..4263e52` を `codex/full-system-verification` へPush。PR #4はDraft・未マージ。
+- 保護対象のユーザー未追跡指示ファイル3件はstageせず維持。過去QUALITY009の実Gemini自然さ・候補意味多様性FAIL、T369の実生成品質FAILは未解決。総合NO-GO。
+- 次: 最新SHA `4263e52` のPush/PR Actionsを確認。その後、引き継ぎ書の段階B（D12 写真失敗・二重保存）と段階C（D01〜D03の確認契約）へ進む。
+

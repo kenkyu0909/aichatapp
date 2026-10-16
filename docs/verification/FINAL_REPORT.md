@@ -1636,3 +1636,10 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 修正後のWindows `python -m pytest -q` は **1743 passed in 303.58s**。指定したFirefox E2E 4件は **4 passed in 49.77s**。任意の本人質問、回答後の再生成、コピーと送信記録の分離、履歴再表示、first/reply/followup/likeを対象とした。関連focused suiteは **117 passed**。架空データとGemini SDKモックを使い、Gemini実通信は0回。
 
 **総合判定はNO-GOのまま。** 過去のT369/QUALITY009実Gemini生成FAILは解消していない。モック・Firefox・pytestの成功は実際のモデル出力品質を証明しない。今回変更のGitHub ActionsはPush後に確認する。PR #4はDraft・未マージを維持する。
+
+### 2026-10-16 20:50 JST 未コミットD01/D02の分離コミット
+
+- 未コミットの `app.py`（D01/D02: 未確認本人主張の誤検出削減）、`app.js`（一時的な `/profile` 失敗時の入力保持）、`tests/test_ui_firefox.py`（待機強化）を検証し、`4a47a66` と `4263e52` に分離してPush。
+- focused 608 passed / Firefox以外の全pytest 1733 passed / 変更Firefoxテスト 2 passed。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。
+- 過去のQUALITY009実生成品質FAIL（自然さ・候補意味多様性）とT369 FAILは未解決で総合NO-GO。PR #4はDraft・未マージ。
+

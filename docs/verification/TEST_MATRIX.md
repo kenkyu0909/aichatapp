@@ -1050,3 +1050,9 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 最新項目数403。状態集計はPASS261 / FAIL14 / FIXED108 / BLOCKED5 / NOT_TESTED15。直近の全pytest **1723 passed in 298.56s** は、追加レビュー指摘の修正前HEAD。今回の追加修正focused suite **44 passed**。最新差分を含む全pytestは再実行中。実APIのT369/QUALITY009品質FAILは未解決として維持する。|
 
 2026-10-16 19:39 JST 最新項目数404。状態集計はPASS261 / FAIL14 / FIXED109 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1743 passed in 303.58s**（Firefox UI含む）。追加のFirefox E2E 4件（任意本人質問、FastAPI一時回答、first→reply/コピー/送信記録/履歴、first/followup/like経路）は個別実行中。Python/JS構文、diff検査、最新HEAD Actionsは実行後に記録する。Gemini実通信0回。T369/QUALITY009実生成品質FAILは維持。
+
+### 2026-10-16 20:50 JST D01/D02の検証コミット
+
+- `app.py`（D01/D02 未確認本人主張の誤検出削減）と `app.js`（一時的な `/profile` 失敗時の入力保持）を分離コミット `4a47a66` / `4263e52` としてPush。
+- focused 608 passed、Firefox以外の全pytest 1733 passed、変更Firefoxテスト 2 passed。構文・diff検査成功。Gemini実通信0回。新規テストIDは増やしていない（既存回帰の再実行）。
+
