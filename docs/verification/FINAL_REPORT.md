@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
+
+- サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。
+- クライアントは `clarification_session_id` を送るが、resume 回答に `confirmed` は付けない。UI文言「回答はプロフィールには保存しません」と既存の一時回答契約・Firefoxテスト2件を維持するため。明示保存のUIは製品判断待ち。
+- 検証: focused 7 passed、`tests/test_app.py` 1711 passed、全pytest **1820 passed in 366.78s**（Firefox UI含む）。`ast.parse(app.py)`・`node --check app.js` 成功。Gemini実通信0回。
+- Actions: Push [38929535963](https://github.com/kenkyu0909/aichatapp/actions/runs/38929535963) とPR [38929543322](https://github.com/kenkyu0909/aichatapp/actions/runs/38929543322) が同一SHA `b6983b4` でsuccess。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 01:55 JST 検証エージェント指摘の反映（プロンプト除外・誤字ガード一般化）
 
 - 検証エージェント#4が `73c8bee` を検証。新キー `ephemeral_confirmations` が `app.py:7201` の `json.dumps(context)` でGeminiプロンプト本文へ混入し、内部 `match_id` を露出しQ/Aを重複させる実バグを検出した。

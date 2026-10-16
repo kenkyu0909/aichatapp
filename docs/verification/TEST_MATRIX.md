@@ -1070,5 +1070,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T414 | 一時確認レコードのプロンプト除外と誤字ガードの一般化 | pytest。`prompt_context` 除外と `雰囲(?!気)` の正例/負例 | FIXED | 検証エージェントが `73c8bee` の新キーが `json.dumps(context)` 経由でGeminiプロンプトに混入し内部 `match_id` を漏らしQ/Aを重複させると指摘。`prompt_context` を追加して内部専用キーを唯一のモデル呼び出し地点で除去し、プロンプト非含有をテストで担保。加えて `candidate_has_high_confidence_japanese_error` をリテラル `雰囲い` から正書法ルール `雰囲(?!気)` へ一般化し、同種の未知変形（`雰囲き`・`雰囲`）を拒否しつつ正しい `雰囲気` を保持。`tests/test_app.py`＋`test_quality_checks_009.py` 1715 passed。commit `8ba307b`。 |
 
-最新ID行: 414。T407〜T414をFIXEDとして追加。Actions: Push [38925131517](https://github.com/kenkyu0909/aichatapp/actions/runs/38925131517) / PR [38925141284](https://github.com/kenkyu0909/aichatapp/actions/runs/38925141284) は同一SHA `8ba307b` でsuccess（CI 1816 passed / 1 warning in ~236s）。
+| T415 | 明示確認のプロフィール昇格（D03永続化サブステップ） | pytest。`confirmed_facts` の保存・既存キー保持・重複排除・非永続 | FIXED | `GenerateInput` に任意 `clarification_session_id` と任意 `confirmed` を追加（validatorは許可キーを question/answer/confirmed に限定）。`build_ephemeral_confirmations` は state を confirmed/ephemeral に分け session_id を保持。`persist_confirmed_facts` は confirmed のみを profile content の `confirmed_facts` へ upsert（`schema_version=2`、既存キー保持、同一 question_id は上書き）。未確認回答はプロフィールに触れない。ブラウザは session_id を送るが resume 回答は未確認のまま（一時回答のUI契約を維持、明示保存UIは製品判断待ち）。focused 7 passed。commit `b6983b4`。 |
+
+最新ID行: 415。T407〜T415をFIXEDとして追加。Actions: Push [38929535963](https://github.com/kenkyu0909/aichatapp/actions/runs/38929535963) / PR [38929543322](https://github.com/kenkyu0909/aichatapp/actions/runs/38929543322) は同一SHA `b6983b4` でsuccess（CI 1820 passed / 1 warning in ~236s）。
 

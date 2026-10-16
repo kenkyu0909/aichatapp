@@ -1732,3 +1732,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: Push [38925131517](https://github.com/kenkyu0909/aichatapp/actions/runs/38925131517) / PR [38925141284](https://github.com/kenkyu0909/aichatapp/actions/runs/38925141284) は同一SHA `8ba307b` でsuccess。PR #4はDraft・未マージ。
 - 次: 検証#4推奨の順序どおり、D03永続化はサーバ可視のセッションキー（`clarification_session_id` を `/generate` に追加、または初回 `needs_user_info` 応答でサーバがトークン発行）を導入してから。当面は P0 の実生成品質項目を継続。検証エージェントで次サブステップを確定する。
 
+### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）と契約判断待ち
+
+- サーバ側の昇格機構を実装。`GenerateInput` に任意 `clarification_session_id`（max 64）と任意 `confirmed` を追加（validatorは `question`/`answer`/`confirmed` のみ許可、confirmed は真偽値必須）。`build_ephemeral_confirmations` は `confirmation_state` を `confirmed`/`ephemeral` に分け `session_id` を保持。`persist_confirmed_facts` は confirmed のみを profile content の `confirmed_facts` へ upsert（`schema_version=2`、既存キー保持、同一 `question_id` は上書き、`confirmed_at` 付与）。未確認回答はプロフィールを変更しない。
+- クライアントは `clarification_session_id`（`crypto.randomUUID()`）を送信。ただし「回答して再生成」の回答に `confirmed` を付けなかった。UI文言が「回答はプロフィールには保存しません」と明示しており、resume を承認扱いにすると既存の一時回答契約と既存Firefoxテスト2件が破綻するため。サーバ能力はAPI/unitテストで検証済みで、明示保存のUIアフォーダンス追加は製品判断待ち。
+- 検証: focused 7 passed、`tests/test_app.py` 1711 passed、全pytest **1820 passed in 366.78s**（Firefox UI含む。当初クライアントで resume を confirmed 扱いにした版は Firefox 2件FAILとなり、契約維持のため差し戻した）。`ast.parse(app.py)`・`node --check app.js` 成功。Gemini実通信0回。
+- Actions: Push [38929535963](https://github.com/kenkyu0909/aichatapp/actions/runs/38929535963) / PR [38929543322](https://github.com/kenkyu0909/aichatapp/actions/runs/38929543322) は同一SHA `b6983b4` でsuccess。PR #4はDraft・未マージ。
+- 要確認: 確認質問への回答を「明示確認」としてプロフィールへ保存してよいか（保存するならUI文言を変更）。それとも別途「プロフィールに保存」ボタンを設けるか。ユーザー判断を仰ぐ。
+- 次: D04（プロフィール保存時の未知キー消失の防止）と、確認済み事実の再質問抑止への接続。検証エージェントで次サブステップを確定する。
+
