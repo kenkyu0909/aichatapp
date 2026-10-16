@@ -8,6 +8,8 @@ let contactSelectionEpoch=0;
 let conversationRevision=0;
 const messageDrafts=new Map();
 const mutatingContacts=new Set();
+const contactMutationCounts=new Map();
+const pendingMessageSubmissions=new Set();
 const optionalUserQuestionHistory=new Map();
 let generationRequestSequence=0;
 const generationRequestTokens=new WeakMap();
@@ -21,6 +23,15 @@ function node(tag,cls,txt) {
 function notice(t){
   $("toast").textContent=t;$("toast").hidden=false;
   clearTimeout(timer);timer=setTimeout(()=>{$("toast").hidden=true;},4000);
+}
+function beginContactMutation(contactId){
+  const count=(contactMutationCounts.get(contactId)||0)+1;
+  contactMutationCounts.set(contactId,count);mutatingContacts.add(contactId);
+}
+function endContactMutation(contactId){
+  const count=(contactMutationCounts.get(contactId)||1)-1;
+  if(count>0)contactMutationCounts.set(contactId,count);
+  else{contactMutationCounts.delete(contactId);mutatingContacts.delete(contactId);}
 }
 function errorText(result){
   const messages={
@@ -148,7 +159,7 @@ function renderMessages(){
   $("first-message").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||hasConversation;
   $("generate").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
   $("follow-up").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
-  const composerUnavailable=state.loadingConversation||state.conversationLoadFailed||!current();
+  const composerUnavailable=state.loadingConversation||state.conversationLoadFailed||!current()||pendingMessageSubmissions.has(state.selectedId);
   ["message-input","send-them","send-me"].forEach(id=>{$(id).disabled=composerUnavailable;});
   if(state.loadingConversation){holder.append(node("p","empty-chat","会話履歴を読み込み中です"));return;}
   if(state.conversationLoadFailed){holder.append(node("p","empty-chat","会話履歴を読み込めませんでした。通信状態を確認して相手を選び直してください"));return;}
@@ -165,12 +176,12 @@ function renderMessages(){
     del.onclick=()=>safe(async()=>{
       if(!confirm("このメッセージを削除しますか？"))return;
       invalidateGenerationResults();
-      mutatingContacts.add(messageContactId);
+      beginContactMutation(messageContactId);
       try{
         await api("/matches/"+messageContactId+"/messages/"+m.id,{method:"DELETE"});
         if(state.selectedId===messageContactId)await refreshConversation();
         notice("メッセージを削除しました");
-      }finally{mutatingContacts.delete(messageContactId);}
+      }finally{endContactMutation(messageContactId);}
     });
     actions.append(edit,del);wrap.append(bubble,stamp,actions);holder.append(wrap);
   });
@@ -230,33 +241,40 @@ function showMessageEditor(m){
     modalFooter(body,"保存",async()=>{
       if(!["them","me"].includes(role.value))throw Error("発言者は me または them にしてください");
       invalidateGenerationResults();
-      mutatingContacts.add(contactId);
+      beginContactMutation(contactId);
       try{
         await api("/matches/"+contactId+"/messages/"+m.id,json("PUT",{role:role.value,body:text.value}));
         $("modal").close();
         if(state.selectedId===contactId)await refreshConversation();
         notice("履歴を更新しました");
-      }finally{mutatingContacts.delete(contactId);}
+      }finally{endContactMutation(contactId);}
     });
   });
 }
 async function addMessage(role,override){
   const c=current();if(!c)throw Error("先に相手を登録してください");
   const contactId=c.id;
+  if(pendingMessageSubmissions.has(contactId))throw Error("この相手の発言を保存しています。完了後にもう一度お試しください");
   const draftValue=override===undefined?$("message-input").value:null;
   const body=(override===undefined?draftValue:override).trim();
   if(!body)throw Error("メッセージを入力してください");
   invalidateGenerationResults();
-  mutatingContacts.add(contactId);
+  pendingMessageSubmissions.add(contactId);
+  beginContactMutation(contactId);
+  renderMessages();
   try{
     await api("/matches/"+contactId+"/messages",json("POST",{role,body}));
-    if(override===undefined&&state.selectedId===contactId&&$("message-input").value===draftValue){
-      $("message-input").value="";
-      messageDrafts.delete(contactId);
+    if(override===undefined){
+      if(messageDrafts.get(contactId)===draftValue)messageDrafts.delete(contactId);
+      if(state.selectedId===contactId&&$("message-input").value===draftValue)$("message-input").value="";
     }
     if(state.selectedId===contactId)await refreshConversation();
     notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
-  }finally{mutatingContacts.delete(contactId);}
+  }finally{
+    pendingMessageSubmissions.delete(contactId);
+    endContactMutation(contactId);
+    if(state.selectedId===contactId)renderMessages();
+  }
 }
 async function openContactForm(edit=false){
   const old=edit?current():null;

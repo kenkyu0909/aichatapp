@@ -2077,9 +2077,11 @@ def test_firefox_double_click_does_not_submit_duplicate_messages(local_app, fire
         return originalFetch(url, options);
       };
     """)
-    send = driver.find_element(By.ID, "send-them")
-    send.click()
-    send.click()
+    driver.execute_script("""
+      const button = document.getElementById('send-them');
+      button.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+      button.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    """)
     time.sleep(0.3)
     assert driver.execute_script("return window.__messagePostCount") == 1
     driver.execute_script("window.__resolveMessagePosts[0]()")
