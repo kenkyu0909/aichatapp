@@ -1433,3 +1433,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T369と実API結果を4つの検証資料へ記録し、コミット `b5204913bc2c5ec9e0176acda66b94c3d3e6c4e5` としてPush。
 - 同SHAのPush Actions [38828310999](https://github.com/kenkyu0909/aichatapp/actions/runs/38828310999) とPR Actions [38828315505](https://github.com/kenkyu0909/aichatapp/actions/runs/38828315505) はともにsuccess。Pushログは1366 passed / 1 warning、JavaScript構文確認成功。
 - PR #4は同SHAでOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。次: GitHub Actions証拠と実API品質FAILをPR説明にも記録し、追加API通信なしでオフライン改善を続ける。
+
+### 2026-10-16 10:16 JST 初回メッセージの好意表現を明確化
+
+- 直近の指示に合わせ、`prompts/first.txt`で各候補に挨拶・相手への主観的な好意・マッチできた喜び・相手プロフィールの話題・質問を求めるよう整理。明るい推奨候補には😊または☺️を自然に1つ入れ、容姿や写真の未確認特徴は創作しない指示を維持した。
+- APIキー未設定時の固定例文5案にも好意と喜びを含め、候補本文の句読点禁止と文単位改行を維持。テストT370を追加した。実モデルの生成品質改善を確認したとは扱わない。
+- 最初のfocused試験で新しい初回文例2項目が失敗し、仕様の欠落を再現。その後の実装で修正した。既存の初回プロンプト文言を検査する回帰テストが旧記述を期待して1件失敗したため、新しい仕様の文言を検査するよう更新し、focused suiteは7 passed。
+- 全pytestは1回目に1367 passed / 1 failed（旧文言の固定期待値）だった。期待値更新後の再実行は**1368 passed in 230.78s**。Firefox UI専用suiteは**14 passed in 194.79s**。`py_compile app.py scripts/simulate_conversation.py`、`node --check app.js`、`git diff --check`成功。
+- Gemini API追加通信0回。過去の実Gemini品質FAILは未解決で、GO判定には至らない。次は同一HEADのActionsを確認し、実運用の自己開示質問が既存UI/APIで安全に表現できるか調べる。PR #4はDraftのまま維持する。

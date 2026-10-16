@@ -68,6 +68,13 @@
 - 今回のGitHub Actions: 最終記録更新直前のHEADについてPush [38536709582](https://github.com/kenkyu0909/aichatapp/actions/runs/38536709582) / PR [38536717824](https://github.com/kenkyu0909/aichatapp/actions/runs/38536717824)が成功。最終記録のみのコミット後はbranch workflow [一覧](https://github.com/kenkyu0909/aichatapp/actions/workflows/test.yml?query=branch%3Acodex%2Ffull-system-verification)で最新runを確認。
 - `prompt_spec.md`: `docs/verification/prompt_spec.md`
 
+## 2026-10-16 10:16 JST 追加検証：初回メッセージの好意表現
+
+- `prompts/first.txt`を更新し、初回候補ごとに主観的な好意とマッチ成立の喜びを明示するようにした。推奨候補には😊または☺️を自然に使い、写真で確認していない容姿の具体的な描写は避ける。APIキー未設定時の固定デモ5案も同じ要件に合わせた。
+- オフライン確認: focused 7 passed、全pytest 1368 passed in 230.78s、Firefox UI 14 passed in 194.79s。`py_compile`、`node --check app.js`、`git diff --check`成功。
+- Gemini実通信: 0回。今回の変更後に実モデルが自然な好意表現を出すかは未検証。QUALITY009の実Gemini候補に対する自然さ・意味的候補多様性FAILは引き続き未解決で、総合判定は**NO-GO**。
+- 変更後のActionsはPush後に確認する。PR #4はOPEN/Draft・未マージ。
+
 ---
 
 ## 2026-10-14 利用制限時の自動切替追加

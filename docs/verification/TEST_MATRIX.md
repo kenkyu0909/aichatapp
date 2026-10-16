@@ -925,6 +925,10 @@ T367のレビュー後最終回帰: 全pytest **1366 passed in 223.60s**（Firef
 
 最新ID行: 369。累計: PASS257 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
 
+| T370 | 初回メッセージの好意・喜び・固定デモ例 | プロンプト確認、固定デモ候補検査、全pytest、Firefox UI | PASS | 2026-10-16 JST。初回用プロンプトに候補ごとの主観的な好意・マッチの喜びを明記し、推奨候補の絵文字方針を追加。固定デモ5案も確認。focused 7 passed、全pytest 1368 passed / 230.78s、Firefox UI 14 passed / 194.79s、`py_compile`と`node --check app.js`成功。実Gemini通信0回のため実生成品質は未確認。関連SHAはコミット後に記録。 |
+
+最新ID行: 370。累計: PASS258 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。歴史的な品質009の手動FAILは保持し、T370のオフラインPASSで置き換えない。
+
 T369報告HEAD `b5204913bc2c5ec9e0176acda66b94c3d3e6c4e5` CI: Push Actions [38828310999](https://github.com/kenkyu0909/aichatapp/actions/runs/38828310999)とPR Actions [38828315505](https://github.com/kenkyu0909/aichatapp/actions/runs/38828315505)は同一SHAでsuccess。Pushログは1366 passed / 1 warning、JavaScript構文検査とartifact保存成功。CI成功はT369の文章品質FAILを変更しない。
 
 最新変更を含むActionsは次のPush後に確認する。1d2f909のPush run [38825261770](https://github.com/kenkyu0909/aichatapp/actions/runs/38825261770)は1 failed / 1365 passed（失敗箇所T368の修正前テスト）、PR run [38825266165](https://github.com/kenkyu0909/aichatapp/actions/runs/38825266165)は同一HEADでsuccess。T368修正後の最新HEAD Actionsを別途確認する。

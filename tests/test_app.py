@@ -692,7 +692,7 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert "3候補では" in backend.read_prompt("first")
     assert "3候補を別々に点検" in backend.read_prompt("first")
     assert "句読点チェックも各候補" in backend.read_prompt("first")
-    assert "軽い好意とマッチできた喜び" in backend.read_prompt("first")
+    assert "主観的な褒め言葉とマッチできた喜び" in backend.read_prompt("first")
     assert "マッチ前" in backend.read_prompt("like")
     assert c.post("/api/generate", json={
         "mode": "first", "match_id": mid, "response_version": 2,
@@ -1856,6 +1856,36 @@ def test_each_generation_mode_has_separate_prompt_with_shared_style(client, mode
     assert "1文ごとに必ず実改行" in prompt
     assert "未完成のテンプレート" in prompt
     assert "会話ですでに答えたことを尋ね返しません" in prompt
+
+
+def test_first_prompt_requires_subjective_interest_and_match_happiness(client):
+    _, backend = client
+    prompt = backend.read_prompt("first")
+
+    assert "主観的な好意" in prompt
+    assert "マッチできた喜び" in prompt
+    assert "推奨候補" in prompt and "絵文字" in prompt
+    assert "相手の容姿や服装" in prompt
+
+
+def test_first_demo_candidates_include_interest_and_match_happiness(client):
+    _, backend = client
+    result = backend.demo_suggestions("first", 5)
+    candidates = [result["recommended"], *result["alternatives"]]
+    interest_markers = (
+        "タイプ", "雰囲気が好み", "雰囲気が気", "プロフィールが気",
+        "お好きなところが素敵", "お好きなところが気にな",
+    )
+    happiness_markers = (
+        "マッチできてうれしい", "マッチできて嬉しい",
+        "マッチできたのがうれしい", "マッチできたのが嬉しい",
+    )
+
+    assert len(candidates) == 5
+    for candidate in candidates:
+        assert any(marker in candidate["text"] for marker in interest_markers), candidate["text"]
+        assert any(marker in candidate["text"] for marker in happiness_markers), candidate["text"]
+    assert any(emoji in candidates[0]["text"] for emoji in ("😊", "☺️"))
 
 
 def test_candidate_validation_rejects_japanese_comma_and_period(client):
