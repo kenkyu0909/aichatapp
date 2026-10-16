@@ -701,6 +701,102 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert c.get(f"/api/matches/{mid}/messages").json() == []
 
 
+@pytest.mark.parametrize(
+    ("text", "required_reason"),
+    [
+        (
+            "マッチありがとうございます😊\nあおいさんめっちゃタイプでうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
+            "初回メッセージの挨拶不足",
+        ),
+        (
+            "はじめまして！\nマッチありがとうございます😊\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
+            "初回メッセージの好意表現不足",
+        ),
+        (
+            "はじめまして！\nプロフィールを見て素敵だなと思っていました😊\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
+            "初回メッセージのマッチ成立の喜び不足",
+        ),
+        (
+            "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでうれしいです！\n休日の旅行も楽しそうですね！\n最近行ったお店ありますか？",
+            "初回メッセージのプロフィール話題不足",
+        ),
+        (
+            "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！",
+            "初回メッセージの質問数不正",
+        ),
+        (
+            "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？\n普段どんなところに行きますか？",
+            "初回メッセージの質問数不正",
+        ),
+    ],
+)
+def test_first_mode_withholds_candidates_missing_required_opening_content(
+    client, text, required_reason
+):
+    c, backend = client
+    match_id = c.post(
+        "/api/matches", json={"name": "架空あおい", "description": "カフェ巡りが好きです"}
+    ).json()["id"]
+    context = backend.build_context(
+        backend.GenerateInput(mode="first", match_id=match_id, response_version=2)
+    )
+    filtered = backend.filter_safe_candidates(
+        backend.SuggestionsV2(
+            needs_user_info=False,
+            user_questions=[],
+            user_info_reason="",
+            recommended=backend.Candidate(label="候補", text=text),
+            alternatives=[],
+            reason="架空テスト",
+            strategy="",
+            conversation_stage="Stage 1",
+            invite_decision="do_not_invite",
+            decision_reason="初回メッセージ",
+            next_action="自然な会話を始める",
+        ),
+        requested_count=1,
+        context=context,
+    )
+
+    assert filtered["available_candidate_count"] == 0
+    assert filtered["generation_blocked"] is True
+    assert required_reason in filtered["candidate_rejections"][0]["reasons"]
+
+
+def test_first_mode_keeps_complete_candidate_and_reports_shortage(client):
+    c, backend = client
+    match_id = c.post(
+        "/api/matches", json={"name": "架空あおい", "description": "カフェ巡りが好きです"}
+    ).json()["id"]
+    context = backend.build_context(
+        backend.GenerateInput(mode="first", match_id=match_id, response_version=2)
+    )
+    complete = "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ってよかったお店ありますか？"
+    incomplete = "こんにちは！\n最近どんなカフェに行きましたか？"
+    filtered = backend.filter_safe_candidates(
+        backend.SuggestionsV2(
+            needs_user_info=False,
+            user_questions=[],
+            user_info_reason="",
+            recommended=backend.Candidate(label="自然な初回文", text=complete),
+            alternatives=[backend.Candidate(label="不足した初回文", text=incomplete)],
+            reason="架空テスト",
+            strategy="",
+            conversation_stage="Stage 1",
+            invite_decision="do_not_invite",
+            decision_reason="初回メッセージ",
+            next_action="自然な会話を始める",
+        ),
+        requested_count=2,
+        context=context,
+    )
+
+    assert filtered["available_candidate_count"] == 1
+    assert filtered["generation_blocked"] is False
+    assert filtered["recommended"]["text"] == complete
+    assert "指定は2案" in filtered["candidate_notice"]
+
+
 def test_all_sendable_modes_require_a_final_language_quality_readthrough(client):
     _, backend = client
     for mode in ("first", "reply", "followup", "like"):
