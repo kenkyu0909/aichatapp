@@ -3,6 +3,7 @@
 (() => {
 const $ = id => document.getElementById(id);
 const state = { matches:[],selectedId:null,messages:[],loadingConversation:false,conversationLoadFailed:false,profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
+const draftsByContact=new Map();
 let timer;
 let contactSelectionEpoch=0;
 const optionalUserQuestionHistory=new Map();
@@ -88,7 +89,10 @@ function renderContacts(){
 async function selectContact(id,relist=true){
   contactSelectionEpoch+=1;
   const selectionEpoch=contactSelectionEpoch;
+  const previousId=state.selectedId;
+  if(previousId!==null&&previousId!==id)draftsByContact.set(previousId,$("message-input").value);
   state.selectedId=id;
+  if(previousId!==id)$("message-input").value=draftsByContact.get(id)||"";
   const generationButtons=[
     [$("first-message"),"🌱 初回メッセージを生成"],
     [$("generate"),$("count").value+"案を生成"],
@@ -220,8 +224,10 @@ async function addMessage(role,override){
   const c=current();if(!c)throw Error("先に相手を登録してください");
   const body=(override===undefined?$("message-input").value:override).trim();
   if(!body)throw Error("メッセージを入力してください");
+  generationRequestSequence+=1;
+  $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   await api("/matches/"+c.id+"/messages",json("POST",{role,body}));
-  if(override===undefined)$("message-input").value="";
+  if(override===undefined){$("message-input").value="";draftsByContact.set(c.id,"");}
   await refreshConversation();
   notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
 }
@@ -424,6 +430,7 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
   const before=button.textContent;button.disabled=true;button.textContent="生成中…";
   try{
     const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:userAnswers,skipped_user_info:skippedUserInfo}));
+    if(requestToken!==generationRequestSequence)return;
     if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed))return;
     area.hidden=false;area.replaceChildren();
     const blocked=result.generation_blocked||(!result.recommended&&(skippedUserInfo||result.skipped_user_info||!result.needs_user_info));
@@ -494,10 +501,18 @@ function profileModal(){
       ["goal","どのような関係を望むか"],["memo","その他の情報・自己紹介"]
     ];
     const inputs={};
-    meta.forEach(([key,label])=>inputs[key]=field(body,label,fields[key]||"",key==="memo"||key==="goal"));
+    meta.forEach(([key,label])=>{
+      const original=fields[key];
+      const displayValue=Array.isArray(original)?original.join("\n"):(original??"");
+      inputs[key]=field(body,label,displayValue,key==="hobbies"||key==="memo"||key==="goal");
+    });
     const avoid=field(body,"言ってほしくないこと・避けたい表現",state.profile.avoid,true);
     modalFooter(body,"プロフィールを保存",async()=>{
-      const content={};meta.forEach(([key])=>content[key]=inputs[key].value.trim());
+      const content={...fields};
+      meta.forEach(([key])=>{
+        const value=inputs[key].value.trim();
+        content[key]=Array.isArray(fields[key])?value.split(/\r?\n/).map(item=>item.trim()).filter(Boolean):value;
+      });
       await api("/profile",json("PUT",{content:JSON.stringify(content),avoid:avoid.value}));
       state.profile={content:JSON.stringify(content),avoid:avoid.value};
       $("modal").close();notice("自分のプロフィールを保存しました");
@@ -572,6 +587,9 @@ function attach(){
   $("edit-contact").onclick=()=>safe(()=>openContactForm(true));
   $("send-them").onclick=()=>safe(()=>addMessage("them"));
   $("send-me").onclick=()=>safe(()=>addMessage("me"));
+  $("message-input").addEventListener("input",()=>{
+    if(state.selectedId!==null)draftsByContact.set(state.selectedId,$("message-input").value);
+  });
   $("message-input").addEventListener("keydown",e=>{
     if(e.ctrlKey&&e.key==="Enter"){e.preventDefault();safe(()=>addMessage("them"));}
   });
