@@ -12446,6 +12446,42 @@ def test_unclassified_first_person_facts_are_not_sendable_without_evidence(clien
     assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
 
 
+@pytest.mark.parametrize("claim", [
+    "毎日パンを食べています！",
+    "毎週食事に出かけています！",
+    "よくパンを買っています！",
+    "毎朝カフェに行っています！",
+])
+def test_unverified_topic_does_not_exempt_frequency_habit_claims(client, claim):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "休日は何をしていますか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の頻度", text=claim)
+
+    assert "未確認の本人事実" in backend.unsupported_personal_claim_topics([candidate], context)
+
+
+@pytest.mark.parametrize("question", ["彼氏はいますか？", "彼女はいますか？", "友達はいますか？"])
+def test_relationship_status_questions_require_scoped_user_confirmation(client, question):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="未確認の関係情報", text="はい！")
+
+    assert backend._is_unclassified_question_about_user(question)
+    assert backend._topic_for_personal_question(question) == "本人情報"
+    assert backend.missing_personal_fact_question(context) is not None
+    assert not backend._answers_verified_partner_question(candidate, context)
+
+
 def test_general_personal_claim_gate_keeps_partner_attribution_and_verified_claim(client):
     _, backend = client
     context = {

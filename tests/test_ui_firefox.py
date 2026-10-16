@@ -2014,6 +2014,82 @@ def test_firefox_message_drafts_are_isolated_per_contact(local_app, firefox):
     assert errors["console"] == []
 
 
+def test_firefox_successful_message_clears_only_its_submitted_draft_after_contact_switch(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "送信中の架空A")
+    add_fictional_contact(driver, "架空B")
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "送信中の架空A")
+    driver.find_element(By.ID, "message-input").send_keys("送信中のAメッセージ")
+    driver.execute_script("""
+      window.__messagePostCount = 0;
+      window.__resolveMessagePost = null;
+      window.__messagePostCompleted = false;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (String(url).endsWith('/messages') && options.method === 'POST') {
+          window.__messagePostCount += 1;
+          return new Promise(resolve => {
+            window.__resolveMessagePost = async () => {
+              const response = await originalFetch(url, options);
+              window.__messagePostCompleted = true;
+              resolve(response);
+            };
+          });
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__messagePostCount === 1"))
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空B")
+    driver.find_element(By.ID, "message-input").send_keys("Bの未送信下書き")
+    driver.execute_script("window.__resolveMessagePost()")
+    WebDriverWait(driver, 8).until(lambda browser: browser.execute_script("return window.__messagePostCompleted"))
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "送信中の架空A")
+    WebDriverWait(driver, 8).until(lambda browser: "送信中のAメッセージ" in browser.find_element(By.ID, "messages").text)
+    assert driver.find_element(By.ID, "message-input").get_attribute("value") == ""
+    driver.find_element(By.CSS_SELECTOR, ".contact-item:not(.active)").click()
+    WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空B")
+    assert driver.find_element(By.ID, "message-input").get_attribute("value") == "Bの未送信下書き"
+    errors = record_artifact("firefox-sent-draft-cleared-after-contact-switch", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_double_click_does_not_submit_duplicate_messages(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "二重送信防止の架空人物")
+    driver.find_element(By.ID, "message-input").send_keys("一度だけ保存する発言")
+    driver.execute_script("""
+      window.__messagePostCount = 0;
+      window.__resolveMessagePosts = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (String(url).endsWith('/messages') && options.method === 'POST') {
+          window.__messagePostCount += 1;
+          return new Promise(resolve => window.__resolveMessagePosts.push(async () => resolve(await originalFetch(url, options))));
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    send = driver.find_element(By.ID, "send-them")
+    send.click()
+    send.click()
+    time.sleep(0.3)
+    assert driver.execute_script("return window.__messagePostCount") == 1
+    driver.execute_script("window.__resolveMessagePosts[0]()")
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
+    assert "一度だけ保存する発言" in driver.find_element(By.ID, "messages").text
+    errors = record_artifact("firefox-double-click-does-not-duplicate-message", driver)
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
 def test_firefox_newer_generation_wins_across_modes_for_same_contact(local_app, firefox):
     driver = firefox
     driver.get(local_app.url)
