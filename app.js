@@ -511,6 +511,7 @@ function profileModal(){
       const content={...fields};
       meta.forEach(([key])=>{
         const value=inputs[key].value.trim();
+        if(!Object.prototype.hasOwnProperty.call(fields,key)&&!value)return;
         content[key]=Array.isArray(fields[key])?value.split(/\r?\n/).map(item=>item.trim()).filter(Boolean):value;
       });
       await api("/profile",json("PUT",{content:JSON.stringify(content),avoid:avoid.value}));
