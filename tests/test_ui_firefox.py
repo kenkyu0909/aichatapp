@@ -1843,7 +1843,12 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
     WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text != "")
 
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     profile_dialog = modal(driver)
+    WebDriverWait(driver, 5).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "#modal-body input")) >= 7
+        and len(browser.find_elements(By.CSS_SELECTOR, "#modal-body textarea")) == 3
+    )
     inputs = profile_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
     input_values = [
         "架空のひなた", "28", "東京都", "デザイナー", "読書とカフェ巡り", "落ち着いた性格", "短く自然な口調"
@@ -1938,7 +1943,12 @@ def test_firefox_saved_profile_is_available_during_first_and_reply_generation(lo
     driver.refresh()
     WebDriverWait(driver, 8).until(lambda browser: browser.find_element(By.ID, "current-name").text == "架空のなな")
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
+    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     restored_dialog = modal(driver)
+    WebDriverWait(driver, 5).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "#modal-body input")) >= 7
+        and len(browser.find_elements(By.CSS_SELECTOR, "#modal-body textarea")) == 3
+    )
     restored_inputs = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")
     assert [field.get_attribute("value") for field in restored_inputs[:7]] == input_values
     restored_textareas = restored_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")
