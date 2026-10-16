@@ -1430,4 +1430,6 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - ユーザーの依頼に基づき、架空プロフィール・一時SQLiteで既存FastAPI `/api/generate` を1回だけ実行。実応答はHTTP 200、`demo=false`、API1 / `gemini-3.5-flash-lite`、provider attempt 1回。APIキー値は表示・保存していない。API2/別モデルへの切替や再試行はしていない。
 - Geminiは候補を返したが、安全検査後に利用可能だったのは指定3案中2案。実出力は「素敵な休日ですね！」と「落ち着いた雰囲気のお店ですか？」。疎通は確認できた一方、3案要求を満たさず、1案目も会話を前進させにくい。T369は生成品質FAILとして記録し、実API検証全体をPASSにしない。
 - 追加API通信は行わない。実験DBは一時ディレクトリで、本番DB・プロフィールに触れていない。会話004と新規会話HTMLも未実施。総合NO-GOを維持する。
-- 次: T369をTEST_MATRIX / FINAL_REPORT / OVERNIGHT_GOALへ記録してGitHubへPushし、最新SHAのActionsとPR #4のDraft状態を確認する。品質改善はAPI通信なしのオフライン作業に戻す。
+- T369と実API結果を4つの検証資料へ記録し、コミット `b5204913bc2c5ec9e0176acda66b94c3d3e6c4e5` としてPush。
+- 同SHAのPush Actions [38828310999](https://github.com/kenkyu0909/aichatapp/actions/runs/38828310999) とPR Actions [38828315505](https://github.com/kenkyu0909/aichatapp/actions/runs/38828315505) はともにsuccess。Pushログは1366 passed / 1 warning、JavaScript構文確認成功。
+- PR #4は同SHAでOPEN/Draft、base `feat/ui-local-backend-v1`、未マージ。次: GitHub Actions証拠と実API品質FAILをPR説明にも記録し、追加API通信なしでオフライン改善を続ける。

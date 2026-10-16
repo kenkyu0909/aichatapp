@@ -1138,3 +1138,4 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 指定3案のうち安全検査後は2案。生成文「素敵な休日ですね！」は会話を進めにくく、候補数も不足したため実API文章品質はFAIL。疎通が成功したことだけをPASSとし、自然さや候補多様性は合格扱いしない。
 - ゴール7の安定性を損なう挙動はこの単発試行では見つからなかったが、全体回帰は再実施していない。API残量・料金は未確認。課金設定変更なし。総合NO-GO。
 - 次: 実APIは追加使用せず、保存済み失敗出力と候補不足時の応答をオフラインで分析。会話004、新規HTML、Chrome、PRマージは引き続き禁止。
+- 記録コミット`b5204913bc2c5ec9e0176acda66b94c3d3e6c4e5`のPush Actions [38828310999](https://github.com/kenkyu0909/aichatapp/actions/runs/38828310999)とPR Actions [38828315505](https://github.com/kenkyu0909/aichatapp/actions/runs/38828315505)は同じSHAでsuccess。pytest 1366 passed / 1 warning。これはオフライン回帰成功でありT369の実生成品質FAILを解消しない。
