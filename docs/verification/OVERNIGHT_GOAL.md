@@ -1125,3 +1125,10 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - `quality_checks_009.json`内の直接質問代替、未確認の本人事実、不安を軽く扱う候補を現行パイプラインで再確認。既知の不適切案は除外され、安全な案を残して不足を通知する。保存JSONの回帰と直接質問/拒否候補のfocused確認は9 passed in 1.68s。Test IDの重複加算なし。
 - 最新docs HEAD `27c6b2c933363b13e42eb67d481c87871f3131d5`のPush/PR Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) / [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188)は同一SHAでsuccess。JUnit 1366件、fail/error/skipped各0。
 - 保存済み実Gemini出力に由来する自然さ・意味的多様性FAILは未解決。オフラインのフィルター合格で実生成品質を合格扱いしない。実API 0回。PR本文の更新済み。次は最新作業HEADへの本追補、Actions再確認、および実利用上の追加P0がないか限定監査。会話004・新HTMLは禁止。
+
+
+##### 2026-10-16 09:05 JST: 最新CI完了と8765の安全確認
+
+- `70e60530aae590e4f21bb6c562b21e31f01d3061`のPush run [38827109927](https://github.com/kenkyu0909/aichatapp/actions/runs/38827109927)とPR run [38827115882](https://github.com/kenkyu0909/aichatapp/actions/runs/38827115882)が同一SHAでsuccess。JUnit 1366件 / 失敗0 / error0 / skipped0。
+- 8765はPID 39504のWindows Store Pythonが使用し、status応答だけでは本アプリと確認できないため停止しなかった。T02 BLOCKED、T69 NOT_TESTED。別ポート8767でのT286隔離Windows/FirefoxテストPASSは保持。
+- QUALITY009の現行安全フィルター再生と関連回帰9件はPASSだが、実際の過去Gemini生成で観測された自然さ・候補意味多様性FAILは残る。GO条件は未達、実API通信0。PR #4はOPEN/Draft。

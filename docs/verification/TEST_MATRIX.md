@@ -5,7 +5,7 @@
 | ID | テスト項目 | 実施方法 | 結果 | 証拠・備考 |
 |---|---|---|---|---|
 | T01 | アプリ起動（Python） | Python 3.12.10、Uvicorn | PASS | `127.0.0.1:8767`で起動。再起動も実施。 |
-| T02 | Windows `start.bat`起動（既定ポート8765） | 実機で実行 | BLOCKED | 2026-10-14に加え、2026-10-15も127.0.0.1:8765をPID 39504のPython 3.12プロセスが占有。HTTP 200だが`/api/status`の`app_id`が空で、今回のアプリか確認できないため停止せず、既定ポートの起動は未実施。別ポートでの実機起動はT286を参照。 |
+| T02 | Windows `start.bat`起動（既定ポート8765） | 実機で実行 | BLOCKED | 2026-10-14/15/16にread-onlyで確認。8765番はPID 39504のWindows Store版Python 3.12がlistenし、`/api/status`の`app_id`/`host`/`status`はnull。今回のアプリと特定できないためプロセスは停止・変更せず、8765での起動再試験は未実施。別ポート8767の隔離起動はT286 PASS。 |
 | T03 | ローカルURL HTTP 200 | HTTP確認 | PASS | `/`が200。 |
 | T04 | HTML・CSS・JavaScript配信 | HTTP確認 | PASS | `/`、`/style.css`、`/app.js`が200。 |
 | T05 | ブラウザーJavaScript Console | Windows 11、Python 3.12.10、Selenium Firefox。アプリ起動・プロフィール・相手追加/切替・メッセージ追加/編集/削除・返信・いいね・設定・再読込を操作し、ページへ例外・未処理Promise拒否・console.error監視を追加 | PASS | Firefox UI自動操作でruntime/console errorsはいずれも空。直接の開発者ツールConsole採取ではなく、ページ側監視。ログ・スクリーンショットはActions [38518482078](https://github.com/kenkyu0909/aichatapp/actions/runs/38518482078) の`offline-test-results` artifact（実行SHA `dcf5dbd6838117b1fd28dde99efcc8e2227538b8`）。テスト: `tests/test_ui_firefox.py`。 |
@@ -932,3 +932,10 @@ T368最終CI追補: 最新SHA `a941ac478dd443bb525928e2e17f473acb774575` のPush
 
 
 QUALITY009再生focused監査（既存項目の補足、件数の重複加算なし）: `tests/test_quality_checks_009.py`と直接質問/拒否後候補フィルターを合わせて9 passed in 1.68s。未確認事実・質問すり替え・不安を軽く扱う既知候補の除外と安全候補不足通知を確認。最新検証HEAD `27c6b2c933363b13e42eb67d481c87871f3131d5` のPush Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824) / PR Actions [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188) は同一SHAでsuccess。JUnit: 1366 / 0 failures / 0 errors / 0 skipped。
+
+### 2026-10-16 09:05 JST 最終CI・Windowsポート状態
+
+- 最新HEAD `70e60530aae590e4f21bb6c562b21e31f01d3061` のPush Actions [38827109927](https://github.com/kenkyu0909/aichatapp/actions/runs/38827109927) とPR Actions [38827115882](https://github.com/kenkyu0909/aichatapp/actions/runs/38827115882) は同一SHAでsuccess。Push artifactのJUnitは**1366 tests / 0 failures / 0 errors / 0 skipped**。PR #4はOPEN/Draft、未マージ。
+- QUALITY009保存候補の安全再生・直接質問・拒否後候補に関するfocused監査は9 passed。具体的な既知不適切候補は除外され、安全な候補を残して不足を通知する。未解決の実生成自然さ・意味的多様性FAILは維持。Gemini実通信0回。
+- Windows `127.0.0.1:8765`はPID 39504のWindows Store版Python 3.12が待受。read-only `/api/status`はアプリ識別フィールドがnull。所有アプリと特定できないため停止・変更せず、T02はBLOCKED、T69はNOT_TESTEDのまま。T286の一時データ/8767/Firefox隔離起動PASSは別結果として維持。
+- PR本文はT367/T368およびQUALITY009監査の結果を追補済み。

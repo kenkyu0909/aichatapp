@@ -1416,3 +1416,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - QUALITY009の保存済み候補を現行フィルターへ再投入するfocused監査と、直接質問・拒否後候補フィルターを含む重点セットは**9 passed in 1.68s**。具体的な既知の危険候補は除外され、安全候補を残して不足通知する。新しいTest IDは増やしていない。
 - 保存済み実Gemini出力の代替案すり替え・未確認本人事実・断り後の不安軽視は当時の品質FAILとして残す。現行フィルターでの除外はオフライン回帰であり、修正後の実Gemini品質PASSを示さない。実API 0回。
 - PR本文へT367/T368結果と現時点の制約を追記済み。PR #4はOPEN/Draft、未マージ。
+
+
+### 2026-10-16 09:05 JST 最新HEAD確認・既定ポートを非侵襲確認
+
+- `70e60530aae590e4f21bb6c562b21e31f01d3061` のPush Actions [38827109927](https://github.com/kenkyu0909/aichatapp/actions/runs/38827109927) / PR Actions [38827115882](https://github.com/kenkyu0909/aichatapp/actions/runs/38827115882) は同一SHAでsuccess。artifactのJUnitは1366件、fail/error/skip各0。PR #4はOPEN/Draft・未マージ。
+- Windows上の8765 listenerを読み取り専用で確認。PID 39504はWindows Store版Python 3.12。`/api/status`の識別欄はnullでアプリ所有と断定できず、既存プロセスを停止・変更しなかった。T02 BLOCKED / T69 NOT_TESTEDを維持。T286の別ポート8767隔離起動PASSと区別する。
+- QUALITY009保存候補の現行安全フィルター再生と直接質問/拒否後ルールの重点回帰は9 passed。危険な保存候補は送信可能候補から除外され安全案不足を通知。過去の実Gemini文章品質FAILは残る。実通信0回。
+- PR本文へ監査状況を追補。コード変更なし。次: 15〜20分ごとの指示ブランチ確認を続け、最新文書HEADのActions完了後にPR状態を再確認する。未解決の実生成自然さ・候補多様性をPASSへ変えない。

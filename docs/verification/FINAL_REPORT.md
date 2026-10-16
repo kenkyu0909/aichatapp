@@ -1472,3 +1472,11 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - `27c6b2c933363b13e42eb67d481c87871f3131d5`のPush Actions [38826749824](https://github.com/kenkyu0909/aichatapp/actions/runs/38826749824)とPR Actions [38826754188](https://github.com/kenkyu0909/aichatapp/actions/runs/38826754188)は同一HEADでsuccess。JUnit artifactで1366 tests / 0 failures / 0 errors / 0 skippedを確認。
 - QUALITY009保存出力と関連安全フィルターのfocused監査は9 passed。危険な既知候補は除外され、安全候補と不足通知を維持する。これはオフライン結果。歴史的実Gemini品質FAILは未解決。
 - PR本文にT367/T368の要約、Actions証拠、未解決FAILを追記。PR #4はOPEN/Draft・未マージ。総合NO-GO。
+
+
+## 2026-10-16 09:05 JST 最終追補
+
+- 最新コード・検証SHA `70e60530aae590e4f21bb6c562b21e31f01d3061`: Push Actions [38827109927](https://github.com/kenkyu0909/aichatapp/actions/runs/38827109927)、PR Actions [38827115882](https://github.com/kenkyu0909/aichatapp/actions/runs/38827115882)、同一SHAでsuccess。JUnit artifactは1366 tests / 0 failures / 0 errors / 0 skipped。
+- 保存済みQUALITY009候補の安全再生と質問/断り境界のfocused監査は9 passed。これは現行オフラインフィルター結果であり、元の実Gemini品質FAIL（自然さ・意味的候補多様性）は未解決。総合NO-GOを維持。Gemini通信0回。
+- 8765の既存listener PID 39504はWindows Store Python 3.12で、read-only statusに識別値がない。安全上停止・変更せず、既定ポート起動はBLOCKED。隔離8767のWindows/Firefoxテストとは分けて記録。
+- PR #4はOPEN/Draft・未マージ。
