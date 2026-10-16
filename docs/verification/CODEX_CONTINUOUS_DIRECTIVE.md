@@ -315,3 +315,9 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 - 既存「Codex開発・毎時監査」automation ID `6ad054c48248819199fe51f70575d82f` は存在するが、監査時点で `is_enabled=false`、`next_run_time=null`。前回実行表示は `2026-10-16T11:06:49Z`。実行継続中とは見なさない。
 - この環境のオートメーション作成/更新では毎時の定期実行がサポート対象外のため、同じ処理の重複automationを作成しない。毎時00分の実行を保証できない旨をユーザーへ明示し、利用可能な代替手段を別途判断する。存在するだけで実行済みと報告しない。
 - 期限の「2026-10-16夜」は本監査時点で進行中。期限到達・経過だけを理由に未解決P0を完了扱いにしない。
+
+
+### Hourly schedule fallback — 2026-10-16
+- Added `.github/workflows/hourly-github-audit.yml` on `main` with GitHub Actions cron `0 * * * *` (UTC; corresponds to every hour at :00 JST), plus manual `workflow_dispatch`.
+- The workflow checks the development branch HEAD, PR #4 state, and latest Actions run, then appends a factual snapshot to this directive on `codex/directive-control`. This is repository-state automation, not an LLM-based quality review; P0 quality evidence still requires explicit review.
+- Do not treat the ChatGPT automation's `next_run_time=null` as repaired. Verify the GitHub Actions workflow run and push permissions at the first scheduled run; report any failure honestly.
