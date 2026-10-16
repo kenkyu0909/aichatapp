@@ -1714,3 +1714,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
 - 次: 検証#3推奨のD03サブステップ（`build_ephemeral_confirmations`: 派生のみ・非永続の構造化確認レコード、`confirmation_state="ephemeral"`）を実装する。
 
+### 2026-10-17 01:15 JST D03サブステップ（一時確認の構造化レコード）
+
+- `build_ephemeral_confirmations(answers, *, match_id)` を追加。各確認回答へ `question_id`（`_normalize_clarification_question_key` でNFKC正規化）・`subject`（`_question_topic`）・`requested_slot`（`_optional_user_question_scope_key`）・`question`・`value`・`source="user_confirmation"`・`confirmation_state="ephemeral"`・`match_id` を付与。
+- `build_context` に `ephemeral_confirmations` を追加（`ephemeral_user_answers` は不変、後方互換）。派生のみで永続化せず、プロフィール昇格は明示確認時のみ（handoff §176-177）。
+- 検証: focused 4 passed、`tests/test_app.py` 1704 passed、全pytest **1813 passed in 381.83s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38921527169](https://github.com/kenkyu0909/aichatapp/actions/runs/38921527169) / PR [38921536322](https://github.com/kenkyu0909/aichatapp/actions/runs/38921536322) は同一SHA `73c8bee` でsuccess（CI **1813 passed / 1 warning in 235.63s**）。PR #4はDraft・未マージ。
+- 総合NO-GO維持。保護対象の未追跡指示ファイル3件保持。
+- 次: D03の永続化ステップ（明示確認時のみ confirmed_facts をプロフィールへ保存、schema version と移行/ロールバック規則、`superseded_by` 等での矛盾解消）と、エンドポイントの同一質問異回答400の扱い整理。検証エージェントで次サブステップを確定する。
+

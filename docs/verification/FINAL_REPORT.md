@@ -1661,6 +1661,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38909079672](https://github.com/kenkyu0909/aichatapp/actions/runs/38909079672) とPR [38909087505](https://github.com/kenkyu0909/aichatapp/actions/runs/38909087505) が同一SHA `17aef51` でsuccess（CI **1787 passed / 1 warning in 220.98s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 01:15 JST D03サブステップ（一時確認の構造化レコード）
+
+- `build_ephemeral_confirmations` を追加し、各確認回答を `question_id`・`subject`・`requested_slot`・`question`・`value`・`source="user_confirmation"`・`confirmation_state="ephemeral"`・`match_id` を持つ構造化レコードとして提示する。`build_context` に `ephemeral_confirmations` を追加し、`ephemeral_user_answers` は不変に保つ。
+- 派生的に毎リクエスト生成し永続化しない。プロフィールへの昇格は明示的な確認を必要とする（handoff §176-177）。等価な質問文は同一の `question_id`、異なる質問は別の `question_id` になる。
+- 検証: focused 4 passed、`tests/test_app.py` 1704 passed、全pytest **1813 passed in 381.83s**（Firefox UI含む）。`ast.parse(app.py)`成功。Gemini実通信0回。
+- Actions: Push [38921527169](https://github.com/kenkyu0909/aichatapp/actions/runs/38921527169) とPR [38921536322](https://github.com/kenkyu0909/aichatapp/actions/runs/38921536322) が同一SHA `73c8bee` でsuccess（CI **1813 passed / 1 warning in 235.63s**）。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 00:40 JST 検証エージェント指摘の反映（テ形スコープ・近未来誘い精度）
 
 - 検証エージェント#3が `11c6dbc` と `32db88a` の回帰を検出した。テ形の本人映画質問（`観てる映画の評価はどれですか？` 等）が下流分類器のテ形未対応で本人確認から漏れ、近未来誘いブランチは `近いうちに食事でもどうですか？` のような「どうですか」提案を漏らしつつ `近日中には間に合いません`・`近いうちに来ませんね`・`近いうちにまた連絡しましょう` のような否定/非提案文を誘いと誤認していた。
