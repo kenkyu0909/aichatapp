@@ -321,3 +321,10 @@ Codexは`docs/verification/PROGRESS.md`の末尾に最新チェックポイン�
 - Added `.github/workflows/hourly-github-audit.yml` on `main` with GitHub Actions cron `0 * * * *` (UTC; corresponds to every hour at :00 JST), plus manual `workflow_dispatch`.
 - The workflow checks the development branch HEAD, PR #4 state, and latest Actions run, then appends a factual snapshot to this directive on `codex/directive-control`. This is repository-state automation, not an LLM-based quality review; P0 quality evidence still requires explicit review.
 - Do not treat the ChatGPT automation's `next_run_time=null` as repaired. Verify the GitHub Actions workflow run and push permissions at the first scheduled run; report any failure honestly.
+
+## Scheduled GitHub audit — 2026-10-16 15:41 UTC
+- Development branch HEAD: a46ae59c18d23b4da98475770e5a09a607690e04
+- Draft PR #4: state=open, draft=true, merged=false, PR head=a46ae59c18d23b4da98475770e5a09a607690e04
+- Latest Actions run for codex/full-system-verification: id=38926007321, status=in_progress, conclusion=pending/none, head_sha=a46ae59c18d23b4da98475770e5a09a607690e04
+- This is a factual repository-state snapshot only; CI success does not establish product-quality PASS. Review P0 failures and the latest quality evidence before declaring completion.
+- Safety constraints remain: do not merge PR #4; do not create conversation_004 or new conversation HTML without explicit permission; protect secrets, production data, billing, and approved API limits.
