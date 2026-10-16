@@ -1163,3 +1163,10 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - 共通プロンプトの相槌が具体化されておらず、絵文字も控えめにする指示だけだった点を修正。文脈に応じた相槌、相槌なし、明るい返信での絵文字検討、深刻/拒否場面での抑制を追加。
 - T372 PASS: focused 5 passed。これはプロンプト内容のオフライン確認で、実Gemini出力の評価ではない。T369実生成品質FAIL、GO未達を維持。
 - 次: 更新をコミット・Pushして最新HEADのCIを確認し、保存済み生成で直接質問に答えない代替案と意味的に重なる候補を監査する。
+
+
+### 2026-10-16 10:30 JST 全体回帰チェックポイント
+
+- Windowsローカル全pytest **1369 passed in 234.27s**。GitHub Actionsは最新HEAD `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`のPush [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552)・PR [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980)ともsuccess、CI pytest 1369 passed、JavaScript構文検査成功。
+- ゴール7のオフライン回帰はPASS。実生成自然さ・意味的多様性の既存FAILがあるため総合はNO-GOを維持。ゴール1〜6も網羅ベンチマーク全体が再評価済みではない。
+- PR #4はOPEN/Draft・未マージ。次は保存済みQUALITY009の本人回答済み直接質問に答えない候補、候補の意味的重複、共感反復を限定的に監査する。

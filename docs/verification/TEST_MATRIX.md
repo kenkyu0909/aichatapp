@@ -957,3 +957,6 @@ QUALITY009再生focused監査（既存項目の補足、件数の重複加算な
 | T372 | 文脈に合う相槌と絵文字の検討 | 共通プロンプト契約テスト（pytest、オフライン） | PASS | 明るい通常会話では3案中1案以上の絵文字を積極的に検討し、文脈に合う相槌・相槌なし・同義反復の回避・深刻/拒否場面での抑制を明記。修正前は相槌例がなく focused testがFAIL。修正後は共通プロンプトを4モードで読むfocused suite 5 passed / 1272 deselected。実Gemini品質は未検証。 |
 
 最新ID行: 372。累計: PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。T369の実生成品質FAILは維持。
+
+
+T371/T372最新HEAD CI追補: `3e6a20f9b64150e83a9cb047047c0a6aa872dba7`のPush Actions [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552)とPR Actions [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980)は同一SHAでsuccess。CI pytest **1369 passed / 1 warning**、`node --check app.js`成功、offline-test-results artifact保存成功。Windowsローカル全pytest **1369 passed in 234.27s**。これはオフラインテストで、T369の実Gemini品質FAILを解消しない。

@@ -1459,3 +1459,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - focused test 5 passed / 1272 deselected（4モード共通prompt契約を含む）。実API通信0回。静的指示の確認で、実生成の自然さ・頻度改善は未確認。
 - T372を追加。総372項目: PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
 - 次: 差分と関連プロンプトの矛盾を確認しコミット・Push。Actionsを最新SHAで確認後、保存済み生成の質問回答漏れと候補多様性をオフラインで次に監査する。会話004/新規HTML/Gemini通信なし。
+
+
+### 2026-10-16 10:30 JST 最新HEAD回帰・Actions確認
+
+- 最新HEAD `3e6a20f9b64150e83a9cb047047c0a6aa872dba7` のPush Actions [38835061552](https://github.com/kenkyu0909/aichatapp/actions/runs/38835061552) とPR Actions [38835066980](https://github.com/kenkyu0909/aichatapp/actions/runs/38835066980) は同一SHAでsuccess。CI pytest 1369 passed / 1 warning、JavaScript構文検査・artifact保存も成功。
+- Windowsローカル全pytest 1369 passed in 234.27s。Firefox UIテストを含む全suite。今回のテストはAPI・UIオフライン検証のみで、Gemini実通信0回。
+- T371/T372の累計: 372件、PASS260 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。過去の品質009実生成自然さ・候補多様性FAILは維持。
+- PR #4は最新SHAでOPEN/Draft・未マージ。次は保存済み品質009出力を使い、本人回答済みの直接質問に各候補が答えることと候補方針の差を再監査する。会話004・新HTML・Gemini通信は行わない。
