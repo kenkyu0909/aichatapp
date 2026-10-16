@@ -1480,3 +1480,10 @@ SHA `fcfd2ed07b8337a90dcc86b3e3729c883dac3492` のPush Actions [38785759890](htt
 - 保存済みQUALITY009候補の安全再生と質問/断り境界のfocused監査は9 passed。これは現行オフラインフィルター結果であり、元の実Gemini品質FAIL（自然さ・意味的候補多様性）は未解決。総合NO-GOを維持。Gemini通信0回。
 - 8765の既存listener PID 39504はWindows Store Python 3.12で、read-only statusに識別値がない。安全上停止・変更せず、既定ポート起動はBLOCKED。隔離8767のWindows/Firefoxテストとは分けて記録。
 - PR #4はOPEN/Draft・未マージ。
+# 2026-10-16 09:13 JST 実Gemini単発確認 追補
+
+- 実API通信: 1論理リクエスト / provider attempt 1回。既存FastAPI `/api/generate` 経由で、隔離SQLiteの架空データを使用。
+- 結果: HTTP 200、`demo=false`、API1 / `gemini-3.5-flash-lite`。APIキーは出力・保存していない。API2や別モデルへフォールバックせず、追加呼び出しもしていない。
+- 品質: 3案要求に対し安全検査後2案でFAIL。候補は「素敵な休日ですね！」と「落ち着いた雰囲気のお店ですか？」。疎通成功と文章品質は別判定とし、自然さ・候補数の問題を解消済みとしない。
+- 料金・残りクォータは確認していないため断定しない。課金設定は変更していない。再通信なし。
+- この結果は過去QUALITY009のFAILを取り消さず、総合NO-GOを維持する。会話004、新規HTML、PRマージは実施していない。

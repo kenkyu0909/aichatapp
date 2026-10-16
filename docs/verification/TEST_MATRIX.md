@@ -921,6 +921,10 @@ T367のレビュー後最終回帰: 全pytest **1366 passed in 223.60s**（Firef
 
 最新ID行: 368。累計: PASS257 / FAIL13 / FIXED78 / BLOCKED5 / NOT_TESTED15。
 
+| T369 | 既存アプリ経由のGemini実API単発疎通と候補品質確認 | `/api/generate`、隔離SQLite、実Gemini API | FAIL（疎通PASS / 品質FAIL） | 2026-10-16 09:13 JST、架空プロフィールで1論理リクエスト・provider attempt 1回。HTTP 200、`demo=false`、API1 / `gemini-3.5-flash-lite`。指定3案に対し安全検査後の候補は2案。実出力「素敵な休日ですね！」「落ち着いた雰囲気のお店ですか？」。外部API到達は確認できたが候補数不足、最初の案は会話を進めにくく、品質テストはFAIL。APIキー非表示、再試行・別モデル切替なし。本番DB不使用。 |
+
+最新ID行: 369。累計: PASS257 / FAIL14 / FIXED78 / BLOCKED5 / NOT_TESTED15。
+
 最新変更を含むActionsは次のPush後に確認する。1d2f909のPush run [38825261770](https://github.com/kenkyu0909/aichatapp/actions/runs/38825261770)は1 failed / 1365 passed（失敗箇所T368の修正前テスト）、PR run [38825266165](https://github.com/kenkyu0909/aichatapp/actions/runs/38825266165)は同一HEADでsuccess。T368修正後の最新HEAD Actionsを別途確認する。
 
 T366 CI追補: T366を含むSHA `e93aef60486e89a7e0d6ba9554b592f1276a0d68`のPush Actions [38820922000](https://github.com/kenkyu0909/aichatapp/actions/runs/38820922000)とPR Actions [38820929128](https://github.com/kenkyu0909/aichatapp/actions/runs/38820929128)は同一head SHAでsuccess。両workflowでpytestとJavaScript syntax check、Firefox準備、artifact uploadが成功。ローカル全pytestは1365 passed in 198.20s。T366を含む次のdocs-only HEADについては別途CIを確認する。

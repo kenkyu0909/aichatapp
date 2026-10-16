@@ -1132,3 +1132,9 @@ SHA `528d101a50b5b853ddf5044d1a5441aff64ceddb` のPush [Actions 38770088351](htt
 - `70e60530aae590e4f21bb6c562b21e31f01d3061`のPush run [38827109927](https://github.com/kenkyu0909/aichatapp/actions/runs/38827109927)とPR run [38827115882](https://github.com/kenkyu0909/aichatapp/actions/runs/38827115882)が同一SHAでsuccess。JUnit 1366件 / 失敗0 / error0 / skipped0。
 - 8765はPID 39504のWindows Store Pythonが使用し、status応答だけでは本アプリと確認できないため停止しなかった。T02 BLOCKED、T69 NOT_TESTED。別ポート8767でのT286隔離Windows/FirefoxテストPASSは保持。
 - QUALITY009の現行安全フィルター再生と関連回帰9件はPASSだが、実際の過去Gemini生成で観測された自然さ・候補意味多様性FAILは残る。GO条件は未達、実API通信0。PR #4はOPEN/Draft。
+##### 2026-10-16 09:13 JST: ユーザー依頼による実Gemini単発試行
+
+- 実際に既存FastAPI `/api/generate` から1論理要求を送信し、隔離SQLiteの架空データを使用。API1 / `gemini-3.5-flash-lite`、HTTP 200、`demo=false`、provider attempt 1。キー値は表示・保存せず、別モデルへの切替や再試行はしていない。
+- 指定3案のうち安全検査後は2案。生成文「素敵な休日ですね！」は会話を進めにくく、候補数も不足したため実API文章品質はFAIL。疎通が成功したことだけをPASSとし、自然さや候補多様性は合格扱いしない。
+- ゴール7の安定性を損なう挙動はこの単発試行では見つからなかったが、全体回帰は再実施していない。API残量・料金は未確認。課金設定変更なし。総合NO-GO。
+- 次: 実APIは追加使用せず、保存済み失敗出力と候補不足時の応答をオフラインで分析。会話004、新規HTML、Chrome、PRマージは引き続き禁止。

@@ -1424,3 +1424,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Windows上の8765 listenerを読み取り専用で確認。PID 39504はWindows Store版Python 3.12。`/api/status`の識別欄はnullでアプリ所有と断定できず、既存プロセスを停止・変更しなかった。T02 BLOCKED / T69 NOT_TESTEDを維持。T286の別ポート8767隔離起動PASSと区別する。
 - QUALITY009保存候補の現行安全フィルター再生と直接質問/拒否後ルールの重点回帰は9 passed。危険な保存候補は送信可能候補から除外され安全案不足を通知。過去の実Gemini文章品質FAILは残る。実通信0回。
 - PR本文へ監査状況を追補。コード変更なし。次: 15〜20分ごとの指示ブランチ確認を続け、最新文書HEADのActions完了後にPR状態を再確認する。未解決の実生成自然さ・候補多様性をPASSへ変えない。
+
+### 2026-10-16 09:13 JST 実Gemini単発疎通確認
+
+- ユーザーの依頼に基づき、架空プロフィール・一時SQLiteで既存FastAPI `/api/generate` を1回だけ実行。実応答はHTTP 200、`demo=false`、API1 / `gemini-3.5-flash-lite`、provider attempt 1回。APIキー値は表示・保存していない。API2/別モデルへの切替や再試行はしていない。
+- Geminiは候補を返したが、安全検査後に利用可能だったのは指定3案中2案。実出力は「素敵な休日ですね！」と「落ち着いた雰囲気のお店ですか？」。疎通は確認できた一方、3案要求を満たさず、1案目も会話を前進させにくい。T369は生成品質FAILとして記録し、実API検証全体をPASSにしない。
+- 追加API通信は行わない。実験DBは一時ディレクトリで、本番DB・プロフィールに触れていない。会話004と新規会話HTMLも未実施。総合NO-GOを維持する。
+- 次: T369をTEST_MATRIX / FINAL_REPORT / OVERNIGHT_GOALへ記録してGitHubへPushし、最新SHAのActionsとPR #4のDraft状態を確認する。品質改善はAPI通信なしのオフライン作業に戻す。
