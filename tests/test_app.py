@@ -12465,7 +12465,10 @@ def test_unverified_topic_does_not_exempt_frequency_habit_claims(client, claim):
     assert "未確認の本人事実" in backend.unsupported_personal_claim_topics([candidate], context)
 
 
-@pytest.mark.parametrize("question", ["彼氏はいますか？", "彼女はいますか？", "友達はいますか？"])
+@pytest.mark.parametrize("question", [
+    "彼氏はいますか？", "彼女はいますか？", "友達はいますか？",
+    "付き合っている人はいますか？", "今付き合ってる人いる？", "恋人っている？",
+])
 def test_relationship_status_questions_require_scoped_user_confirmation(client, question):
     _, backend = client
     context = {
@@ -12480,6 +12483,35 @@ def test_relationship_status_questions_require_scoped_user_confirmation(client, 
     assert backend._topic_for_personal_question(question) == "本人情報"
     assert backend.missing_personal_fact_question(context) is not None
     assert not backend._answers_verified_partner_question(candidate, context)
+
+
+def test_matching_frequency_on_a_different_activity_does_not_ground_personal_habit(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {
+            "favorite_foods": ["パンが好き"],
+            "cafe_habit": "毎朝カフェに行っています",
+        }},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="別の習慣", text="毎朝パンを食べています！")
+
+    assert backend._has_unverified_general_personal_claim(candidate.text, context)
+
+    context["my_profile"]["facts"] = {"food_habit": "毎朝パンを買っています"}
+    assert backend._has_unverified_general_personal_claim(candidate.text, context)
+
+
+def test_frequency_habit_is_supported_only_by_matching_activity_evidence(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {"cafe_habit": "毎朝カフェに行っています"}},
+        "ephemeral_user_answers": [],
+    }
+
+    assert not backend._has_unverified_general_personal_claim("毎朝カフェに行っています！", context)
 
 
 def test_general_personal_claim_gate_keeps_partner_attribution_and_verified_claim(client):
