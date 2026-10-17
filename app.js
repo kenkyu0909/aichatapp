@@ -313,7 +313,8 @@ async function openContactForm(edit=false){
       createdId=data.id;
       if(upload){
         const form=new FormData();form.append("file",upload);
-        await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});
+        try{await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});}
+        catch(err){await loadMatches(data.id);throw err;}
       }
       $("modal").close();await loadMatches(data.id);notice("相手の情報を保存しました");
     });
@@ -643,6 +644,7 @@ async function profileModal(){
       }
       await api("/profile",json("PUT",{content:JSON.stringify(content),avoid:avoid.value}));
       state.profile={content:JSON.stringify(content),avoid:avoid.value};
+      invalidateGenerationResults();
       $("modal").close();notice("自分のプロフィールを保存しました");
     });
   });
