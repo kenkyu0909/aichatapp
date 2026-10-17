@@ -1145,5 +1145,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 | T462 | 休日質問ガード・日時場所提案エスカレーション・自己重複棄却（T462） | pytest。`app.py`・`prompts/reply.txt` | FIXED | 相手からの休日・ルーティン質問を回避する候補を棄却するガード、相手からの具体的日時・場所の提案を本人の意向確認へエスカレーションするチェック（`_is_concrete_date_or_place_proposal`）、直前発言と類似・重複する候補の棄却ガード（`_is_duplicate_or_near_identical_to_prior_me`）、および相手の新情報に対する冒頭相槌・共感のプロンプト指示を追加。全pytest **1,932 passed**。commit `b17ecee`。 |
 | T463 | カフェ好み確認質問回答による一般カフェ質問の検証完了対応 | pytest。`_topic_is_verified` | FIXED | ユーザーがカフェ好みに関する確認質問（`personal_fact_question`）に回答した際、一般のカフェ質問も検証済みとして認識されるよう `_topic_is_verified("カフェ好み")` を補正。回帰テスト追加。全pytest **1,932 passed**。commit `37d0e8e`。 |
 | T464 | 読書質問回答の事実検証連携・未分類回答スコープ照合・文体整合（T464） | pytest＋実API文体短編再検証（`conversation_test_20261018_casual_v2.html` / `mixed_v2.html`） | FIXED | 相手の読書質問（「普段どんな本読むの？」）に対するユーザーの最近の読書回答（「星新一のショートショート」）が「普段」語彙スキップやスコープ不一致で棄却されていた不具合を修正。候補が未確認の習慣を偽称する場合のみ除外するよう `app.py:6825` を厳密化し、`_ephemeral_answer_addresses_question` を読書照合に接続。`_unclassified_personal_question_user_answer` にトピックスコープ照合を追加し別トピック回答の誤引用を防止。初回・返信プロンプトおよびフォールバックでのタメ口・混合文体支持、自プロファイル（水野そよか）復元による名前衝突解消を実施。タメ口・混合各6ターンの再シミュレーション（`casual_v2` / `mixed_v2`）でブロック0回・敬語混入ゼロ・本人確認済み事実バッジ表示を実証。全pytest **1,934 passed**。 |
+| T465 | 飲食メニュー・注文習慣一人称主張の本人事実照合ガード（T465） | pytest（`tests/test_app.py:15165`） | FIXED | 候補文中の飲食メニューや注文習慣の一人称主張（「〜を見つけると思わず頼んじゃう」「〜を頼むことが多い」「〜を注文しちゃう」等）を検出するパターンを `_has_unverified_general_personal_claim` に追加。主張文節から注文メニュー（オムライス、タルト等）を抽出し、プロフィールの `favorite_foods` や臨時ユーザー回答（`ephemeral_user_answers`）に根拠が存在しない場合は「未確認の本人事実」として確実に棄却するよう実装。回帰テスト追加（未確認時棄却、プロフィール事実確認時通過、臨時回答確認時通過）。全pytest **1,935 passed**。 |
 
-最新ID行: 464。T457〜T464をFIXEDとして追加。全pytest **1,934 passed**（失敗0件）。
+最新ID行: 465。T457〜T465をFIXEDとして追加。全pytest **1,935 passed**（失敗0件）。
+

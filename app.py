@@ -4810,6 +4810,11 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
         re.compile(r"(?:犬|猫|花粉|小麦|卵|乳製品|そば|甲殻類)?アレルギー(?:なんです|です|があります|がある|ではありません|じゃありません|ではない|じゃない)?"),
         re.compile(r"(?:お気に入り|行きつけ)の[^!?！？\n]{1,24}(?:店|お店|場所|カフェ)(?:が|は)(?:あります|ある|なんです|です)"),
         re.compile(r"[^!?！？\n]{0,18}(?:行ったこと|見たこと|観たこと|食べたこと|使ったこと)(?:が)?(?:あります|ある|ない|ありません)"),
+        re.compile(
+            r"(?:思わず|ついつい|よく|いつも|たまに|ときどき)?[^!?！？\n]{0,30}?"
+            r"(?:頼んじゃう|頼んじゃいます|頼むことが多い|頼むことにして|頼んでしまう|頼んでしまいます|"
+            r"頼むのが好き|思わず頼|注文しちゃう|注文しちゃいます|注文することが多い)"
+        ),
     )
     sources = _trusted_fact_clauses(context, include_negated=True)
     normalized_sources = [re.sub(r"[\s、。！!？?]", "", source) for source in sources]
@@ -4908,6 +4913,22 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
                     and any(token in latest_question for token in topic_tokens)
                     and _answers_verified_partner_question(candidate, context)
                 ):
+                    continue
+            if pattern_index == 5:
+                # Ordering / menu preference claim: verify each claimed dish/menu
+                # item against trusted fact clauses or ephemeral answers.
+                order_segment = re.split(
+                    r"(?:んだけど|けれど|けど|が、|が)(?=[^ぁ-んァ-ヶ]|\n|[ぁ-んァ-ヶ]{2,8}(?:くん|さん|ちゃん|は|って|の))",
+                    clause,
+                )[0]
+                m_action = re.search(r"を見つけると|を見かけると|を見ると|を頼|を注文|思わず頼|頼んじゃう|頼む|注文", order_segment)
+                dishes: list[str] = []
+                if m_action:
+                    menu_part = order_segment[:m_action.start()]
+                    menu_part = re.sub(r"^(?:喫茶店|カフェ|お店|店)(?:では|で)?", "", menu_part)
+                    menu_part = re.sub(r"^(?:私|自分|僕|俺)(?:は|も|が)?", "", menu_part)
+                    dishes = [d.strip() for d in re.split(r"や|と|、|,|／", menu_part) if d.strip()]
+                if dishes and all(any(d in source for source in sources) for d in dishes):
                     continue
             return True
     return False

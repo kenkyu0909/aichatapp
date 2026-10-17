@@ -15162,5 +15162,54 @@ def test_cafe_preference_clarification_answer_verifies_general_cafe_question(cli
     assert backend.missing_personal_fact_question(context) is None
 
 
+def test_food_ordering_claim_requires_grounding(client):
+    _, backend = client
+    cand_text = (
+        "静かなレトロ喫茶で窓ぎわの席に座るのが好きなんだー✨\n"
+        "オムライスや季節のタルトを見つけると思わず頼んじゃうんだけどいつきくんは喫茶店で何食べるのが好き？"
+    )
+    cand = backend.Candidate(label="カフェ会話", text=cand_text)
 
+    # 1. Rejected when food/ordering preference is not in profile facts or ephemeral answers
+    context_unconfirmed = {
+        "mode": "reply",
+        "my_profile": {"facts": {"favorite_cafes": ["レトロな喫茶店"]}},
+        "history": [{"role": "them", "body": "喫茶店って落ち着きますよね。水野さんはどんなお店が好きですか？"}],
+        "ephemeral_user_answers": [
+            {"question": "どんなカフェが好きですか？", "answer": "静かで落ち着いたレトロな喫茶店が好きだよ"}
+        ],
+    }
+    assert backend._has_unverified_general_personal_claim(cand_text, context_unconfirmed)
+    assert "未確認の本人事実" in backend.unsupported_personal_claim_topics([cand], context_unconfirmed)
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(cand, context_unconfirmed)
+
+    # 2. Accepted when foods are in profile facts
+    context_grounded_facts = {
+        "mode": "reply",
+        "my_profile": {
+            "facts": {
+                "favorite_cafes": ["レトロな喫茶店"],
+                "favorite_foods": ["オムライス", "季節のタルト"],
+            }
+        },
+        "history": [{"role": "them", "body": "喫茶店って落ち着きますよね。水野さんはどんなお店が好きですか？"}],
+        "ephemeral_user_answers": [
+            {"question": "どんなカフェが好きですか？", "answer": "静かで落ち着いたレトロな喫茶店が好きだよ"}
+        ],
+    }
+    assert not backend._has_unverified_general_personal_claim(cand_text, context_grounded_facts)
+    assert "未確認の本人事実" not in backend.unsupported_personal_claim_topics([cand], context_grounded_facts)
+
+    # 3. Accepted when food preference is in ephemeral answers
+    context_grounded_ephemeral = {
+        "mode": "reply",
+        "my_profile": {"facts": {"favorite_cafes": ["レトロな喫茶店"]}},
+        "history": [{"role": "them", "body": "喫茶店って落ち着きますよね。水野さんはどんなお店が好きですか？"}],
+        "ephemeral_user_answers": [
+            {"question": "どんなカフェが好きですか？", "answer": "静かで落ち着いたレトロな喫茶店が好きだよ"},
+            {"question": "喫茶店では何を頼みますか？", "answer": "オムライスや季節のタルトをよく頼みます"},
+        ],
+    }
+    assert not backend._has_unverified_general_personal_claim(cand_text, context_grounded_ephemeral)
+    assert "未確認の本人事実" not in backend.unsupported_personal_claim_topics([cand], context_grounded_ephemeral)
 
