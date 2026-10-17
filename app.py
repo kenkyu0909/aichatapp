@@ -22,6 +22,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, field_validator
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 BASE = Path(__file__).resolve().parent
 load_dotenv(BASE / ".env")
@@ -57,6 +58,15 @@ def _wait_for_provider_interval(api_alias: str, model: str) -> None:
 
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
 logger = logging.getLogger(__name__)
+
+
+def _allowed_hosts() -> list[str]:
+    """Host allow-list for the local API, guarding against DNS rebinding."""
+    raw = os.getenv("MRA_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
+    return [host.strip() for host in raw.split(",") if host.strip()]
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts())
 
 
 async def storage_error_handler(request: Request, exc: Exception) -> JSONResponse:

@@ -36,6 +36,50 @@ def add_match(client, name):
     return response.json()["id"]
 
 
+def test_trusted_host_allows_default_and_loopback_hosts(client):
+    c, _backend = client
+
+    assert c.get("/api/profile").status_code == 200
+    assert c.get("/api/profile", headers={"Host": "127.0.0.1:8765"}).status_code == 200
+    assert c.get("/api/profile", headers={"Host": "localhost:8765"}).status_code == 200
+
+
+def test_trusted_host_rejects_unknown_host_header(client):
+    c, _backend = client
+
+    response = c.get("/api/profile", headers={"Host": "untrusted.example"})
+
+    assert response.status_code == 400
+    assert "untrusted.example" not in response.text
+
+
+def test_trusted_host_blocks_mutating_route(client):
+    c, _backend = client
+
+    response = c.post(
+        "/api/matches",
+        json={"name": "架空テスト", "description": "架空の趣味は読書"},
+        headers={"Host": "untrusted.example"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_trusted_host_allowlist_is_configurable_via_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MRA_ALLOWED_HOSTS", "127.0.0.1,example.test")
+    spec = importlib.util.spec_from_file_location(
+        "test_backend_hosts", Path(__file__).resolve().parents[1] / "app.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+
+    with TestClient(module.app) as c:
+        assert c.get("/api/profile", headers={"Host": "example.test"}).status_code == 200
+        assert c.get("/api/profile", headers={"Host": "localhost"}).status_code == 400
+
+
 def test_provider_attempts_wait_for_configured_model_interval(client, monkeypatch):
     _, backend = client
     monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "4.05")
