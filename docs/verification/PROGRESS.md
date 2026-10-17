@@ -1828,5 +1828,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: `6d555b6` Push [39005171268](https://github.com/kenkyu0909/aichatapp/actions/runs/39005171268) / PR [39005174295](https://github.com/kenkyu0909/aichatapp/actions/runs/39005174295)、`a369794` Push [39006007280](https://github.com/kenkyu0909/aichatapp/actions/runs/39006007280) / PR [39006009668](https://github.com/kenkyu0909/aichatapp/actions/runs/39006009668) はいずれもsuccess。
 - 次: 要求全体の global deadline（D11後半）または D16 README（取得先・起動終了・バックアップ/復元・依存固定）に着手。実生成品質（D07）は実Gemini予算待ち。
 
+### 2026-10-17 D11後半 要求全体の期限（global deadline）
+
+- T436（`efebc41`, D11後半）: 検証エージェントが provider ループに要求全体の壁時計上限がないこと（最悪 12試行×(30s+4.05s)）を指摘。`MRA_REQUEST_DEADLINE_SECONDS`（既定120秒、`none`/負値で無効、`0`で即時失効）と `_request_deadline` を追加し、各試行の直前に期限を判定。超過時は `RequestDeadlineExceededError`→`error_code=request_deadline_exceeded` の安全な502（試行0で停止）。期限直前のSDK呼び出しは最大1回分=30秒の超過があり得る点は残課題として明記。テスト2件追加。全pytest **1893 passed in 421.26s**。
+- 次: D16 README（取得先・起動終了・バックアップ/復元・検証済み依存組合せ）に着手。実生成品質（D07）は実Gemini予算待ち。
+
+
 
 

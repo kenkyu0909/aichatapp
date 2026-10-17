@@ -1795,5 +1795,12 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: `6d555b6` Push [39005171268](https://github.com/kenkyu0909/aichatapp/actions/runs/39005171268) / PR [39005174295](https://github.com/kenkyu0909/aichatapp/actions/runs/39005174295)、`a369794` Push [39006007280](https://github.com/kenkyu0909/aichatapp/actions/runs/39006007280) / PR [39006009668](https://github.com/kenkyu0909/aichatapp/actions/runs/39006009668) はいずれもsuccess。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持（実生成品質FAILは予算待ち）。
 
+### 2026-10-17 D11後半 要求全体の期限（global deadline）
+
+- T436（`efebc41`）: `MRA_REQUEST_DEADLINE_SECONDS`（既定120秒、`none`/負値で無効、`0`で即時失効）を追加し、各試行の直前に要求全体の壁時計期限を判定。超過時は `error_code=request_deadline_exceeded` の安全な502（試行0で停止）。期限直前のSDK呼び出しは最大30秒の超過があり得る。テスト2件。全pytest **1893 passed in 421.26s**。
+- 検証エージェント所見の残課題: 期限の判定は試行間のみのため、1回のSDK呼び出し（30秒timeout）分の超過は残る。
+- 総合判定は**NO-GO**を維持（実生成品質FAILは予算待ち）。
+
+
 
 
