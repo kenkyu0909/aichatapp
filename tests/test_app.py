@@ -14617,6 +14617,49 @@ def test_fallback_candidate_with_trailing_statement_context(client):
     assert backend._candidate_rejection_reasons(fb_unclass, context_unclass) == []
 
 
+def test_first_message_fallback_candidate(client):
+    _, backend = client
+    context_first = {
+        "mode": "first",
+        "my_profile": {
+            "facts": {
+                "name": "水野そよか",
+                "job": "経理",
+            }
+        },
+        "other": {
+            "name": "黒川いつき",
+            "occupation": "書店員",
+            "description": "中野で書店員をしています。休みの日は古本屋をのぞいたり街をぶらぶら歩いたりしています。喫茶店のカレーとドーナツが好きです。ゆっくり話せる方だとうれしいです。",
+        },
+        "history": [],
+    }
+    fb_first = backend._build_first_message_fallback_candidate(context_first)
+    assert fb_first is not None
+    assert "はじめまして！" in fb_first.text
+    assert "マッチありがとうございます" in fb_first.text
+    assert "書店員をされているんですね！" in fb_first.text
+    assert backend._candidate_rejection_reasons(fb_first, context_first) == []
+
+    # Integration with filter_safe_candidates when all candidates fail
+    unsafe_cand = backend.Candidate(
+        label="不備候補",
+        text="こんにちは！よろしくお願いします！",
+        reply_move="react",
+    )
+    raw_suggestions = backend.Suggestions(
+        reason="テスト",
+        strategy="テスト",
+        recommended=unsafe_cand,
+        alternatives=[],
+    )
+    res = backend.filter_safe_candidates(raw_suggestions, 1, context_first)
+    assert res["deterministic_fallback_used"] is True
+    assert res["recommended"] is not None
+    assert "はじめまして！" in res["recommended"]["text"]
+
+
+
 
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
     client, tmp_path, monkeypatch

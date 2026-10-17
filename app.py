@@ -7861,6 +7861,74 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
     return candidate
 
 
+def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
+    """Synthesize 1 safe fallback candidate when all model candidates fail on initial first message."""
+    if context.get("mode") != "first":
+        return None
+    other = context.get("other") or {}
+    other_desc = str(other.get("description", "") or "")
+    other_job = str(other.get("occupation", "") or "")
+    profile_sources = [other_desc]
+    profile_sources.extend(
+        str(value)
+        for value in other.get("temporary_user_supplied_profile_facts", [])
+    )
+    profile_terms: set[str] = set()
+    generic_terms = {
+        "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
+        "です", "ます", "多い", "います", "あります", "プロフィール",
+    }
+    for source in profile_sources:
+        chunks = re.split(
+            r"[、。！!？?\s]+|(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
+            source,
+        )
+        for term in chunks:
+            term = term.strip()
+            term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
+            if len(term) >= 2 and term not in generic_terms:
+                profile_terms.add(term)
+    if not profile_terms:
+        return None
+
+    combined_text = other_job + " " + other_desc
+    topic_line = ""
+    question_line = ""
+    if other_job and any(term in other_job for term in profile_terms):
+        topic_line = f"{other_job}をされているんですね！"
+        if re.search(r"本|書店|古本", combined_text):
+            question_line = "最近おすすめの本はありますか？"
+        elif re.search(r"カフェ|喫茶|珈琲|飲食|料理|パン", combined_text):
+            question_line = "普段はどんなお店に行かれることが多いですか？"
+        else:
+            question_line = "お仕事で特に楽しいのはどんなときですか？"
+    elif re.search(r"本|読書|小説|古本", other_desc):
+        topic_line = "読書がお好きなんですね！"
+        question_line = "最近おすすめの本はありますか？"
+    elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
+        topic_line = "喫茶店がお好きなんですね！"
+        question_line = "普段はどんなお店に行かれることが多いですか？"
+    elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
+        topic_line = "散歩がお好きなんですね！"
+        question_line = "休日はどんな場所を歩かれることが多いですか？"
+    elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
+        topic_line = "映画がお好きなんですね！"
+        question_line = "最近観てよかった作品はありますか？"
+    else:
+        best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
+        topic_line = f"{best_term}がお好きなんですね！"
+        question_line = f"{best_term}で特におすすめはありますか？"
+
+    candidate = Candidate(
+        label="初回メッセージ",
+        text=f"はじめまして！\nマッチありがとうございます😊\nプロフィールの雰囲気がすてきだなと思っていたのでマッチできてうれしいです！\n{topic_line}\n{question_line}",
+        reply_move="react",
+    )
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -7898,6 +7966,8 @@ def filter_safe_candidates(
         fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_verified_profile_fact_fallback_candidate(candidate_context)
+        if fallback_candidate is None and candidate_context.get("mode") == "first":
+            fallback_candidate = _build_first_message_fallback_candidate(candidate_context)
         if fallback_candidate is not None:
             accepted.append(fallback_candidate)
             deterministic_fallback_used = True
