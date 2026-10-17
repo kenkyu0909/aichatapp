@@ -14153,3 +14153,57 @@ def test_mutation_origin_allowlist_blocks_untrusted_origin_and_allows_trusted_or
     assert c.get("/api/profile").json()["content"] == "ローカルOrigin"
 
 
+def test_prompt_history_char_budget_trims_older_long_messages_while_preserving_latest_turns(
+    client, monkeypatch
+):
+    _, backend = client
+    monkeypatch.setenv("MRA_PROMPT_HISTORY_CHAR_BUDGET", "1500")
+    history = [
+        {"role": "them", "body": "あ" * 900},
+        {"role": "me", "body": "い" * 900},
+        {"role": "them", "body": "う" * 400},
+        {"role": "me", "body": "え" * 400},
+        {"role": "them", "body": "最新の質問です"},
+    ]
+    context = {
+        "mode": "reply",
+        "history": history,
+        "history_policy": history,
+        "my_profile": {"facts": {}},
+        "other": {"name": "架空", "description": ""},
+    }
+    prompt_payload = backend.prompt_context(context)
+    assert len(prompt_payload["history"]) == 3
+    assert prompt_payload["history"][-1]["body"] == "最新の質問です"
+    assert sum(len(item["body"]) for item in prompt_payload["history"]) <= 1500
+
+
+def test_contact_stop_request_beyond_60_message_prompt_window_remains_enforced(client):
+    c, backend = client
+    mid = add_match(c, "架空の停止保持確認")
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "もう連絡しないでください。"},
+    )
+    for index in range(65):
+        c.post(
+            f"/api/matches/{mid}/messages",
+            json={
+                "role": "me" if index % 2 == 0 else "them",
+                "body": f"雑談メッセージ{index}",
+            },
+        )
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "最近どうですか？"},
+    )
+    context = backend.build_context(
+        backend.GenerateInput(mode="reply", match_id=mid, response_version=2)
+    )
+    assert len(context["history"]) == 60
+    assert len(context["history_policy"]) == 67
+    assert backend.partner_requests_contact_stop(context) is True
+
+
+
+

@@ -650,21 +650,13 @@ def partner_latest_message_expresses_meeting_unease(context: dict) -> bool:
 
 def partner_requests_contact_stop(context: dict) -> bool:
     """Detect an explicit request to end messaging, distinct from meeting unease."""
-    latest_partner = next(
-        (
-            str(message.get("body", ""))
-            for message in reversed(context.get("history", []))
-            if message.get("role") == "them"
-        ),
-        "",
-    )
-    message_without_quotes = re.sub(r"[「『][^」』]*[」』]", " ", latest_partner)
-    clauses = re.split(
-        r"(?:でしたが|ませんが|ないですが|たくないですが|たくありませんが|ましたが|たが|"
-        r"と思っていましたが|と思っていたが|けれども|けれど|けど|ただし|とはいえ|でも|"
-        r"、|。|！|!|\n|が(?=(?:、|今後|これから|もう|これ以上|私は|私も)))",
-        message_without_quotes,
-    )
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in _history_for_policy(context)
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
     stop_pattern = re.compile(
         r"(?:連絡|メッセージ|DM|返信|返事|やり取り).{0,18}"
         r"(?:控え|やめ|しないで|送らないで|送ってこないで|取らないで|不要|いらない|終わり)|"
@@ -694,18 +686,26 @@ def partner_requests_contact_stop(context: dict) -> bool:
         r"(?:と言ったのは|と言っていたのは|と話したのは)(?:友達|友人|知人|家族|同僚|先生|上司|先輩)"
     )
     refusal_active = False
-    for clause in clauses:
-        retraction = contact_retraction.search(clause)
-        if retraction:
-            retraction_text = clause[retraction.start():retraction.end() + 20]
-            if not reported_request.search(clause) and not negated_stop_suffix.search(retraction_text):
-                refusal_active = False
-            continue
-        match = stop_pattern.search(clause)
-        if not match or reported_request.search(clause):
-            continue
-        trailing_text = clause[match.start():match.end() + 20]
-        refusal_active = not bool(negated_stop_suffix.search(trailing_text))
+    for partner_body in partner_messages:
+        message_without_quotes = re.sub(r"[「『][^」』]*[」』]", " ", partner_body)
+        clauses = re.split(
+            r"(?:でしたが|ませんが|ないですが|たくないですが|たくありませんが|ましたが|たが|"
+            r"と思っていましたが|と思っていたが|けれども|けれど|けど|ただし|とはいえ|でも|"
+            r"、|。|！|!|\n|が(?=(?:、|今後|これから|もう|これ以上|私は|私も)))",
+            message_without_quotes,
+        )
+        for clause in clauses:
+            retraction = contact_retraction.search(clause)
+            if retraction:
+                retraction_text = clause[retraction.start():retraction.end() + 20]
+                if not reported_request.search(clause) and not negated_stop_suffix.search(retraction_text):
+                    refusal_active = False
+                continue
+            match = stop_pattern.search(clause)
+            if not match or reported_request.search(clause):
+                continue
+            trailing_text = clause[match.start():match.end() + 20]
+            refusal_active = not bool(negated_stop_suffix.search(trailing_text))
     return refusal_active
 
 
@@ -5528,6 +5528,31 @@ def _history_for_policy(context: dict) -> list[dict]:
     return context.get("history", [])
 
 
+def _prompt_history_char_budget() -> int:
+    """Maximum total characters of history sent in the prompt payload."""
+    raw = os.getenv("MRA_PROMPT_HISTORY_CHAR_BUDGET", "24000").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 24000
+    return max(1000, min(value, 200000))
+
+
+def _trim_history_to_char_budget(history: list[dict[str, Any]], budget: int) -> list[dict[str, Any]]:
+    """Keep the most recent messages within the character budget (always keeping at least the last 2)."""
+    if not history:
+        return []
+    selected_reversed: list[dict[str, Any]] = []
+    used_chars = 0
+    for index, item in enumerate(reversed(history)):
+        body_len = len(str(item.get("body", "")))
+        if index >= 2 and used_chars + body_len > budget:
+            break
+        selected_reversed.append(item)
+        used_chars += body_len
+    return list(reversed(selected_reversed))
+
+
 def prompt_context(context: dict[str, Any]) -> dict[str, Any]:
     """Drop derived, internal-only keys before the context becomes a prompt.
 
@@ -5535,11 +5560,16 @@ def prompt_context(context: dict[str, Any]) -> dict[str, Any]:
     so they must not add the internal partner id or a duplicated Q/A block to the
     model call.
     """
-    return {
+    filtered = {
         key: value
         for key, value in context.items()
         if key not in _INTERNAL_CONTEXT_KEYS
     }
+    if isinstance(filtered.get("history"), list):
+        filtered["history"] = _trim_history_to_char_budget(
+            filtered["history"], _prompt_history_char_budget()
+        )
+    return filtered
 
 
 def build_context(data: GenerateInput) -> dict:
