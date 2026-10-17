@@ -1808,7 +1808,7 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - 同一入力の再実行1回は別内容の候補でPASSし、元のFAILは `superseded_by=joke_mirroring_retry` として履歴に残した。最終状態は status=PASS、logical 9、provider 19、historical_nonpass 1、unresolved 0。
 - 残課題: 多様性ゲートは確率的で再実行に依存する（初回のみ衝突）。独立採点器の重複検出は文字n-gramのため、語が異なるトピック衝突を検出できず、このFAILは製品ゲートのみが検出した。`combine_quality_verdict` が両者を合成するため FAIL が隠れることはない。
 - 未変更の元 `quality_checks_009.json` は従来のFAIL記録として残置する。
-- 全pytest **1894 passed in 416.53s**。commit `b2930b1`。
+- 全pytest **1894 passed in 416.53s**。commit `b2930b1`。Actions: Push [39008343305](https://github.com/kenkyu0909/aichatapp/actions/runs/39008343305) / PR [39008346994](https://github.com/kenkyu0909/aichatapp/actions/runs/39008346994) でsuccess。
 - 総合判定は**条件付きGO**とする。実生成品質は今回の実行で全ケース通過したが、多様性ゲートの再発が再実行依存のため、多様性ゲートの決定性を確認するまで無条件のGOとはしない。
 
 
