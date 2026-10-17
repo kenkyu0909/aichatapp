@@ -7865,10 +7865,15 @@ def generate(data: GenerateInput):
         last_rate_limit: Exception | None = None
         for account, key, model in configurations:
             try:
+                initial_timeout_ms = 30_000
+                if request_deadline is not None:
+                    remaining_sec = request_deadline - time.monotonic()
+                    if remaining_sec > 0:
+                        initial_timeout_ms = max(1_000, min(30_000, int(remaining_sec * 1000)))
                 client = genai.Client(
                     api_key=key,
                     http_options=types.HttpOptions(
-                        timeout=30_000,
+                        timeout=initial_timeout_ms,
                         retry_options=types.HttpRetryOptions(attempts=1),
                     ),
                 )

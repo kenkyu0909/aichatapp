@@ -13,7 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient
 
-assert os.getenv("GEMINI_API_KEY"), "Gemini test key is not configured."
+_smoke_key = (os.getenv("GEMINI_API_KEY") or os.getenv("MRA_API_1_KEY") or "").strip()
+assert _smoke_key, "Gemini test key is not configured."
+os.environ.setdefault("GEMINI_API_KEY", _smoke_key)
+os.environ.setdefault("MRA_API_1_KEY", _smoke_key)
 
 with tempfile.TemporaryDirectory(prefix="fictional-matching-smoke-") as directory:
     os.environ["APP_DATA_DIR"] = directory
