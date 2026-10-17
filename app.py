@@ -1838,7 +1838,10 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             for answer in context.get("ephemeral_user_answers", [])
             if re.search(r"カフェ|喫茶店", answer.get("question", ""))
             and re.search(r"好き|好み|お気に入り|行きつけ", answer.get("answer", ""))
-            and _personal_information_scope(topic, question_text) == _personal_information_scope(topic, answer.get("question", ""))
+            and (
+                _personal_information_scope(topic, question_text) == _personal_information_scope(topic, answer.get("question", ""))
+                or _normalize_clarification_question_key(answer.get("question", "")) == _normalize_clarification_question_key(personal_fact_question(topic, question_text).question)
+            )
         )
     if topic == "料理習慣":
         requested_scope = _personal_information_scope(topic, question_text)

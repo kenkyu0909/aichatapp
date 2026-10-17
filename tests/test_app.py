@@ -15056,4 +15056,21 @@ def test_repeats_recent_self_question_catches_bean_and_brewing_across_six_turns(
     assert not backend._candidate_repeats_recent_self_question(cand_fresh, context)
 
 
+def test_cafe_preference_clarification_answer_verifies_general_cafe_question(client):
+    _, backend = client
+    msg = "手書きの看板や、のんびりした空気感に惹かれますね。水野さんは、喫茶店ではどんなおやつを頼むことが多いですか？"
+    ans_q = backend.personal_fact_question("カフェ好み", msg).question
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {}},
+        "history": [{"role": "them", "body": msg}],
+        "ephemeral_user_answers": [
+            {"question": ans_q, "answer": "喫茶店では季節のタルトが好きで、落ち着いた静かな雰囲気が好みです。"}
+        ],
+    }
+    assert backend._topic_is_verified("カフェ好み", context, msg)
+    assert backend.missing_personal_fact_question(context) is None
+
+
+
 
