@@ -7876,7 +7876,7 @@ def _unclassified_personal_question_user_answer(context: dict) -> str | None:
             ):
                 return answer_text
         return None
-    if topic in {"読書", "カフェ場所", "映画", "カフェ最近", "旅行最近"}:
+    if topic in {"読書", "カフェ場所", "カフェ好み", "映画", "カフェ最近", "旅行最近"}:
         for answer in context.get("ephemeral_user_answers", []):
             answer_text = str(answer.get("answer", "")).strip()
             answer_question = str(answer.get("question", "")).strip()
