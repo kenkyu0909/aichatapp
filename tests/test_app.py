@@ -14205,5 +14205,29 @@ def test_contact_stop_request_beyond_60_message_prompt_window_remains_enforced(c
     assert backend.partner_requests_contact_stop(context) is True
 
 
+def test_declarative_itsumo_statement_is_not_misclassified_as_personal_question(client):
+    _, backend = client
+    declarative_messages = [
+        "木目調の落ち着いた喫茶店が多くて、ついつい長居してしまいます。いつも深煎りのブレンドと固めのプリンかドーナツを頼んでいます。",
+        "そのカフェは落ち着いた雰囲気で、いつもコーヒーを飲んでいます。",
+        "いつか京都へ旅行に行きたいと思っています。",
+        "平日はいつでもカフェが空いていて落ち着きます。",
+    ]
+    for body in declarative_messages:
+        assert backend._topic_for_personal_question(body) is None
+        context = {
+            "mode": "reply",
+            "history": [{"role": "them", "body": body}],
+            "my_profile": {"facts": {"hobbies": ["喫茶店めぐり"]}},
+            "ephemeral_user_answers": [],
+        }
+        assert backend.missing_personal_fact_question(context) is None
 
-
+    real_questions = [
+        ("いつカフェに行きますか？", "カフェ"),
+        ("旅行はいつ行くんですか？", "旅行"),
+        ("いつ会えますか？", "予定"),
+    ]
+    for question, expected_prefix in real_questions:
+        topic = backend._topic_for_personal_question(question)
+        assert topic is not None and topic.startswith(expected_prefix)

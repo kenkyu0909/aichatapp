@@ -747,7 +747,7 @@ UNPUNCTUATED_CASUAL_PERSONAL_QUESTION = re.compile(
     r"どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも|だって))|"
     r"どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも|だって))|"
     r"どこ(?![へにとからまで]?(?:でも|も|だって)|か)|"
-    r"いつ(?!か|も|でも|までも|だって)|"
+    r"(?<!つ)いつ(?!い|か|も|でも|までも|だって)|"
     r"誰(?!でも|にでも|とでも|からでも|だって)|だれ(?!でも|にでも|とでも|からでも|だって)|どれくらい|どのくらい).{0,24}"
     r"(?:いける|食べる|飲む|聴く|聞く|見る|観る|読む|できる|作れる|行く|"
     r"食べた|飲んだ|聴いた|聞いた|見た|観た|読んだ|行った|空いてる|空いてます)$"
@@ -1168,7 +1168,7 @@ def _topic_for_personal_question(text: str) -> str | None:
         text,
     )
     if not explicit_movie_request and not re.search(
-        r"[?？]|ですか|ますか|どんな|どの|何を|どこ|いつ|頻度|食べること|何歳|年齢|\d{2}歳|いくつ",
+        r"[?？]|ですか|ますか|どんな|どの|何を|どこ|(?<!つ)いつ(?!い|か|も|でも|までも|だって)|頻度|食べること|何歳|年齢|\d{2}歳|いくつ",
         text,
     ) and not UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text):
         return None
@@ -1183,7 +1183,7 @@ def _topic_for_personal_question(text: str) -> str | None:
         return "年齢"
     if re.search(r"会う|会え|待ち合わせ", text) and re.search(r"地域|場所|どこ", text):
         return "会う場所"
-    if re.search(r"会う|会え|待ち合わせ|日程", text) and re.search(r"いつ|何曜|曜日|時間|頃", text):
+    if re.search(r"会う|会え|待ち合わせ|日程", text) and re.search(r"(?<!つ)いつ(?!い|か|も|でも|までも|だって)|何曜|曜日|時間|頃", text):
         return "予定"
     if re.search(r"休日|休みの日|週末", text) and re.search(r"何|どう|友達|家|過ご|出かけ", text):
         return "休日"
@@ -1324,7 +1324,7 @@ def _topic_for_personal_question(text: str) -> str | None:
                 if re.search(r"映画.{0,10}(?:観ますか|見ますか|観るんですか|見るんですか|観ることありますか|見ることありますか)", text):
                     return "映画"
             # Do not mistake statements about the partner for a question about the user.
-            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|予定|タイプ|頻度|経験|何系|どんな(?!に|.{0,12}でも)|どの(?![^?？!！\r\n]{0,12}でも)|どこ(?![へにとからまで]?でも|か)|何が|何ですか|教えて|おすすめ|週末|いつ|地域|どのあたり)", text):
+            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|予定|タイプ|頻度|経験|何系|どんな(?!に|.{0,12}でも)|どの(?![^?？!！\r\n]{0,12}でも)|どこ(?![へにとからまで]?でも|か)|何が|何ですか|教えて|おすすめ|週末|(?<!つ)いつ(?!い|か|も|でも|までも|だって)|地域|どのあたり)", text):
                 return topic
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
