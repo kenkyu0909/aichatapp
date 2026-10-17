@@ -1714,6 +1714,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38997786372](https://github.com/kenkyu0909/aichatapp/actions/runs/38997786372) / PR [38997790530](https://github.com/kenkyu0909/aichatapp/actions/runs/38997790530)（`e3d5353`）。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 08:05 JST D10 設定契約統一・D14 窓外拒否保持
+
+- T428（D10, `e986f06`）: live smoke ワークフローが `GEMINI_API_KEY` のみ設定し、アプリが読む `MRA_API_1_KEY` が無く demo に落ちていた。`env` に `MRA_API_1_KEY` を追加して契約を統一。静的YAMLテストとSDKモックテスト。`tests/test_app.py` 1754 passed。
+- T429（D14, `e7c176b`）: プロンプト窓は60件のまま、内部 `history_policy`（既定600件）を追加し、窓外の拒否を再勧誘で覆わない。テスト3件。`tests/test_app.py` 1757 passed、全pytest 1867。
+- T430（D14補正, `195889f`）: `invite_opportunity_ready` を再開対応済み判定へ委譲し、窓外の再開後に誘い検討を再開できるよう修正。テスト1件。`tests/test_app.py` 1758 passed、全pytest **1868 passed in 422.99s**。
+- Actions: `e986f06` Push [38998967649](https://github.com/kenkyu0909/aichatapp/actions/runs/38998967649) / PR [38998971379](https://github.com/kenkyu0909/aichatapp/actions/runs/38998971379)、`e7c176b` Push [38999837805](https://github.com/kenkyu0909/aichatapp/actions/runs/38999837805) / PR [38999839662](https://github.com/kenkyu0909/aichatapp/actions/runs/38999839662) はsuccess。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。

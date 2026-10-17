@@ -1802,3 +1802,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: Push [38997786372](https://github.com/kenkyu0909/aichatapp/actions/runs/38997786372) / PR [38997790530](https://github.com/kenkyu0909/aichatapp/actions/runs/38997790530)（`e3d5353`）、Push [38998265747](https://github.com/kenkyu0909/aichatapp/actions/runs/38998265747) / PR [38998268434](https://github.com/kenkyu0909/aichatapp/actions/runs/38998268434)（`364e441`）はいずれもsuccess。
 - 次: D10（live-gemini の設定契約を workflow の1行で統一、オフライン静的テスト付き）を実施予定。D14/D09 は影響範囲を精査してから。
 
+### 2026-10-17 08:05 JST D10 設定契約統一・D14 窓外拒否保持
+
+- T428（`e986f06`, D10）: smoke ワークフローが `GEMINI_API_KEY` のみ設定し、アプリが読む `MRA_API_1_KEY` が無いため実経路が demo に落ちていた。`env` に `MRA_API_1_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}` を追加して契約を統一。workflow_dispatch 限定・ref ガード・キー非表示は維持。静的YAMLテストとSDKモックのオフラインテストを追加。`tests/test_app.py` 1754 passed。検証エージェントは PASS（GEMINI_MODEL がデッド設定である点を残課題として指摘）。
+- T429（`e7c176b`, D14）: プロンプト用 `history` は最新60件のまま、内部専用 `history_policy`（既定600件、`MRA_CONTEXT_POLICY_WINDOW`、`prompt_context` で除去）を追加。`partner_has_active_invitation_refusal` と `invite_opportunity_ready` の阻害判定を方針履歴へ拡張し、窓外の拒否を再勧誘で覆わない。テスト3件。`tests/test_app.py` 1757 passed、全pytest 1867。
+- T430（`195889f`, D14補正）: 検証エージェントが `invite_opportunity_ready` の却下走査に再開対応がなく、窓外で再開しても過剰抑止される不整合を検出。再開対応済み判定へ委譲。テスト1件。`tests/test_app.py` 1758 passed、全pytest **1868 passed in 422.99s**。
+- 残課題: `GEMINI_MODEL` はアプリが読まないデッド設定。`partner_requests_contact_stop` 等の最新状態系検出は意図的に窓外まで広げていない。方針履歴の二重クエリで取得量が増える（ローカルSQLiteでは軽微）。Starlette 未固定。
+- Actions: `e986f06` Push [38998967649](https://github.com/kenkyu0909/aichatapp/actions/runs/38998967649) / PR [38998971379](https://github.com/kenkyu0909/aichatapp/actions/runs/38998971379)、`e7c176b` Push [38999837805](https://github.com/kenkyu0909/aichatapp/actions/runs/38999837805) / PR [38999839662](https://github.com/kenkyu0909/aichatapp/actions/runs/38999839662)、`195889f` Push [39000747406](https://github.com/kenkyu0909/aichatapp/actions/runs/39000747406) / PR [39000750339](https://github.com/kenkyu0909/aichatapp/actions/runs/39000750339) はいずれもsuccess。
+- 次: D09（評価の独立性）。方針は「`scripts/quality_eval.py`（app.py非依存）＋テストを先に追加し、ランナー配線は別増分」。
+
