@@ -110,6 +110,10 @@ def database():
                 body TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS orphaned_photos (
+                filename TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
         yield connection
         connection.commit()
@@ -5052,12 +5056,38 @@ def delete_match(match_id: int):
     with database() as db:
         match = one_match(db, match_id)
         db.execute("DELETE FROM matches WHERE id=?", (match_id,))
-    if match["photo"]:
-        try:
-            (PHOTOS / match["photo"]).unlink(missing_ok=True)
-        except OSError:
-            logger.error("Failed to remove a photo after match deletion")
-    return {"ok": True}
+        _retry_orphaned_photos(db)
+        pending = False
+        if match["photo"] and not _remove_photo_file(match["photo"]):
+            _queue_orphaned_photo(db, match["photo"])
+            pending = True
+    return {"ok": True, "photo_cleanup_pending": pending}
+
+
+def _remove_photo_file(filename: str) -> bool:
+    """Delete a recorded photo file; return False when it cannot be removed."""
+    try:
+        (PHOTOS / filename).unlink(missing_ok=True)
+        return True
+    except OSError:
+        logger.error("Failed to remove a photo file")
+        return False
+
+
+def _queue_orphaned_photo(db, filename: str) -> None:
+    """Record a photo file that could not be deleted so it can be retried."""
+    db.execute(
+        "INSERT OR IGNORE INTO orphaned_photos(filename) VALUES (?)",
+        (filename,),
+    )
+
+
+def _retry_orphaned_photos(db) -> None:
+    """Retry only the recorded orphaned photos, never a directory scan."""
+    for row in db.execute("SELECT filename FROM orphaned_photos").fetchall():
+        filename = row["filename"]
+        if _remove_photo_file(filename):
+            db.execute("DELETE FROM orphaned_photos WHERE filename=?", (filename,))
 
 
 def image_extension(data: bytes) -> str | None:
@@ -5123,12 +5153,13 @@ async def upload_photo(match_id: int, file: UploadFile = File(...)):
         raise HTTPException(
             500, "写真を保存できませんでした。保存先を確認してください。"
         ) from None
-    if match["photo"]:
-        try:
-            (PHOTOS / match["photo"]).unlink(missing_ok=True)
-        except OSError:
-            logger.error("Failed to remove an old photo after successful replacement")
-    return {"ok": True}
+    pending = False
+    with database() as db:
+        _retry_orphaned_photos(db)
+        if match["photo"] and not _remove_photo_file(match["photo"]):
+            _queue_orphaned_photo(db, match["photo"])
+            pending = True
+    return {"ok": True, "photo_cleanup_pending": pending}
 
 
 @app.get("/api/matches/{match_id}/photo")

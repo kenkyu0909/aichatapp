@@ -237,6 +237,63 @@ def test_photo_requires_decodable_image_and_enforces_size_limit(client):
     assert c.put(f"/api/matches/{mid}/photo", files={"file": ("valid.png", png_bytes(), "image/png")}).status_code == 200
 
 
+def _orphaned_photo_names(backend):
+    with backend.database() as db:
+        return {row["filename"] for row in db.execute("SELECT filename FROM orphaned_photos")}
+
+
+def test_delete_match_queues_orphan_when_unlink_fails(client, monkeypatch):
+    c, backend = client
+    mid = add_match(c, "孤児削除")
+    assert c.put(f"/api/matches/{mid}/photo", files={"file": ("ok.png", png_bytes(), "image/png")}).status_code == 200
+    photo_name = c.get("/api/matches").json()[0]["photo"]
+    monkeypatch.setattr(backend, "_remove_photo_file", lambda filename: False)
+    response = c.delete(f"/api/matches/{mid}")
+    assert response.status_code == 200
+    assert response.json()["photo_cleanup_pending"] is True
+    assert c.get(f"/api/matches/{mid}/messages").status_code == 404
+    assert _orphaned_photo_names(backend) == {photo_name}
+
+
+def test_photo_replacement_queues_old_orphan_when_unlink_fails(client, monkeypatch):
+    c, backend = client
+    mid = add_match(c, "孤児差替")
+    assert c.put(f"/api/matches/{mid}/photo", files={"file": ("first.png", png_bytes(), "image/png")}).status_code == 200
+    first_name = c.get("/api/matches").json()[0]["photo"]
+    monkeypatch.setattr(backend, "_remove_photo_file", lambda filename: False)
+    response = c.put(f"/api/matches/{mid}/photo", files={"file": ("second.png", png_bytes((10, 200, 10)), "image/png")})
+    assert response.status_code == 200
+    assert response.json()["photo_cleanup_pending"] is True
+    second_name = c.get("/api/matches").json()[0]["photo"]
+    assert second_name != first_name
+    assert (backend.PHOTOS / second_name).exists()
+    assert _orphaned_photo_names(backend) == {first_name}
+
+
+def test_orphan_retry_removes_only_recorded_files(client):
+    c, backend = client
+    mid = add_match(c, "孤児再試行")
+    assert c.put(f"/api/matches/{mid}/photo", files={"file": ("ok.png", png_bytes(), "image/png")}).status_code == 200
+    recorded = "deadbeefdeadbeef.png"
+    (backend.PHOTOS / recorded).write_bytes(b"recorded")
+    unrecorded = backend.PHOTOS / "cafebabecafebabe.png"
+    unrecorded.write_bytes(b"keep me")
+    with backend.database() as db:
+        backend._queue_orphaned_photo(db, recorded)
+    with backend.database() as db:
+        backend._retry_orphaned_photos(db)
+    assert not (backend.PHOTOS / recorded).exists()
+    assert unrecorded.exists()
+    assert _orphaned_photo_names(backend) == set()
+
+
+def test_orphan_journal_survives_new_connection(client):
+    c, backend = client
+    with backend.database() as db:
+        backend._queue_orphaned_photo(db, "0123456789abcdef.png")
+    assert _orphaned_photo_names(backend) == {"0123456789abcdef.png"}
+
+
 def test_web_ui_is_served_without_api_key(client):
     c, _ = client
     page = c.get("/")
