@@ -6424,6 +6424,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             if answer.get("answer", "").strip()
             and _same_personal_information_scope(topic, question, answer.get("question", ""))
         )
+        evidence.extend(_confirmed_fact_values_for_question(context, topic, question))
         normalized = lambda value: re.sub(r"[\s、。！!？?😊☺️✨😄😂🥲😭🌸❤️💕👍☕📚]", "", value)
         allowed_answer_remainder = re.compile(
             r"(?:(?:最近|この前|昨日|先週|先日|この間|さっき)|(?:私|自分|僕|俺))?"
@@ -6479,6 +6480,11 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 _explicit_frequency_signature(str(answer.get("answer", "")))
                 or _qualitative_cafe_frequency_class(str(answer.get("answer", "")))
             )
+        )
+        frequency_evidence.extend(
+            value
+            for value in _confirmed_fact_values_for_question(context, topic, question)
+            if _explicit_frequency_signature(value) or _qualitative_cafe_frequency_class(value)
         )
         answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
         answer_segments = [
@@ -8128,9 +8134,7 @@ def generate(data: GenerateInput):
                                     *safe_candidates[:invitation_index],
                                     *safe_candidates[invitation_index + 1:],
                                 ]
-                        if (
-            partial_candidate_repair_pending or safe_candidate_fallback_from_deterministic
-        ) and safe_candidate_fallback is not None:
+                        if partial_candidate_repair_pending and safe_candidate_fallback is not None:
                             previous_safe_candidates = [
                                 safe_candidate_fallback.recommended,
                                 *safe_candidate_fallback.alternatives,
@@ -8618,7 +8622,9 @@ def generate(data: GenerateInput):
             failure_message = "Geminiとの通信に失敗しました。接続と設定を確認してください。"
             failure_code = "gemini_connection_error"
 
-        if partial_candidate_repair_pending and safe_candidate_fallback is not None:
+        if (
+            partial_candidate_repair_pending or safe_candidate_fallback_from_deterministic
+        ) and safe_candidate_fallback is not None:
             safe_fallback_result = filter_safe_candidates(
                 safe_candidate_fallback,
                 data.count,
