@@ -1778,3 +1778,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38911863000](https://github.com/kenkyu0909/aichatapp/actions/runs/38911863000) とPR [38911869652](https://github.com/kenkyu0909/aichatapp/actions/runs/38911869652) が同一SHA `11c6dbc` でsuccess（CI **1790 passed / 1 warning in 225.80s**）。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 D09 評価の独立性（独立採点器と009ランナー配線）
+
+- T431（`0f77f1c`）: アプリ自身の採点に依存しない独立採点器 `scripts/quality_eval.py` を追加（`app.py` 非依存をテストで固定）。近似重複・冗長リアクション・プレースホルダー・未確認一人称・候補回答・長文未分割の判定と `independent_quality_verdict`／`combine_quality_verdict` を公開。テスト17件。全pytest **1885 passed in 424.65s**。
+- T432（`ba8906c`）: 009ランナーの最終判定を独立採点へ委譲。`combine_quality_verdict(content_pass and not diversity_violation, independent_pass, ...)` で PASS/FAIL/BLOCKED を決定し、`independent_*` を記録。映画ケースの `any("青い灯台" ...)` を全候補回答要求へ置換。テスト1件追加。全pytest **1886 passed in 425.77s**。
+- T433（`6428754`）: 検証エージェントが独立採点器の句読点判定が製品規約（「、」「。」を含めない）と逆で、製品が通した候補を常にFAILさせる不具合を検出。判定を「『、』または『。』を含む場合に違反」へ修正し、記録済みの句読点なし候補で PASS する回帰テストを追加。全pytest **1887 passed in 422.06s**。
+- 検証エージェント（READ-ONLY）: 独立採点器が真に `app.py` 非依存であること、二経路importガード、use-before-assignmentが無いことを確認。残課題として `scripts/run_quality_checks_008.py:196` の旧映画判定・未配線、`combine_quality_verdict` の error_code+200→BLOCKED（旧はPASS、開発ゲートとして保守的）、`trusted_claims` のトークン接地の粗さを記録。
+- Actions: `0f77f1c` Push [39001970969](https://github.com/kenkyu0909/aichatapp/actions/runs/39001970969) / PR [39001973826](https://github.com/kenkyu0909/aichatapp/actions/runs/39001973826)、`ba8906c` Push [39002561869](https://github.com/kenkyu0909/aichatapp/actions/runs/39002561869) / PR [39002565203](https://github.com/kenkyu0909/aichatapp/actions/runs/39002565203)、`6428754` Push [39003428787](https://github.com/kenkyu0909/aichatapp/actions/runs/39003428787) / PR [39003519038](https://github.com/kenkyu0909/aichatapp/actions/runs/39003519038) はいずれもsuccess。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持。QUALITY009 の実生成品質FAILは実Gemini予算待ちで未解決だが、以後の採点は（T432配線により）アプリ自己申告に依存しない。未追跡指示ファイル3件は保持。
+
+

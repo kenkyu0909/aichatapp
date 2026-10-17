@@ -1811,3 +1811,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: `e986f06` Push [38998967649](https://github.com/kenkyu0909/aichatapp/actions/runs/38998967649) / PR [38998971379](https://github.com/kenkyu0909/aichatapp/actions/runs/38998971379)、`e7c176b` Push [38999837805](https://github.com/kenkyu0909/aichatapp/actions/runs/38999837805) / PR [38999839662](https://github.com/kenkyu0909/aichatapp/actions/runs/38999839662)、`195889f` Push [39000747406](https://github.com/kenkyu0909/aichatapp/actions/runs/39000747406) / PR [39000750339](https://github.com/kenkyu0909/aichatapp/actions/runs/39000750339) はいずれもsuccess。
 - 次: D09（評価の独立性）。方針は「`scripts/quality_eval.py`（app.py非依存）＋テストを先に追加し、ランナー配線は別増分」。
 
+### 2026-10-17 D09 評価の独立性（独立採点器と009配線）
+
+- T431（`0f77f1c`, D09）: アプリ自身の採点に依存しない独立採点器 `scripts/quality_eval.py` を追加（`app.py`・`from app import`・`spec_from_file_location` を一切含まないことをテストで固定）。`independent_quality_verdict`（近似重複/冗長リアクション/プレースホルダー/未確認一人称/候補回答/長文未分割）と `combine_quality_verdict`（500・error_code→BLOCKED、両PASS以外FAIL）を公開。テスト17件。全pytest **1885 passed in 424.65s**。
+- T432（`ba8906c`, D09）: 009ランナーの最終判定を独立採点へ委譲。`independent_*` を記録し、`combine_quality_verdict(content_pass and not diversity_violation, independent_pass, ...)` で判定。映画ケースの `any("青い灯台" ...)` を全候補回答要求へ置換。二経路importガード。`quality_case_result` は後方互換で保持。テスト1件追加。全pytest **1886 passed in 425.77s**。
+- T433（`6428754`, D09補正）: 検証エージェントが独立採点器の句読点判定が製品規約（「、」「。」を含めない）と逆で、製品が通した候補を常にFAILさせる不具合を検出。判定を「『、』または『。』を含む場合に違反」へ修正し、記録済みの句読点なし候補で PASS する回帰テストを追加。全pytest **1887 passed in 422.06s**。
+- 検証エージェント所見（残課題）: `scripts/run_quality_checks_008.py:196` には旧 `any("青い灯台" ...)` と独立採点の未配線が残る（歴史的FAIL記録を歪めないため今回は変更せず）。`combine_quality_verdict` は `content_pass=True かつ error_code` (HTTP 200) を BLOCKED とする点が旧 `quality_case_result`（content_pass 時は PASS）と異なる（開発ゲートとしては保守的で意図的）。`trusted_claims` の接地はトークン単位のため「青い灯台」回答が「映画」話題を接地しない場合がある（軽微）。
+- Actions: `0f77f1c` Push [39001970969](https://github.com/kenkyu0909/aichatapp/actions/runs/39001970969) / PR [39001973826](https://github.com/kenkyu0909/aichatapp/actions/runs/39001973826)、`ba8906c` Push [39002561869](https://github.com/kenkyu0909/aichatapp/actions/runs/39002561869) / PR [39002565203](https://github.com/kenkyu0909/aichatapp/actions/runs/39002565203)、`6428754` Push [39003428787](https://github.com/kenkyu0909/aichatapp/actions/runs/39003428787) / PR [39003519038](https://github.com/kenkyu0909/aichatapp/actions/runs/39003519038) はいずれもsuccess。
+- 次: 実生成品質（QUALITY009 の FAIL）は実Gemini予算待ちで、D09 の独立採点により以後の採点はアプリ自己申告に依存しない。予算が確保でき次第、T432 の配線済みランナーで再評価し `evaluator_divergence` を確認する。並行して次項目（D11 予算台帳 / D16 README / D17 backup）から着手。
+
+
