@@ -1698,6 +1698,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - **D05/D06は既に実装済み**（`b9cece7`/`de2f021`、Firefoxテスト担保済み）。`DEEPSEEK_HANDOFF.md` の該当アンカーは古い。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 06:30 JST 所有格第三者・伝聞の却下（T423）と Host許可リスト（D15/T424）
+
+- T423（`b7be0fe`）: 所有格付き第三者（「観たのは私の妹です」）と伝聞（「観たという話」「観たとのことです」）を却下、同伴の誤却下を回避。回帰5件。`tests/test_app.py` 1742 passed。
+- T424（D15, `2c6f2ab`）: `TrustedHostMiddleware` を追加。既定で `127.0.0.1,localhost,testserver` のみ許可（`MRA_ALLOWED_HOSTS` で変更可）。未知Hostの GET/POST を400拒否。DNSリバインディング対策（実攻撃の再現は未主張）。テスト4件。`tests/test_app.py` 1746 passed、全pytest **1856 passed in 446.01s**（フレークなし）。
+- Actions: Push [38996309429](https://github.com/kenkyu0909/aichatapp/actions/runs/38996309429) / PR [38996314017](https://github.com/kenkyu0909/aichatapp/actions/runs/38996314017)（同一SHA `2c6f2ab`）。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。

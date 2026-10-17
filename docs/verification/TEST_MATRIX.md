@@ -1084,5 +1084,8 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T422 | 映画タイトル証拠の第三者・受動態の却下（共通判定） | pytest。`_candidate_asserts_viewing_of_title` | FIXED | confirmed/ephemeral両ループを共通述語 `_candidate_asserts_viewing_of_title` に統合（タイトル含有・`_asserts_movie_viewing`・非第三者・逆質問除外）。`_movie_viewing_attributed_to_other_person` に後置主語（「観たのは妹です」）と受動/伝聞（「観たと言われました」）を追加。第三者・受動・矛盾・伝聞・逆質問を却下し、一人称肯定を受理。回帰10件追加。focused 149、`tests/test_app.py` 1737 passed、全pytest **1847 passed in 427.49s**。commit `8bc498d`。 |
 
-最新ID行: 422。T407〜T422をFIXEDとして追加。Actions: Push [38994897457](https://github.com/kenkyu0909/aichatapp/actions/runs/38994897457) / PR [38994900033](https://github.com/kenkyu0909/aichatapp/actions/runs/38994900033) は同一SHA `8bc498d` でsuccess。全pytest **1847 passed in 427.49s**（Firefox UI含む、フレークなし）。
+| T423 | 映画タイトル証拠の所有格第三者・伝聞の却下 | pytest。`_movie_viewing_attributed_to_other_person` | FIXED | 後置主語の所有格形（「観たのは私の妹です」）と伝聞（「観たという話」「観たとのことです」）を追加。同伴（「観たのは友達と一緒です」）を誤却下しないよう負の先読みで除外し、一人称肯定は受理。回帰5件追加。`tests/test_app.py` 1742 passed。commit `b7be0fe`。 |
+| T424 | Host許可リスト（D15） | pytest。TrustedHostMiddleware | FIXED | `TrustedHostMiddleware` を追加し、許可ホストを `MRA_ALLOWED_HOSTS`（既定 `127.0.0.1,localhost,testserver`）から読込。未知Hostの GET/POST を400で拒否し、loopback（ポート付き）と既定TestClientホストを許可。envでの設定変更もテスト。DNSリバインディング対策（実攻撃の再現は未主張）。テスト4件追加。`tests/test_app.py` 1746 passed、全pytest **1856 passed in 446.01s**。commit `2c6f2ab`。 |
+
+最新ID行: 424。T407〜T424をFIXEDとして追加。Actions: Push [38996309429](https://github.com/kenkyu0909/aichatapp/actions/runs/38996309429) / PR [38996314017](https://github.com/kenkyu0909/aichatapp/actions/runs/38996314017) は同一SHA `2c6f2ab` でsuccess。`b7be0fe`（T423）も Push [38995661197](https://github.com/kenkyu0909/aichatapp/actions/runs/38995661197) / PR [38995664091](https://github.com/kenkyu0909/aichatapp/actions/runs/38995664091) でsuccess。全pytest **1856 passed in 446.01s**（Firefox UI含む、フレークなし）。
 

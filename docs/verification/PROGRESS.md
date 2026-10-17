@@ -1785,3 +1785,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **D05/D06 は既に実装済み**: 相手別下書き分離は `b9cece7`/`de2f021`（`app.js` の `messageDrafts` をcontact idでキー化、`contactSelectionEpoch`/`conversationRevision`/`generationRequestTokens` ガード）で完了し、Firefoxテスト（`test_firefox_message_drafts_are_isolated_per_contact` 等）で担保済み。`DEEPSEEK_HANDOFF.md` の D05/D06 行番号アンカーは古いため、再実装しないこと。
 - 次: 残る未達P0（D09/D10/D11/D13-D18、QUALITY009実生成品質）を精査し、オフラインで進められるものを選ぶ。
 
+### 2026-10-17 06:30 JST 所有格第三者・伝聞の却下（T423）と Host許可リスト（D15/T424）
+
+- T423（`b7be0fe`）: T422の残差（「観たのは私の妹です」等の所有格付き第三者、「観たという話」「観たとのことです」の伝聞）を `_movie_viewing_attributed_to_other_person` に追加して却下。同伴（「観たのは友達と一緒です」）は負の先読みで誤却下を回避。回帰5件追加。`tests/test_app.py` 1742 passed。CI b7be0fe push/PR success。
+- 調査エージェントの残項目ランキング: 未達は D09（評価の独立性）/D10（live-gemini設定不一致）/D11（予算台帳）/D13（孤児写真）/D14（60件窓で拒否・合意が消える）/D15（Host許可リスト）/D16（README）/D17（バックアップ/復元）/D18（レポート台帳）。いずれもオフライン可、P0の実生成品質は予算ブロック。次に小・高価値のD15を選択。
+- T424（`2c6f2ab`）: `TrustedHostMiddleware` を追加し、`MRA_ALLOWED_HOSTS`（既定 `127.0.0.1,localhost,testserver`）で未知Hostの GET/POST を400拒否。ポートはStarletteが除去するため `127.0.0.1:8765` 等も許可。CORSは追加せず。env設定変更をテスト。テスト4件追加。`tests/test_app.py` 1746 passed、全pytest **1856 passed in 446.01s**（フレークなし）。
+- Actions: Push [38996309429](https://github.com/kenkyu0909/aichatapp/actions/runs/38996309429) / PR [38996314017](https://github.com/kenkyu0909/aichatapp/actions/runs/38996314017)（同一SHA `2c6f2ab`）。
+- 次: 残る未達のうちD10（設定契約の統一）かD13（孤児写真の後始末）を検討。D14（文脈窓）は価値が高いが影響範囲大。
+
