@@ -7248,11 +7248,13 @@ def _candidate_sentence_count(text: str) -> int:
 
 ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
     r"そうなんですね|そうなんですか|そうなんだ|なるほど|わかります|分かります|"
-    r"たしかに|確かに|ですよね|いいですね|素敵ですね|楽しそうですね|"
-    r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま|"
+    r"たしかに|確かに|ですよね|いいですね|素敵ですね|すてきですね|楽しそうですね|"
+    r"気になりますね|気になります|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま|"
     r"うれしいです|嬉しいです|うれしいな|嬉しいな|ありがとうございます|ありがとう|"
     r"ぜひ(?:行きましょう|お願いしたいです|お願いします|行きましょ)?|"
-    r"ぜひよろしくお願いします|楽しみですね|楽しみです"
+    r"ぜひよろしくお願いします|楽しみですね|楽しみです|"
+    r"気分転換になりますよね|落ち着きますよね|落ち着けていいですね|贅沢ですね|最高ですね|美味しそうですね|おいしそうですね|"
+    r"楽しそうです|居心地が良さそうです|リフレッシュできそうですね"
 )
 QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか|いかがですか|どうですか")
 
@@ -7293,32 +7295,56 @@ def _prioritize_question_candidate(
     *,
     invite_decision: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Promote the first question-bearing candidate to index 0 when appropriate."""
+    """Prioritize candidates to recommended index 0 by conversational quality.
+
+    Hierarchy:
+      Tier 3: Both Acknowledgment/Empathy and Partner Question (optimal shape)
+      Tier 2: Partner Question
+      Tier 1: Acknowledgment/Empathy
+      Tier 0: Other
+    Preserves first candidate when refusal/caution contexts apply, when first candidate
+    is already an invitation, or when first candidate is a single-sentence reaction.
+    """
     if len(candidates) <= 1:
         return candidates
     if not _should_prioritize_question_candidate(context, invite_decision=invite_decision):
         return candidates
     first_text = str(candidates[0].get("text", ""))
-    if _candidate_has_partner_question(first_text):
+    if invite_decision == "invite_gently" and INVITATION_PATTERN.search(first_text):
         return candidates
     if _candidate_sentence_count(first_text) < 2:
         return candidates
-    if invite_decision == "invite_gently" and INVITATION_PATTERN.search(first_text):
+
+    def candidate_tier(text: str) -> int:
+        has_a = bool(ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text))
+        has_q = _candidate_has_partner_question(text)
+        if has_a and has_q:
+            return 3
+        if has_q:
+            return 2
+        if has_a:
+            return 1
+        return 0
+
+    first_tier = candidate_tier(first_text)
+    if first_tier == 3:
         return candidates
-    question_index = next(
-        (
-            index
-            for index, candidate in enumerate(candidates)
-            if _candidate_has_partner_question(str(candidate.get("text", "")))
-        ),
-        None,
-    )
-    if question_index is None or question_index == 0:
+
+    best_index = 0
+    best_tier = first_tier
+    for index, candidate in enumerate(candidates[1:], 1):
+        tier = candidate_tier(str(candidate.get("text", "")))
+        if tier > best_tier:
+            best_tier = tier
+            best_index = index
+
+    if best_index == 0:
         return candidates
+
     return [
-        candidates[question_index],
-        *candidates[:question_index],
-        *candidates[question_index + 1:],
+        candidates[best_index],
+        *candidates[:best_index],
+        *candidates[best_index + 1:],
     ]
 
 
