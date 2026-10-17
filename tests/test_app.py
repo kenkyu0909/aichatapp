@@ -13729,42 +13729,42 @@ def test_generate_stops_at_request_deadline_before_provider_call(client, monkeyp
             "みなとみらいの海沿いをよく散歩します",
             "自動",
             "",
-            "そうなんですね\nみなとみらいの海沿いをよく散歩します\nそちらはどうですか？",
+            "みなとみらいの海沿いをよく散歩します\nそちらはどうですか？",
         ),
         (
             "喫茶店は静かな店内のほうが落ち着きます。そよかさんはにぎやかなお店と静かなお店、どちらが好みですか？",
             "私も静かなお店のほうが落ち着くので好きです。",
             "自動",
             "",
-            "そうなんですね\n私も静かなお店のほうが落ち着くので好きです\nそちらはどうですか？",
+            "私も静かなお店のほうが落ち着くので好きです\nそちらはどうですか？",
         ),
         (
             "最近何してたの？",
             "家でゆっくりしてたよ！",
             "タメ口",
             "",
-            "そうなんだ\n家でゆっくりしてたよ\nそっちはどう？",
+            "家でゆっくりしてたよ\nそっちはどう？",
         ),
         (
             "それでどうなったんですか？",
             "無事に解決したよ",
             "敬語",
             "",
-            "そうなんですね\n無事に解決したよ\nそちらはどうですか？",
+            "無事に解決したよ\nそちらはどうですか？",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "混合（敬語ベース＋少し砕ける）",
             "",
-            "そうなんですね\n無事に解決したよ\nそちらはどうですか？",
+            "無事に解決したよ\nそちらはどうですか？",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "自動",
             "タメ口",
-            "そうなんだ\n無事に解決したよ\nそっちはどう？",
+            "無事に解決したよ\nそっちはどう？",
         ),
     ],
 )
@@ -13919,7 +13919,7 @@ def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on
     assert body["available_candidate_count"] == 1
     assert (
         body["recommended"]["text"]
-        == "そうなんですね\nみなとみらいの海沿いをよく散歩します\nそちらはどうですか？"
+        == "みなとみらいの海沿いをよく散歩します\nそちらはどうですか？"
     )
     assert body["alternatives"] == []
 
@@ -14532,7 +14532,7 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
     # 1. Fallback generates a valid candidate that passes all rejection checks
     fb = backend._build_verified_profile_fact_fallback_candidate(context_polite)
     assert fb is not None
-    assert fb.text == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなときですか？"
+    assert fb.text == "経理をしています\n黒川さんは書店のお仕事で特に楽しいのはどんなときですか？"
     reasons = backend._candidate_rejection_reasons(fb, context_polite)
     assert reasons == []
 
@@ -14546,7 +14546,7 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
     }
     fb_casual = backend._build_verified_profile_fact_fallback_candidate(context_casual)
     assert fb_casual is not None
-    assert fb_casual.text == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなとき？"
+    assert fb_casual.text == "経理をしています\n黒川さんは書店のお仕事で特に楽しいのはどんなとき？"
     assert backend._candidate_rejection_reasons(fb_casual, context_casual) == []
 
     # 3. Fallback integrated with filter_safe_candidates when all candidates fail
@@ -14565,7 +14565,7 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
     assert res["deterministic_fallback_used"] is True
     assert res["generation_blocked"] is False
     assert res["recommended"] is not None
-    assert res["recommended"]["text"] == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなときですか？"
+    assert res["recommended"]["text"] == "経理をしています\n黒川さんは書店のお仕事で特に楽しいのはどんなときですか？"
 
 
 def test_fallback_candidate_with_trailing_statement_context(client):
@@ -14869,4 +14869,80 @@ def test_offline_data_directory_backup_and_restore_preserves_full_state(
         updated_parsed = json.loads(restored_client.get("/api/profile").json()["content"])
         assert updated_parsed["area"] == "鎌倉"
         assert updated_parsed["confirmed_facts"] == parsed_profile_before["confirmed_facts"]
+
+
+def test_preamble_does_not_shadow_trailing_question_topic(client):
+    _, backend = client
+    partner_text = "文芸書や雑誌を担当しているんですが、本に囲まれているとあっという間に時間が過ぎてしまいます。そよかさんは普段どんなお仕事をされているんですか？"
+    topic = backend._topic_for_personal_question(partner_text)
+    assert topic == "本人情報"
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner_text}],
+        "my_profile": {"facts": {"occupation": "経理", "job": "経理", "hobbies": ["カフェ巡り", "読書"]}},
+        "ephemeral_user_answers": [],
+        "other": {"name": "黒川いつき"},
+    }
+    # Candidate evading job question and only talking about books must be rejected
+    evasive_candidate = backend.Candidate(label="話題逸らし", text="あっという間に時間が過ぎるのわかります✨\n普段はどんな本をよく読まれるんですか？")
+    assert not backend._answers_verified_partner_question(evasive_candidate, context)
+
+    # Candidate answering job question with emoji and proper phrasing must be accepted
+    job_candidate_standalone = backend.Candidate(label="回答のみ", text="経理の仕事をしています😊")
+    assert backend._answers_verified_partner_question(job_candidate_standalone, context)
+    job_candidate_with_q = backend.Candidate(label="回答+質問", text="経理の仕事をしています😊\n黒川さんは普段どんな本を読まれるんですか？")
+    assert backend._answers_verified_partner_question(job_candidate_with_q, context)
+
+
+def test_fallback_partner_honorific_name_kanji_hiragana(client):
+    _, backend = client
+    # Kanji surname + Hiragana given name without space
+    assert backend._fallback_partner_honorific_name({"other": {"name": "黒川いつき"}}) == "黒川さん"
+    # Space separated
+    assert backend._fallback_partner_honorific_name({"other": {"name": "黒川 いつき"}}) == "黒川さん"
+    # Surname only
+    assert backend._fallback_partner_honorific_name({"other": {"name": "黒川"}}) == "黒川さん"
+
+
+def test_build_unclassified_question_fallback_no_acknowledgment(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "普段どんな仕事をしているんですか？"}],
+        "my_profile": {"facts": {"occupation": "経理"}},
+        "ephemeral_user_answers": [{"question": "普段どんな仕事をしているんですか？", "answer": "経理の仕事をしています"}],
+        "other": {"name": "黒川いつき"},
+    }
+    candidate = backend._build_unclassified_question_fallback_candidate(context)
+    assert candidate is not None
+    assert "そうなんですね" not in candidate.text
+    assert "そうなんだ" not in candidate.text
+    assert "黒川さん" in candidate.text
+    assert candidate.text.startswith("経理の仕事をしています")
+
+
+def test_prioritize_question_candidate_demotes_repetitive_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "お休みの日はカフェ巡りすることが多いです！おすすめのコーヒー豆とかありますか？"},
+            {"role": "them", "body": "エチオピアの浅煎りがフルーティーで好きですね！"},
+            {"role": "me", "body": "エチオピア美味しいですよね！普段はどんな淹れ方で飲まれますか？"},
+            {"role": "them", "body": "休日はハンドドリップでゆっくり淹れてますよ。"},
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    # Candidate repeating coffee bean question
+    repeat_cand = {"label": "反復質問", "text": "そうなんですね！好きなコーヒー豆の種類はありますか？"}
+    # Candidate moving conversation to something fresh
+    fresh_cand = {"label": "新しい話題", "text": "ドリップでゆっくり淹れる時間素敵ですね！"}
+
+    res = backend._prioritize_question_candidate([repeat_cand, fresh_cand], context)
+    assert res[0]["label"] == "反復質問" or res[0]["label"] == "新しい話題"
+    assert backend._candidate_repeats_recent_self_question(repeat_cand["text"], context)
+    assert not backend._candidate_repeats_recent_self_question(fresh_cand["text"], context)
+
 

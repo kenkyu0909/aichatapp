@@ -1043,6 +1043,17 @@ def _is_user_relationship_status_question(text: str) -> bool:
 
 
 def _topic_for_personal_question(text: str) -> str | None:
+    if re.search(r"[。\n]", text):
+        sentences = [s.strip() for s in re.split(r"[。\n]+", text) if s.strip()]
+        if len(sentences) > 1:
+            q_sentences = [
+                s for s in sentences
+                if re.search(r"[?？]|(?:ですか|ますか|でしょうか|何|どんな|どう|どこ|いつ|どちら|どの|教えて)", s)
+            ]
+            if q_sentences and q_sentences[-1] != text:
+                q_topic = _topic_for_personal_question(q_sentences[-1])
+                if q_topic:
+                    return q_topic
     # Do not mistake a question about a third party or a general service for
     # a request for the user's own information merely because it mentions a
     # personal topic.
@@ -6629,7 +6640,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 answer_seen = False
                 segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
                 for segment in (part.strip() for part in segments if part.strip()):
-                    normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
+                    normalized_segment = re.sub(r"[\s、。！!？?😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]", "", segment)
                     if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ"}:
                         continue
                     if _is_partner_directed_followup_question(segment, question):
@@ -6714,6 +6725,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                                 f"{normalized_value}です",
                                 f"{normalized_value}をしています",
                                 f"{normalized_value}として働いています",
+                                f"{normalized_value}の仕事をしています",
+                                f"{normalized_value}のお仕事をしています",
+                                f"{normalized_value}の仕事です",
+                                f"{normalized_value}のお仕事です",
                             }
                         if without_subject in allowed_answers:
                             matched_fact = True
@@ -7289,6 +7304,39 @@ def _should_prioritize_question_candidate(context: dict, invite_decision: str | 
     return True
 
 
+def _candidate_repeats_recent_self_question(text: str, context: dict) -> bool:
+    """Return True if the candidate's question repeats a question topic already asked by 'me' recently."""
+    if not _candidate_has_partner_question(text):
+        return False
+    recent_me = [
+        str(m.get("body", ""))
+        for m in context.get("history", [])
+        if m.get("role") == "me"
+    ][-4:]
+    if not recent_me:
+        return False
+    candidate_questions = [
+        part.strip()
+        for part in re.split(r"(?<=[?？])|\n+", text)
+        if re.search(r"[?？]|(?:ですか|ますか|でしょうか|何|どんな|どう|どこ|いつ|どちら|どの|教えて)", part)
+    ]
+    if not candidate_questions:
+        return False
+    question_keywords = [
+        (r"コーヒー豆|豆の種類|好きな豆|お気に入りの豆", r"コーヒー豆|豆|焙煎|深煎り|浅煎り"),
+        (r"淹れ方|ハンドドリップ|抽出", r"淹れ方|ドリップ|抽出"),
+        (r"好きな作家|お気に入りの作家|おすすめの作家", r"作家|著者"),
+        (r"好きな本|おすすめの本|お気に入りの本", r"好きな本|おすすめの本|お気に入りの本"),
+        (r"行きつけ|おすすめのカフェ|好きなカフェ", r"行きつけ|おすすめのカフェ|好きなカフェ"),
+    ]
+    for cand_q in candidate_questions:
+        for pattern_cand, pattern_me in question_keywords:
+            if re.search(pattern_cand, cand_q):
+                if any(re.search(pattern_me, me_text) for me_text in recent_me):
+                    return True
+    return False
+
+
 def _prioritize_question_candidate(
     candidates: list[dict[str, Any]],
     context: dict,
@@ -7318,6 +7366,8 @@ def _prioritize_question_candidate(
     def candidate_tier(text: str) -> int:
         has_a = bool(ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text))
         has_q = _candidate_has_partner_question(text)
+        if _candidate_repeats_recent_self_question(text, context):
+            has_q = False
         if has_a and has_q:
             return 3
         if has_q:
@@ -7722,6 +7772,9 @@ def _fallback_partner_honorific_name(context: dict) -> str | None:
     first_token = cleaned.split(" ")[0]
     if re.search(r"(?:さん|くん|ちゃん|様)$", first_token):
         return first_token
+    kanji_kana_match = re.match(r"^([一-龯]{1,4})([ぁ-んァ-ヶ]{1,4})$", first_token)
+    if kanji_kana_match:
+        return f"{kanji_kana_match.group(1)}さん"
     if re.fullmatch(r"[一-龯ぁ-んァ-ヶ]{1,8}", first_token):
         return f"{first_token}さん"
     return None
@@ -7763,15 +7816,16 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
             followup = f"{partner_label}は都合どうかな？" if casual else f"{partner_label}はご都合いかがですか？"
         else:
             followup = "そっちは都合どう？" if casual else "そちらはご都合いかがですか？"
+        candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
-        ack = "そうなんだ" if casual else "そうなんですね"
         if partner_label:
             followup = f"{partner_label}はどう？" if casual else f"{partner_label}はいかがですか？"
         else:
             followup = "そっちはどう？" if casual else "そちらはどうですか？"
+        candidate_text = f"{clean_answer}\n{followup}"
     candidate = Candidate(
         label="回答を反映した返信",
-        text=f"{ack}\n{clean_answer}\n{followup}",
+        text=candidate_text,
         reply_move="react",
     )
     if _candidate_rejection_reasons(candidate, context):
