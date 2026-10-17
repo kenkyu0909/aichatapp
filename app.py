@@ -1413,23 +1413,33 @@ def _personal_information_scope(topic: str | None, text: str) -> tuple[str, str]
         "映画館頻度": "映画",
         "映画館場所": "映画館",
     }.get(topic, topic)
-    if re.search(r"どの映画館|どこの映画館|よく行く映画館|行きつけの映画館|どの辺|どのあたり|どのエリア|どこらへん|どこら辺|どの地域|どの場所|地域|場所|どこ(?:に|へ)行", text):
+    target_text = text
+    if re.search(r"[。\n!?！？]", text):
+        sentences = [s.strip() for s in re.split(r"[。\n!?！？]+", text) if s.strip()]
+        if len(sentences) > 1:
+            q_sentences = [
+                s for s in sentences
+                if re.search(r"[?？]|(?:ですか|ますか|でしょうか|何|どんな|どう|どこ|いつ|どちら|どの|教えて|読むの|行くの|するの|あるの)", s)
+            ]
+            if q_sentences:
+                target_text = q_sentences[-1]
+    if re.search(r"どの映画館|どこの映画館|よく行く映画館|行きつけの映画館|どの辺|どのあたり|どのエリア|どこらへん|どこら辺|どの地域|どの場所|地域|場所|どこ(?:に|へ)行", target_text):
         detail = "location"
-    elif re.search(r"雰囲気|静か|落ち着|にぎやか|賑やか|広々|レトロ|おしゃれ|開放的", text):
+    elif re.search(r"雰囲気|静か|落ち着|にぎやか|賑やか|広々|レトロ|おしゃれ|開放的", target_text):
         detail = "atmosphere"
-    elif re.search(r"最近|この前|昨日|先週|観た映画|見た映画|読んだ本|行ったカフェ", text):
+    elif re.search(r"最近|この前|昨日|先週|観た映画|見た映画|読んだ本|行ったカフェ", target_text):
         detail = "recent_experience"
     elif topic == "料理習慣" and re.search(
         r"(?:最近|この前|昨日|先週|先日).{0,16}(?:料理|ご飯|ごはん|作っ|作り)|"
         r"(?:料理|ご飯|ごはん).{0,16}(?:最近|この前|昨日|先週|先日).{0,10}(?:作っ|作り)",
-        text,
+        target_text,
     ):
         detail = "recent_experience"
-    elif re.search(r"ジャンル|何系|どんな.{0,8}(?:本|映画)|好きな.{0,8}(?:本|映画)|ミステリー|小説|漫画|マンガ|洋画|邦画|アニメ|ドキュメンタリー|アクション|恋愛|コメディ|SF", text):
+    elif re.search(r"ジャンル|何系|どんな.{0,8}(?:本|映画)|好きな.{0,8}(?:本|映画)|ミステリー|小説|漫画|マンガ|洋画|邦画|アニメ|ドキュメンタリー|アクション|恋愛|コメディ|SF", target_text):
         detail = "genre"
-    elif re.search(r"頻度|どのくらい|どれくらい|何回|何度|週\s*\d+|週に|週末によく|月に|よく行|普段どのくらい|週末", text):
+    elif re.search(r"頻度|どのくらい|どれくらい|何回|何度|週\s*\d+|週に|週末によく|月に|よく行|普段どのくらい|週末", target_text):
         detail = "frequency"
-    elif re.search(r"好き|好み|趣味|お好き", text):
+    elif re.search(r"好き|好み|趣味|お好き", target_text):
         detail = "preference"
     else:
         detail = "general"
@@ -6172,8 +6182,9 @@ def _candidate_uses_specific_answer_detail(candidate_text: str, evidence: str) -
         normalize(token)
         for token in re.split(
             r"(?:は|が|を|に|で|と|の|も|へ|から|まで|です|でした|ます|ません|"
-            r"読むことが多い|読むことがあります|読むことが|読む|読みます|読み|普段|最近|よく|"
-            r"たまに|時々|ときどき|月に数回|年に数回)",
+            r"読み返してい(?:る|ます|た)?|読み返して(?:る|い)?(?:よ|ね|な)?|読み返し(?:ている|てます|てた)?|読み返|"
+            r"読んでいる|読んでい|読んで|読んだ|読むことが多い|読むことがあります|読むことが|読む|読みます|読み|"
+            r"普段|最近|よく|たまに|時々|ときどき|月に数回|年に数回|てるよ|てるね|てる|ている|てます|てた)",
             evidence,
         )
         if len(normalize(token)) >= 2 and normalize(token) not in generic_terms
@@ -6812,14 +6823,24 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             same_scope = _same_personal_information_scope(topic, question, answer_question)
             for segment in _reading_genre_evidence_segments(answer_text):
                 is_recent_experience = bool(re.search(r"最近|この前|昨日|先週|先日|今日", segment))
-                if is_recent_experience:
+                if (
+                    is_recent_experience
+                    and re.search(r"普段|いつも|日頃|日常|習慣", question)
+                    and _reading_genre_frequency(candidate.text) == "habitual"
+                ):
                     # A recent title cannot establish the habitual genre asked
                     # for, even when another clause names a habitual genre.
                     continue
                 evidence_polarity = _reading_genre_polarity(segment)
-                if same_scope or explicit_genre_scope and (
+                if (
+                    same_scope
+                    or explicit_genre_scope
+                    or _ephemeral_answer_addresses_question(topic, question, answer_question)
+                    or not re.search(r"普段|いつも|日頃|日常|習慣", question)
+                ) and (
                     evidence_polarity is True
                     or not re.search(r"最近|この前|昨日|先週|先日|今日", segment)
+                    or _candidate_uses_specific_answer_detail(candidate.text, segment)
                 ):
                     evidence.append((segment, True if evidence_polarity is None else evidence_polarity))
         candidate_polarity = _reading_genre_polarity(candidate.text)
@@ -7831,6 +7852,16 @@ def _unclassified_personal_question_user_answer(context: dict) -> str | None:
                 and normalize(answer_text)
             ):
                 return answer_text
+        return None
+    if topic in {"読書", "カフェ場所", "映画", "カフェ最近", "旅行最近"}:
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            answer_question = str(answer.get("question", "")).strip()
+            if (
+                re.sub(r"[\s、。，．！!？?]", "", answer_text)
+                and _ephemeral_answer_addresses_question(topic, question, answer_question)
+            ):
+                return answer_text
     return None
 
 
@@ -7855,6 +7886,8 @@ def _fallback_should_use_casual_tone(
     if partner_register == "カジュアル（推定）":
         return True
     if partner_register == "敬語（推定）":
+        return False
+    if context.get("mode") == "first":
         return False
     return not bool(re.search(r"です|ます|でした|ました|ません|でしょうか", question))
 
@@ -8046,39 +8079,73 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
     combined_text = other_job + " " + other_desc
     topic_line = ""
     question_line = ""
-    if other_job and any(term in other_job for term in profile_terms):
-        topic_line = f"{other_job}をされているんですね！"
-        if re.search(r"本|書店|古本", combined_text):
-            question_line = "最近おすすめの本はありますか？"
-        elif re.search(r"カフェ|喫茶|珈琲|飲食|料理|パン", combined_text):
-            question_line = "普段はどんなお店に行かれることが多いですか？"
+    casual = _fallback_should_use_casual_tone(context, "", "")
+    if casual:
+        if other_job and any(term in other_job for term in profile_terms):
+            topic_line = f"{other_job}をしてるんだね！"
+            if re.search(r"本|書店|古本", combined_text):
+                question_line = "最近おすすめの本ってある？"
+            elif re.search(r"カフェ|喫茶|珈琲|飲食|料理|パン", combined_text):
+                question_line = "普段はどんなお店によく行くの？"
+            else:
+                question_line = "お仕事で特に楽しいのはどんなとき？"
+        elif re.search(r"本|読書|小説|古本", other_desc):
+            topic_line = "読書が好きなんだね！"
+            question_line = "最近おすすめの本ってある？"
+        elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
+            topic_line = "喫茶店が好きなんだね！"
+            question_line = "普段はどんなお店によく行くの？"
+        elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
+            topic_line = "散歩が好きなんだね！"
+            question_line = "休日はどんな場所を歩くことが多いの？"
+        elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
+            topic_line = "映画が好きなんだね！"
+            question_line = "最近観てよかった作品ってある？"
         else:
-            question_line = "お仕事で特に楽しいのはどんなときですか？"
-    elif re.search(r"本|読書|小説|古本", other_desc):
-        topic_line = "読書がお好きなんですね！"
-        question_line = "最近おすすめの本はありますか？"
-    elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
-        topic_line = "喫茶店がお好きなんですね！"
-        question_line = "普段はどんなお店に行かれることが多いですか？"
-    elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
-        topic_line = "散歩がお好きなんですね！"
-        question_line = "休日はどんな場所を歩かれることが多いですか？"
-    elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
-        topic_line = "映画がお好きなんですね！"
-        question_line = "最近観てよかった作品はありますか？"
-    else:
-        best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
-        topic_line = f"{best_term}がお好きなんですね！"
-        question_line = f"{best_term}で特におすすめはありますか？"
+            best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
+            topic_line = f"{best_term}が好きなんだね！"
+            question_line = f"{best_term}で特におすすめってある？"
 
-    candidate = Candidate(
-        label="初回メッセージ",
-        text=f"はじめまして！\nマッチありがとうございます😊\nプロフィールの雰囲気がすてきだなと思っていたのでマッチできてうれしいです！\n{topic_line}\n{question_line}",
-        reply_move="react",
-    )
+        candidate = Candidate(
+            label="初回メッセージ",
+            text=f"はじめまして！\nマッチありがとう😊\nプロフィールの雰囲気がすてきだなと思ってたからマッチできてすごくうれしい！\n{topic_line}\n{question_line}",
+            reply_move="react",
+        )
+    else:
+        if other_job and any(term in other_job for term in profile_terms):
+            topic_line = f"{other_job}をされているんですね！"
+            if re.search(r"本|書店|古本", combined_text):
+                question_line = "最近おすすめの本はありますか？"
+            elif re.search(r"カフェ|喫茶|珈琲|飲食|料理|パン", combined_text):
+                question_line = "普段はどんなお店に行かれることが多いですか？"
+            else:
+                question_line = "お仕事で特に楽しいのはどんなときですか？"
+        elif re.search(r"本|読書|小説|古本", other_desc):
+            topic_line = "読書がお好きなんですね！"
+            question_line = "最近おすすめの本はありますか？"
+        elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
+            topic_line = "喫茶店がお好きなんですね！"
+            question_line = "普段はどんなお店に行かれることが多いですか？"
+        elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
+            topic_line = "散歩がお好きなんですね！"
+            question_line = "休日はどんな場所を歩かれることが多いですか？"
+        elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
+            topic_line = "映画がお好きなんですね！"
+            question_line = "最近観てよかった作品はありますか？"
+        else:
+            best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
+            topic_line = f"{best_term}がお好きなんですね！"
+            question_line = f"{best_term}で特におすすめはありますか？"
+
+        candidate = Candidate(
+            label="初回メッセージ",
+            text=f"はじめまして！\nマッチありがとうございます😊\nプロフィールの雰囲気がすてきだなと思っていたのでマッチできてうれしいです！\n{topic_line}\n{question_line}",
+            reply_move="react",
+        )
     if _candidate_rejection_reasons(candidate, context):
         return None
     return candidate
+
 
 
 def filter_safe_candidates(
@@ -8419,6 +8486,24 @@ def generate(data: GenerateInput):
             "会話方針がinvite_gentlyなら、3案のいずれかをinviteにして自然に誘います。"
             "本人事実が未確認ならgrounded_shareを強行せず、react等の安全な案に置き換えます。"
             "候補の文末だけを変えて多様性を装わず、役割を本文内容にも反映します。"
+        )
+    tone_setting = str(data.tone or "自動").strip()
+    style_fact = str(context.get("my_profile", {}).get("facts", {}).get("style", "") or "")
+    if tone_setting == "タメ口" or (tone_setting == "自動" and re.search(r"タメ口|ため口|カジュアル", style_fact)):
+        system_instruction += (
+            "\n【文体指定（最優先）】親しみやすいタメ口（カジュアル敬語なしのフランクな口調）で書いてください。"
+            "「〜です」「〜ます」「〜でした」「〜ました」「〜ありがとうございます」「〜お好きなんですね」「〜ありますか」「〜でしょうか」などの敬語・丁寧語はすべての候補で絶対に使わないでください。"
+            "語尾は「〜だよ」「〜だね」「〜してるよ」「〜かな」「〜？」「〜ある？」「〜行く？」のように自然なタメ口にしてください。"
+            "初回の挨拶やお礼も「マッチありがとう！」「マッチできてうれしい！」のように自然に崩してください。"
+        )
+    elif tone_setting == "混合" or (tone_setting == "自動" and re.search(r"混合", style_fact)):
+        system_instruction += (
+            "\n【文体指定】敬語ベースで少し崩す親しみやすい混合スタイル（「〜ですね」「〜ですよ」「〜ですか？」を基調に柔らかい口調）で書いてください。"
+            "硬すぎる敬語（〜でございます等）は避け、柔らかく親しみやすい口調にしてください。"
+        )
+    elif tone_setting == "敬語" or (tone_setting == "自動" and re.search(r"敬語|丁寧|ですます", style_fact)):
+        system_instruction += (
+            "\n【文体指定】落ち着いた丁寧な敬語（です・ます調）で書いてください。"
         )
     attempted_models: list[dict[str, str]] = []
     fact_repair_used = False

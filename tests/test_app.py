@@ -14659,7 +14659,97 @@ def test_first_message_fallback_candidate(client):
     assert "はじめまして！" in res["recommended"]["text"]
 
 
+def test_first_message_fallback_candidate_casual_tone(client):
+    _, backend = client
+    context_casual = {
+        "mode": "first",
+        "my_profile": {
+            "facts": {
+                "name": "水野そよか",
+                "job": "経理",
+                "style": "親しみやすいタメ口で短め",
+            }
+        },
+        "other": {
+            "name": "黒川いつき",
+            "occupation": "書店員",
+            "description": "中野で書店員をしています。休みの日は古本屋をのぞいたり街をぶらぶら歩いたりしています。喫茶店のカレーとドーナツが好きです。ゆっくり話せる方だとうれしいです。",
+        },
+        "reply_preferences": {"tone": "タメ口"},
+        "history": [],
+    }
+    fb = backend._build_first_message_fallback_candidate(context_casual)
+    assert fb is not None
+    assert "はじめまして！" in fb.text
+    assert "マッチありがとう" in fb.text
+    assert "書店員をしてるんだね！" in fb.text
+    assert "です" not in fb.text and "ます" not in fb.text
+    assert backend._candidate_rejection_reasons(fb, context_casual) == []
 
+
+def test_direct_reading_question_evasion_rejected_when_user_answered(client):
+    _, backend = client
+    q = "マッチありがとう！イツキくんよろしくねー！最近は神保町で昔の短編集を見つけて読んでるよ。イツキくんはどんな本読むの？"
+    context = {
+        "mode": "reply",
+        "other": {"name": "黒川いつき"},
+        "history": [{"role": "them", "body": q}],
+        "my_profile": {"facts": {"hobbies": ["読書", "カフェ巡り"], "style": "親しみやすいタメ口で短め"}},
+        "ephemeral_user_answers": [{
+            "question": "普段はどんなジャンルの本を読みますか？",
+            "answer": "最近は星新一のショートショートを読み返してるよ",
+        }],
+        "reply_preferences": {"tone": "タメ口"},
+    }
+    # Candidate evades the question with a generic profile statement
+    evasive = backend.Candidate(
+        label="自己開示の共有",
+        text="読書が好きでカフェでのんびり読む時間も好きなんです☕️\nよく行く街やエリアはありますか？",
+        reply_move="grounded_share",
+    )
+    reasons_evasive = backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" in reasons_evasive
+
+    # Candidate faithfully answers with the user's confirmed reading fact
+    good = backend.Candidate(
+        label="回答",
+        text="最近は星新一のショートショートを読み返してるよ\n黒川さんはどう？",
+        reply_move="react",
+    )
+    reasons_good = backend._candidate_rejection_reasons(good, context)
+    assert reasons_good == []
+
+    # Deterministic fallback synthesizes a safe candidate using the answer
+    fallback = backend._build_unclassified_question_fallback_candidate(context)
+    assert fallback is not None
+    assert "星新一" in fallback.text
+    assert backend._candidate_rejection_reasons(fallback, context) == []
+
+    # Regression 1: A user answer from an unrelated topic must NOT be returned
+    mismatched_context = dict(context)
+    mismatched_context["ephemeral_user_answers"] = [{
+        "question": "普段行く映画館の名前や場所を教えてください",
+        "answer": "TOHOシネマズによく行きます",
+    }]
+    assert backend._unclassified_personal_question_user_answer(mismatched_context) is None
+
+    # Regression 2: Accuracy test (habit exaggeration / unconfirmed genre) must still be rejected
+    exaggerated_habit = backend.Candidate(
+        label="未確認の習慣とジャンル捏造",
+        text="普段はミステリーばかり読みます！\n黒川さんはどう？",
+        reply_move="grounded_share",
+    )
+    reasons_exaggerated = backend._candidate_rejection_reasons(exaggerated_habit, context)
+    assert "相手からの直接質問に未回答" in reasons_exaggerated
+
+    # Regression 3: Accuracy test (unconfirmed title substitution) must still be rejected
+    wrong_title = backend.Candidate(
+        label="未確認の作品名捏造",
+        text="最近は夏目漱石を読み返してるよ！\n黒川さんはどう？",
+        reply_move="grounded_share",
+    )
+    reasons_wrong = backend._candidate_rejection_reasons(wrong_title, context)
+    assert "相手からの直接質問に未回答" in reasons_wrong
 
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
     client, tmp_path, monkeypatch
