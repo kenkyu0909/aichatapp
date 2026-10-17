@@ -532,6 +532,27 @@ MEETING_RESISTANCE_PATTERN = re.compile(
     r"(?:(?:直接|実際に)?会う|会って|会うこと).{0,16}抵抗(?:が|を|は)?(?:あります|ある|感じます|感じる)|"
     r"抵抗(?:が)?(?:あります|ある).{0,14}(?:会う|会って)"
 )
+def _is_concrete_date_or_place_proposal(text: str) -> bool:
+    if not text:
+        return False
+    if re.search(r"先週|昨日|一昨日|おととい|この前|こないだ|先日|過去|でした|だった|過ごした|何してた", text):
+        return False
+    date_proposal = bool(
+        re.search(
+            r"(?:(?:今週|来週|再来週|今度|次|この)?\s*(?:(?:月|火|水|木|金|土|日)曜(?:日)?|週末|\d{1,2}月\d{1,2}日|\d{1,2}日)|明日|明後日)"
+            r".{0,12}(?:午前|午後|昼|夜|\d{1,2}時|夕方)?.*(?:いかが|どうですか|どうでしょう|どうでしょうか|空いて|都合|会え|行け|大丈夫)",
+            text,
+        )
+    )
+    place_proposal = bool(
+        re.search(
+            r"(?:(?:待ち合わせ|会う|合流|お茶|ご飯|食事).*(?:場所|駅|エリア|どこ|どのあたり))|"
+            r"(?:(?:駅|あたり|周辺|近く|エリア|カフェ|喫茶店|お店|店).*(?:で会え|で待ち合わせ|で合流|にしませんか|にしましょう|はいかが|はどうですか|はどうでしょう))|"
+            r"(?:(?:待ち合わせ|会う|お茶|ご飯).*(?:どこ|どのあたり|どの駅|どのエリア).*(?:いいですか|希望|ありますか))",
+            text,
+        )
+    )
+    return date_proposal or place_proposal
 PURCHASE_NEGATION_PATTERN = re.compile(
     r"(?:衝動買い|即決(?:購入)?|即買い|すぐ.{0,4}買|迷わず買).{0,14}(?:避け|控え|しません|しない|しないです|買わない)|"
     r"すぐには買わない|衝動買いはしない|即決はしない|衝動買いを避け(?:ています|ている)|衝動買いは控え(?:ています|ている)"
@@ -2188,16 +2209,27 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
 
     # Availability must be explicit and confirmed; a tentative profile note is not a promise.
     if topic == "予定":
-        tentative_markers = ("候補", "未定", "未確定", "確定ではない", "まだ確定", "たぶん", "かも")
-        schedule_values = [str(facts.get(key, "")) for key in ("availability", "schedule", "available_time", "予定")]
-        if any(value.strip() and not any(marker in value for marker in tentative_markers) for value in schedule_values):
-            return True
+        if not (question_text and _is_concrete_date_or_place_proposal(question_text)):
+            tentative_markers = ("候補", "未定", "未確定", "確定ではない", "まだ確定", "たぶん", "かも")
+            schedule_values = [str(facts.get(key, "")) for key in ("availability", "schedule", "available_time", "予定")]
+            if any(value.strip() and not any(marker in value for marker in tentative_markers) for value in schedule_values):
+                return True
     if topic == "会う場所":
-        return any(facts.get(key) for key in ("preferred_meeting_regions", "meeting_area", "会える地域")) or any(
-            answer.get("answer", "").strip()
-            for answer in context.get("ephemeral_user_answers", [])
-            if re.search(r"会う場所|待ち合わせ|会う地域", answer.get("question", ""))
-        )
+        if not (question_text and _is_concrete_date_or_place_proposal(question_text)):
+            if any(facts.get(key) for key in ("preferred_meeting_regions", "meeting_area", "会える地域")):
+                return True
+        for answer in context.get("ephemeral_user_answers", []):
+            if answer.get("answer", "").strip() and re.search(r"会う場所|待ち合わせ|会う地域|どう返信したいか", answer.get("question", "")):
+                return True
+    if topic in {"予定", "会う場所"} and question_text and _is_concrete_date_or_place_proposal(question_text):
+        quoted = question_text.strip().replace("\n", " ")[:180]
+        norm_quoted = re.sub(r"[\s　、。，．！!？?「」『』]", "", quoted)
+        for answer in context.get("ephemeral_user_answers", []):
+            ans_text = str(answer.get("answer", "")).strip()
+            ans_q = str(answer.get("question", ""))
+            norm_q = re.sub(r"[\s　、。，．!！?？「」『』]", "", ans_q)
+            if ans_text and (norm_quoted in norm_q or "どう返信したいか" in ans_q or any(term in ans_q for term in ("日時", "場所", "予定", "都合", "日程"))):
+                return True
 
     owned_question_keys: set[str] = set()
     if question_text:
@@ -2235,7 +2267,22 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     partner_messages = [m["body"] for m in context.get("history", []) if m.get("role") == "them"]
     if not partner_messages:
         return None
-    question_parts = _compound_direct_personal_question_parts(partner_messages[-1])
+    last_partner_msg = partner_messages[-1]
+    if _is_concrete_date_or_place_proposal(last_partner_msg):
+        quoted_proposal = last_partner_msg.strip().replace("\n", " ")[:180]
+        norm_quoted_proposal = re.sub(r"[\s　、。，．！!？?「」『』]", "", quoted_proposal)
+        has_proposal_answer = any(
+            str(a.get("answer", "")).strip()
+            and (
+                norm_quoted_proposal in re.sub(r"[\s　、。，．!！?？「」『』]", "", str(a.get("question", "")))
+                or "どう返信したいか" in str(a.get("question", ""))
+                or any(term in str(a.get("question", "")) for term in ("日時", "場所", "予定", "都合", "日程"))
+            )
+            for a in context.get("ephemeral_user_answers", [])
+        )
+        if not has_proposal_answer:
+            return personal_fact_question("予定", last_partner_msg)
+    question_parts = _compound_direct_personal_question_parts(last_partner_msg)
     for topic, question_text in question_parts:
         if _negative_binary_question_has_ambiguous_answer(context, question_text):
             return _negative_binary_question_clarification(question_text)
@@ -2243,7 +2290,7 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
             return personal_fact_question(topic, question_text)
     if question_parts:
         return None
-    topic = _topic_for_personal_question(partner_messages[-1])
+    topic = _topic_for_personal_question(last_partner_msg)
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
     if not topic and _is_unclassified_direct_question(partner_messages[-1]) and _is_unclassified_question_about_user(partner_messages[-1]):
@@ -2500,6 +2547,9 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
             question = "兄弟や姉妹について相手に伝えてよい内容を教えてください"
     elif topic == "料理習慣":
         question = "普段どのくらい料理や自炊をしますか？"
+    elif topic in {"予定", "会う場所"} and _is_concrete_date_or_place_proposal(source_question):
+        quoted_question = source_question.strip().replace("\n", " ")[:180]
+        question = f"相手の「{quoted_question}」についてどう返信したいか教えてください"
     elif topic == "予定":
         question = "相手に伝えてよい曜日や時間帯を教えてください"
     elif topic == "会う場所":
@@ -2576,9 +2626,14 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         "休日": "休日は普段どんなふうに過ごすか教えてください",
         }
         question = questions.get(topic, f"{topic}について相手に伝えてよい内容を教えてください")
+    purpose = (
+        "相手からの具体的な日時や場所の提案に対する本人の意向を確認するため"
+        if (topic in {"予定", "会う場所"} and _is_concrete_date_or_place_proposal(source_question))
+        else f"本人が確認していない{topic}の好みや経験を相手に伝えないため"
+    )
     return UserQuestion(
         question=question,
-        purpose=f"本人が確認していない{topic}の好みや経験を相手に伝えないため",
+        purpose=purpose,
     )
 
 
@@ -7087,8 +7142,9 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         ),
         "カフェ頻度": r"(?:カフェ|喫茶店).{0,18}(?:よく|頻繁|週|月|たまに|時々|ときどき|あまり)|(?:よく|頻繁|週|月|たまに|時々|ときどき|あまり).{0,18}(?:カフェ|喫茶店)|(?:週|月|年)に?\s*(?:\d+|数)\s*回|(?:毎日|毎週|毎月|毎年|頻繁|たまに|時々|ときどき|あまり|よく)",
         "料理習慣": r"(?:料理|自炊).{0,18}(?:する|作る|しない|作らない)",
+        "休日": r"(?:休日|休みの日|週末).{0,22}(?:過ご|カフェ|喫茶店|本|読書|映画|旅行|家|自宅|散歩|出かけ)|(?:過ご|カフェ|喫茶店|本|読書|映画|旅行|家|自宅|散歩|出かけ).{0,18}(?:休日|休みの日|週末)",
         "居住地": r"(?:住んで|在住|地域|エリア)",
-        "予定": r"(?:曜日|時間|予定|空いて|都合)",
+        "予定": r"(?:曜日|時間|予定|空いて|都合|日程|大丈夫|午前|午後)",
     }
     marker = patterns.get(topic)
     if not marker:
@@ -7312,7 +7368,7 @@ def _candidate_repeats_recent_self_question(text: str, context: dict) -> bool:
         str(m.get("body", ""))
         for m in context.get("history", [])
         if m.get("role") == "me"
-    ][-4:]
+    ][-6:]
     if not recent_me:
         return False
     candidate_questions = [
@@ -7323,8 +7379,8 @@ def _candidate_repeats_recent_self_question(text: str, context: dict) -> bool:
     if not candidate_questions:
         return False
     question_keywords = [
-        (r"コーヒー豆|豆の種類|好きな豆|お気に入りの豆", r"コーヒー豆|豆|焙煎|深煎り|浅煎り"),
-        (r"淹れ方|ハンドドリップ|抽出", r"淹れ方|ドリップ|抽出"),
+        (r"コーヒー豆|豆の種類|好きな豆|お気に入りの豆|どのような豆|何の豆|どんな豆|豆は|豆を", r"コーヒー豆|豆|焙煎|深煎り|浅煎り"),
+        (r"淹れ方|ハンドドリップ|抽出|こだわり", r"淹れ方|ドリップ|抽出|淹れ"),
         (r"好きな作家|お気に入りの作家|おすすめの作家", r"作家|著者"),
         (r"好きな本|おすすめの本|お気に入りの本", r"好きな本|おすすめの本|お気に入りの本"),
         (r"行きつけ|おすすめのカフェ|好きなカフェ", r"行きつけ|おすすめのカフェ|好きなカフェ"),
@@ -7539,9 +7595,48 @@ def _first_message_required_content_reasons(text: str, context: dict) -> list[st
     return reasons
 
 
+def _is_duplicate_or_near_identical_to_prior_me(candidate_text: str, prior_me_text: str) -> bool:
+    if not candidate_text.strip() or not prior_me_text.strip():
+        return False
+    clean_cand = re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", candidate_text)
+    clean_me = re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", prior_me_text)
+    if not clean_cand or not clean_me:
+        return False
+    if clean_cand == clean_me:
+        return True
+    similarity = SequenceMatcher(None, clean_cand, clean_me).ratio()
+    if similarity >= 0.85:
+        return True
+    cand_lines = [
+        re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", line)
+        for line in candidate_text.splitlines()
+        if re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", line)
+    ]
+    me_lines = [
+        re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", line)
+        for line in prior_me_text.splitlines()
+        if re.sub(r"[\s　、。，．！!？?笑😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+", "", line)
+    ]
+    if cand_lines and me_lines:
+        shared = 0
+        for cl in cand_lines:
+            if any(cl == ml or (len(cl) >= 8 and (cl in ml or ml in cl)) or SequenceMatcher(None, cl, ml).ratio() >= 0.85 for ml in me_lines):
+                shared += 1
+        if shared / len(cand_lines) >= 0.66:
+            return True
+    return False
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
+    recent_me_messages = [
+        str(m.get("body", ""))
+        for m in context.get("history", [])
+        if m.get("role") == "me"
+    ]
+    if recent_me_messages and _is_duplicate_or_near_identical_to_prior_me(text, recent_me_messages[-1]):
+        reasons.append("直前の自分の発言と重複")
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:
@@ -7690,10 +7785,10 @@ def _unclassified_personal_question_user_answer(context: dict) -> str | None:
     if _negative_binary_question_has_ambiguous_answer(context, question):
         return None
     topic = _topic_for_personal_question(question)
-    if topic == "予定":
+    if topic in {"予定", "会う場所"}:
         for answer in context.get("ephemeral_user_answers", []):
             answered_question = re.sub(r"\s+|[?？。！!]", "", str(answer.get("question", "")))
-            if any(term in answered_question for term in ("曜日", "時間帯", "予定", "都合")):
+            if any(term in answered_question for term in ("曜日", "時間帯", "予定", "都合", "返信", "日時", "場所", "日程")):
                 answer_text = str(answer.get("answer", "")).strip()
                 if re.sub(r"[\s、。，．！!？?]", "", answer_text):
                     return answer_text

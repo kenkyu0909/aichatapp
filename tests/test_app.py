@@ -14946,3 +14946,114 @@ def test_prioritize_question_candidate_demotes_repetitive_question(client):
     assert not backend._candidate_repeats_recent_self_question(fresh_cand["text"], context)
 
 
+def test_holiday_question_unanswered_rejected_and_answered_accepted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "休日は普段どんなふうに過ごすことが多いですか？"},
+        ],
+        "my_profile": {"facts": {"weekends": "カフェで読書をすることが多いです"}},
+        "ephemeral_user_answers": [],
+    }
+    # Unrelated response that fails to answer the weekend question
+    evasive_cand = backend.Candidate(
+        label="evasive",
+        text="静かな路地裏には素敵な発見がたくさんありますよね！\nカフェ巡りは楽しいです",
+    )
+    reasons = backend._candidate_rejection_reasons(evasive_cand, context)
+    assert "相手からの直接質問に未回答" in reasons
+
+    # Answering candidate that does answer the weekend question
+    answering_cand = backend.Candidate(
+        label="answering",
+        text="休日はカフェで読書をして過ごすことが多いです！\nのんびりできて落ち着きます",
+    )
+    reasons_ok = backend._candidate_rejection_reasons(answering_cand, context)
+    assert "相手からの直接質問に未回答" not in reasons_ok
+
+
+def test_duplicate_or_near_identical_to_prior_me_rejected(client):
+    _, backend = client
+    prior_me = "カフェ巡り素敵ですね！\n休日は静かなカフェで本を読むことが多いです"
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": prior_me},
+            {"role": "them", "body": "そうなんですね！私も読書好きです。"},
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    # Candidate nearly identical to prior me
+    dup_cand = backend.Candidate(
+        label="duplicate",
+        text="カフェ巡り素敵ですね！\n休日は静かなカフェで本を読むことが多いです！",
+    )
+    reasons = backend._candidate_rejection_reasons(dup_cand, context)
+    assert "直前の自分の発言と重複" in reasons
+
+    # Different candidate
+    diff_cand = backend.Candidate(
+        label="different",
+        text="読書仲間ができて嬉しいです！\n最近はどんな本を読まれましたか？",
+    )
+    reasons_ok = backend._candidate_rejection_reasons(diff_cand, context)
+    assert "直前の自分の発言と重複" not in reasons_ok
+
+
+def test_concrete_date_or_place_proposal_escalates_to_user_info(client):
+    _, backend = client
+    # Even if my_profile has generic availability facts, concrete proposal escalates to user
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "来週末の土曜日の午後などいかがでしょうか？"},
+        ],
+        "my_profile": {"facts": {"availability": "土日休み", "schedule": "週末"}},
+        "ephemeral_user_answers": [],
+    }
+    question = backend.missing_personal_fact_question(context)
+    assert question is not None
+    assert "来週末の土曜日の午後などいかがでしょうか？" in question.question
+    assert "意向を確認" in question.purpose
+
+    # Once user answers, missing_personal_fact_question returns None
+    context_with_answer = {
+        **context,
+        "ephemeral_user_answers": [
+            {"question": question.question, "answer": "土曜日の午後で大丈夫です！楽しみにしています。"}
+        ],
+    }
+    assert backend.missing_personal_fact_question(context_with_answer) is None
+
+
+def test_repeats_recent_self_question_catches_bean_and_brewing_across_six_turns(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "普段はどんな豆を買われることが多いですか？"},  # me turn -5
+            {"role": "them", "body": "エチオピアが好きですね。"},
+            {"role": "me", "body": "フルーティーで美味しいですよね！"},  # me turn -4
+            {"role": "them", "body": "そうなんですよ。"},
+            {"role": "me", "body": "休日はよく出かけますか？"},  # me turn -3
+            {"role": "them", "body": "近所を散歩したりしてます。"},
+            {"role": "me", "body": "散歩も気持ちいいですよね。"},  # me turn -2
+            {"role": "them", "body": "はい、いい気分転換になります。"},
+            {"role": "me", "body": "カフェとかも立ち寄られますか？"},  # me turn -1
+            {"role": "them", "body": "たまに寄りますよ！"},
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    # Coffee bean question without "コーヒー" word
+    cand_bean = "豆はお気に入りの焙煎度などありますか？"
+    assert backend._candidate_repeats_recent_self_question(cand_bean, context)
+
+    # Fresh question
+    cand_fresh = "どんな街をお散歩するのが好きですか？"
+    assert not backend._candidate_repeats_recent_self_question(cand_fresh, context)
+
+
+
