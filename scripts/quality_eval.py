@@ -90,8 +90,16 @@ def _strip_filler(text: str) -> str:
     return _SENTENCE_SEPARATORS.sub("", stripped)
 
 
+_REST_EMPATHY = re.compile(
+    r"(?:お疲れ(?:様|さま)|ゆっくり休|体を休め|休むのも大事|休息|休めましたか|寝て終わ|寝て過ご)"
+)
+
+
 def has_redundant_reaction_set(texts: Sequence[str], *, threshold: float = 0.5) -> bool:
     """True when candidate first clauses are near-identical reactions."""
+    rest_hits = sum(bool(_REST_EMPATHY.search(normalize_text(text))) for text in texts)
+    if rest_hits >= 2:
+        return True
     heads = []
     for text in texts:
         clauses = clause_split(_strip_filler(text))

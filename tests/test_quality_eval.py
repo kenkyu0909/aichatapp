@@ -88,6 +88,15 @@ def test_independent_grader_allows_distinct_candidates():
 def test_independent_grader_detects_redundant_reactions():
     texts = ["いいですね", "いいですね"]
     assert quality_eval.has_redundant_reaction_set(texts) is True
+    rest_collision = [
+        "そういう日もありますよね笑\nゆっくり休めましたか？",
+        "お疲れ様です\nしっかり体を休めるのも大事ですね",
+        "休日にゆっくり休めるのって大切ですよね！",
+    ]
+    assert quality_eval.has_redundant_reaction_set(rest_collision) is True
+    verdict = quality_eval.independent_quality_verdict(rest_collision)
+    assert verdict["redundant_reaction_violation"] is True
+    assert verdict["result"] == "FAIL"
 
 
 def test_independent_placeholder_and_punctuation_checks():
