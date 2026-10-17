@@ -8867,6 +8867,11 @@ def generate(data: GenerateInput):
             raise last_rate_limit
         raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
+        logger.warning(
+            "Gemini provider request failed (%s): %s",
+            type(exc).__name__,
+            re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED]", str(exc)[:200]),
+        )
         if isinstance(exc, ProviderAttemptLimitError):
             failure_message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
             failure_code = "request_attempt_limit"
