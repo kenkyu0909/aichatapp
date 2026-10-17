@@ -13721,3 +13721,206 @@ def test_generate_stops_at_request_deadline_before_provider_call(client, monkeyp
     assert "test-api1-secret" not in response.text
 
 
+@pytest.mark.parametrize(
+    ("question", "answer", "tone", "profile_style", "expected_text"),
+    [
+        (
+            "そよかさんは横浜の中で、よく散歩される場所はありますか？",
+            "みなとみらいの海沿いをよく散歩します",
+            "自動",
+            "",
+            "そうなんですね\nみなとみらいの海沿いをよく散歩します\nそちらはどうですか？",
+        ),
+        (
+            "喫茶店は静かな店内のほうが落ち着きます。そよかさんはにぎやかなお店と静かなお店、どちらが好みですか？",
+            "私も静かなお店のほうが落ち着くので好きです。",
+            "自動",
+            "",
+            "そうなんですね\n私も静かなお店のほうが落ち着くので好きです\nそちらはどうですか？",
+        ),
+        (
+            "最近何してたの？",
+            "家でゆっくりしてたよ！",
+            "タメ口",
+            "",
+            "そうなんだ\n家でゆっくりしてたよ\nそっちはどう？",
+        ),
+        (
+            "それでどうなったんですか？",
+            "無事に解決したよ",
+            "敬語",
+            "",
+            "そうなんですね\n無事に解決したよ\nそちらはどうですか？",
+        ),
+        (
+            "それでどうなったの？",
+            "無事に解決したよ",
+            "混合（敬語ベース＋少し砕ける）",
+            "",
+            "そうなんですね\n無事に解決したよ\nそちらはどうですか？",
+        ),
+        (
+            "それでどうなったの？",
+            "無事に解決したよ",
+            "自動",
+            "タメ口",
+            "そうなんだ\n無事に解決したよ\nそっちはどう？",
+        ),
+    ],
+)
+def test_unclassified_personal_question_deterministic_fallback_passes_all_guards(
+    client, question, answer, tone, profile_style, expected_text
+):
+    _, backend = client
+    facts = {" hobbies": ["カフェ巡り"]}
+    if profile_style:
+        facts["style"] = profile_style
+    history = [{"role": "them", "body": question}]
+    context = {
+        "mode": "reply",
+        "history": history,
+        "other": {"name": "相手", "description": "カフェと散歩が好き"},
+        "my_profile": {"facts": facts, "avoid": []},
+        "reply_preferences": {"length": "標準", "tone": tone, "emoji": "控えめ"},
+        "mirroring": backend.estimate_message_style(history),
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+
+    fallback = backend._build_unclassified_question_fallback_candidate(context)
+    assert fallback is not None
+    assert fallback.text == expected_text
+    assert backend._answers_verified_partner_question(fallback, context) is True
+    assert backend._candidate_rejection_reasons(fallback, context) == []
+
+    unsafe_model = backend.SuggestionsV2.model_validate(
+        {
+            "needs_user_info": False,
+            "user_questions": [],
+            "user_info_reason": "",
+            "recommended": {
+                "label": "句読点違反",
+                "text": "そうなんですね。詳しく教えてください。",
+            },
+            "alternatives": [
+                {
+                    "label": "回答漏れ",
+                    "text": "いいですね！\nもっと聞かせてください",
+                },
+                {
+                    "label": "未確認の誘い",
+                    "text": "よかったら今度一緒に行きませんか？",
+                },
+            ],
+            "reason": "理由",
+            "strategy": "方針",
+            "conversation_stage": "Stage 2",
+            "invite_decision": "do_not_invite",
+            "decision_reason": "会話中",
+            "next_action": "質問に答える",
+        }
+    )
+    filtered = backend.filter_safe_candidates(unsafe_model, 3, context)
+    assert filtered["generation_blocked"] is False
+    assert filtered["deterministic_fallback_used"] is True
+    assert filtered["available_candidate_count"] == 1
+    assert filtered["recommended"]["text"] == expected_text
+    assert filtered["alternatives"] == []
+
+
+def test_unclassified_personal_question_without_user_answer_requests_clarification_without_fallback(
+    client, monkeypatch
+):
+    c, backend = client
+    mid = add_match(c, "架空の直樹")
+    question = "そよかさんは横浜の中で、よく散歩される場所はありますか？"
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": question})
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "other": {"name": "架空の直樹", "description": ""},
+        "my_profile": {"facts": {}, "avoid": []},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._build_unclassified_question_fallback_candidate(context) is None
+    assert backend.missing_personal_fact_question(context) is not None
+
+    monkeypatch.setattr(backend, "gemini_configurations", lambda: [])
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": mid, "response_version": 2},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["generation_blocked"] is False
+    assert body["recommended"] is None
+    assert len(body["user_questions"]) == 1
+
+
+def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on_answered_wh_question(
+    client, monkeypatch
+):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の直樹")
+    question = "そよかさんは横浜の中で、よく散歩される場所はありますか？"
+    answer = "みなとみらいの海沿いをよく散歩します"
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": question})
+
+    unsafe_payload = {
+        "needs_user_info": False,
+        "user_questions": [],
+        "user_info_reason": "",
+        "recommended": {
+            "label": "不適切1",
+            "text": "みなとみらいの海沿いをよく散歩します。最近は赤レンガ倉庫にも毎週行っています。",
+        },
+        "alternatives": [
+            {"label": "不適切2", "text": "横浜の公園もよく歩きますよ。"},
+            {"label": "不適切3", "text": "散歩は気持ちいいですよね。"},
+        ],
+        "reason": "理由",
+        "strategy": "方針",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "会話継続",
+        "next_action": "質問に答える",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(unsafe_payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(
+        genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels())
+    )
+
+    response = c.post(
+        "/api/generate",
+        json={
+            "mode": "reply",
+            "match_id": mid,
+            "response_version": 2,
+            "count": 3,
+            "tone": "敬語",
+            "user_answers": [{"question": question, "answer": answer}],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(calls) == 2
+    assert body["generation_blocked"] is False
+    assert body["needs_user_info"] is False
+    assert body["available_candidate_count"] == 1
+    assert (
+        body["recommended"]["text"]
+        == "そうなんですね\nみなとみらいの海沿いをよく散歩します\nそちらはどうですか？"
+    )
+    assert body["alternatives"] == []
+
+

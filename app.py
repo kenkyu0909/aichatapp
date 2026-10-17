@@ -2207,6 +2207,8 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
     if not topic and _is_unclassified_direct_question(partner_messages[-1]) and _is_unclassified_question_about_user(partner_messages[-1]):
+        if _unclassified_personal_question_user_answer(context) is not None:
+            return None
         question_text = partner_messages[-1]
         quoted_question = question_text.strip().replace("\n", " ")[:180]
         if INVITATION_PATTERN.search(question_text):
@@ -6469,7 +6471,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
                 for segment in (part.strip() for part in segments if part.strip()):
                     normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
-                    if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね"}:
+                    if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ"}:
                         continue
                     if _is_partner_directed_followup_question(segment, question):
                         continue
@@ -6682,11 +6684,23 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             # location, habits, or past experiences. A small set of clearly
             # partner-directed follow-up questions remains usable; uncertain
             # clauses fail closed and the caller reports candidate shortages.
-            segments = re.split(
-                r"(?<=[!?！？])|\n+|(?<=です)が|(?<=ます)が|(?<=でした)が|(?<=ました)が|"
-                r"(?<=ています)が|(?<=いる)が|けれども|けれど|けど|でも|一方で",
-                candidate.text,
+            normalized_answer_clause = re.sub(
+                r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_answer
             )
+            line_segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
+            segments: list[str] = []
+            for line_part in (part.strip() for part in line_segments if part.strip()):
+                normalized_line_part = re.sub(r"[\s、。！!？?]", "", line_part)
+                if normalized_line_part == normalized_answer:
+                    segments.append(line_part)
+                else:
+                    segments.extend(
+                        re.split(
+                            r"(?<=です)が|(?<=ます)が|(?<=でした)が|(?<=ました)が|"
+                            r"(?<=ています)が|(?<=いる)が|けれども|けれど|けど|でも|一方で",
+                            line_part,
+                        )
+                    )
             for segment in (part.strip() for part in segments if part.strip()):
                 normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
                 if binary_scope and binary_polarity:
@@ -6702,7 +6716,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                     if _binary_answer_restatement_matches(segment, binary_scope, binary_polarity):
                         answer_seen = True
                         continue
-                if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね"}:
+                if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ"}:
                     continue
                 if _is_partner_directed_followup_question(segment, question):
                     continue
@@ -6711,10 +6725,15 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 # contradictions such as "とは言えません" and arbitrary
                 # claims appended to the confirmed answer.
                 answer_clause = re.sub(r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_segment)
-                if answer_clause == normalized_answer or _is_confirmed_cooking_skill_paraphrase(
-                    answer_clause,
-                    question=question,
-                    answer=normalized_answer,
+                if (
+                    normalized_segment == normalized_answer
+                    or answer_clause == normalized_answer
+                    or (normalized_answer_clause and answer_clause == normalized_answer_clause)
+                    or _is_confirmed_cooking_skill_paraphrase(
+                        answer_clause,
+                        question=question,
+                        answer=normalized_answer,
+                    )
                 ):
                     answer_seen = True
                 else:
@@ -7106,7 +7125,10 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
         # Long partner messages are answered at a similar or slightly shorter
         # length. Never force expansion just because the input itself is long.
         maximum_sentences = partner_sentences
-    if partner_sentences >= 2 and _candidate_is_acknowledgment_plus_question(candidate.text):
+    if (
+        partner_sentences >= 2
+        or _unclassified_personal_question_user_answer(context) is not None
+    ) and _candidate_is_acknowledgment_plus_question(candidate.text):
         # Allow the acknowledge-then-ask shape one extra line, capped at three.
         maximum_sentences = min(maximum_sentences + 1, 3)
     return _candidate_sentence_count(candidate.text) > maximum_sentences
@@ -7326,6 +7348,115 @@ def _candidate_set_needs_diversity_repair(
     )
 
 
+def _unclassified_personal_question_user_answer(context: dict) -> str | None:
+    """Return the confirmed user answer for a single unclassified direct question."""
+    if context.get("mode") not in {"reply", "followup"}:
+        return None
+    if partner_requests_contact_stop(context):
+        return None
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if not partner_messages:
+        return None
+    question = partner_messages[-1]
+    if _compound_direct_personal_question_parts(question):
+        return None
+    if _negative_binary_question_has_ambiguous_answer(context, question):
+        return None
+    topic = _topic_for_personal_question(question)
+    if topic == "本人情報":
+        exact_question = re.sub(r"\s+|[?？。！!]", "", question)
+        requested_activity_scope = _same_day_activity_scope(question)
+        requested_future_scope = _future_activity_scope(question)
+        requested_past_scope = _past_activity_scope(question)
+        for answer in context.get("ephemeral_user_answers", []):
+            answered_question = re.sub(r"\s+|[?？。！!]", "", str(answer.get("question", "")))
+            if requested_activity_scope:
+                if _same_day_activity_scope(str(answer.get("question", ""))) != requested_activity_scope:
+                    continue
+            elif requested_future_scope:
+                if _future_activity_scope(str(answer.get("question", ""))) != requested_future_scope:
+                    continue
+            elif requested_past_scope:
+                if _past_activity_scope(str(answer.get("question", ""))) != requested_past_scope:
+                    continue
+            elif answered_question != exact_question and exact_question not in answered_question:
+                continue
+            answer_text = str(answer.get("answer", "")).strip()
+            if re.sub(r"[\s、。，．！!？?]", "", answer_text):
+                return answer_text
+        return None
+    if not topic and _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):
+        normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
+        normalized_question = normalize(question)
+        if not normalized_question:
+            return None
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            if (
+                answer_text
+                and normalized_question in normalize(answer.get("question", ""))
+                and normalize(answer_text)
+            ):
+                return answer_text
+    return None
+
+
+def _fallback_should_use_casual_tone(
+    context: dict, question: str, clean_answer: str
+) -> bool:
+    """Select casual vs polite register for the deterministic fallback candidate."""
+    tone = str(context.get("reply_preferences", {}).get("tone", "自動") or "自動").strip()
+    if tone == "タメ口":
+        return True
+    if tone == "敬語" or tone.startswith("混合"):
+        return False
+    style_fact = str(context.get("my_profile", {}).get("facts", {}).get("style", "") or "")
+    if re.search(r"タメ口|ため口|カジュアル", style_fact):
+        return True
+    if re.search(r"敬語|丁寧|ですます", style_fact):
+        return False
+    if re.search(r"です|ます|でした|ました|ません|でございます", clean_answer):
+        return False
+    mirroring = context.get("mirroring") or {}
+    partner_register = str(mirroring.get("partner_register_estimate", "") or "")
+    if partner_register == "カジュアル（推定）":
+        return True
+    if partner_register == "敬語（推定）":
+        return False
+    return not bool(re.search(r"です|ます|でした|ました|ません|でしょうか", question))
+
+
+def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
+    """Synthesize 1 safe fallback candidate when all model candidates fail on an answered unclassified question."""
+    raw_answer = _unclassified_personal_question_user_answer(context)
+    if not raw_answer:
+        return None
+    clean_answer = re.sub(r"[\s、。，．！!？?]+", "", raw_answer)
+    if not clean_answer:
+        return None
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    casual = _fallback_should_use_casual_tone(context, question, clean_answer)
+    ack = "そうなんだ" if casual else "そうなんですね"
+    followup = "そっちはどう？" if casual else "そちらはどうですか？"
+    candidate = Candidate(
+        label="回答を反映した返信",
+        text=f"{ack}\n{clean_answer}\n{followup}",
+        reply_move="react",
+    )
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -7358,10 +7489,18 @@ def filter_safe_candidates(
         if len(accepted) >= requested_count:
             break
 
+    deterministic_fallback_used = False
+    if not accepted:
+        fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        if fallback_candidate is not None:
+            accepted.append(fallback_candidate)
+            deterministic_fallback_used = True
+
     result = value.model_dump()
     result["requested_candidate_count"] = requested_count
     result["available_candidate_count"] = len(accepted)
     result["candidate_rejections"] = rejected
+    result["deterministic_fallback_used"] = deterministic_fallback_used
     if not accepted:
         notice = (
             f"安全確認後に表示できる候補は0案です（指定は{requested_count}案）。候補を送らず、入力内容を確認してください。"
@@ -7384,6 +7523,10 @@ def filter_safe_candidates(
     result["alternatives"] = [candidate.model_dump() for candidate in accepted[1:]]
     result["generation_blocked"] = False
     notices: list[str] = []
+    if deterministic_fallback_used:
+        notices.append(
+            "生成された候補が安全検査を通過しなかったため、確認済みの回答をそのまま反映した最小限の安全な候補を1案表示しています。"
+        )
     if len(accepted) < requested_count:
         notices.append(
             f"安全確認後に表示できる候補は{len(accepted)}案です（指定は{requested_count}案）。不足分を不自然な候補で補っていません。"
@@ -7654,6 +7797,7 @@ def generate(data: GenerateInput):
     candidate_repair_used = False
     partial_candidate_repair_pending = False
     safe_candidate_fallback: SuggestionsV2 | None = None
+    safe_candidate_fallback_from_deterministic = False
     safe_candidate_fallback_notice = ""
     safe_candidate_fallback_provider: dict[str, str] | None = None
     safe_candidate_fallback_sources: dict[str, dict[str, str]] = {}
@@ -7808,8 +7952,37 @@ def generate(data: GenerateInput):
                             current_candidate_source = safe_candidate_fallback_provider or current_candidate_source
                             current_candidate_sources = safe_candidate_fallback_sources or current_candidate_sources
                             result_candidate_sources = current_candidate_sources.copy()
-                        had_safe_candidate_fallback = safe_candidate_fallback is not None
+                        had_safe_candidate_fallback = (
+                            safe_candidate_fallback is not None
+                            and not safe_candidate_fallback_from_deterministic
+                        )
                         filtered_result = filter_safe_candidates(parsed, data.count, context)
+                        if filtered_result.get("deterministic_fallback_used") and not candidate_repair_used:
+                            candidate_repair_used = True
+                            fallback_candidate = Candidate.model_validate(filtered_result["recommended"])
+                            if safe_candidate_fallback is None:
+                                safe_candidate_fallback = parsed.model_copy(update={
+                                    "recommended": fallback_candidate,
+                                    "alternatives": [],
+                                })
+                                safe_candidate_fallback_from_deterministic = True
+                                safe_candidate_fallback_notice = filtered_result.get("candidate_notice", "")
+                                safe_candidate_fallback_provider = current_candidate_source
+                                safe_candidate_fallback_sources = {
+                                    re.sub(r"\s+", "", fallback_candidate.text): current_candidate_source
+                                }
+                            reasons = sorted({
+                                reason
+                                for item in filtered_result.get("candidate_rejections", [])
+                                for reason in item.get("reasons", [])
+                            })
+                            system_instruction += (
+                                "\n【候補ごとの安全・形式検査で不適切候補を検出】"
+                                + "、".join(reasons)
+                                + "。問題部分だけでなく全候補を見直し、未確認の本人・相手情報、句読点、既知情報の聞き直しを避けてください。"
+                                "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
+                            )
+                            continue
                         if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
                             parsed = safe_candidate_fallback.model_copy(deep=True)
                             filtered_result = filter_safe_candidates(parsed, data.count, context)
@@ -7903,7 +8076,9 @@ def generate(data: GenerateInput):
                                     *safe_candidates[:invitation_index],
                                     *safe_candidates[invitation_index + 1:],
                                 ]
-                        if partial_candidate_repair_pending and safe_candidate_fallback is not None:
+                        if (
+            partial_candidate_repair_pending or safe_candidate_fallback_from_deterministic
+        ) and safe_candidate_fallback is not None:
                             previous_safe_candidates = [
                                 safe_candidate_fallback.recommended,
                                 *safe_candidate_fallback.alternatives,
