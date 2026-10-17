@@ -14292,3 +14292,117 @@ def test_multiline_cafe_atmosphere_and_specific_detail_answers_after_acknowledgm
         "ミステリー小説をよく読みます",
     ) is False
 
+
+def test_prioritize_question_candidate_promotes_question_over_multiline_reaction_only(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "質問優先テスト相手")
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={
+            "role": "them",
+            "body": "最近は街歩きのエッセイ集を読んでいます。写真も多くて楽しいです。",
+        },
+    )
+    payload = {
+        "needs_user_info": False,
+        "user_questions": [],
+        "user_info_reason": "",
+        "recommended": {
+            "label": "共感のみ2行",
+            "text": "街歩きのエッセイ集いいですね😊\nどんなお店や街が登場する本なのか気になります！",
+            "reply_move": "react",
+        },
+        "alternatives": [
+            {
+                "label": "質問付き",
+                "text": "街歩きのエッセイ集楽しそうですね！\n特に印象に残った街やお店はありましたか？",
+                "reply_move": "expand",
+            },
+            {
+                "label": "別の共感",
+                "text": "写真が多い本は眺めているだけでもワクワクしますよね✨",
+                "reply_move": "grounded_share",
+            },
+        ],
+        "reason": "エッセイ集の話題を広げる",
+        "strategy": "質問を添えて会話を広げる",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "趣味の話題が盛り上がっている",
+        "next_action": "本の詳細を聞く",
+    }
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(
+        backend,
+        "gemini_configurations",
+        lambda: [("API1", "offline-placeholder-key", "model-test-a")],
+    )
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=lambda **kw: SimpleNamespace(
+                    text=json.dumps(payload, ensure_ascii=False)
+                )
+            )
+        ),
+    )
+    res = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": mid, "response_version": 2, "count": 3},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["recommended"]["text"] == (
+        "街歩きのエッセイ集楽しそうですね！\n特に印象に残った街やお店はありましたか？"
+    )
+    assert body["alternatives"][0]["text"] == (
+        "街歩きのエッセイ集いいですね😊\nどんなお店や街が登場する本なのか気になります！"
+    )
+
+    # Refusal / caution context must NOT promote questions ahead of respectful empathy.
+    refusal_context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "会うのはもう少し仲良くなってからがいいです"}],
+    }
+    candidates = [
+        {"label": "尊重", "text": "もちろんです！\nまずはメッセージでゆっくりお話ししましょう😊"},
+        {"label": "質問", "text": "普段はどんな音楽を聴くんですか？"},
+    ]
+    assert backend._prioritize_question_candidate(
+        candidates, refusal_context, invite_decision="respect_no"
+    ) == candidates
+
+
+def test_high_confidence_godan_missing_continuative_typo_guard_with_ichidan_negatives(client):
+    _, backend = client
+    malformed_samples = [
+        "スパイスのいい香りがするとつい頼たくなりますよね😊",
+        "面白そうな本を見ると読たくなります！",
+        "美味しいコーヒーを飲たいですね！",
+        "休日はゆっくり休たいですよね",
+    ]
+    for sample in malformed_samples:
+        assert backend.candidate_has_high_confidence_japanese_error(sample) is True
+        reasons = backend._candidate_rejection_reasons(
+            backend.Candidate(label="誤字", text=sample),
+            {"mode": "reply", "history": [{"role": "them", "body": "カレーが好きです"}]},
+        )
+        assert "明らかな誤字" in reasons
+
+    valid_ichidan_and_godan_samples = [
+        "スパイスのいい香りがするとつい頼みたくなりますよね😊",
+        "また来たくなる素敵なお店ですね！",
+        "その映画すごく見たいです！",
+        "春になると着たくなる服ってありますよね😊",
+        "休日は家でゆっくり寝たいこともありますよね",
+        "外に出たくなる季節ですね✨",
+        "ずっと居たくなるような落ち着いた空間ですね☕",
+        "お気に入りの本を読みたくなりますね！",
+        "深煎りのコーヒーを飲みたくなりますね☕",
+    ]
+    for valid in valid_ichidan_and_godan_samples:
+        assert backend.candidate_has_high_confidence_japanese_error(valid) is False

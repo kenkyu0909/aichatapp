@@ -7122,6 +7122,7 @@ def candidate_has_meeting_related_question(text: str) -> bool:
 
 _HIGH_CONFIDENCE_MALFORMED_WORDS = (
     re.compile(r"雰囲(?!気)"),
+    re.compile(r"(?:頼|読|飲|休|歩|住|進|選|遊|運|学|励|並|喜|悩)(?:たく|たい)"),
 )
 
 
@@ -7148,6 +7149,71 @@ ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
     r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま"
 )
 QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか")
+
+
+def _candidate_has_partner_question(text: str) -> bool:
+    """Return whether a candidate includes an explicit question to the partner."""
+    return bool(re.search(r"[?？]", text) or QUESTION_MARKERS.search(text))
+
+
+def _should_prioritize_question_candidate(context: dict, invite_decision: str | None = None) -> bool:
+    """Return whether a question-bearing candidate should be promoted to recommended."""
+    if context.get("mode") not in {"reply", "followup"}:
+        return False
+    if partner_requests_contact_stop(context):
+        return False
+    if partner_has_active_invitation_refusal(context):
+        return False
+    if partner_latest_message_expresses_meeting_unease(context):
+        return False
+    if invite_decision in {"respect_no", "do_not_repeat_invite", "wait", "continue_or_close"}:
+        return False
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if partner_messages and re.search(
+        r"(?:悩んで|落ち込んで|つらい|辛い|しんどい|疲れてしま|体調が悪|おやすみなさい|また明日|寝ますね)",
+        partner_messages[-1],
+    ):
+        return False
+    return True
+
+
+def _prioritize_question_candidate(
+    candidates: list[dict[str, Any]],
+    context: dict,
+    *,
+    invite_decision: str | None = None,
+) -> list[dict[str, Any]]:
+    """Promote the first question-bearing candidate to index 0 when appropriate."""
+    if len(candidates) <= 1:
+        return candidates
+    if not _should_prioritize_question_candidate(context, invite_decision=invite_decision):
+        return candidates
+    first_text = str(candidates[0].get("text", ""))
+    if _candidate_has_partner_question(first_text):
+        return candidates
+    if _candidate_sentence_count(first_text) < 2:
+        return candidates
+    if invite_decision == "invite_gently" and INVITATION_PATTERN.search(first_text):
+        return candidates
+    question_index = next(
+        (
+            index
+            for index, candidate in enumerate(candidates)
+            if _candidate_has_partner_question(str(candidate.get("text", "")))
+        ),
+        None,
+    )
+    if question_index is None or question_index == 0:
+        return candidates
+    return [
+        candidates[question_index],
+        *candidates[:question_index],
+        *candidates[question_index + 1:],
+    ]
 
 
 def _candidate_is_acknowledgment_plus_question(text: str) -> bool:
@@ -7859,6 +7925,7 @@ def generate(data: GenerateInput):
             "\n3案は安全性と自然さを優先し、reply_moveを使って切り口を分けます。"
             "1案目はreact（素直な反応）、2案目はexpand（新しい具体的な話題へ進める）、"
             "3案目はgrounded_share（確認済みの本人情報で短く共有）を基本にします。"
+            "相手の文数上限（短い相手には最大2行、2文以上の相手にも最大3行）を厳守し、深い相談・拒否・別れ際や直前に答えた話題を除き、少なくとも1〜2案には相手への質問を1つ添えます。"
             "会話方針がinvite_gentlyなら、3案のいずれかをinviteにして自然に誘います。"
             "本人事実が未確認ならgrounded_shareを強行せず、react等の安全な案に置き換えます。"
             "候補の文末だけを変えて多様性を装わず、役割を本文内容にも反映します。"
@@ -8153,6 +8220,12 @@ def generate(data: GenerateInput):
                                     *safe_candidates[:invitation_index],
                                     *safe_candidates[invitation_index + 1:],
                                 ]
+                        else:
+                            safe_candidates = _prioritize_question_candidate(
+                                safe_candidates,
+                                context,
+                                invite_decision=parsed.invite_decision,
+                            )
                         if partial_candidate_repair_pending and safe_candidate_fallback is not None:
                             previous_safe_candidates = [
                                 safe_candidate_fallback.recommended,
