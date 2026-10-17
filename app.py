@@ -7934,6 +7934,25 @@ def _fallback_partner_honorific_name(context: dict) -> str | None:
     return None
 
 
+def _partner_shares_info_with_question(question_text: str) -> bool:
+    """Return True if partner shared facts/opinions alongside asking a question."""
+    if not _candidate_has_partner_question(question_text):
+        return False
+    if re.search(r"どちら|どっち|どちらが|どっちが|どちら派|どっち派", question_text):
+        return False
+    sentences = [s.strip() for s in re.split(r"[。\n]+", question_text) if s.strip()]
+    if len(sentences) < 2:
+        return False
+    non_q_sentences = [s for s in sentences if not _candidate_has_partner_question(s)]
+    for s in non_q_sentences:
+        s_clean = re.sub(
+            r"^(?:こんにちは|こんばんは|はじめまして|マッチありがとう|よろしくお?願いします)[!！。、\s]*", "", s
+        )
+        if len(s_clean) >= 4:
+            return True
+    return False
+
+
 def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
     """Synthesize 1 safe fallback candidate when all model candidates fail on an answered unclassified question."""
     raw_answer = _unclassified_personal_question_user_answer(context)
@@ -7961,6 +7980,7 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
     has_invitation_acceptance = bool(
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
     )
+    partner_shares_info = _partner_shares_info_with_question(question)
     if is_schedule_or_accept:
         if has_invitation_acceptance:
             ack = "うれしいな！" if casual else "うれしいです😊"
@@ -7970,6 +7990,13 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
             followup = f"{partner_label}は都合どうかな？" if casual else f"{partner_label}はご都合いかがですか？"
         else:
             followup = "そっちは都合どう？" if casual else "そちらはご都合いかがですか？"
+        candidate_text = f"{ack}\n{clean_answer}\n{followup}"
+    elif partner_shares_info:
+        ack = "そうなんだ！" if casual else "そうなんですね！"
+        if partner_label:
+            followup = f"{partner_label}はどう？" if casual else f"{partner_label}はいかがですか？"
+        else:
+            followup = "そっちはどう？" if casual else "そちらはどうですか？"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
         if partner_label:
@@ -8054,7 +8081,11 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
                     if casual
                     else f"そちらは{work_label}で特に楽しいのはどんなときですか？"
                 )
-            candidate_text = f"{line1}\n{followup}"
+            if _partner_shares_info_with_question(question):
+                ack = "そうなんだ！" if casual else "そうなんですね！"
+                candidate_text = f"{ack}\n{line1}\n{followup}"
+            else:
+                candidate_text = f"{line1}\n{followup}"
 
     if not candidate_text:
         return None
