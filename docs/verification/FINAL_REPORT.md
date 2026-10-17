@@ -1705,6 +1705,15 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38996309429](https://github.com/kenkyu0909/aichatapp/actions/runs/38996309429) / PR [38996314017](https://github.com/kenkyu0909/aichatapp/actions/runs/38996314017)（同一SHA `2c6f2ab`）。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 07:10 JST D15補強・D13孤児写真の記録・404順序テスト
+
+- T425（`63f73d3`）: 空の `MRA_ALLOWED_HOSTS` でも loopback へフォールバックし、全拒否の設定ミスを防ぐ。テスト1件。
+- T426（D13, `e3d5353`）: 写真削除失敗を冪等な `orphaned_photos` へ記録して再試行する。既存DBは自動で表を得るためマイグレーション不要。記録済みのみ削除し、ディレクトリ走査はしない。応答へ加算キー `photo_cleanup_pending`。テスト4件。`tests/test_app.py` 1751 passed、全pytest **1861 passed in 420.74s**。
+- T427（`364e441`）: 存在しない match の削除404が写真・ジャーナルに触れない順序を固定。テスト1件。
+- 残課題: DB `UPDATE` と旧写真削除の間のクラッシュで未記録の孤児が残る。恒久的 unlink 失敗時はジャーナルが増え続ける。Starlette が未固定。
+- Actions: Push [38997786372](https://github.com/kenkyu0909/aichatapp/actions/runs/38997786372) / PR [38997790530](https://github.com/kenkyu0909/aichatapp/actions/runs/38997790530)（`e3d5353`）。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。

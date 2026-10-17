@@ -1793,3 +1793,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: Push [38996309429](https://github.com/kenkyu0909/aichatapp/actions/runs/38996309429) / PR [38996314017](https://github.com/kenkyu0909/aichatapp/actions/runs/38996314017)（同一SHA `2c6f2ab`）。
 - 次: 残る未達のうちD10（設定契約の統一）かD13（孤児写真の後始末）を検討。D14（文脈窓）は価値が高いが影響範囲大。
 
+### 2026-10-17 07:10 JST D15補強・D13孤児写真の記録・404順序テスト
+
+- 検証エージェントが D15（Host許可リスト）を PASS と確認。同時に空 `MRA_ALLOWED_HOSTS`（`","`）が全拒否を招く設定ミスを指摘。T425（`63f73d3`）で `_allowed_hosts` が空なら loopback へフォールバック。テスト1件。
+- D13（孤児写真）: DBコミット後の写真削除失敗でファイルが残留する問題を修正。冪等な `orphaned_photos` テーブルを既存 `executescript` へ追加（既存DBは自動で付与、マイグレーション不要）。`_remove_photo_file`/`_queue_orphaned_photo`/`_retry_orphaned_photos` を追加し、記録済みのみを削除（ディレクトリ走査なし）。`delete_match`・`upload_photo` の失敗時に記録し、加算キー `photo_cleanup_pending` を返す。テスト4件。T426（`e3d5353`）。`tests/test_app.py` 1751 passed、全pytest **1861 passed in 420.74s**。
+- T427（`364e441`）: 存在しない match の削除が404で終わり写真・ジャーナルに触れないことを固定。テスト1件。
+- 検証エージェント所見の残課題: DBの `UPDATE` と旧写真削除の間にクラッシュすると記録されない孤児が残る（既存の隙間、部分的にしか閉じない）。恒久的な unlink 失敗時はジャーナルが増え続ける（上限・TTLなし）。Starlette が未固定（system 0.52.1 と `.venv` 1.8.0）。
+- Actions: Push [38997786372](https://github.com/kenkyu0909/aichatapp/actions/runs/38997786372) / PR [38997790530](https://github.com/kenkyu0909/aichatapp/actions/runs/38997790530)（`e3d5353`）、Push [38998265747](https://github.com/kenkyu0909/aichatapp/actions/runs/38998265747) / PR [38998268434](https://github.com/kenkyu0909/aichatapp/actions/runs/38998268434)（`364e441`）はいずれもsuccess。
+- 次: D10（live-gemini の設定契約を workflow の1行で統一、オフライン静的テスト付き）を実施予定。D14/D09 は影響範囲を精査してから。
+
