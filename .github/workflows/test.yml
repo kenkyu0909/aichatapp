@@ -1,9 +1,19 @@
 name: Local app offline tests
+
 on:
   push:
-    branches: [feat/ui-local-backend-v1]
+    branches:
+      - feat/ui-local-backend-v1
+      - codex/full-system-verification
   pull_request:
-    branches: [main]
+    branches:
+      - feat/ui-local-backend-v1
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -12,6 +22,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install -r requirements.txt pytest httpx
-      - run: python -m pytest -q
-      - run: node --check app.js
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-test.txt
+      - name: Check Firefox for browser tests
+        run: firefox --version
+      - name: Create test result directory
+        run: mkdir -p test-results
+      - name: Run backend tests
+        run: python -m pytest -q --junitxml=test-results/pytest.xml
+      - name: Check JavaScript syntax
+        run: node --check app.js
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-test-results
+          path: test-results/
+          if-no-files-found: warn
