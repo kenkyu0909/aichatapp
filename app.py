@@ -7632,8 +7632,11 @@ def _unclassified_personal_question_user_answer(context: dict) -> str | None:
     if not partner_messages:
         return None
     question = partner_messages[-1]
-    if _compound_direct_personal_question_parts(question):
+    compound_parts = _compound_direct_personal_question_parts(question)
+    if len(compound_parts) > 1:
         return None
+    if compound_parts:
+        question = compound_parts[0][1]
     if _negative_binary_question_has_ambiguous_answer(context, question):
         return None
     topic = _topic_for_personal_question(question)
@@ -7738,6 +7741,9 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
         if item.get("role") == "them"
     ]
     question = partner_messages[-1] if partner_messages else ""
+    compound_parts = _compound_direct_personal_question_parts(question)
+    if len(compound_parts) == 1:
+        question = compound_parts[0][1]
     casual = _fallback_should_use_casual_tone(context, question, clean_answer)
     partner_label = _fallback_partner_honorific_name(context)
     is_schedule_or_accept = bool(
@@ -7789,8 +7795,11 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
     question = partner_messages[-1]
     if not re.search(r"[?？]|何|どんな|どう|どこ|いつ|どちら|どの", question):
         return None
-    if _compound_direct_personal_question_parts(question):
+    compound_parts = _compound_direct_personal_question_parts(question)
+    if len(compound_parts) > 1:
         return None
+    if compound_parts:
+        question = compound_parts[0][1]
 
     facts = context.get("my_profile", {}).get("facts", {})
     if not isinstance(facts, dict):

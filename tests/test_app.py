@@ -14568,6 +14568,56 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
     assert res["recommended"]["text"] == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなときですか？"
 
 
+def test_fallback_candidate_with_trailing_statement_context(client):
+    _, backend = client
+    # 1. Verified profile fact fallback with trailing statement
+    context_profile = {
+        "mode": "reply",
+        "my_profile": {
+            "facts": {
+                "name": "水野そよか",
+                "job": "経理",
+            }
+        },
+        "other": {
+            "name": "黒川いつき",
+            "occupation": "書店員",
+            "description": "中野で書店員をしています。",
+        },
+        "history": [
+            {"role": "them", "body": "水野さんは普段どんなお仕事されてるんですか？僕は中野で書店員をしています。"},
+        ],
+        "reply_preferences": {"tone": "敬語"},
+    }
+    fb_prof = backend._build_verified_profile_fact_fallback_candidate(context_profile)
+    assert fb_prof is not None
+    assert "経理をしています" in fb_prof.text
+    assert backend._candidate_rejection_reasons(fb_prof, context_profile) == []
+
+    # 2. Unclassified question fallback with trailing statement
+    context_unclass = {
+        "mode": "reply",
+        "my_profile": {
+            "facts": {"name": "水野そよか"}
+        },
+        "other": {
+            "name": "黒川いつき",
+        },
+        "history": [
+            {"role": "them", "body": "どんな雰囲気の席がお好きですか？僕は窓ぎわが空いているとつい座ってしまいます。"},
+        ],
+        "ephemeral_user_answers": [
+            {"question": "どんな雰囲気の席がお好きですか？", "answer": "静かなテラス席や窓際の席が好きです"}
+        ],
+        "reply_preferences": {"tone": "敬語"},
+    }
+    fb_unclass = backend._build_unclassified_question_fallback_candidate(context_unclass)
+    assert fb_unclass is not None
+    assert "静かなテラス席や窓際の席が好きです" in fb_unclass.text
+    assert backend._candidate_rejection_reasons(fb_unclass, context_unclass) == []
+
+
+
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
     client, tmp_path, monkeypatch
 ):
