@@ -6587,11 +6587,19 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         normalized_confirmed = re.sub(r"\s+", "", confirmed_value)
         if normalized_confirmed and normalized_confirmed in normalized_candidate:
             return True
-        if topic == "映画":
-            confirmed_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
-            confirmed_title = re.search(r"[『「]([^』」]{1,40})[』」]", confirmed_value)
-            if confirmed_title and re.sub(r"\s+", "", confirmed_title.group(1)) in re.sub(
-                r"\s+", "", confirmed_prefix
+        if topic != "映画":
+            continue
+        confirmed_title = re.search(r"[『「]([^』」]{1,40})[』」]", confirmed_value)
+        if not confirmed_title:
+            continue
+        normalized_title = re.sub(r"\s+", "", confirmed_title.group(1))
+        for segment in _reading_genre_evidence_segments(candidate.text):
+            if _reading_genre_segment_is_question_only(segment):
+                continue
+            if (
+                normalized_title in re.sub(r"\s+", "", segment)
+                and _asserts_movie_viewing(segment)
+                and not _movie_viewing_attributed_to_other_person(segment)
             ):
                 return True
     answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]

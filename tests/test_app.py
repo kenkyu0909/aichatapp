@@ -3683,6 +3683,36 @@ def test_evasive_answer_to_confirmed_movie_question_is_rejected(client):
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
 
 
+def test_contradicting_saved_movie_answer_is_rejected(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="矛盾", text="『青い灯台』は観ていません")
+
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_hearsay_about_saved_movie_answer_is_rejected(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="伝聞", text="『青い灯台』は面白いと聞きました")
+
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_confirmed_movie_title_only_answer_is_still_accepted(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="作品名のみ", text="『青い灯台』を観ました")
+
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
+
+
 def test_confirmed_fact_metadata_is_not_trusted_fact_evidence(client):
     _, backend = client
     context = _movie_confirmed_context(
