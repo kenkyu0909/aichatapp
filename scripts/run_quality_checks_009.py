@@ -17,6 +17,11 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+try:
+    from scripts.quality_eval import combine_quality_verdict, independent_quality_verdict
+except ImportError:  # pragma: no cover - direct script execution puts scripts/ on sys.path
+    from quality_eval import combine_quality_verdict, independent_quality_verdict
+
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs/verification/simulations/quality_checks_009.json"
 API_DIR = Path(os.environ.get("MRA_API_DIR") or (ROOT.parent / "API")).expanduser()
@@ -274,6 +279,12 @@ def main() -> int:
             diversity_violation = candidate_set_has_semantic_redundancy(
                 candidates, app_module
             )
+            independent = independent_quality_verdict(
+                texts,
+                trusted_claims=[answer.get("answer", "") for answer in case.get("answers", [])],
+                required_answer_tokens=("青い灯台",) if case["id"] == "recent_movie_answered" else (),
+                require_all_answer=case["id"] == "recent_movie_answered",
+            )
             direct_question = body.get("needs_user_info") is True and bool(body.get("user_questions")) and not candidates
             no_punctuation = all("、" not in text and "。" not in text for text in texts)
             no_placeholders = all(not app_module.candidate_has_placeholder(text) for text in texts)
@@ -294,6 +305,12 @@ def main() -> int:
                 "candidate_count": len(candidates), "candidate_distinct_count": len(set(norm)),
                 "semantic_diversity_violation": diversity_violation,
                 "semantic_diversity_result": "FAIL" if diversity_violation else "PASS",
+                "independent_result": independent["result"],
+                "independent_reasons": independent["reasons"],
+                "independent_unsupported_topics": independent["unsupported_topics"],
+                "independent_duplicate_violation": independent["duplicate_violation"],
+                "independent_redundant_reaction_violation": independent["redundant_reaction_violation"],
+                "independent_answer_violation": independent["answer_violation"],
                 **({"candidate_set_status": smoke_candidate_status} if smoke_candidate_status else {}),
                 "unsupported_personal_claim_topics": facts,
                 "text_lengths": [len(text) for text in texts],
@@ -313,7 +330,7 @@ def main() -> int:
             if case["id"] == "direct_question_unconfirmed":
                 content_pass = (result.status_code == 200 and direct_question and attempts == 0)
             if case["id"] == "recent_movie_answered":
-                content_pass = content_pass and any("青い灯台" in text for text in texts)
+                content_pass = content_pass and not independent["answer_violation"]
             if case["id"] == "respect_decline":
                 content_pass = content_pass and body.get("invite_decision") in {"respect_no", "do_not_repeat_invite", "wait", "continue_or_close", "do_not_invite"}
             if case["id"] == "respect_decline_after_fix":
@@ -328,11 +345,14 @@ def main() -> int:
                     re.search(r"(?:よかったら|今度|一緒に).{0,30}(?:行きません|行ってみません|どうですか|行けたら)", text, re.S)
                     for text in texts
                 )
-            evaluation["result"] = quality_case_result(
-                content_pass,
-                diversity_violation,
-                result.status_code,
-                body.get("error_code"),
+            product_pass = content_pass and not diversity_violation
+            independent_pass = independent["result"] == "PASS"
+            evaluation["evaluator_divergence"] = product_pass and not independent_pass
+            evaluation["result"] = combine_quality_verdict(
+                product_pass,
+                independent_pass,
+                http_status=result.status_code,
+                error_code=body.get("error_code"),
             )
             if content_pass and diversity_violation:
                 evaluation["failure_notes"] = [

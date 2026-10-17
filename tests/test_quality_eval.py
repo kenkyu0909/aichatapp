@@ -10,6 +10,15 @@ import pytest
 from scripts import quality_eval
 
 
+def test_runner_009_wires_the_independent_grader():
+    from scripts import run_quality_checks_009 as runner
+
+    source = Path(runner.__file__).read_text(encoding="utf-8")
+    assert "independent_quality_verdict(" in source
+    assert "combine_quality_verdict(" in source
+    assert "def quality_case_result(" in source
+
+
 def test_quality_eval_module_imports_no_app():
     source = Path(quality_eval.__file__).read_text(encoding="utf-8")
     assert "import app\n" not in source
