@@ -34,6 +34,7 @@ GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
 GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
 _provider_attempt_lock = threading.Lock()
 _provider_last_attempt: dict[tuple[str, str], float] = {}
+_usage_ledger_lock = threading.Lock()
 
 
 def _wait_for_provider_interval(api_alias: str, model: str) -> None:
@@ -108,18 +109,28 @@ def reserve_provider_usage(
 ) -> int:
     """Reserve one provider call in the ledger before it runs; raise when exhausted.
 
-    The reservation is committed before the provider call so a crash mid-call
-    still leaves a durable record, and a concurrent request cannot spend the
-    same remaining budget.
+    The read-count and the insert share one immediate transaction guarded by a
+    process lock, so concurrent requests cannot both spend the same remaining
+    budget. The reservation is committed before the provider call, so a crash
+    mid-call still leaves a durable record.
     """
     moment = int(time.time() if epoch is None else epoch)
-    if limit is not None and usage_ledger_used(connection, window_seconds, moment) >= limit:
-        raise UsageBudgetExceededError("Provider usage ledger budget is exhausted")
-    cursor = connection.execute(
-        "INSERT INTO api_usage (reserved_epoch, api_alias, model) VALUES (?, ?, ?)",
-        (moment, api_alias, model),
-    )
-    connection.commit()
+    with _usage_ledger_lock:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            if limit is not None and usage_ledger_used(connection, window_seconds, moment) >= limit:
+                raise UsageBudgetExceededError("Provider usage ledger budget is exhausted")
+            cursor = connection.execute(
+                "INSERT INTO api_usage (reserved_epoch, api_alias, model) VALUES (?, ?, ?)",
+                (moment, api_alias, model),
+            )
+            connection.commit()
+        except UsageBudgetExceededError:
+            connection.rollback()
+            raise
+        except Exception:
+            connection.rollback()
+            raise
     return int(cursor.lastrowid or 0)
 
 

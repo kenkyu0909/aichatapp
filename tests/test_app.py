@@ -13485,6 +13485,33 @@ def test_usage_ledger_window_excludes_expired_reservations(client, monkeypatch):
         assert backend.usage_ledger_used(connection, None, now) == 2
 
 
+def test_usage_ledger_reservation_is_atomic_under_concurrency(client, monkeypatch):
+    import threading
+
+    _, backend = client
+    monkeypatch.setenv("MRA_USAGE_LEDGER_LIMIT", "10")
+    monkeypatch.setenv("MRA_USAGE_LEDGER_WINDOW", "none")
+
+    granted = []
+    denied = []
+
+    def worker():
+        try:
+            backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+            granted.append(1)
+        except backend.UsageBudgetExceededError:
+            denied.append(1)
+
+    threads = [threading.Thread(target=worker) for _ in range(40)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(granted) == 10
+    assert len(denied) == 30
+
+
 def test_generate_reports_usage_budget_failure_as_safe_error(client, monkeypatch, tmp_path):
     from google import genai
 
