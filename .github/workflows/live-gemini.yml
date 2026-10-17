@@ -16,6 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
+      # The app reads MRA_API_1_KEY; the smoke script guards on GEMINI_API_KEY.
+      # One secret feeds both so the live branch is actually exercised.
+      MRA_API_1_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL_TEST || 'gemini-3.5-flash-lite' }}
     steps:

@@ -696,6 +696,59 @@ def test_missing_api_key_is_explicitly_demo_not_generated(client, monkeypatch):
     assert "固定例文" in response.json()["reason"]
 
 
+def test_live_smoke_workflow_uses_app_key_contract():
+    workflow = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "live-gemini.yml"
+    ).read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "pull_request:" not in workflow and "  push:" not in workflow
+    assert "MRA_API_1_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}" in workflow
+    assert workflow.count("secrets.GEMINI_API_KEY_TEST") >= 2
+
+
+def test_mra_key_drives_live_path_offline(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "ライブ経路確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    placeholder = "testing-only-placeholder-key"
+    keys_seen = []
+    models_called = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            models_called.append(kwargs["model"])
+            return SimpleNamespace(text=json.dumps({
+                "recommended": {"label": "自然体", "text": "どんな展示が好きですか？"},
+                "alternatives": [
+                    {"label": "短め", "text": "展示いいですね"},
+                    {"label": "広げる", "text": "美術館のあとにカフェへ行くのも楽しそうですね"},
+                ],
+                "reason": "話題を受けています。",
+                "strategy": "会話を続けます。",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", placeholder)
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path))
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: (keys_seen.append(kwargs["api_key"]) or SimpleNamespace(models=FakeModels())),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 200
+    assert response.json()["demo"] is False
+    assert keys_seen == [placeholder]
+    assert models_called == ["gemini-3.5-flash-lite"]
+    assert placeholder not in response.text
+    assert response.json()["recommended"]["text"].strip()
+
+
 def test_gemini_timeout_is_bounded_redacted_and_not_retried(client, monkeypatch):
     from google import genai
 
