@@ -80,6 +80,21 @@ def test_trusted_host_allowlist_is_configurable_via_env(tmp_path, monkeypatch):
         assert c.get("/api/profile", headers={"Host": "localhost"}).status_code == 400
 
 
+def test_trusted_host_blank_env_falls_back_to_loopback(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MRA_ALLOWED_HOSTS", ",")
+    spec = importlib.util.spec_from_file_location(
+        "test_backend_hosts_blank", Path(__file__).resolve().parents[1] / "app.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+
+    assert module._allowed_hosts() == ["127.0.0.1", "localhost", "testserver"]
+    with TestClient(module.app) as c:
+        assert c.get("/api/profile", headers={"Host": "127.0.0.1"}).status_code == 200
+
+
 def test_provider_attempts_wait_for_configured_model_interval(client, monkeypatch):
     _, backend = client
     monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "4.05")

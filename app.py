@@ -63,7 +63,8 @@ logger = logging.getLogger(__name__)
 def _allowed_hosts() -> list[str]:
     """Host allow-list for the local API, guarding against DNS rebinding."""
     raw = os.getenv("MRA_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
-    return [host.strip() for host in raw.split(",") if host.strip()]
+    hosts = [host.strip() for host in raw.split(",") if host.strip()]
+    return hosts or ["127.0.0.1", "localhost", "testserver"]
 
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts())
