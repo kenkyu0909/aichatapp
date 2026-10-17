@@ -29,9 +29,9 @@ def test_quality_eval_module_imports_no_app():
 
 def test_independent_grader_flags_every_movie_nonanswer():
     texts = [
-        "青い灯台という映画の話をしました。",
-        "映画が好きなんですね。",
-        "ほかの話題で盛り上がりましょう。",
+        "青い灯台という映画の話をしました",
+        "映画が好きなんですね",
+        "ほかの話題で盛り上がりましょう",
     ]
     verdict = quality_eval.independent_quality_verdict(
         texts, required_answer_tokens=["青い灯台"], require_all_answer=True
@@ -43,8 +43,8 @@ def test_independent_grader_flags_every_movie_nonanswer():
 
 def test_independent_grader_accepts_all_candidate_answers():
     texts = [
-        "青い灯台という映画の話をしました。",
-        "青い灯台は評判がいいですよね。",
+        "青い灯台という映画の話をしました",
+        "青い灯台は評判がいいですね",
     ]
     verdict = quality_eval.independent_quality_verdict(
         texts, required_answer_tokens=["青い灯台"], require_all_answer=True
@@ -54,14 +54,14 @@ def test_independent_grader_accepts_all_candidate_answers():
 
 
 def test_independent_grader_flags_unverified_first_person_claim():
-    texts = ["私も映画が好きです。"]
+    texts = ["私も映画が好きです"]
     assert quality_eval.untrusted_first_person_topics(texts) == ["映画"]
     verdict = quality_eval.independent_quality_verdict(texts)
     assert "unsupported_first_person_claim" in verdict["reasons"]
 
 
 def test_independent_grader_accepts_grounded_claim():
-    texts = ["私は映画が好きです。"]
+    texts = ["私は映画が好きです"]
     assert quality_eval.untrusted_first_person_topics(texts, ["映画が好き"]) == []
     verdict = quality_eval.independent_quality_verdict(texts, trusted_claims=["映画が好き"])
     assert verdict["unsupported_topics"] == []
@@ -69,33 +69,45 @@ def test_independent_grader_accepts_grounded_claim():
 
 
 def test_independent_grader_ignores_interrogative_first_person():
-    assert quality_eval.untrusted_first_person_topics(["私は映画が好きですか？"]) == []
+    assert quality_eval.untrusted_first_person_topics(["私は映画が好きですか"]) == []
 
 
 def test_independent_grader_detects_near_duplicate_candidates():
-    texts = ["とても楽しい時間でしたね。", "とても楽しい時間でしたね。"]
+    texts = ["とても楽しい時間でしたね", "とても楽しい時間でしたね"]
     assert quality_eval.has_near_duplicate_candidates(texts) is True
     verdict = quality_eval.independent_quality_verdict(texts)
     assert verdict["duplicate_violation"] is True
 
 
 def test_independent_grader_allows_distinct_candidates():
-    texts = ["映画が好きなんですね。", "週末はどこに行くんですか。"]
+    texts = ["映画が好きなんですね", "週末はどこに行くんですか"]
     assert quality_eval.has_near_duplicate_candidates(texts) is False
     assert quality_eval.has_redundant_reaction_set(texts) is False
 
 
 def test_independent_grader_detects_redundant_reactions():
-    texts = ["いいですね。", "いいですね。"]
+    texts = ["いいですね", "いいですね"]
     assert quality_eval.has_redundant_reaction_set(texts) is True
 
 
 def test_independent_placeholder_and_punctuation_checks():
-    assert quality_eval.has_placeholder("〇〇さん、こんにちは。") is True
-    assert quality_eval.has_placeholder("こんにちは。") is False
-    punctuation = quality_eval.independent_quality_verdict(["hello there friend"])
-    assert punctuation["punctuation_violation"] is True
-    assert punctuation["result"] == "FAIL"
+    assert quality_eval.has_placeholder("〇〇さん、こんにちは") is True
+    assert quality_eval.has_placeholder("こんにちは") is False
+    flagged = quality_eval.independent_quality_verdict(["こんにちは、元気ですか"])
+    assert flagged["punctuation_violation"] is True
+    assert flagged["result"] == "FAIL"
+    clean = quality_eval.independent_quality_verdict(["こんにちは\n元気ですか"])
+    assert clean["punctuation_violation"] is False
+
+
+def test_independent_grader_matches_recorded_punctuation_free_candidates():
+    texts = [
+        "友達とカフェ巡りいいですね\nどんな雰囲気のお店に行ったんですか？",
+        "カフェ巡り楽しそうですね\n最近お気に入りのエリアはありますか？",
+    ]
+    verdict = quality_eval.independent_quality_verdict(texts)
+    assert verdict["punctuation_violation"] is False
+    assert verdict["result"] == "PASS"
 
 
 def test_independent_grader_flags_long_unbroken_text():

@@ -175,7 +175,9 @@ def independent_quality_verdict(
 ) -> dict[str, Any]:
     """Independent PASS/FAIL evaluation of a candidate set with reasons."""
     reasons: list[str] = []
-    punctuation = any("," not in text and "、" not in text and "。" not in text for text in texts)
+    # The product's absolute rule is that candidate text must NOT contain 、 or 。;
+    # the style uses line breaks and ！？ instead.
+    punctuation = any("、" in text or "。" in text for text in texts)
     if punctuation:
         reasons.append("missing_japanese_punctuation")
     placeholders = [i for i, text in enumerate(texts) if has_placeholder(text)]
