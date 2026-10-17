@@ -1883,3 +1883,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T451（`5f7b766`、複数行返信の2行目回答認識・カフェ質問行除外）**: 「1行目相槌＋2行目回答＋3行目質問」の構成において、`_answers_verified_single_partner_question`（`カフェ好み` の雰囲気分岐）と `_candidate_uses_specific_answer_detail` が1行目のみを検査して2行目の回答を落としていた問題、および `_claim_supported_by_trusted_fact("カフェ")` が末尾の相手向け質問文（「よく行くお気に入りのお店はありますか？」）を本人の未確認主張と誤判定していた問題を修正。
 - **実API 再確認テスト（`conversation_test_20261017_T450_recheck.html`）**: Turn #8と同一の相手発言を送信し、不要な本人確認質問が出ず試行1回目で3案すべて通過すること、続く「どんな雰囲気のカフェが好きですか？」にも回答後試行1回目で3案通過することを確認。
 - 全pytest **1915 passed in 401.68s**、`node --check app.js` PASS、`git diff --check` PASS。
+
+### 2026-10-17 T452（質問付き推奨候補優先・五段動詞誤字ガード）・T453（独立採点器整合・条件付きGO残条件整理）・誘い段階実API 5シナリオ検証（T454）
+
+- **T452（質問付き推奨候補優先・五段動詞連用形抜け誤字ガード）**:
+  - `app.py` に `_candidate_has_partner_question` / `_should_prioritize_question_candidate` / `_prioritize_question_candidate` を実装し、安全通過候補の先頭（`#1`）が複数行の相槌・感想のみで質問を含まず、後続候補に質問付き候補がある場合は最初の質問付き候補を `#1 (recommended)` に昇格（拒否・不快・重い相談文脈と1行リアクション単体は除外）。
+  - `_HIGH_CONFIDENCE_MALFORMED_WORDS` に五段動詞の連用形抜け誤字パターン `re.compile(r"(?:頼|読|飲|休|歩|住|進|選|遊|運|学|励|並|喜|悩)(?:たく|たい)")`（例: `頼たくなります`）を追加し、一段・カ変の正例（`来たく`・`見たい`・`着たく`・`寝たい`・`出たく`・`居たく`）を非誤検出として単体テストで固定。
+  - **新規実API 20通会話テスト（`conversation_test_20261017_T452.html` / `.json`）**: 既存 `conversation_test.html` を保持したまま別名で20通フル実行し、**20通完走・候補ブロック0回・誤字0件・推奨#1候補の質問付与15/20通（75%）** を確認。
+- **T453（独立採点器の休息・共感語彙衝突検出整合と `FINAL_REPORT.md` 残条件整理）**:
+  - `scripts/quality_eval.py` の `has_redundant_reaction_set` に `_REST_EMPATHY` 語彙衝突検出を追加し、製品ゲートと独立採点器の判定を一致させた。`FINAL_REPORT.md` 冒頭で「条件付きGO」の残条件をコード解消済み項目と運用・確率的留意事項に仕分けして明記。
+- **T454（誘い判断 Stage 1–6 / `invite_decision` のオフライン48件＋実API 5シナリオ検証）**:
+  - オフライン自動テスト48件全PASSに加え、実APIで (a) 初期ターン（`Stage 1 / do_not_invite` → `Stage 2 / continue_conversation`）、(b) 相手の関心表明（`Stage 4 / invite_gently`）、(c) 相手の慎重姿勢（`Stage 3 / respect_no`＋次ターン再勧誘なし）、(d) 承諾・日程質問（`needs_user_info=True` → 回答後 `Stage 5 / schedule_after_acceptance`）、(e) 連絡終了要求（即時生成停止・候補0件）の全5シナリオを検証し、HTML/JSON（`conversation_test_20261017_invite_a_early.html` 〜 `e_stop.html`）へ保存。
+- 全pytest **1917 passed**、`node --check app.js` PASS、`git diff --check` PASS。
