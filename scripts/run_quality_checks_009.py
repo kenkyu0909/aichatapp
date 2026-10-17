@@ -23,7 +23,10 @@ except ImportError:  # pragma: no cover - direct script execution puts scripts/ 
     from quality_eval import combine_quality_verdict, independent_quality_verdict
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "docs/verification/simulations/quality_checks_009.json"
+OUTPUT = Path(
+    os.environ.get("MRA_QUALITY_OUTPUT")
+    or (ROOT / "docs/verification/simulations/quality_checks_009.json")
+).expanduser()
 API_DIR = Path(os.environ.get("MRA_API_DIR") or (ROOT.parent / "API")).expanduser()
 MAX_LOGICAL = 12
 MAX_PROVIDER = 24

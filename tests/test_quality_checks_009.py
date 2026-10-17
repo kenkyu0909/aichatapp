@@ -196,3 +196,23 @@ def test_smoke_only_status_matches_semantic_quality_verdict_and_exit_code():
 
 def test_smoke_scope_is_explicit_for_full_and_smoke_only_artifacts():
     assert "excludes semantic diversity" in SMOKE_SCOPE
+
+
+def test_output_path_can_be_redirected_without_overwriting_the_record(tmp_path, monkeypatch):
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "quality_checks_009_20261017.json"
+    monkeypatch.setenv("MRA_QUALITY_OUTPUT", str(target))
+    spec = importlib.util.spec_from_file_location(
+        "quality009_output_override", root / "scripts/run_quality_checks_009.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+
+    assert module.OUTPUT == target
+    assert module.OUTPUT != root / "docs/verification/simulations/quality_checks_009.json"
