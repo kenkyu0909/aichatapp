@@ -1900,4 +1900,4 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
   - 相手からの都合・空き照会（曜日・時間帯・空き・日程）を専用トピック `予定` として分類。
   - 曜日・時間帯・時刻・日付の厳格な値照合（`_validate_schedule_elements_match`）を実装。曜日違い（土曜→日曜）・余計な日程追加（土曜→土日）・時間追加・極性逆転（空いていません）をすべて厳密に棄却。
   - 日程合意コンテキストでの受諾表現（「ぜひ行きましょう」等）の文体許可により、実APIシナリオ(d)で決定論的フォールバックに頼ることなくモデル生出力3案が安全・正確に一発通過（`available=3`, `deterministic_fallback_used=None`）することを確認し、`conversation_test_20261017_invite_d_schedule_T456.html` / `.json` に保存。
-- 全pytest **1790 passed**、`node --check app.js` PASS、`git diff --check` PASS。
+- 全pytest **1,920 passed**（`tests/test_app.py` 1,790 passed + 全リポジトリスイート計 1,920 passed、失敗0件）、`scripts/run_scenario_d_t456.py` は検証リポジトリから外部 `会話テスト` ディレクトリへ移行（`git rm`）。`node --check app.js` PASS、`git diff --check` PASS。
