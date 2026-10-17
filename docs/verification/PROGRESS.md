@@ -1776,3 +1776,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 次: 全pytestとCIを確認後、D05（相手別下書き分離）以降の未達P0へ進む。
 - 検証: 全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524)（同一SHA `f1aac28`、success）。
 
+### 2026-10-17 05:45 JST 映画タイトル証拠の第三者・受動態の却下（T422）
+
+- 検証エージェントが残る過剰受理を検出: confirmed/ephemeral のタイトル枝で、保存/一時回答の作品名を第三者が観た記述（「観たのは妹です」）や受動/伝聞（「観たと言われました」）が通っていた。
+- 修正（`8bc498d`）: 両ループを共通述語 `_candidate_asserts_viewing_of_title`（タイトル含有・`_asserts_movie_viewing`・非第三者・逆質問除外）に統合。`_movie_viewing_attributed_to_other_person` に後置主語と受動/伝聞のパターンを追加。
+- 回帰10件追加（一人称肯定の受理、矛盾・伝聞・第三者・受動・逆質問の却下、第三者/受動のe2e）。focused 149、`tests/test_app.py` **1737 passed in 55.78s**、全pytest **1847 passed in 427.49s**（フレークなし）。
+- Actions: Push [38994897457](https://github.com/kenkyu0909/aichatapp/actions/runs/38994897457) / PR [38994900033](https://github.com/kenkyu0909/aichatapp/actions/runs/38994900033)（同一SHA `8bc498d`）。
+- **D05/D06 は既に実装済み**: 相手別下書き分離は `b9cece7`/`de2f021`（`app.js` の `messageDrafts` をcontact idでキー化、`contactSelectionEpoch`/`conversationRevision`/`generationRequestTokens` ガード）で完了し、Firefoxテスト（`test_firefox_message_drafts_are_isolated_per_contact` 等）で担保済み。`DEEPSEEK_HANDOFF.md` の D05/D06 行番号アンカーは古いため、再実装しないこと。
+- 次: 残る未達P0（D09/D10/D11/D13-D18、QUALITY009実生成品質）を精査し、オフラインで進められるものを選ぶ。
+

@@ -1082,5 +1082,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T421 | 確認済み映画回答の矛盾・伝聞の却下（fail-closed是正） | pytest。genericフォールバックのタイトル枝 | FIXED | T420でgenericフォールバックに混入した無ガードのタイトル接頭辞一致を撤去し、`_reading_genre_evidence_segments`＋`_asserts_movie_viewing`＋`_movie_viewing_attributed_to_other_person`＋逆質問除外による guarded 判定へ置換。保存済み作品名を否定（「観ていません」）・伝聞（「と聞きました」）・逆質問した候補は却下し、肯定（「『青い灯台』を観ました」）は受理。回帰3件追加。focused 116、`tests/test_app.py` 1727 passed。commit `f1aac28`。 |
 
-最新ID行: 421。T407〜T421をFIXEDとして追加。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524) は同一SHA `f1aac28` でsuccess。全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。
+| T422 | 映画タイトル証拠の第三者・受動態の却下（共通判定） | pytest。`_candidate_asserts_viewing_of_title` | FIXED | confirmed/ephemeral両ループを共通述語 `_candidate_asserts_viewing_of_title` に統合（タイトル含有・`_asserts_movie_viewing`・非第三者・逆質問除外）。`_movie_viewing_attributed_to_other_person` に後置主語（「観たのは妹です」）と受動/伝聞（「観たと言われました」）を追加。第三者・受動・矛盾・伝聞・逆質問を却下し、一人称肯定を受理。回帰10件追加。focused 149、`tests/test_app.py` 1737 passed、全pytest **1847 passed in 427.49s**。commit `8bc498d`。 |
+
+最新ID行: 422。T407〜T422をFIXEDとして追加。Actions: Push [38994897457](https://github.com/kenkyu0909/aichatapp/actions/runs/38994897457) / PR [38994900033](https://github.com/kenkyu0909/aichatapp/actions/runs/38994900033) は同一SHA `8bc498d` でsuccess。全pytest **1847 passed in 427.49s**（Firefox UI含む、フレークなし）。
 

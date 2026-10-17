@@ -1691,6 +1691,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - 全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524)（同一SHA `f1aac28`、success）。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 05:45 JST 映画タイトル証拠の第三者・受動態の却下（T422）
+
+- verified/ephemeralのタイトル枝を共通述語 `_candidate_asserts_viewing_of_title` に統合し、第三者（観たのは妹です）・受動/伝聞（観たと言われました）・矛盾・逆質問を却下（`8bc498d`）。`_movie_viewing_attributed_to_other_person` に後置主語と受動のパターンを追加。
+- 回帰10件追加。focused 149、`tests/test_app.py` **1737 passed in 55.78s**、全pytest **1847 passed in 427.49s**（フレークなし）。Actions: Push [38994897457](https://github.com/kenkyu0909/aichatapp/actions/runs/38994897457) / PR [38994900033](https://github.com/kenkyu0909/aichatapp/actions/runs/38994900033)（同一SHA `8bc498d`）。
+- **D05/D06は既に実装済み**（`b9cece7`/`de2f021`、Firefoxテスト担保済み）。`DEEPSEEK_HANDOFF.md` の該当アンカーは古い。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。
