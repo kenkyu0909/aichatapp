@@ -1833,6 +1833,17 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - T436（`efebc41`, D11後半）: 検証エージェントが provider ループに要求全体の壁時計上限がないこと（最悪 12試行×(30s+4.05s)）を指摘。`MRA_REQUEST_DEADLINE_SECONDS`（既定120秒、`none`/負値で無効、`0`で即時失効）と `_request_deadline` を追加し、各試行の直前に期限を判定。超過時は `RequestDeadlineExceededError`→`error_code=request_deadline_exceeded` の安全な502（試行0で停止）。期限直前のSDK呼び出しは最大1回分=30秒の超過があり得る点は残課題として明記。テスト2件追加。全pytest **1893 passed in 421.26s**。
 - 次: D16 README（取得先・起動終了・バックアップ/復元・検証済み依存組合せ）に着手。実生成品質（D07）は実Gemini予算待ち。
 
+### 2026-10-17 実Geminiでの009再評価（D07 / T437）
+
+- ユーザーの実API許可を受け、`scripts/run_quality_checks_009.py` を実Geminiで実行。既存の実品質記録 `quality_checks_009.json` を上書きしないよう、`MRA_QUALITY_OUTPUT` による出力先の差し替えを追加（テスト1件）。証跡は新規 `docs/verification/simulations/quality_checks_009_live_20261017.json`。
+- smoke: PASS（logical 1、model gemini-3.5-flash-lite、alias API1）。
+- 初回フル実行: 9件中8件PASS。`joke_mirroring` のみFAIL。製品の多様性ゲートが共感・休息トピックのレキシカル衝突（「お疲れ様」「ゆっくり休め」の2候補）を検出したもので、全候補は句読点なし・独立採点はPASSだった。
+- 同一入力の再実行1回（`--retry-case`）は別内容の候補でPASS。元のFAILは `superseded_by=joke_mirroring_retry` として履歴保持。
+- 最終状態: status=PASS、logical 9、provider 19、historical_nonpass 1、unresolved 0。未変更の元 `quality_checks_009.json`（旧データセット）は従来のFAIL記録として残置。
+- 残課題: 多様性ゲートが確率的で再実行に依存する（初回のみ衝突）。独立採点器は文字n-gramの類似で判定するため、語が異なるトピック衝突を検出できず、このFAILは製品ゲートのみが検出した。回答ムーブの重複を使う独立規則は誤FAIL4件を生んだため撤回した。
+- 全pytest **1894 passed in 416.53s**。commit `b2930b1`。総合判定は条件付きGO（多様性ゲートの決定性確認待ち）。
+- 次: D16 README（取得先・起動終了・バックアップ/復元・検証済み依存組合せ）に着手。
+
 
 
 

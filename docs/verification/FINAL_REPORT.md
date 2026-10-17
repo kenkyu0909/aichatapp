@@ -1801,6 +1801,16 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - 検証エージェント所見の残課題: 期限の判定は試行間のみのため、1回のSDK呼び出し（30秒timeout）分の超過は残る。
 - 総合判定は**NO-GO**を維持（実生成品質FAILは予算待ち）。
 
+### 2026-10-17 実Geminiでの009再評価（D07 / T437）
+
+- ユーザーの実API許可を受け、`scripts/run_quality_checks_009.py` を実Geminiで実行した。既存の実品質記録 `quality_checks_009.json` を上書きしないよう `MRA_QUALITY_OUTPUT` で出力先を振り替え、証跡は新規 `docs/verification/simulations/quality_checks_009_live_20261017.json` に保存した。
+- smoke は PASS。初回フル実行は9件中8件PASSで、`joke_mirroring` のみ製品の多様性ゲートが共感・休息トピックのレキシカル衝突を検出してFAILした（全候補は句読点なし、独立採点はPASS）。
+- 同一入力の再実行1回は別内容の候補でPASSし、元のFAILは `superseded_by=joke_mirroring_retry` として履歴に残した。最終状態は status=PASS、logical 9、provider 19、historical_nonpass 1、unresolved 0。
+- 残課題: 多様性ゲートは確率的で再実行に依存する（初回のみ衝突）。独立採点器の重複検出は文字n-gramのため、語が異なるトピック衝突を検出できず、このFAILは製品ゲートのみが検出した。`combine_quality_verdict` が両者を合成するため FAIL が隠れることはない。
+- 未変更の元 `quality_checks_009.json` は従来のFAIL記録として残置する。
+- 全pytest **1894 passed in 416.53s**。commit `b2930b1`。
+- 総合判定は**条件付きGO**とする。実生成品質は今回の実行で全ケース通過したが、多様性ゲートの再発が再実行依存のため、多様性ゲートの決定性を確認するまで無条件のGOとはしない。
+
 
 
 
