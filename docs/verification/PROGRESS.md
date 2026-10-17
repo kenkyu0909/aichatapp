@@ -1820,4 +1820,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - Actions: `0f77f1c` Push [39001970969](https://github.com/kenkyu0909/aichatapp/actions/runs/39001970969) / PR [39001973826](https://github.com/kenkyu0909/aichatapp/actions/runs/39001973826)、`ba8906c` Push [39002561869](https://github.com/kenkyu0909/aichatapp/actions/runs/39002561869) / PR [39002565203](https://github.com/kenkyu0909/aichatapp/actions/runs/39002565203)、`6428754` Push [39003428787](https://github.com/kenkyu0909/aichatapp/actions/runs/39003428787) / PR [39003519038](https://github.com/kenkyu0909/aichatapp/actions/runs/39003519038) はいずれもsuccess。
 - 次: 実生成品質（QUALITY009 の FAIL）は実Gemini予算待ちで、D09 の独立採点により以後の採点はアプリ自己申告に依存しない。予算が確保でき次第、T432 の配線済みランナーで再評価し `evaluator_divergence` を確認する。並行して次項目（D11 予算台帳 / D16 README / D17 backup）から着手。
 
+### 2026-10-17 D11 永続利用台帳（事前予約と原子性）
+
+- T434（`6d555b6`, D11）: 呼出し前に予約する永続台帳を追加。冪等な `CREATE TABLE IF NOT EXISTS api_usage` を既存 `executescript` へ追加（マイグレーション不要）。`MRA_USAGE_LEDGER_LIMIT` 未設定なら台帳に一切書き込まない（オフライン/無制限運用で行が貯まらない）。`generate` の provider ループで `generate_content` 直前に `_reserve_provider_usage` を呼び、枯渇時は `UsageBudgetExceededError`→安全な502（`error_code=usage_budget_exceeded`）。テスト3件。全pytest **1890 passed in 382.05s**。
+- T435（`a369794`, D11補正）: 検証エージェントが check-then-insert の競合（原子性なし・ロックなしで並行要求が予算を超過、実測 上限10で40スレッドが全通過）を検出。`_usage_ledger_lock`＋`BEGIN IMMEDIATE` でカウントと挿入を単一トランザクション化し、枯渇時は rollback。40スレッド×上限10で granted=10/denied=30 を固定するテストを追加。全pytest **1891 passed in 400.54s**。
+- 検証エージェント所見（残課題）: D11の後半「要求全体の期限（global deadline）」は未実装（30秒はSDK呼び出し単位のtimeoutで、providerループ全体の壁時計上限はない。最悪 12試行×(30s+4.05s)）。`MRA_USAGE_LEDGER_WINDOW` の綴り誤りは既定 `day` に静かに縮退（`none` の誤記は上限付きdayになり、より厳しい側に倒れる）。
+- Actions: `6d555b6` Push [39005171268](https://github.com/kenkyu0909/aichatapp/actions/runs/39005171268) / PR [39005174295](https://github.com/kenkyu0909/aichatapp/actions/runs/39005174295)、`a369794` Push [39006007280](https://github.com/kenkyu0909/aichatapp/actions/runs/39006007280) / PR [39006009668](https://github.com/kenkyu0909/aichatapp/actions/runs/39006009668) はいずれもsuccess。
+- 次: 要求全体の global deadline（D11後半）または D16 README（取得先・起動終了・バックアップ/復元・依存固定）に着手。実生成品質（D07）は実Gemini予算待ち。
+
+
 

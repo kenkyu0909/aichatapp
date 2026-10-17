@@ -1787,4 +1787,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: `0f77f1c` Push [39001970969](https://github.com/kenkyu0909/aichatapp/actions/runs/39001970969) / PR [39001973826](https://github.com/kenkyu0909/aichatapp/actions/runs/39001973826)、`ba8906c` Push [39002561869](https://github.com/kenkyu0909/aichatapp/actions/runs/39002561869) / PR [39002565203](https://github.com/kenkyu0909/aichatapp/actions/runs/39002565203)、`6428754` Push [39003428787](https://github.com/kenkyu0909/aichatapp/actions/runs/39003428787) / PR [39003519038](https://github.com/kenkyu0909/aichatapp/actions/runs/39003519038) はいずれもsuccess。PR #4はDraft・未マージ。
 - 総合判定は**NO-GO**を維持。QUALITY009 の実生成品質FAILは実Gemini予算待ちで未解決だが、以後の採点は（T432配線により）アプリ自己申告に依存しない。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 D11 永続利用台帳（事前予約と原子性）
+
+- T434（`6d555b6`）: 呼出し前に予約する永続台帳 `api_usage` を追加。`MRA_USAGE_LEDGER_LIMIT` 未設定なら書き込みなし。`generate` の `generate_content` 直前に予約し、枯渇時は `error_code=usage_budget_exceeded` の安全な502。テスト3件。全pytest **1890 passed in 382.05s**。
+- T435（`a369794`）: 検証エージェントが check-then-insert の競合（並行要求で予算超過、上限10で40スレッドが全通過）を検出。`_usage_ledger_lock`＋`BEGIN IMMEDIATE` で単一トランザクション化。40スレッド×上限10で granted=10/denied=30 を固定するテストを追加。全pytest **1891 passed in 400.54s**。
+- 検証エージェント所見（残課題）: D11後半の要求全体の期限（global deadline）は未実装。`MRA_USAGE_LEDGER_WINDOW` の綴り誤りは既定 day に静かに縮退。
+- Actions: `6d555b6` Push [39005171268](https://github.com/kenkyu0909/aichatapp/actions/runs/39005171268) / PR [39005174295](https://github.com/kenkyu0909/aichatapp/actions/runs/39005174295)、`a369794` Push [39006007280](https://github.com/kenkyu0909/aichatapp/actions/runs/39006007280) / PR [39006009668](https://github.com/kenkyu0909/aichatapp/actions/runs/39006009668) はいずれもsuccess。PR #4はDraft・未マージ。
+- 総合判定は**NO-GO**を維持（実生成品質FAILは予算待ち）。
+
+
 
