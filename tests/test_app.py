@@ -294,6 +294,16 @@ def test_orphan_journal_survives_new_connection(client):
     assert _orphaned_photo_names(backend) == {"0123456789abcdef.png"}
 
 
+def test_delete_missing_match_is_404_without_touching_photos(client):
+    c, backend = client
+    mid = add_match(c, "不存在削除")
+    assert c.put(f"/api/matches/{mid}/photo", files={"file": ("keep.png", png_bytes(), "image/png")}).status_code == 200
+    photo_name = c.get("/api/matches").json()[0]["photo"]
+    assert c.delete(f"/api/matches/{mid + 999}").status_code == 404
+    assert (backend.PHOTOS / photo_name).exists()
+    assert _orphaned_photo_names(backend) == set()
+
+
 def test_web_ui_is_served_without_api_key(client):
     c, _ = client
     page = c.get("/")
