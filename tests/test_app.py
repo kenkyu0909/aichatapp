@@ -13539,3 +13539,48 @@ def test_generate_reports_usage_budget_failure_as_safe_error(client, monkeypatch
     assert "予算上限" in response.json()["detail"]
     assert "test-api1-secret" not in response.text
 
+
+def test_request_deadline_helper_modes(client, monkeypatch):
+    _, backend = client
+    monkeypatch.setenv("MRA_REQUEST_DEADLINE_SECONDS", "none")
+    assert backend._request_deadline() is None
+    monkeypatch.setenv("MRA_REQUEST_DEADLINE_SECONDS", "-5")
+    assert backend._request_deadline() is None
+    monkeypatch.setenv("MRA_REQUEST_DEADLINE_SECONDS", "0")
+    assert backend._request_deadline() is not None
+    monkeypatch.delenv("MRA_REQUEST_DEADLINE_SECONDS")
+    assert backend._request_deadline() is not None
+
+
+def test_generate_stops_at_request_deadline_before_provider_call(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の期限確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setenv("MRA_REQUEST_DEADLINE_SECONDS", "0")
+
+    calls = []
+
+    def _fake_generate(**kwargs):
+        calls.append(kwargs["model"])
+        raise AssertionError("provider call must not run past the deadline")
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(models=SimpleNamespace(generate_content=_fake_generate)),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "request_deadline_exceeded"
+    assert response.json()["api_attempt_count"] == 0
+    assert calls == []
+    assert "test-api1-secret" not in response.text
+
+

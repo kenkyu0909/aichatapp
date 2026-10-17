@@ -134,6 +134,30 @@ def reserve_provider_usage(
     return int(cursor.lastrowid or 0)
 
 
+REQUEST_DEADLINE_DEFAULT_SECONDS = 120.0
+
+
+def _request_deadline() -> float | None:
+    """Return the monotonic wall-clock deadline for one generate request.
+
+    ``MRA_REQUEST_DEADLINE_SECONDS`` unset uses a 120s default; an empty,
+    ``none`` or negative value disables the cap; ``0`` expires immediately.
+    """
+    raw = os.getenv("MRA_REQUEST_DEADLINE_SECONDS", "").strip().lower()
+    if raw in {"none", "off", "disable", "disabled"}:
+        return None
+    if not raw:
+        seconds = REQUEST_DEADLINE_DEFAULT_SECONDS
+    else:
+        try:
+            seconds = float(raw)
+        except ValueError:
+            seconds = REQUEST_DEADLINE_DEFAULT_SECONDS
+    if seconds < 0:
+        return None
+    return time.monotonic() + seconds
+
+
 def _reserve_provider_usage(api_alias: str, model: str) -> None:
     """Reserve a provider attempt in the persisted ledger when a budget is set.
 
@@ -467,6 +491,10 @@ class ProviderAttemptLimitError(RuntimeError):
 
 class UsageBudgetExceededError(RuntimeError):
     """The persistent provider-usage ledger has no remaining budget for this window."""
+
+
+class RequestDeadlineExceededError(RuntimeError):
+    """The request-wide wall-clock deadline for provider calls has expired."""
 
 
 INVITATION_PATTERN = re.compile(
@@ -7576,6 +7604,7 @@ def generate(data: GenerateInput):
     except ValueError:
         provider_attempt_limit = 12
     provider_attempt_limit = max(1, min(provider_attempt_limit, 12))
+    request_deadline = _request_deadline()
     try:
         from google import genai
         from google.genai import types
@@ -7593,6 +7622,8 @@ def generate(data: GenerateInput):
                 while True:
                     if len(attempted_models) >= provider_attempt_limit:
                         raise ProviderAttemptLimitError("Provider attempt safety cap reached")
+                    if request_deadline is not None and time.monotonic() >= request_deadline:
+                        raise RequestDeadlineExceededError("Request-wide provider deadline reached")
                     _reserve_provider_usage(account, model)
                     _wait_for_provider_interval(account, model)
                     attempted_models.append({"api_alias": account, "model": model})
@@ -8279,6 +8310,9 @@ def generate(data: GenerateInput):
         elif isinstance(exc, UsageBudgetExceededError):
             failure_message = "API利用の予算上限に達したため生成を停止しました。設定を見直すか、次の時間帯・翌日に再試行してください。"
             failure_code = "usage_budget_exceeded"
+        elif isinstance(exc, RequestDeadlineExceededError):
+            failure_message = "生成の全体制限時間に達したため停止しました。時間をおいて再度お試しください。"
+            failure_code = "request_deadline_exceeded"
         elif _is_rate_limit_error(exc):
             failure_message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
             failure_code = "all_models_rate_limited"
