@@ -1896,4 +1896,8 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
   - オフライン自動テスト48件全PASSに加え、実APIで (a) 初期ターン（`Stage 1 / do_not_invite` → `Stage 2 / continue_conversation`）、(b) 相手の関心表明（`Stage 4 / invite_gently`）、(c) 相手の慎重姿勢（`Stage 3 / respect_no`＋次ターン再勧誘なし）、(d) 承諾・日程質問（`needs_user_info=True` → 回答後 `Stage 5 / schedule_after_acceptance`）、(e) 連絡終了要求（即時生成停止・候補0件）の全5シナリオを検証し、HTML/JSON（`conversation_test_20261017_invite_a_early.html` 〜 `e_stop.html`）へ保存。
 - **T455（フォールバック候補の文脈別相槌・相手名入り質問の自然化および日程調整シナリオ(d)再確認）**:
   - 既存の厳密な回答一致ガードを維持したまま、誘い承諾＋日程質問時は喜び表現（`うれしいです😊` / `うれしいな！`）、通常日程質問時は感謝表現（`ありがとうございます！` / `ありがとう！`）、相手名がある場合は相手名入り質問（`黒川さんはご都合いかがですか？` 等）を返すよう改善し、実API再確認テスト（`conversation_test_20261017_invite_d_schedule_T455.html`）で検証。
-- 全pytest **1918 passed**、`node --check app.js` PASS、`git diff --check` PASS。
+- **T456（日程調整質問の「予定」トピック独立化・厳格なスケジュール値マッチング・実モデル生出力通過）**:
+  - 相手からの都合・空き照会（曜日・時間帯・空き・日程）を専用トピック `予定` として分類。
+  - 曜日・時間帯・時刻・日付の厳格な値照合（`_validate_schedule_elements_match`）を実装。曜日違い（土曜→日曜）・余計な日程追加（土曜→土日）・時間追加・極性逆転（空いていません）をすべて厳密に棄却。
+  - 日程合意コンテキストでの受諾表現（「ぜひ行きましょう」等）の文体許可により、実APIシナリオ(d)で決定論的フォールバックに頼ることなくモデル生出力3案が安全・正確に一発通過（`available=3`, `deterministic_fallback_used=None`）することを確認し、`conversation_test_20261017_invite_d_schedule_T456.html` / `.json` に保存。
+- 全pytest **1790 passed**、`node --check app.js` PASS、`git diff --check` PASS。

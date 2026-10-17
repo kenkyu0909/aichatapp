@@ -1140,11 +1140,23 @@ def _topic_for_personal_question(text: str) -> str | None:
         return None
     if SAME_DAY_ACTIVITY_QUESTION.search(text):
         return "本人情報"
+    if DAILY_ROUTINE_SCHEDULE_QUESTION.search(text):
+        return "本人情報"
+    if (
+        not re.search(r"何してる|何をして|何する|何をする|どう過ご|何を過ご", text)
+        and (
+            re.search(r"[?？]|ですか|ますか|でしょうか|どう|いかが|教えて", text)
+            or UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text)
+        )
+        and (
+            re.search(r"都合|空いて|空き|何曜|時間帯|日程|日時", text)
+            or (re.search(r"曜日", text) and re.search(r"いつ|どの|ある|あります|ですか|どう|いかが", text))
+        )
+    ):
+        return "予定"
     if FUTURE_ACTIVITY_QUESTION.search(text):
         return "本人情報"
     if _past_activity_scope(text):
-        return "本人情報"
-    if DAILY_ROUTINE_SCHEDULE_QUESTION.search(text):
         return "本人情報"
     if "映画館" in text and re.search(r"どこにあります|どこにある|場所.{0,8}(?:あります|ある)|どこ(?:ですか|でしょうか)", text) and not re.search(r"行く|行った|通う|利用|普段|よく|行きつけ|どの映画館|どこの映画館", text):
         return None
@@ -6151,6 +6163,76 @@ def _reading_genre_segment_is_question_only(text: str) -> bool:
     return bool(re.search(r"(?:かね|かな|か|でしょう)$", normalized))
 
 
+DAYS_LIST = ["月曜", "火曜", "水曜", "木曜", "金曜", "土曜", "日曜", "土日", "週末", "平日"]
+TIMES_LIST = ["午前", "午後", "昼", "夜", "夕方", "朝"]
+
+
+def _extract_schedule_elements(text: str) -> dict[str, set[str]]:
+    """Extract days, times of day, hours, and calendar dates from schedule text."""
+    text_norm = re.sub(r"[\s、。！!？?]", "", text)
+    found_days = set()
+    if "土日" in text_norm:
+        found_days.add("土日")
+    for d in ["月曜", "火曜", "水曜", "木曜", "金曜", "土曜", "日曜", "週末", "平日"]:
+        if d in text_norm or (d in ("土曜", "日曜") and d + "日" in text_norm):
+            found_days.add(d)
+    found_times = set()
+    for t in TIMES_LIST:
+        if t in text_norm:
+            found_times.add(t)
+    hours = set(re.findall(r"\d{1,2}時(?:半)?", text_norm))
+    dates = set(re.findall(r"\d{1,2}月\d{1,2}日|\d{1,2}日", text_norm))
+    return {
+        "days": found_days,
+        "times": found_times,
+        "hours": hours,
+        "dates": dates,
+    }
+
+
+def _validate_schedule_elements_match(candidate_text: str, answer_text: str) -> bool:
+    """Validate schedule answers using strict value matching without semantic leakage.
+
+    Requires candidate to include all schedule elements from answer, forbids differing or
+    extra schedule values, and rejects opposite availability polarity.
+    """
+    negation_pattern = re.compile(
+        r"空いて(?:い)?(?:ない|ません|なかった)|"
+        r"(?:難し|むずかし)(?:い|そう|です|かも)|"
+        r"都合が?(?:悪い|つかない|合わない)|"
+        r"予定が?(?:ある|入って|埋まって)|"
+        r"(?:行け|会え)(?:ない|ません)"
+    )
+    ans_is_neg = bool(negation_pattern.search(answer_text))
+    cand_is_neg = bool(negation_pattern.search(candidate_text))
+    if ans_is_neg != cand_is_neg:
+        return False
+
+    ans_elem = _extract_schedule_elements(answer_text)
+    cand_elem = _extract_schedule_elements(candidate_text)
+
+    has_any_ans = any(bool(ans_elem[cat]) for cat in ["days", "times", "hours", "dates"])
+    if not has_any_ans:
+        return re.sub(r"[\s、。！!？?]", "", answer_text) in re.sub(r"[\s、。！!？?]", "", candidate_text)
+
+    for cat in ["days", "times", "hours", "dates"]:
+        if ans_elem[cat]:
+            if not ans_elem[cat].issubset(cand_elem[cat]):
+                return False
+            extra = cand_elem[cat] - ans_elem[cat]
+            if extra:
+                return False
+        else:
+            if cand_elem[cat]:
+                return False
+
+    if not ans_is_neg:
+        if not re.search(r"空いて|都合|合わせやすい|時間|予定|大丈夫|行け|伺え|お話し|楽しみに|よろしく|空き", candidate_text):
+            return False
+
+    return True
+
+
 def _is_partner_directed_followup_question(text: str, direct_question: str) -> bool:
     """Allow a clear question to the partner beside a verified personal answer."""
     normalized = text.strip()
@@ -6420,6 +6502,20 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         # A recognized personal question without a confirmed answer must not
         # be treated as answered by an unrelated, evasive candidate. The API
         # preflight normally asks the user first; this is the final send guard.
+        return False
+    if topic == "予定":
+        confirmed_evidence: list[str] = []
+        for answer in context.get("ephemeral_user_answers", []):
+            ans_text = str(answer.get("answer", "")).strip()
+            if ans_text:
+                confirmed_evidence.append(ans_text)
+        facts = context.get("my_profile", {}).get("facts", {})
+        for key in ("confirmed_availability", "confirmed_schedule", "確定した予定", "availability", "schedule", "available_time", "予定"):
+            val = facts.get(key)
+            if val and str(val).strip():
+                confirmed_evidence.append(str(val).strip())
+        if confirmed_evidence:
+            return any(_validate_schedule_elements_match(candidate.text, ev) for ev in confirmed_evidence)
         return False
     if topic == "料理習慣" and _personal_information_scope(topic, question) == (topic, "recent_experience"):
         facts = context.get("my_profile", {}).get("facts", {})
@@ -7155,6 +7251,7 @@ ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
     r"たしかに|確かに|ですよね|いいですね|素敵ですね|楽しそうですね|"
     r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま|"
     r"うれしいです|嬉しいです|うれしいな|嬉しいな|ありがとうございます|ありがとう|"
+    r"ぜひ(?:行きましょう|お願いしたいです|お願いします|行きましょ)?|"
     r"ぜひよろしくお願いします|楽しみですね|楽しみです"
 )
 QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか|いかがですか|どうですか")
@@ -7514,6 +7611,14 @@ def _unclassified_personal_question_user_answer(context: dict) -> str | None:
     if _negative_binary_question_has_ambiguous_answer(context, question):
         return None
     topic = _topic_for_personal_question(question)
+    if topic == "予定":
+        for answer in context.get("ephemeral_user_answers", []):
+            answered_question = re.sub(r"\s+|[?？。！!]", "", str(answer.get("question", "")))
+            if any(term in answered_question for term in ("曜日", "時間帯", "予定", "都合")):
+                answer_text = str(answer.get("answer", "")).strip()
+                if re.sub(r"[\s、。，．！!？?]", "", answer_text):
+                    return answer_text
+        return None
     if topic == "本人情報":
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)
         requested_activity_scope = _same_day_activity_scope(question)

@@ -14463,3 +14463,43 @@ def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partne
     assert fb_plain is not None
     assert fb_plain.text == "ありがとうございます！\n土曜日の午後なら空いています\n黒川さんはご都合いかがですか？"
     assert backend._candidate_rejection_reasons(fb_plain, plain_context) == []
+
+
+def test_schedule_value_matching_validation_strictness(client):
+    _, backend = client
+    answer = '土曜日の午後が空いています'
+    cand_ok = '土曜日の午後なら空いています！ぜひ行きましょう！'
+    assert backend._validate_schedule_elements_match(cand_ok, answer) is True
+    cand_day_mismatch = '日曜日の午後なら空いています！'
+    assert backend._validate_schedule_elements_match(cand_day_mismatch, answer) is False
+    cand_extra_day = '土日どちらの午後も空いています！'
+    assert backend._validate_schedule_elements_match(cand_extra_day, answer) is False
+    cand_time_mismatch = '土曜日の夜なら空いています！'
+    assert backend._validate_schedule_elements_match(cand_time_mismatch, answer) is False
+    cand_extra_hour = '土曜日の午後8時が空いています！'
+    assert backend._validate_schedule_elements_match(cand_extra_hour, answer) is False
+    cand_negated = '土曜日の午後は予定が入っていて難しいです'
+    assert backend._validate_schedule_elements_match(cand_negated, answer) is False
+    neg_answer = '土曜日は予定があって空いていません'
+    cand_neg_ok = '土曜日はあいにく予定があって空いていません、すみません！'
+    assert backend._validate_schedule_elements_match(cand_neg_ok, neg_answer) is True
+    cand_pos_rejected = '土曜日は大丈夫ですよ！'
+    assert backend._validate_schedule_elements_match(cand_pos_rejected, neg_answer) is False
+
+
+def test_schedule_question_in_verified_single_partner_question(client):
+    _, backend = client
+    question = 'ぜひ行きましょう！来週か再来週あたりで都合のいい曜日や時間帯はありますか？'
+    context = {
+        'mode': 'reply',
+        'history': [{'role': 'them', 'body': question}],
+        'my_profile': {'facts': {}},
+        'ephemeral_user_answers': [{'question': '相手に伝えてよい曜日や時間帯を教えてください', 'answer': '土曜日の午後が空いています'}],
+        'invite_decision': 'schedule_after_acceptance',
+    }
+    valid_cand = backend.Candidate(label='正確な予定回答', text='ぜひ行きましょう！土曜日の午後が空いています。ご都合いかがですか？')
+    assert backend._answers_verified_single_partner_question(valid_cand, context) is True
+    assert '相手からの直接質問に未回答' not in backend._candidate_rejection_reasons(valid_cand, context)
+    altered_cand = backend.Candidate(label='誤った予定回答', text='ぜひ行きましょう！日曜日の午後が空いています。ご都合いかがですか？')
+    assert backend._answers_verified_single_partner_question(altered_cand, context) is False
+    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(altered_cand, context)
