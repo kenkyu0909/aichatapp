@@ -7773,6 +7773,85 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
     return candidate
 
 
+def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate | None:
+    """Synthesize 1 safe fallback candidate when all model candidates fail on a profile-confirmed question (e.g. occupation)."""
+    if context.get("mode") not in {"reply", "followup"}:
+        return None
+    if partner_requests_contact_stop(context):
+        return None
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if not partner_messages:
+        return None
+    question = partner_messages[-1]
+    if not re.search(r"[?？]|何|どんな|どう|どこ|いつ|どちら|どの", question):
+        return None
+    if _compound_direct_personal_question_parts(question):
+        return None
+
+    facts = context.get("my_profile", {}).get("facts", {})
+    if not isinstance(facts, dict):
+        return None
+
+    casual = _fallback_should_use_casual_tone(context, question, "")
+    partner_label = _fallback_partner_honorific_name(context)
+    other = context.get("other") or {}
+    other_desc = str(other.get("description", "") or "")
+    other_job = str(other.get("occupation", "") or "")
+
+    candidate_text: str | None = None
+
+    # 1. Occupation / Work / School question
+    if re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question):
+        known_occupations = _verified_job_or_school_values(facts, question)
+        if known_occupations:
+            norm_job = _normalize_occupation_label(known_occupations[0])
+            line1 = f"{norm_job}をしています"
+            work_label = "お仕事"
+            work_match = re.search(
+                r"(?:中野で|都内で|街で)?(書店|本屋|カフェ|保育士|看護師|エンジニア|事務|営業|教員|パン屋|花屋)",
+                other_desc + " " + other_job,
+            )
+            if work_match:
+                matched_kw = work_match.group(1)
+                if matched_kw in {"書店", "本屋"}:
+                    work_label = "書店のお仕事"
+                elif matched_kw == "カフェ":
+                    work_label = "カフェのお仕事"
+                elif matched_kw in {"パン屋", "花屋"}:
+                    work_label = f"{matched_kw}のお仕事"
+                else:
+                    work_label = f"{matched_kw}のお仕事"
+            if partner_label:
+                followup = (
+                    f"{partner_label}は{work_label}で特に楽しいのはどんなとき？"
+                    if casual
+                    else f"{partner_label}は{work_label}で特に楽しいのはどんなときですか？"
+                )
+            else:
+                followup = (
+                    f"そちらは{work_label}で特に楽しいのはどんなとき？"
+                    if casual
+                    else f"そちらは{work_label}で特に楽しいのはどんなときですか？"
+                )
+            candidate_text = f"{line1}\n{followup}"
+
+    if not candidate_text:
+        return None
+
+    candidate = Candidate(
+        label="回答を反映した返信",
+        text=candidate_text,
+        reply_move="react",
+    )
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -7808,6 +7887,8 @@ def filter_safe_candidates(
     deterministic_fallback_used = False
     if not accepted:
         fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        if fallback_candidate is None:
+            fallback_candidate = _build_verified_profile_fact_fallback_candidate(candidate_context)
         if fallback_candidate is not None:
             accepted.append(fallback_candidate)
             deterministic_fallback_used = True
@@ -8591,6 +8672,41 @@ def generate(data: GenerateInput):
                             )
                             continue
                         if data.response_version == 2 and not data.skipped_user_info:
+                            if safe_candidate_fallback is not None:
+                                safe_fallback_result = filter_safe_candidates(
+                                    safe_candidate_fallback,
+                                    data.count,
+                                    context,
+                                )
+                                fallback_provider = safe_candidate_fallback_provider or {}
+                                final_candidates = [
+                                    safe_fallback_result["recommended"],
+                                    *safe_fallback_result.get("alternatives", []),
+                                ]
+                                safe_fallback_result.update({
+                                    "demo": False,
+                                    "requested_candidate_count": data.count,
+                                    "skipped_user_info": False,
+                                    "generation_blocked": False,
+                                    "api_alias": fallback_provider.get("api_alias"),
+                                    "model": fallback_provider.get("model"),
+                                    "api_attempt_count": len(attempted_models),
+                                    "attempted_models": attempted_models,
+                                    "candidate_notice": " ".join(filter(None, [
+                                        safe_fallback_result.get("candidate_notice", ""),
+                                        "再生成の候補に未確認情報が含まれていたため、先に確認済みの安全な候補を表示します。",
+                                    ])),
+                                    "candidate_provenance": [
+                                        {
+                                            "candidate_index": index,
+                                            **safe_candidate_fallback_sources.get(
+                                                re.sub(r"\s+", "", candidate.get("text", "")), fallback_provider
+                                            ),
+                                        }
+                                        for index, candidate in enumerate(final_candidates)
+                                    ],
+                                })
+                                return safe_fallback_result
                             # A hallucinated, unrelated personal claim must not be
                             # converted into a question to the user. Ask only when
                             # the missing fact is exactly what the partner directly

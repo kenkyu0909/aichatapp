@@ -14503,3 +14503,277 @@ def test_schedule_question_in_verified_single_partner_question(client):
     altered_cand = backend.Candidate(label='誤った予定回答', text='ぜひ行きましょう！日曜日の午後が空いています。ご都合いかがですか？')
     assert backend._answers_verified_single_partner_question(altered_cand, context) is False
     assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(altered_cand, context)
+
+
+def test_verified_profile_fact_fallback_candidate_occupation(client):
+    _, backend = client
+    context_polite = {
+        "mode": "reply",
+        "my_profile": {
+            "facts": {
+                "name": "水野そよか",
+                "job": "経理",
+                "hobbies": ["読書", "カフェ巡り"],
+            }
+        },
+        "other": {
+            "name": "黒川いつき",
+            "occupation": "書店員",
+            "description": "中野で書店員をしています。休みの日は古本屋をのぞいたり街をぶらぶら歩いたりしています。",
+        },
+        "history": [
+            {"role": "them", "body": "はじめまして！マッチありがとうございます！"},
+            {"role": "me", "body": "はじめまして！マッチできて嬉しいです！よろしくお願いします"},
+            {"role": "them", "body": "水野さんは普段どんなお仕事されてるんですか？"},
+        ],
+        "reply_preferences": {"tone": "自動"},
+    }
+
+    # 1. Fallback generates a valid candidate that passes all rejection checks
+    fb = backend._build_verified_profile_fact_fallback_candidate(context_polite)
+    assert fb is not None
+    assert fb.text == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなときですか？"
+    reasons = backend._candidate_rejection_reasons(fb, context_polite)
+    assert reasons == []
+
+    # 2. Casual tone produces casual follow-up question
+    context_casual = {
+        **context_polite,
+        "reply_preferences": {"tone": "タメ口"},
+        "history": [
+            {"role": "them", "body": "水野は普段どんな仕事してるの？"},
+        ],
+    }
+    fb_casual = backend._build_verified_profile_fact_fallback_candidate(context_casual)
+    assert fb_casual is not None
+    assert fb_casual.text == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなとき？"
+    assert backend._candidate_rejection_reasons(fb_casual, context_casual) == []
+
+    # 3. Fallback integrated with filter_safe_candidates when all candidates fail
+    unsafe_cand = backend.Candidate(
+        label="未確認詳細あり",
+        text="経理の仕事をしています！\n毎日電卓を叩いて数字とにらめっこしています😊",
+        reply_move="react",
+    )
+    raw_suggestions = backend.Suggestions(
+        reason="テスト",
+        strategy="テスト",
+        recommended=unsafe_cand,
+        alternatives=[],
+    )
+    res = backend.filter_safe_candidates(raw_suggestions, 1, context_polite)
+    assert res["deterministic_fallback_used"] is True
+    assert res["generation_blocked"] is False
+    assert res["recommended"] is not None
+    assert res["recommended"]["text"] == "経理をしています\n黒川いつきさんは書店のお仕事で特に楽しいのはどんなときですか？"
+
+
+def test_offline_data_directory_backup_and_restore_preserves_full_state(
+    client, tmp_path, monkeypatch
+):
+    import shutil
+
+    c, backend = client
+    data_dir = backend.DATA
+    backup_dir = tmp_path / "data_backup"
+
+    # 1. Populate user profile (structured JSON + avoid)
+    initial_profile_data = {
+        "name": "水野そよか",
+        "age": "26",
+        "area": "横浜",
+        "job": "事務",
+        "hobbies": ["読書", "カフェ巡り"],
+        "food": "和食",
+    }
+    assert (
+        c.put(
+            "/api/profile",
+            json={
+                "content": json.dumps(initial_profile_data, ensure_ascii=False),
+                "avoid": "絵文字の連打",
+            },
+        ).status_code
+        == 200
+    )
+
+    # 2. Populate matches, photos, and conversation histories
+    match_a = add_match(c, "架空の相手A")
+    match_b = add_match(c, "架空の相手B")
+
+    photo_payload = png_bytes((60, 140, 220))
+    assert (
+        c.put(
+            f"/api/matches/{match_a}/photo",
+            files={"file": ("avatar.png", photo_payload, "image/png")},
+        ).status_code
+        == 200
+    )
+    photo_filename = next(m for m in c.get("/api/matches").json() if m["id"] == match_a)["photo"]
+    assert photo_filename
+    assert (backend.PHOTOS / photo_filename).is_file()
+
+    assert (
+        c.post(
+            f"/api/matches/{match_a}/messages",
+            json={"role": "them", "body": "はじめまして！週末は何をしていますか？"},
+        ).status_code
+        == 201
+    )
+    assert (
+        c.post(
+            f"/api/matches/{match_a}/messages",
+            json={"role": "me", "body": "はじめまして！カフェでのんびりすることが多いです"},
+        ).status_code
+        == 201
+    )
+    assert (
+        c.post(
+            f"/api/matches/{match_a}/messages",
+            json={"role": "them", "body": "映画はお好きですか？"},
+        ).status_code
+        == 201
+    )
+    assert (
+        c.post(
+            f"/api/matches/{match_b}/messages",
+            json={"role": "them", "body": "Bとの独立した会話履歴です"},
+        ).status_code
+        == 201
+    )
+
+    # 3. Populate confirmed_facts via both /api/profile/confirmed-facts and /api/generate
+    confirm_resp = c.post(
+        "/api/profile/confirmed-facts",
+        json={
+            "match_id": match_a,
+            "clarification_session_id": "sess-backup-1",
+            "answers": [
+                {"question": "最近観た映画はありますか？", "answer": "『青い灯台』を観ました"}
+            ],
+        },
+    )
+    assert confirm_resp.status_code == 200
+    assert confirm_resp.json()["saved"] == 1
+
+    gen_resp = c.post(
+        "/api/generate",
+        json={
+            "mode": "reply",
+            "match_id": match_a,
+            "response_version": 2,
+            "clarification_session_id": "sess-backup-2",
+            "user_answers": [
+                {
+                    "question": "映画はお好きですか？",
+                    "answer": "洋画が好きです",
+                    "confirmed": True,
+                },
+                {
+                    "question": "一時的な未保存回答ですか？",
+                    "answer": "この回答は永続化しない",
+                },
+            ],
+        },
+    )
+    assert gen_resp.status_code == 200
+
+    # Also record a provider usage ledger entry in SQLite
+    monkeypatch.setenv("MRA_USAGE_LEDGER_LIMIT", "5")
+    monkeypatch.setenv("MRA_USAGE_LEDGER_WINDOW", "none")
+    backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+
+    # Capture pre-backup snapshots via API
+    profile_before = c.get("/api/profile").json()
+    parsed_profile_before = json.loads(profile_before["content"])
+    assert len(parsed_profile_before["confirmed_facts"]) == 2
+    matches_before = c.get("/api/matches").json()
+    messages_a_before = c.get(f"/api/matches/{match_a}/messages").json()
+    messages_b_before = c.get(f"/api/matches/{match_b}/messages").json()
+    photo_bytes_before = c.get(f"/api/matches/{match_a}/photo").content
+    assert photo_bytes_before == photo_payload
+
+    # 4. Create offline backup copy of the entire data/ directory
+    shutil.copytree(data_dir, backup_dir)
+    assert (backup_dir / "app.sqlite3").is_file()
+    assert (backup_dir / "photos" / photo_filename).is_file()
+
+    # 5. Mutate and then wipe active data/ directory (simulating corruption + data loss)
+    c.put("/api/profile", json={"content": "壊れたプロフィール", "avoid": ""})
+    c.delete(f"/api/matches/{match_a}")
+    shutil.rmtree(data_dir)
+    assert not data_dir.exists()
+
+    # Verify a clean instance sees empty state after data loss
+    assert c.get("/api/profile").json() == {"content": "", "avoid": ""}
+    assert c.get("/api/matches").json() == []
+    assert c.get(f"/api/matches/{match_a}/photo").status_code == 404
+
+    # 6. Restore backup files into data/ and load a fresh backend instance
+    shutil.rmtree(data_dir)
+    shutil.copytree(backup_dir, data_dir)
+
+    spec = importlib.util.spec_from_file_location(
+        "test_backend_restored", Path(__file__).resolve().parents[1] / "app.py"
+    )
+    restored_module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, restored_module)
+    spec.loader.exec_module(restored_module)
+
+    with TestClient(restored_module.app) as restored_client:
+        # 7. Verify all state is 100% faithfully restored via API endpoints
+        restored_profile = restored_client.get("/api/profile").json()
+        assert restored_profile == profile_before
+        restored_parsed = json.loads(restored_profile["content"])
+        assert restored_parsed["name"] == "水野そよか"
+        assert restored_parsed["hobbies"] == ["読書", "カフェ巡り"]
+        assert restored_parsed["food"] == "和食"
+        assert restored_parsed["schema_version"] == 2
+        assert restored_parsed["confirmed_facts"] == parsed_profile_before["confirmed_facts"]
+
+        assert restored_client.get("/api/matches").json() == matches_before
+        assert (
+            restored_client.get(f"/api/matches/{match_a}/messages").json()
+            == messages_a_before
+        )
+        assert (
+            restored_client.get(f"/api/matches/{match_b}/messages").json()
+            == messages_b_before
+        )
+
+        restored_photo = restored_client.get(f"/api/matches/{match_a}/photo")
+        assert restored_photo.status_code == 200
+        assert restored_photo.content == photo_payload
+
+        # Verify usage ledger row survived backup/restore
+        with restored_module.database() as connection:
+            assert restored_module.usage_ledger_used(connection, None, 0) == 1
+
+        # Verify restored confirmed_facts are usable in generation without re-asking
+        post_restore_gen = restored_client.post(
+            "/api/generate",
+            json={"mode": "reply", "match_id": match_a, "response_version": 2},
+        )
+        assert post_restore_gen.status_code == 200
+        post_restore_body = post_restore_gen.json()
+        assert post_restore_body["needs_user_info"] is False
+        assert post_restore_body["generation_blocked"] is False
+        assert post_restore_body["recommended"] is not None
+
+        # Verify subsequent profile edits preserve restored confirmed_facts
+        assert (
+            restored_client.put(
+                "/api/profile",
+                json={
+                    "content": json.dumps(
+                        {"name": "水野そよか", "area": "鎌倉"}, ensure_ascii=False
+                    ),
+                    "avoid": "長文",
+                },
+            ).status_code
+            == 200
+        )
+        updated_parsed = json.loads(restored_client.get("/api/profile").json()["content"])
+        assert updated_parsed["area"] == "鎌倉"
+        assert updated_parsed["confirmed_facts"] == parsed_profile_before["confirmed_facts"]
+
