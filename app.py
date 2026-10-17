@@ -1890,7 +1890,10 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             return True
         return any(
             answer.get("answer", "").strip()
-            and re.search(r"よく|頻繁|週|月|回|たまに|時々|あまり|食べない", answer.get("answer", ""))
+            and re.search(
+                r"よく|頻繁|週|月|回|たまに|ときどき|時々|時どき|ときたま|しばしば|毎日|あまり|全然|めったに|ほとんど|食べない|食べません",
+                answer.get("answer", ""),
+            )
             for answer in context.get("ephemeral_user_answers", [])
             if "カレー" in answer.get("question", "")
         )
@@ -2134,13 +2137,26 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             if re.search(r"会う場所|待ち合わせ|会う地域", answer.get("question", ""))
         )
 
+    owned_question_keys: set[str] = set()
+    if question_text:
+        try:
+            owned_question_keys.add(
+                _normalize_clarification_question_key(
+                    personal_fact_question(topic, question_text).question
+                )
+            )
+        except Exception:
+            owned_question_keys = set()
+
     for answer in context.get("ephemeral_user_answers", []):
         answer_question = answer.get("question", "")
         answer_text = answer.get("answer", "").strip()
+        if not answer_text or not any(term in answer_question for term in topic_terms):
+            continue
         if (
-            answer_text
-            and any(term in answer_question for term in topic_terms)
-            and (not question_text or _same_personal_information_scope(topic, question_text, answer_question))
+            not question_text
+            or _same_personal_information_scope(topic, question_text, answer_question)
+            or _normalize_clarification_question_key(answer_question) in owned_question_keys
         ):
             return True
     return False
@@ -6829,7 +6845,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         "買い物": r"(?:買|購入|調べ|比較|考え|悩ん).{0,22}(?:買|購入|調べ|比較|考え|悩ん)?",
         "カレー好み": r"カレー.{0,18}(?:好き|苦手|嫌い)|(?:好き|苦手|嫌い).{0,18}カレー",
         "カレー": r"カレー.{0,18}(?:好き|苦手|嫌い|辛口|甘口|チキン|ポーク|キーマ)",
-        "カレー頻度": r"カレー.{0,18}(?:よく|頻繁|週|月|たまに|あまり)",
+        "カレー頻度": r"カレー.{0,18}(?:よく|頻繁|週|月|たまに|時々|ときどき|あまり)",
         "旅行": r"旅行|旅",
         "旅行最近": r"(?:旅行|旅|行っ|出かけ).{0,18}(?:最近|この前|先週|昨日)?|(?:最近|この前|先週|昨日).{0,18}(?:旅行|旅|行っ|出かけ)",
         "旅行頻度": r"(?:旅行|旅).{0,18}(?:よく|頻繁|何回|年に|月に|たまに)",

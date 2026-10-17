@@ -5347,6 +5347,43 @@ def test_topic_classifier_does_not_conflate_preference_frequency_and_experience(
     assert backend.missing_personal_fact_question(context) is not None
 
 
+def test_hiragana_curry_frequency_answer_verifies_the_topic(client):
+    _, backend = client
+    question = "カレーをよく食べますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "カレーを食べる頻度を教えてください",
+            "answer": "カレーはときどき食べますが、喫茶店ではオムライスや季節のタルトを選ぶことが多いです",
+        }],
+    }
+    assert backend._topic_is_verified("カレー頻度", context, question) is True
+    candidate = backend.Candidate(label="候補", text="カレーはときどき食べます")
+    assert backend._answers_verified_single_partner_question(candidate, context) is True
+
+
+def test_answer_to_app_clarification_verifies_topic_across_scope_mismatch(client):
+    _, backend = client
+    partner = (
+        "写真集は旅先の景色のものをよく買います。"
+        "そよかさんの好きな美術館の雰囲気も、いつか聞いてみたいです。"
+    )
+    assert backend._personal_information_scope("旅行", partner) == ("旅行", "atmosphere")
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": "旅行はお好きですか？",
+            "answer": "旅行は好きです。景色の写真を撮るために出かけることもあります",
+        }],
+    }
+    assert backend._topic_is_verified("旅行", context, partner) is True
+    assert backend.missing_personal_fact_question(context) is None
+
+
 def test_specific_purchase_habit_requires_matching_profile_detail(client):
     _, backend = client
     question = "気になる新作を見つけたらすぐ買うタイプですか？"
