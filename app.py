@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -189,6 +190,22 @@ def _allowed_hosts() -> list[str]:
 
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts())
+
+
+@app.middleware("http")
+async def verify_mutation_origin(request: Request, call_next):
+    """Reject cross-origin state-changing requests when an Origin header is present."""
+    if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
+        origin = request.headers.get("origin", "").strip()
+        if origin:
+            hostname = (urlsplit(origin).hostname or "").strip().lower()
+            allowed = {host.lower() for host in _allowed_hosts()}
+            if "*" not in allowed and hostname not in allowed:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "許可されていないOriginからの変更要求です"},
+                )
+    return await call_next(request)
 
 
 async def storage_error_handler(request: Request, exc: Exception) -> JSONResponse:

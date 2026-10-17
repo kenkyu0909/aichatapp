@@ -14131,3 +14131,25 @@ def test_offline_data_directory_backup_and_restore_preserves_full_state(
         )
 
 
+def test_mutation_origin_allowlist_blocks_untrusted_origin_and_allows_trusted_or_missing_origin(
+    client,
+):
+    c, _ = client
+    untrusted = c.put(
+        "/api/profile",
+        json={"content": "不正Originからの書き換え", "avoid": ""},
+        headers={"Origin": "https://evil.example"},
+    )
+    assert untrusted.status_code == 403
+    assert "Origin" in untrusted.json()["detail"]
+    assert c.get("/api/profile").json()["content"] == ""
+
+    trusted = c.put(
+        "/api/profile",
+        json={"content": "ローカルOrigin", "avoid": ""},
+        headers={"Origin": "http://127.0.0.1:8765"},
+    )
+    assert trusted.status_code == 200
+    assert c.get("/api/profile").json()["content"] == "ローカルOrigin"
+
+
