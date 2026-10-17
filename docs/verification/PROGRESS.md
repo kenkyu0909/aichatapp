@@ -1873,4 +1873,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T448（`c29f720`、D10/D11）**: `genai.Client` の試行別 timeout を `request_deadline` の残り時間（1〜30秒）でクランプし、グローバル期限超過を防止。`scripts/live_gemini_smoke.py` の環境変数優先順を `MRA_API_1_KEY` / `GEMINI_API_KEY` の双方に対応するよう統一。
 - **T449（`7e648e2`、D03）**: `_answers_verified_single_partner_question` の `料理習慣`（最近の料理）および `カフェ頻度` 分岐で `_confirmed_fact_values_for_question` も参照するよう統一。
 - **D18（最終報告書冒頭要約）**: `FINAL_REPORT.md` 冒頭に1ページの最新エグゼクティブサマリー（総合判定・根拠・残リスク・推奨運用条件）を追加。
-- 全pytest **1913 passed in 368.81s**、`node --check app.js` PASS、`git diff --check` PASS。
+- 全pytest **1913 passed in 368.81s**、`node --check app.js` PASS、`git diff --check` PASS。Push CI [39024733654](https://github.com/kenkyu0909/aichatapp/actions/runs/39024733654) / PR CI [39024737404](https://github.com/kenkyu0909/aichatapp/actions/runs/39024737404) で success。
+
+### 2026-10-17 実API会話テスト（丁寧語20通・タメ口2通）およびT450・T451修正
+
+- **実API 20通会話テスト（`conversation_test_20261017_T441.html`）**: 未知WH質問4回（#4 散歩場所、#9 喫茶店の席、#14 カフェインレス・ハーブティー、#19 観葉植物の置き場所）を混ぜて20通完走。未知WH質問4回はすべてT441の決定論的フォールバック（`[回答を反映した返信]`）が発動し、試行1回目・ブロック0回で通過。
+- **実API タメ口確認テスト（`conversation_test_20261017_T441_tameguchi.html`）**: 本人プロフィールの `style` を `タメ口で短め。質問は一度にひとつ` に設定して未知WH質問（「休日はどこを散歩してるの？」）を検証し、`そうなんだ / 休日はみなとみらいの海沿いをよく散歩してるよ / そっちはどう？` が試行1回目・ブロック0回で生成されることを確認。
+- **T450（`c0056e0`、平叙文の「いつも／ついつい」誤判定修正）**: 20通テストのTurn #8で相手の発言「木目調の落ち着いた喫茶店が多くて、ついつい長居してしまいます。いつも深煎りのブレンドと固めのプリンかドーナツを頼んでいます。」が `_topic_for_personal_question` 内の `いつ` に部分一致し、質問ではないのに本人質問（`カフェ好み`）と誤判定されていた問題を修正。`(?<!つ)いつ(?!い|か|も|でも|までも|だって)` に変更し、平叙文の「いつも」「ついつい」「いつか」「いつでも」を除外しつつ真の「いつ〜？」質問を維持。
+- **T451（`5f7b766`、複数行返信の2行目回答認識・カフェ質問行除外）**: 「1行目相槌＋2行目回答＋3行目質問」の構成において、`_answers_verified_single_partner_question`（`カフェ好み` の雰囲気分岐）と `_candidate_uses_specific_answer_detail` が1行目のみを検査して2行目の回答を落としていた問題、および `_claim_supported_by_trusted_fact("カフェ")` が末尾の相手向け質問文（「よく行くお気に入りのお店はありますか？」）を本人の未確認主張と誤判定していた問題を修正。
+- **実API 再確認テスト（`conversation_test_20261017_T450_recheck.html`）**: Turn #8と同一の相手発言を送信し、不要な本人確認質問が出ず試行1回目で3案すべて通過すること、続く「どんな雰囲気のカフェが好きですか？」にも回答後試行1回目で3案通過することを確認。
+- 全pytest **1915 passed in 401.68s**、`node --check app.js` PASS、`git diff --check` PASS。

@@ -1129,5 +1129,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 | T448 | 単発SDKタイムアウトの残りDeadlineクランプとsmokeキー環境変数補完（D10, D11） | pytest・スクリプト検査 | FIXED | `generate()` でプロバイダー設定ごとのSDK初期タイムアウトを `request_deadline` の残り時間（1〜30秒）へクランプし、`scripts/live_gemini_smoke.py` で `GEMINI_API_KEY` と `MRA_API_1_KEY` を双方向補完。commit `c29f720`。 |
 
 | T449 | 保存済み `confirmed_facts` の料理・カフェ頻度バリデータ接続（D03） | pytest。`_answers_verified_single_partner_question` | FIXED | `_answers_verified_single_partner_question` の `料理習慣`（最近の料理）および `カフェ頻度` 分岐の証拠リストに `_confirmed_fact_values_for_question` を追加。全pytest **1913 passed in 368.81s**。commit `7e648e2`。 |
+| T450 | 平叙文の「いつも」「ついつい」「いつか」「いつでも」に対する本人質問誤判定の解消 | pytest＋実API会話テスト再確認。`_topic_for_personal_question`・`UNPUNCTUATED_CASUAL_PERSONAL_QUESTION` | FIXED | 20通会話テスト（`conversation_test_20261017_T441.html`）のTurn #8で相手文「木目調の落ち着いた喫茶店が多くて、ついつい長居してしまいます。いつも深煎りのブレンドと固めのプリンかドーナツを頼んでいます。」が `いつ` 部分一致により本人への質問（`カフェ好み`）と誤判定され不要な本人確認質問と9回のブロックを誘発した不具合を修正。`(?<!つ)いつ(?!い|か|も|でも|までも|だって)` に厳密化し、真の「いつ〜？」質問のみを検出。回帰テスト追加・実API再確認（`conversation_test_20261017_T450_recheck.html`）で誤質問0・試行1回目で3案通過を確認。commit `c0056e0`。 |
+| T451 | 相槌1行目＋回答2行目＋質問3行目の複数行返信における回答認識・カフェ質問行除外 | pytest。`_answers_verified_single_partner_question`・`_candidate_uses_specific_answer_detail`・`_claim_supported_by_trusted_fact` | FIXED | T439で推奨した「1行目相槌＋2行目本人回答＋3行目質問」の形式に対し、`カフェ好み`（雰囲気）および `_candidate_uses_specific_answer_detail` が1行目のみを検査して2行目の回答を見落としていた問題、ならびに `_claim_supported_by_trusted_fact("カフェ")` が末尾の相手向け質問文（「よく行くお気に入りのお店はありますか？」）を本人の未確認主張と誤認していた問題を修正。疑問符（`?`/`？`）で終わる質問文を除いた全非疑問文を検査対象に統一。全pytest **1915 passed in 401.68s**。commit `5f7b766`。 |
 
-最新ID行: 449。T441〜T449をFIXEDとして追加。全pytest **1913 passed in 368.81s**。
+最新ID行: 451。T441〜T451をFIXEDとして追加。全pytest **1915 passed in 401.68s**。
