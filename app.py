@@ -4171,11 +4171,16 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             clause for clause in _trusted_fact_clauses(context)
             if re.search(r"カフェ|喫茶店", clause)
         )
-        if _explicit_frequency_signature(text) and not any(
-            _frequency_claim_is_supported(text, source) for source in cafe_frequency_sources
+        non_question_text = "\n".join(
+            sentence
+            for sentence in re.findall(r"[^。！？!?\n]+[。！？!?]?", text)
+            if sentence.strip() and not re.search(r"[?？]\s*$", sentence.strip())
+        )
+        if _explicit_frequency_signature(non_question_text) and not any(
+            _frequency_claim_is_supported(non_question_text, source) for source in cafe_frequency_sources
         ):
             return False
-        atmosphere = re.findall(r"落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め", text)
+        atmosphere = re.findall(r"落ち着(?:く|いた)|静か|にぎやか|騒がしい|明るい|暗め", non_question_text)
         if atmosphere and not all(re.sub(r"いた$", "く", marker) in source or marker in source for marker in atmosphere):
             return False
         # A source such as "落ち着いた雰囲気よりにぎやかな店が好き" mentions
@@ -4189,22 +4194,22 @@ def _claim_supported_by_trusted_fact(topic: str, text: str, context: dict) -> bo
             losing_forms = {losing_descriptor, re.sub(r"いた$", "く", losing_descriptor)}
             if any(marker in losing_forms or re.sub(r"いた$", "く", marker) in losing_forms for marker in atmosphere):
                 return False
-        if atmosphere and re.search(r"好き|好み", text):
-            candidate_negative = _is_effectively_negative_personal_fact(text)
+        if atmosphere and re.search(r"好き|好み", non_question_text):
+            candidate_negative = _is_effectively_negative_personal_fact(non_question_text)
             profile_scope_supported = any(
                 all(marker in clause for marker in atmosphere)
                 and re.search(r"好き|好み", clause)
                 and _is_effectively_negative_personal_fact(clause) == candidate_negative
                 for clause in _trusted_fact_clauses(context)
             )
-        if re.search(r"お気に入り|行きつけ", text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
+        if re.search(r"お気に入り|行きつけ", non_question_text) and not (re.search(r"お気に入り|行きつけ", source) or explicit_favorites):
             return False
         candidate_frequency = re.findall(
-            r"よく行|よく巡|頻繁に|毎日|毎週|毎月|毎年|通って", text
+            r"よく行|よく巡|頻繁に|毎日|毎週|毎月|毎年|通って", non_question_text
         )
         if candidate_frequency and not all(marker in source for marker in candidate_frequency):
             return False
-        if re.search(r"よく行|よく巡|頻繁に|毎週|通って", text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
+        if re.search(r"よく行|よく巡|頻繁に|毎週|通って", non_question_text) and not re.search(r"よく行|よく巡|頻繁に|毎週|通って", source):
             return False
     elif topic == "場所探し":
         clauses = _trusted_fact_clauses(context)
@@ -6065,7 +6070,12 @@ def _unsupported_partner_claim(candidate: Candidate, context: dict) -> bool:
 
 def _candidate_uses_specific_answer_detail(candidate_text: str, evidence: str) -> bool:
     """Require a direct answer to retain at least one user-confirmed content detail."""
-    candidate_prefix = re.split(r"\n|[?？]", candidate_text, maxsplit=1)[0]
+    before_question = re.split(r"[?？]", candidate_text, maxsplit=1)[0]
+    candidate_prefix = "\n".join(
+        line.strip()
+        for line in before_question.splitlines()
+        if line.strip() and not _reading_genre_segment_is_question_only(line.strip())
+    )
     normalize = lambda value: re.sub(r"\s+|[、。！!？?]", "", value)
     normalized_candidate = normalize(candidate_prefix)
     normalized_evidence = normalize(evidence)
@@ -6678,28 +6688,37 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 and _personal_information_scope(topic, answer.get("question", "")) == ("カフェ", "atmosphere")
             ):
                 evidence.extend(_user_attributed_preference_clauses(answer_text))
-        candidate_prefix = re.split(r"\n|[?？]", candidate.text, maxsplit=1)[0]
-        if _reading_genre_segment_is_question_only(candidate_prefix):
+        before_question = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+        answer_lines = [
+            line.strip()
+            for line in before_question.splitlines()
+            if line.strip() and not _reading_genre_segment_is_question_only(line.strip())
+        ]
+        if not answer_lines:
             return False
-        if re.search(r"(?:相手|あなた|そちら)(?:は|が|も)", candidate_prefix):
-            return False
-        if not re.search(
+        preference_assertion_re = re.compile(
             r"(?:が|は)(?:(?:あまり|そんなに|そこまで)?好き(?:なんです|なんだ|ですよ|です|だ|ではありません|じゃありません|ではない|じゃない|でない|！|!|$)|"
             r"好み(?:なんです|なんだ|ですよ|です|だ|ではありません|じゃありません|ではない|じゃない|でない|$)|"
             r"苦手(?:なんです|なんだ|ですよ|です|だ|ではありません|じゃありません|ではない|じゃない|でない|$)|"
-            r"嫌い(?:なんです|なんだ|ですよ|です|だ|ではありません|じゃありません|ではない|じゃない|でない|$))",
-            candidate_prefix,
-        ):
-            return False
-        candidate_styles = _cafe_atmosphere_style_polarities(candidate_prefix)
-        for item in evidence:
-            evidence_styles = _cafe_atmosphere_style_polarities(item)
-            if any(
-                candidate_styles[style] == evidence_polarity
-                for style, evidence_polarity in evidence_styles.items()
-                if style in candidate_styles
-            ):
-                return True
+            r"嫌い(?:なんです|なんだ|ですよ|です|だ|ではありません|じゃありません|ではない|じゃない|でない|$))"
+        )
+        for line_text in answer_lines:
+            cleaned_line = re.sub(r"[\s　😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+$", "", line_text)
+            if re.search(r"(?:相手|あなた|そちら)(?:は|が|も)", cleaned_line):
+                continue
+            if not preference_assertion_re.search(cleaned_line):
+                continue
+            candidate_styles = _cafe_atmosphere_style_polarities(cleaned_line)
+            if not candidate_styles:
+                continue
+            for item in evidence:
+                evidence_styles = _cafe_atmosphere_style_polarities(item)
+                if any(
+                    candidate_styles[style] == evidence_polarity
+                    for style, evidence_polarity in evidence_styles.items()
+                    if style in candidate_styles
+                ):
+                    return True
         return False
     if topic == "本人情報":
         exact_question = re.sub(r"\s+|[?？。！!]", "", question)

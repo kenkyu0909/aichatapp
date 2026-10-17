@@ -14231,3 +14231,64 @@ def test_declarative_itsumo_statement_is_not_misclassified_as_personal_question(
     for question, expected_prefix in real_questions:
         topic = backend._topic_for_personal_question(question)
         assert topic is not None and topic.startswith(expected_prefix)
+
+
+def test_multiline_cafe_atmosphere_and_specific_detail_answers_after_acknowledgment(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {
+                "role": "them",
+                "body": "休日は喫茶店をめぐっています。どんな雰囲気のカフェが好きですか？",
+            }
+        ],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [
+            {
+                "question": "どんな雰囲気のカフェが好きですか？",
+                "answer": "静かで落ち着いた雰囲気のカフェが好きです。",
+            }
+        ],
+    }
+    second_line_answer = backend.Candidate(
+        label="相槌＋回答＋質問",
+        text=(
+            "そうなんですね！\n"
+            "私は静かで落ち着いた雰囲気のカフェが好きです😊\n"
+            "よく行くお気に入りのお店はありますか？"
+        ),
+    )
+    assert backend._answers_verified_partner_question(second_line_answer, context) is True
+    assert backend._candidate_rejection_reasons(second_line_answer, context) == []
+
+    unrelated_lines = backend.Candidate(
+        label="無関係な行のみ",
+        text=(
+            "そうなんですね！\n"
+            "深煎りのブレンドとドーナツとても美味しそうですね！\n"
+            "よく行くお気に入りのお店はありますか？"
+        ),
+    )
+    assert backend._answers_verified_partner_question(unrelated_lines, context) is False
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unrelated_lines, context)
+
+    partner_attributed_second_line = backend.Candidate(
+        label="相手帰属の2行目",
+        text=(
+            "そうなんですね！\n"
+            "そちらは落ち着いた雰囲気のカフェが好きなんですね！\n"
+            "落ち着いた雰囲気のお店が好きですか？"
+        ),
+    )
+    assert backend._answers_verified_partner_question(partner_attributed_second_line, context) is False
+
+    assert backend._candidate_uses_specific_answer_detail(
+        "そうなんですね！\n普段はミステリー小説をよく読みます！\nどんな本が好きですか？",
+        "ミステリー小説をよく読みます",
+    ) is True
+    assert backend._candidate_uses_specific_answer_detail(
+        "そうなんですね！\n読書は楽しいですよね！\nミステリー小説は好きですか？",
+        "ミステリー小説をよく読みます",
+    ) is False
+
