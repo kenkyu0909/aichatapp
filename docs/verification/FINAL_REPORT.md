@@ -1811,6 +1811,14 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - 全pytest **1894 passed in 416.53s**。commit `b2930b1`。Actions: Push [39008343305](https://github.com/kenkyu0909/aichatapp/actions/runs/39008343305) / PR [39008346994](https://github.com/kenkyu0909/aichatapp/actions/runs/39008346994) でsuccess。
 - 総合判定は**条件付きGO**とする。実生成品質は今回の実行で全ケース通過したが、多様性ゲートの再発が再実行依存のため、多様性ゲートの決定性を確認するまで無条件のGOとはしない。
 
+### 2026-10-17 会話テストでの確認質問ループ修正（T438）
+
+- 実APIでの確認用会話テスト（20通）を実施し、`conversation_test.html` を生成した。20通のうち、生成が一度ブロックされた回の理由は「相手からの直接質問に未回答」11、「未確認の本人事実」9、「禁止句読点」8、「返信量に対して長すぎる候補」5、「文の区切り不足」1だった。
+- テスト中、相手文が `('旅行','atmosphere')`（「雰囲気」で分類）と判定される一方、アプリ自身が出す確認質問が `('旅行','preference')` と判定される場合、`_same_personal_information_scope` が不一致となり、ユーザーがアプリの確認質問に回答しても `_topic_is_verified` が永続的に False となり同じ質問を再発する欠陥を検出した。これは回答不能な確認ループであり、実利用では会話が停止する。
+- `_topic_is_verified` を修正し、その topic の「アプリ自身が尋ねた確認質問」にそのまま回答した場合も検証済みとして扱うようにした。あわせてカレー頻度回答のひらがな頻度語の取りこぼしも修正した。
+- 回帰テスト2件を追加。全pytest **1896 passed in 389.01s**。commit `c145368`。Actions: Push [39012335427](https://github.com/kenkyu0909/aichatapp/actions/runs/39012335427) / PR [39012446977](https://github.com/kenkyu0909/aichatapp/actions/runs/39012446977) は success。
+- 総合判定は引き続き**条件付きGO**（多様性ゲートの決定性確認が残る）。
+
 
 
 
