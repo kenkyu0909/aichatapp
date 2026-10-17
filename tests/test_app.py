@@ -429,6 +429,20 @@ def test_reopened_invitation_after_old_refusal_clears_refusal(client):
     assert backend.partner_has_active_invitation_refusal(context) is False
 
 
+def test_invite_ready_after_reopen_beyond_prompt_window(client):
+    c, backend = client
+    mid = add_match(c, "再開後の誘い")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "ごめんなさい、今は会うのは難しいです"})
+    for index in range(70):
+        c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": f"雑談{index}"})
+        c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": f"返信{index}"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "やっぱり今度一緒に行きましょう！"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近カフェ巡りにハマっています。行ってみたいです！どこかおすすめありますか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert backend.partner_has_active_invitation_refusal(context) is False
+    assert backend.invite_opportunity_ready(context) is True
+
+
 def test_policy_history_is_internal_and_not_in_prompt(client):
     c, backend = client
     mid = add_match(c, "内部キー確認")

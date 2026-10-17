@@ -408,14 +408,9 @@ def invite_opportunity_ready(context: dict) -> bool:
         item.get("body", "") for item in policy_history if item.get("role") == "me"
     )):
         return False
-    if any(re.search(
-        r"まだ会う|会うのは.{0,8}(?:難|控え|不安)|今は.{0,6}(?:難|無理)|"
-        r"これ以上.{0,8}(?:やり取り|連絡)|(?:連絡|やり取り).{0,8}控え|お断り|"
-        r"行くのは.{0,8}(?:難|不安)|ごめんなさい.{0,12}(?:会う|行く|難|控え|無理)",
-        text,
-    ) for text in (
-        item.get("body", "") for item in policy_history if item.get("role") == "them"
-    )):
+    # Delegate to the reopen-aware detector so a genuine reopen beyond the prompt
+    # window clears the block consistently with partner_has_active_invitation_refusal.
+    if partner_has_active_invitation_refusal(context):
         return False
     # Use only the latest two partner turns so a coherent exchange can span
     # adjacent messages, while old unrelated signals cannot accumulate.
