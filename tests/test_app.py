@@ -3635,6 +3635,85 @@ def test_short_partner_message_rejects_overlong_candidate_and_preserves_safe_opt
     assert "安全確認後に表示できる候補は2案です（指定は3案）" in result["candidate_notice"]
 
 
+def test_reply_length_guard_allows_acknowledgment_and_question_for_two_sentence_partner(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": (
+                "近場では鎌倉や川越の小さな展示を見に行くことが多いです。"
+                "写真展のあとに喫茶店を探すのも楽しみのひとつです。"
+            ),
+        }],
+    }
+    three_lines = backend.Candidate(
+        label="相槌と質問",
+        text=(
+            "そうなんですね\n"
+            "鎌倉や川越は落ち着いて歩けるんですね\n"
+            "写真展のあとの喫茶店もお好きなんですか？"
+        ),
+    )
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(three_lines, context)
+
+    four_lines = backend.Candidate(
+        label="長すぎる",
+        text=(
+            "そうなんですね\n"
+            "鎌倉や川越は落ち着いて歩けるんですね\n"
+            "写真展のあとの喫茶店もお好きなんですか\n"
+            "またゆっくりお話ししましょう"
+        ),
+    )
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(four_lines, context)
+
+
+def test_reply_length_guard_still_caps_acknowledgment_without_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{
+            "role": "them",
+            "body": (
+                "近場では鎌倉や川越の小さな展示を見に行くことが多いです。"
+                "写真展のあとに喫茶店を探すのも楽しみのひとつです。"
+            ),
+        }],
+    }
+    no_question = backend.Candidate(
+        label="相槌のみ",
+        text=(
+            "そうなんですね\n"
+            "鎌倉や川越は落ち着いて歩けるんですね\n"
+            "写真展のあとの喫茶店も素敵ですね"
+        ),
+    )
+    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(no_question, context)
+
+
+def test_punctuated_partner_message_counts_sentences(client):
+    _, backend = client
+    messages = [{
+        "role": "them",
+        "body": (
+            "近場では鎌倉や川越の小さな展示を見に行くことが多いです。"
+            "写真展のあとに喫茶店を探すのも楽しみのひとつです。"
+        ),
+    }]
+
+    assert backend.estimate_message_style(messages)["partner_sentence_estimate"] == 2
+
+
+def test_shared_prompt_requires_acknowledgment_and_a_question(client):
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+
+    assert "原則としてどの候補にも答えやすい質問を1つ添えます" in prompt
+    assert "原則として短い相槌を1つ入れて" in prompt
+    assert "原則として質問を1つ添えて" in prompt
+
+
 def test_reply_length_guard_exempts_first_messages_but_caps_serious_context(client):
     _, backend = client
     candidate = backend.Candidate(

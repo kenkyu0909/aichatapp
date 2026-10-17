@@ -4968,7 +4968,7 @@ def estimate_message_style(messages: list[dict]) -> dict:
         return sum(
             max(
                 1,
-                len(re.findall(r"[!?！？]+", line)),
+                len(re.findall(r"[!?！？。．]+", line)),
                 1 + len(SENTENCE_BOUNDARY_PATTERN.findall(line)),
             )
             for line in lines
@@ -7029,6 +7029,27 @@ def _candidate_sentence_count(text: str) -> int:
     return sum(bool(line.strip()) for line in text.splitlines())
 
 
+ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
+    r"そうなんですね|そうなんですか|そうなんだ|なるほど|わかります|分かります|"
+    r"たしかに|確かに|ですよね|いいですね|素敵ですね|楽しそうですね|"
+    r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま"
+)
+QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか")
+
+
+def _candidate_is_acknowledgment_plus_question(text: str) -> bool:
+    """True when a reply pairs a short acknowledgment with a follow-up question.
+
+    Such a reply carries the conversational shape the prompt asks for
+    (acknowledge, then ask), so the mirrored-length ceiling grants it one extra
+    line beyond the strict partner-sentence count.
+    """
+    return bool(
+        ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text)
+        and QUESTION_MARKERS.search(text)
+    )
+
+
 def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> bool:
     """Reject replies that materially exceed the measured partner sentence range.
 
@@ -7063,6 +7084,9 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
         # Long partner messages are answered at a similar or slightly shorter
         # length. Never force expansion just because the input itself is long.
         maximum_sentences = partner_sentences
+    if partner_sentences >= 2 and _candidate_is_acknowledgment_plus_question(candidate.text):
+        # Allow the acknowledge-then-ask shape one extra line, capped at three.
+        maximum_sentences = min(maximum_sentences + 1, 3)
     return _candidate_sentence_count(candidate.text) > maximum_sentences
 
 
