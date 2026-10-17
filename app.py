@@ -56,6 +56,92 @@ def _wait_for_provider_interval(api_alias: str, model: str) -> None:
                 time.sleep(delay)
         _provider_last_attempt[key] = time.monotonic()
 
+USAGE_LEDGER_WINDOWS: dict[str, int | None] = {
+    "hour": 3600,
+    "day": 86400,
+    "week": 604800,
+    "month": 2592000,
+    "none": None,
+}
+
+
+def _usage_ledger_window_seconds() -> int | None:
+    """Map the configured ledger window name to seconds (default: one day)."""
+    window = os.getenv("MRA_USAGE_LEDGER_WINDOW", "day").strip().lower()
+    return USAGE_LEDGER_WINDOWS.get(window, 86400)
+
+
+def _usage_ledger_limit() -> int | None:
+    """Return the configured per-window provider budget, or None when unset."""
+    raw = os.getenv("MRA_USAGE_LEDGER_LIMIT", "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def usage_ledger_used(
+    connection: sqlite3.Connection, window_seconds: int | None, epoch: int
+) -> int:
+    """Count provider calls already reserved within the rolling window."""
+    if window_seconds is None:
+        row = connection.execute("SELECT COUNT(*) FROM api_usage").fetchone()
+    else:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM api_usage WHERE reserved_epoch >= ?",
+            (epoch - window_seconds,),
+        ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def reserve_provider_usage(
+    connection: sqlite3.Connection,
+    api_alias: str,
+    model: str,
+    *,
+    limit: int | None,
+    window_seconds: int | None,
+    epoch: int | None = None,
+) -> int:
+    """Reserve one provider call in the ledger before it runs; raise when exhausted.
+
+    The reservation is committed before the provider call so a crash mid-call
+    still leaves a durable record, and a concurrent request cannot spend the
+    same remaining budget.
+    """
+    moment = int(time.time() if epoch is None else epoch)
+    if limit is not None and usage_ledger_used(connection, window_seconds, moment) >= limit:
+        raise UsageBudgetExceededError("Provider usage ledger budget is exhausted")
+    cursor = connection.execute(
+        "INSERT INTO api_usage (reserved_epoch, api_alias, model) VALUES (?, ?, ?)",
+        (moment, api_alias, model),
+    )
+    connection.commit()
+    return int(cursor.lastrowid or 0)
+
+
+def _reserve_provider_usage(api_alias: str, model: str) -> None:
+    """Reserve a provider attempt in the persisted ledger when a budget is set.
+
+    With no ``MRA_USAGE_LEDGER_LIMIT`` the ledger stays untouched, so offline
+    tests and uncapped local use do not accumulate rows.
+    """
+    limit = _usage_ledger_limit()
+    if limit is None:
+        return
+    with database() as connection:
+        reserve_provider_usage(
+            connection,
+            api_alias,
+            model,
+            limit=limit,
+            window_seconds=_usage_ledger_window_seconds(),
+        )
+
+
 app = FastAPI(title="Matching Reply Assistant", docs_url=None, redoc_url=None)
 logger = logging.getLogger(__name__)
 
@@ -113,6 +199,12 @@ def database():
             CREATE TABLE IF NOT EXISTS orphaned_photos (
                 filename TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS api_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reserved_epoch INTEGER NOT NULL,
+                api_alias TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT ''
             );
         """)
         yield connection
@@ -360,6 +452,10 @@ class CandidateRepeatedQuestionError(ValueError):
 
 class ProviderAttemptLimitError(RuntimeError):
     """The request reached its configured hard ceiling for provider calls."""
+
+
+class UsageBudgetExceededError(RuntimeError):
+    """The persistent provider-usage ledger has no remaining budget for this window."""
 
 
 INVITATION_PATTERN = re.compile(
@@ -7486,6 +7582,7 @@ def generate(data: GenerateInput):
                 while True:
                     if len(attempted_models) >= provider_attempt_limit:
                         raise ProviderAttemptLimitError("Provider attempt safety cap reached")
+                    _reserve_provider_usage(account, model)
                     _wait_for_provider_interval(account, model)
                     attempted_models.append({"api_alias": account, "model": model})
                     response = client.models.generate_content(
@@ -8168,6 +8265,9 @@ def generate(data: GenerateInput):
         if isinstance(exc, ProviderAttemptLimitError):
             failure_message = "生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。"
             failure_code = "request_attempt_limit"
+        elif isinstance(exc, UsageBudgetExceededError):
+            failure_message = "API利用の予算上限に達したため生成を停止しました。設定を見直すか、次の時間帯・翌日に再試行してください。"
+            failure_code = "usage_budget_exceeded"
         elif _is_rate_limit_error(exc):
             failure_message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
             failure_code = "all_models_rate_limited"

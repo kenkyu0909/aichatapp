@@ -13442,3 +13442,73 @@ def test_filter_safe_candidates_drops_unknown_direct_answers_without_user_confir
     assert filtered["generation_blocked"] is True
     assert filtered["available_candidate_count"] == 0
     assert "相手からの直接質問に未回答" in str(filtered["candidate_rejections"])
+
+
+def test_usage_ledger_reserves_and_blocks_when_budget_is_spent(client, monkeypatch):
+    import time
+
+    _, backend = client
+    monkeypatch.setenv("MRA_USAGE_LEDGER_LIMIT", "2")
+    monkeypatch.setenv("MRA_USAGE_LEDGER_WINDOW", "none")
+
+    backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+    backend._reserve_provider_usage("API2", "gemini-3.1-flash-lite")
+    with pytest.raises(backend.UsageBudgetExceededError):
+        backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+
+    with backend.database() as connection:
+        assert backend.usage_ledger_used(connection, None, int(time.time())) == 2
+
+
+def test_usage_ledger_window_excludes_expired_reservations(client, monkeypatch):
+    import time
+
+    _, backend = client
+    monkeypatch.setenv("MRA_USAGE_LEDGER_LIMIT", "1")
+    monkeypatch.setenv("MRA_USAGE_LEDGER_WINDOW", "hour")
+
+    with backend.database() as connection:
+        connection.execute(
+            "INSERT INTO api_usage (reserved_epoch, api_alias, model) VALUES (?, '', '')",
+            (0,),
+        )
+        connection.commit()
+
+    # The expired reservation is outside the rolling hour window, so one fresh call is allowed.
+    backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+    with pytest.raises(backend.UsageBudgetExceededError):
+        backend._reserve_provider_usage("API1", "gemini-3.5-flash-lite")
+
+    with backend.database() as connection:
+        now = int(time.time())
+        assert backend.usage_ledger_used(connection, 3600, now) == 1
+        assert backend.usage_ledger_used(connection, None, now) == 2
+
+
+def test_generate_reports_usage_budget_failure_as_safe_error(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空の予算上限確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(models=SimpleNamespace()),
+    )
+
+    def _always_exhausted(api_alias, model):
+        raise backend.UsageBudgetExceededError("budget spent")
+
+    monkeypatch.setattr(backend, "_reserve_provider_usage", _always_exhausted)
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "usage_budget_exceeded"
+    assert "予算上限" in response.json()["detail"]
+    assert "test-api1-secret" not in response.text
+
