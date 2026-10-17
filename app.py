@@ -7993,16 +7993,32 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     elif partner_shares_info:
         ack = "そうなんだ！" if casual else "そうなんですね！"
+        prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
+        last_prior_me = prior_me[-1] if prior_me else ""
         if partner_label:
-            followup = f"{partner_label}はどう？" if casual else f"{partner_label}はいかがですか？"
+            if casual:
+                followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
+            else:
+                followup = f"{partner_label}はどうですか？" if f"{partner_label}はいかがですか？" in last_prior_me else f"{partner_label}はいかがですか？"
         else:
-            followup = "そっちはどう？" if casual else "そちらはどうですか？"
+            if casual:
+                followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
+            else:
+                followup = "そちらはいかがですか？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
+        prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
+        last_prior_me = prior_me[-1] if prior_me else ""
         if partner_label:
-            followup = f"{partner_label}はどう？" if casual else f"{partner_label}はいかがですか？"
+            if casual:
+                followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
+            else:
+                followup = f"{partner_label}はどうですか？" if f"{partner_label}はいかがですか？" in last_prior_me else f"{partner_label}はいかがですか？"
         else:
-            followup = "そっちはどう？" if casual else "そちらはどうですか？"
+            if casual:
+                followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
+            else:
+                followup = "そちらはいかがですか？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
         candidate_text = f"{clean_answer}\n{followup}"
     candidate = Candidate(
         label="回答を反映した返信",
