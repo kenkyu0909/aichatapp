@@ -3713,6 +3713,50 @@ def test_confirmed_movie_title_only_answer_is_still_accepted(client):
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
+@pytest.mark.parametrize("text", [
+    "『青い灯台』は観ていません",
+    "『青い灯台』は面白いと聞きました",
+    "友達が『青い灯台』を観ました",
+    "『青い灯台』を観たのは妹です",
+    "『青い灯台』を観たと言われました",
+    "『青い灯台』は観ましたか？",
+])
+def test_candidate_viewing_of_title_rejects_non_first_person_claims(client, text):
+    _, backend = client
+
+    assert backend._candidate_asserts_viewing_of_title(text, "青い灯台") is False
+
+
+@pytest.mark.parametrize("text", [
+    "『青い灯台』を観ました",
+    "最近は『青い灯台』を観ました",
+])
+def test_candidate_viewing_of_title_accepts_first_person_claims(client, text):
+    _, backend = client
+
+    assert backend._candidate_asserts_viewing_of_title(text, "青い灯台") is True
+
+
+def test_third_party_viewing_of_confirmed_movie_is_rejected(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="第三者", text="『青い灯台』を観たのは妹です")
+
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_passive_viewing_of_confirmed_movie_is_rejected(client):
+    _, backend = client
+    context = _movie_confirmed_context(
+        backend, "最近観た映画は何ですか？", "最近は『青い灯台』を観ました"
+    )
+    candidate = backend.Candidate(label="受動", text="『青い灯台』を観たと言われました")
+
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+
+
 def test_confirmed_fact_metadata_is_not_trusted_fact_evidence(client):
     _, backend = client
     context = _movie_confirmed_context(

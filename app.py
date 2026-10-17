@@ -2504,6 +2504,8 @@ def _movie_viewing_attributed_to_other_person(segment: str) -> bool:
         rf"(?:{other_person})(?:さん)?(?:も|の話では|の話だと|から聞いた話では|によると|曰く).{{0,24}}(?:観|見)(?:た|ました|てきた|てきました)|"
         rf"(?:観|見)(?:た|ました)(?:{other_person})(?:さん)?(?:に|が|は|から)|"
         rf"(?:観|見)(?:た|ました)(?:と|って)(?:{other_person})(?:さん)?(?:に|から)?.{{0,10}}(?:聞|言わ)|"
+        rf"(?:観|見)(?:た|ました)(?:の)?(?:は|が)(?:{other_person})(?:さん)?|"
+        rf"(?:観|見)(?:た|ました)(?:と|って)(?:言われ|伝えられ|聞かされ|話され)|"
         rf"(?:{other_person})(?:さん)?(?:から|に).{{0,24}}(?:観|見)(?:た|ました)(?:と|って).{{0,8}}(?:聞|言わ)",
         segment,
     ))
@@ -6058,6 +6060,27 @@ def _negative_binary_question_clarification(question: str) -> UserQuestion:
     )
 
 
+def _candidate_asserts_viewing_of_title(candidate_text: str, title: str) -> bool:
+    """Whether the candidate affirmatively claims the user watched the named title.
+
+    Shared by the ephemeral and confirmed evidence loops so neither accepts a
+    negation, hearsay, question, or third-person mention of a known title.
+    """
+    normalized_title = re.sub(r"\s+", "", title)
+    if not normalized_title:
+        return False
+    for segment in _reading_genre_evidence_segments(candidate_text):
+        if _reading_genre_segment_is_question_only(segment):
+            continue
+        if (
+            normalized_title in re.sub(r"\s+", "", segment)
+            and _asserts_movie_viewing(segment)
+            and not _movie_viewing_attributed_to_other_person(segment)
+        ):
+            return True
+    return False
+
+
 def _answers_verified_single_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
@@ -6579,9 +6602,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         ):
             return True
         if topic == "映画" and same_scope:
-            answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
             answer_title = re.search(r"[『「]([^』」]{1,40})[』」]", answer_text)
-            if answer_title and re.sub(r"\s+", "", answer_title.group(1)) in re.sub(r"\s+", "", answer_prefix):
+            if answer_title and _candidate_asserts_viewing_of_title(
+                candidate.text, answer_title.group(1)
+            ):
                 return True
     for confirmed_value in _confirmed_fact_values_for_question(context, topic, question):
         normalized_confirmed = re.sub(r"\s+", "", confirmed_value)
@@ -6590,18 +6614,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         if topic != "映画":
             continue
         confirmed_title = re.search(r"[『「]([^』」]{1,40})[』」]", confirmed_value)
-        if not confirmed_title:
-            continue
-        normalized_title = re.sub(r"\s+", "", confirmed_title.group(1))
-        for segment in _reading_genre_evidence_segments(candidate.text):
-            if _reading_genre_segment_is_question_only(segment):
-                continue
-            if (
-                normalized_title in re.sub(r"\s+", "", segment)
-                and _asserts_movie_viewing(segment)
-                and not _movie_viewing_attributed_to_other_person(segment)
-            ):
-                return True
+        if confirmed_title and _candidate_asserts_viewing_of_title(
+            candidate.text, confirmed_title.group(1)
+        ):
+            return True
     answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
     patterns = {
         "映画": r"(?:映画|洋画|邦画).{0,18}(?:好き|観|見)|(?:好き|観|見).{0,18}(?:映画|洋画|邦画)|作品名",
