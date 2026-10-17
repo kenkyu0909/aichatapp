@@ -1684,6 +1684,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
 - Actions: Push [38975820578](https://github.com/kenkyu0909/aichatapp/actions/runs/38975820578) / PR [38975827260](https://github.com/kenkyu0909/aichatapp/actions/runs/38975827260)（同一SHA `f382077`）。
 - 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
 
+### 2026-10-17 05:10 JST 確認済み映画回答のfail-closed是正
+
+- 検証エージェントが検出した回帰（保存済み確認を否定・伝聞した候補が通る）を修正（`f1aac28`）。genericフォールバックの無ガードなタイトル接頭辞一致を、`_asserts_movie_viewing` 等を用いる guarded 判定へ置換。
+- 回帰3件追加（矛盾却下・伝聞却下・作品名のみの肯定受理）。focused 116、`tests/test_app.py` **1727 passed in 50.62s**。
+- 全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524)（同一SHA `f1aac28`、success）。
+- 総合判定は**NO-GO**を維持。T369/QUALITY009の実生成品質FAILは未解決。未追跡指示ファイル3件は保持。
+
 ### 2026-10-17 02:40 JST D03永続化（明示確認のプロフィール昇格）
 
 - サーバ側の昇格機構を追加。`GenerateInput` に任意 `clarification_session_id` と任意 `confirmed`、`build_ephemeral_confirmations` に confirmed/ephemeral と session_id、`persist_confirmed_facts` に confirmed のみの `confirmed_facts` upsert（`schema_version=2`、既存キー保持、同一 `question_id` 上書き）を実装。未確認回答はプロフィールを変更しない。

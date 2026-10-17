@@ -1771,4 +1771,8 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - テスト追加3件（正答受理・回避却下・メタ文字列非接地。`_movie_confirmed_context` ヘルパ）。focused 183、`tests/test_app.py` **1724 passed in 58.62s**、全pytest **1834 passed in 422.73s**（Firefox UI含む、フレークなし）。
 - Actions: Push [38975820578](https://github.com/kenkyu0909/aichatapp/actions/runs/38975820578) / PR [38975827260](https://github.com/kenkyu0909/aichatapp/actions/runs/38975827260) は同一SHA `f382077` でsuccess。
 - commit `f382077`。次: 検証エージェントでD03ブリッジを確認し、次サブステップを確定する。
+- 検証エージェント結果: 主要動作はPASSだが、`f382077` が generic フォールバックに無ガードのタイトル接頭辞一致を追加し、保存済み確認を否定・伝聞した候補（例「『青い灯台』は観ていません」）が通る fail-closed 回帰を新規検出。
+- 修正（`f1aac28`）: 無ガードのタイトル接頭辞一致を撤去し、`_reading_genre_evidence_segments`＋`_asserts_movie_viewing`＋`_movie_viewing_attributed_to_other_person`＋逆質問除外の guarded 判定へ置換。回帰3件（矛盾却下・伝聞却下・作品名のみの肯定受理）追加。focused 116、`tests/test_app.py` **1727 passed in 50.62s**。
+- 次: 全pytestとCIを確認後、D05（相手別下書き分離）以降の未達P0へ進む。
+- 検証: 全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524)（同一SHA `f1aac28`、success）。
 

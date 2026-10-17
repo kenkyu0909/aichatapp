@@ -1080,5 +1080,7 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T420 | 保存済み確認ファクトを直接質問の証拠源にする（D03ブリッジ） | pytest。`_answers_verified_single_partner_question` と `_trusted_fact_clauses` | FIXED | `_confirmed_fact_values_for_question` を追加（`_confirmed_fact_covers_question` と同じ正規化id一致）。直近の直接質問に対する確認ファクト値を、最近観た映画タイトル枝と汎用フォールバックの証拠に追加。`_trusted_fact_clauses` は `confirmed_facts` から `value` のみを収集し、`question`/`session_id`/`source`/`requested_slot` のメタ文字列を接地から除外（値の捏造接地を防止）。focused 183、`tests/test_app.py` 1724 passed、全pytest **1834 passed in 422.73s**。commit `f382077`。 |
 
-最新ID行: 420。T407〜T420をFIXEDとして追加。Actions: Push [38975820578](https://github.com/kenkyu0909/aichatapp/actions/runs/38975820578) / PR [38975827260](https://github.com/kenkyu0909/aichatapp/actions/runs/38975827260) は同一SHA `f382077` でsuccess。`a2f82e2`（T419）は同一pushに同梱され独立runなし。全pytest **1834 passed**（Firefox UI含む）。
+| T421 | 確認済み映画回答の矛盾・伝聞の却下（fail-closed是正） | pytest。genericフォールバックのタイトル枝 | FIXED | T420でgenericフォールバックに混入した無ガードのタイトル接頭辞一致を撤去し、`_reading_genre_evidence_segments`＋`_asserts_movie_viewing`＋`_movie_viewing_attributed_to_other_person`＋逆質問除外による guarded 判定へ置換。保存済み作品名を否定（「観ていません」）・伝聞（「と聞きました」）・逆質問した候補は却下し、肯定（「『青い灯台』を観ました」）は受理。回帰3件追加。focused 116、`tests/test_app.py` 1727 passed。commit `f1aac28`。 |
+
+最新ID行: 421。T407〜T421をFIXEDとして追加。Actions: Push [38993274037](https://github.com/kenkyu0909/aichatapp/actions/runs/38993274037) / PR [38993277524](https://github.com/kenkyu0909/aichatapp/actions/runs/38993277524) は同一SHA `f1aac28` でsuccess。全pytest **1837 passed in 420.11s**（Firefox UI含む、フレークなし）。
 
