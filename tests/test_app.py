@@ -3692,6 +3692,27 @@ def test_reply_length_guard_still_caps_acknowledgment_without_question(client):
     assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(no_question, context)
 
 
+def test_answer_to_app_weekend_clarification_verifies_across_scope_mismatch(client):
+    _, backend = client
+    partner = (
+        "中野では古本屋と喫茶店をはしごするのが休日の定番です。"
+        "そよかさんは横浜だと、休日はどんな場所で過ごされることが多いんですか？"
+    )
+    question = backend.personal_fact_question("休日", partner).question
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [{
+            "question": question,
+            "answer": "休日は喫茶店でコーヒーを飲みながら本を読んだり、家で観葉植物の手入れをして過ごすことが多いです",
+        }],
+    }
+
+    assert backend._topic_is_verified("休日", context, partner) is True
+    assert backend.missing_personal_fact_question(context) is None
+
+
 def test_punctuated_partner_message_counts_sentences(client):
     _, backend = client
     messages = [{

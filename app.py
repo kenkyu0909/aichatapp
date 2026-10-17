@@ -1383,6 +1383,28 @@ def _same_personal_information_scope(topic: str, requested_text: str, answered_t
     return requested_scope is not None and requested_scope == answered_scope
 
 
+def _ephemeral_answer_addresses_question(topic: str, question_text: str, answer_question: str) -> bool:
+    """Whether an ephemeral answer replies to the clarification the app asked.
+
+    The scope comparison classifies the partner message and the answer's own
+    question text independently. When the app itself asked the clarification
+    through ``personal_fact_question`` those two wordings can classify
+    differently, so an answer whose question matches the app's own clarification
+    for this topic and source message also counts as addressing it.
+    """
+    if _same_personal_information_scope(topic, question_text, answer_question):
+        return True
+    if not question_text or not answer_question:
+        return False
+    try:
+        owned = _normalize_clarification_question_key(
+            personal_fact_question(topic, question_text).question
+        )
+    except Exception:
+        return False
+    return _normalize_clarification_question_key(answer_question) == owned
+
+
 def _cafe_atmosphere_style_polarities(text: str) -> dict[str, bool]:
     """Extract explicit cafe styles and whether each is affirmed or negated."""
     patterns = {
@@ -1724,7 +1746,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             if (
                 answer_text
                 and re.search(r"旅行|旅|出かけ", answer_question)
-                and _same_personal_information_scope(topic, question_text, answer_question)
+                and _ephemeral_answer_addresses_question(topic, question_text, answer_question)
                 and (explicit_no_trip or (standalone_destination and not explicit_old_trip) or completed_trip)
             ):
                 return True
@@ -1765,14 +1787,14 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 return True
             return any(
                 answer.get("answer", "").strip()
-                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+                and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
                 for answer in context.get("ephemeral_user_answers", [])
             )
         return any(facts.get(key) for key in ("cooking_habits", "cooking_frequency", "料理習慣", "自炊頻度")) or any(
             answer.get("answer", "").strip()
             for answer in context.get("ephemeral_user_answers", [])
             if re.search(r"料理|自炊", answer.get("question", ""))
-            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
         )
     if topic == "カフェ最近":
         keys = ("recent_cafes", "recent_cafe_visits", "最近行ったカフェ")
@@ -1827,7 +1849,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             if (
                 answer_text
                 and re.search(r"カフェ|喫茶店", answer_question)
-                and _same_personal_information_scope(topic, question_text, answer_question)
+                and _ephemeral_answer_addresses_question(topic, question_text, answer_question)
                 and (location_marker or habitual_named_area or standalone_area or explicit_no_area)
                 and not non_area_destination
                 and not (generic_preference and not location_marker)
@@ -1842,7 +1864,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             return any(
                 answer.get("answer", "").strip()
                 and "映画館" in answer.get("question", "")
-                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+                and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
                 for answer in context.get("ephemeral_user_answers", [])
             )
         keys = (
@@ -2000,7 +2022,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         return any(
             answer.get("answer", "").strip()
             and "映画館" in answer.get("question", "")
-            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
             for answer in context.get("ephemeral_user_answers", [])
         )
     if topic == "映画館場所":
@@ -2010,7 +2032,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         return any(
             answer.get("answer", "").strip()
             and "映画館" in answer.get("question", "")
-            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
             for answer in context.get("ephemeral_user_answers", [])
         )
     if topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", question_text):
@@ -2082,7 +2104,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         return any(
             answer.get("answer", "").strip()
             and any(term in answer.get("question", "") for term in topic_terms)
-            and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+            and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
             for answer in context.get("ephemeral_user_answers", [])
         )
     if any(facts.get(key) for key in explicit_field_keys.get(topic, ())):
@@ -2108,7 +2130,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 for answer in context.get("ephemeral_user_answers", [])
                 if answer.get("answer", "").strip()
                 and any(term in answer.get("question", "") for term in topic_terms)
-                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+                and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
             )
         else:
             # A bare mention of weekends is not evidence for a specific activity.
@@ -2117,7 +2139,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 answer.get("answer", "")
                 for answer in context.get("ephemeral_user_answers", [])
                 if any(term in answer.get("question", "") for term in topic_terms)
-                and _same_personal_information_scope(topic, question_text, answer.get("question", ""))
+                and _ephemeral_answer_addresses_question(topic, question_text, answer.get("question", ""))
             )
         activity_terms = ("カフェ", "喫茶店", "映画", "映画館", "読書", "本", "旅行", "出かけ", "家", "自宅", "寝", "植物", "美術館", "買い物", "友達")
         return any(any(term in value for term in activity_terms) for value in weekend_values)
@@ -2155,7 +2177,7 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             continue
         if (
             not question_text
-            or _same_personal_information_scope(topic, question_text, answer_question)
+            or _ephemeral_answer_addresses_question(topic, question_text, answer_question)
             or _normalize_clarification_question_key(answer_question) in owned_question_keys
         ):
             return True
