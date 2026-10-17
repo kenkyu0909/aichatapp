@@ -402,6 +402,42 @@ def test_long_history_is_limited_and_missing_match_is_rejected(client):
     assert c.post("/api/generate", json={"mode": "reply", "match_id": 9999}).status_code == 404
 
 
+def test_refusal_older_than_prompt_window_stays_active(client):
+    c, backend = client
+    mid = add_match(c, "昔の断り確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "ごめんなさい、今は会うのは難しいです"})
+    for index in range(70):
+        c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": f"雑談{index}"})
+        c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": f"返信{index}"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近どうですか？"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert len(context["history"]) == 60
+    assert not any("会うのは難しい" in item["body"] for item in context["history"])
+    assert backend.partner_has_active_invitation_refusal(context) is True
+    assert backend.invite_opportunity_ready(context) is False
+
+
+def test_reopened_invitation_after_old_refusal_clears_refusal(client):
+    c, backend = client
+    mid = add_match(c, "再開確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "ごめんなさい、今は会うのは難しいです"})
+    for index in range(70):
+        c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": f"雑談{index}"})
+        c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": f"返信{index}"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "やっぱり今度一緒に行きましょう！"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert backend.partner_has_active_invitation_refusal(context) is False
+
+
+def test_policy_history_is_internal_and_not_in_prompt(client):
+    c, backend = client
+    mid = add_match(c, "内部キー確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "会話です"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert "history_policy" in context
+    assert "history_policy" not in backend.prompt_context(context)
+
+
 @pytest.mark.parametrize("response_text", [
     "not-json",
     json.dumps({
