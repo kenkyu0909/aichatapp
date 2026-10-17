@@ -14406,3 +14406,60 @@ def test_high_confidence_godan_missing_continuative_typo_guard_with_ichidan_nega
     ]
     for valid in valid_ichidan_and_godan_samples:
         assert backend.candidate_has_high_confidence_japanese_error(valid) is False
+
+
+def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partner_name(client):
+    _, backend = client
+    partner_question = "ぜひ行きましょう！来週か再来週あたりで都合のいい曜日や時間帯はありますか？"
+    clarification = (
+        "相手の「ぜひ行きましょう！来週か再来週あたりで都合のいい曜日や時間帯はありますか？」"
+        "に答えるため該当する日の予定や過ごし方を教えてください"
+    )
+    polite_context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "高円寺の喫茶店とっても気になります！\nもしよろしければ今度一緒に行ってみませんか？"},
+            {"role": "them", "body": partner_question},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {"question": clarification, "answer": "土曜日の午後なら空いています。"}
+        ],
+    }
+    fb_polite = backend._build_unclassified_question_fallback_candidate(polite_context)
+    assert fb_polite is not None
+    assert fb_polite.text == "うれしいです😊\n土曜日の午後なら空いています\n黒川さんはご都合いかがですか？"
+    assert backend._candidate_rejection_reasons(fb_polite, polite_context) == []
+
+    casual_context = {
+        **polite_context,
+        "my_profile": {"facts": {"style": "タメ口"}, "avoid": []},
+        "reply_preferences": {"tone": "タメ口"},
+        "ephemeral_user_answers": [
+            {"question": clarification, "answer": "土曜日の午後なら空いてるよ！"}
+        ],
+    }
+    fb_casual = backend._build_unclassified_question_fallback_candidate(casual_context)
+    assert fb_casual is not None
+    assert fb_casual.text == "うれしいな！\n土曜日の午後なら空いてるよ\n黒川さんは都合どうかな？"
+    assert backend._candidate_rejection_reasons(fb_casual, casual_context) == []
+
+    plain_schedule_question = "来週あたりで都合のいい曜日はありますか？"
+    plain_context = {
+        **polite_context,
+        "history": [{"role": "them", "body": plain_schedule_question}],
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「来週あたりで都合のいい曜日はありますか？」に答えるため該当する日の予定や過ごし方を教えてください",
+                "answer": "土曜日の午後なら空いています。",
+            }
+        ],
+    }
+    fb_plain = backend._build_unclassified_question_fallback_candidate(plain_context)
+    assert fb_plain is not None
+    assert fb_plain.text == "ありがとうございます！\n土曜日の午後なら空いています\n黒川さんはご都合いかがですか？"
+    assert backend._candidate_rejection_reasons(fb_plain, plain_context) == []

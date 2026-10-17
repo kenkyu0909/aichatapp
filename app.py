@@ -6158,7 +6158,7 @@ def _is_partner_directed_followup_question(text: str, direct_question: str) -> b
         return False
     if re.match(
         r"^(?:そっちは|そちらは|あなたは|相手は|ちなみに|最近|普段|休日|どんな|何|なに|どの|どれ|どちら|"
-        r"おすすめ|よく|カフェ|映画|本)",
+        r"おすすめ|よく|カフェ|映画|本|[一-龯ぁ-んァ-ヶA-Za-z]{1,12}(?:さん|くん|ちゃん)(?:は|も|の))",
         normalized,
     ):
         return True
@@ -6788,7 +6788,14 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                     if _binary_answer_restatement_matches(segment, binary_scope, binary_polarity):
                         answer_seen = True
                         continue
-                if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ"}:
+                compact_ack = re.sub(r"[\s、。！!？?😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]", "", segment)
+                if compact_ack in {
+                    "はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ",
+                    "うれしいです", "嬉しいです", "うれしいな", "嬉しいな", "うれしい", "嬉しい",
+                    "ありがとうございます", "ありがとう", "お誘いありがとうございます",
+                    "ぜひ", "ぜひぜひ", "ぜひお願いします", "ぜひよろしくお願いします", "よろしくお願いします",
+                    "楽しみにしてます", "楽しみにしています", "楽しみです",
+                }:
                     continue
                 if _is_partner_directed_followup_question(segment, question):
                     continue
@@ -7146,9 +7153,11 @@ def _candidate_sentence_count(text: str) -> int:
 ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
     r"そうなんですね|そうなんですか|そうなんだ|なるほど|わかります|分かります|"
     r"たしかに|確かに|ですよね|いいですね|素敵ですね|楽しそうですね|"
-    r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま"
+    r"気になりますね|面白そうですね|聞いてみたいです|大変でしたね|お疲れさま|"
+    r"うれしいです|嬉しいです|うれしいな|嬉しいな|ありがとうございます|ありがとう|"
+    r"ぜひよろしくお願いします|楽しみですね|楽しみです"
 )
-QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか")
+QUESTION_MARKERS = re.compile(r"[?？]|ですか|ますか|でしょうか|ませんか|ありますか|いかがですか|どうですか")
 
 
 def _candidate_has_partner_question(text: str) -> bool:
@@ -7568,6 +7577,22 @@ def _fallback_should_use_casual_tone(
     return not bool(re.search(r"です|ます|でした|ました|ません|でしょうか", question))
 
 
+def _fallback_partner_honorific_name(context: dict) -> str | None:
+    """Extract a safe partner honorific name (e.g., 黒川さん) when a concrete name is configured."""
+    raw_name = str((context.get("other") or {}).get("name", "") or "").strip()
+    if not raw_name or raw_name in {"相手", "お相手", "パートナー", "未設定", "名無し"}:
+        return None
+    if re.search(r"架空|テスト|サンプル|ダミー", raw_name):
+        return None
+    cleaned = re.sub(r"[\s　]+", " ", raw_name).strip()
+    first_token = cleaned.split(" ")[0]
+    if re.search(r"(?:さん|くん|ちゃん|様)$", first_token):
+        return first_token
+    if re.fullmatch(r"[一-龯ぁ-んァ-ヶ]{1,8}", first_token):
+        return f"{first_token}さん"
+    return None
+
+
 def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
     """Synthesize 1 safe fallback candidate when all model candidates fail on an answered unclassified question."""
     raw_answer = _unclassified_personal_question_user_answer(context)
@@ -7583,8 +7608,30 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
     ]
     question = partner_messages[-1] if partner_messages else ""
     casual = _fallback_should_use_casual_tone(context, question, clean_answer)
-    ack = "そうなんだ" if casual else "そうなんですね"
-    followup = "そっちはどう？" if casual else "そちらはどうですか？"
+    partner_label = _fallback_partner_honorific_name(context)
+    is_schedule_or_accept = bool(
+        context.get("invite_decision") == "schedule_after_acceptance"
+        or _future_activity_scope(question)
+        or re.search(r"ぜひ行きましょう|ぜひご一緒|都合|空いて|何曜日|時間帯|日程", question)
+    )
+    has_invitation_acceptance = bool(
+        re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
+    )
+    if is_schedule_or_accept:
+        if has_invitation_acceptance:
+            ack = "うれしいな！" if casual else "うれしいです😊"
+        else:
+            ack = "ありがとう！" if casual else "ありがとうございます！"
+        if partner_label:
+            followup = f"{partner_label}は都合どうかな？" if casual else f"{partner_label}はご都合いかがですか？"
+        else:
+            followup = "そっちは都合どう？" if casual else "そちらはご都合いかがですか？"
+    else:
+        ack = "そうなんだ" if casual else "そうなんですね"
+        if partner_label:
+            followup = f"{partner_label}はどう？" if casual else f"{partner_label}はいかがですか？"
+        else:
+            followup = "そっちはどう？" if casual else "そちらはどうですか？"
     candidate = Candidate(
         label="回答を反映した返信",
         text=f"{ack}\n{clean_answer}\n{followup}",

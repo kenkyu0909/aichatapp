@@ -1894,4 +1894,6 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
   - `scripts/quality_eval.py` の `has_redundant_reaction_set` に `_REST_EMPATHY` 語彙衝突検出を追加し、製品ゲートと独立採点器の判定を一致させた。`FINAL_REPORT.md` 冒頭で「条件付きGO」の残条件をコード解消済み項目と運用・確率的留意事項に仕分けして明記。
 - **T454（誘い判断 Stage 1–6 / `invite_decision` のオフライン48件＋実API 5シナリオ検証）**:
   - オフライン自動テスト48件全PASSに加え、実APIで (a) 初期ターン（`Stage 1 / do_not_invite` → `Stage 2 / continue_conversation`）、(b) 相手の関心表明（`Stage 4 / invite_gently`）、(c) 相手の慎重姿勢（`Stage 3 / respect_no`＋次ターン再勧誘なし）、(d) 承諾・日程質問（`needs_user_info=True` → 回答後 `Stage 5 / schedule_after_acceptance`）、(e) 連絡終了要求（即時生成停止・候補0件）の全5シナリオを検証し、HTML/JSON（`conversation_test_20261017_invite_a_early.html` 〜 `e_stop.html`）へ保存。
-- 全pytest **1917 passed**、`node --check app.js` PASS、`git diff --check` PASS。
+- **T455（フォールバック候補の文脈別相槌・相手名入り質問の自然化および日程調整シナリオ(d)再確認）**:
+  - 既存の厳密な回答一致ガードを維持したまま、誘い承諾＋日程質問時は喜び表現（`うれしいです😊` / `うれしいな！`）、通常日程質問時は感謝表現（`ありがとうございます！` / `ありがとう！`）、相手名がある場合は相手名入り質問（`黒川さんはご都合いかがですか？` 等）を返すよう改善し、実API再確認テスト（`conversation_test_20261017_invite_d_schedule_T455.html`）で検証。
+- 全pytest **1918 passed**、`node --check app.js` PASS、`git diff --check` PASS。
