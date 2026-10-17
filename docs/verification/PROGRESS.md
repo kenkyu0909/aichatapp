@@ -1861,6 +1861,16 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - 残課題: 未知のWH質問（分類できない直接質問）では、回答が候補本文に逐語で含まれないと `_answers_verified_single_partner_question` が拒否し続け、回答しても停止する。実測で2件再現（散歩場所、喫茶店の好み）。
 - 次: D16 README（取得先・起動終了・バックアップ/復元・検証済み依存組合せ）に着手。
 
+### 2026-10-17 未知WH質問フォールバックおよびD03・D06・D08・D10・D11・D12・D14・D15・D16・D17・D18一括完了（T441〜T449）
 
-
-
+- **T441（`97317e1`、優先1）**: 未分類の本人向け直接質問（未知WH質問）に対し、本人が `user_answers` で回答済みであるにもかかわらずモデル生成候補がすべて安全フィルタで除外された場合、本人の確定回答をそのまま用いてトーン設定（`敬語`/`タメ口`/`混合`/`自動`）に合わせた決定論的フォールバック候補1件を合成し、`filter_safe_candidates` を再通過させて返す救済経路（`_unclassified_personal_question_user_answer`, `_fallback_should_use_casual_tone`, `_build_unclassified_question_fallback_candidate`）を実装。未回答時はフォールバックせず `needs_user_info=True` を維持。回帰テスト8件追加。
+- **T442（`40171be`、D16）**: `README.md` を現行実装と整合（クローンURL `https://github.com/kenkyu0909/aichatapp.git`、`start.bat`/`uvicorn` 起動と `Ctrl+C` 停止手順、4モード＋本人確認フロー、Python 3.12.10/3.11・依存バージョン固定、`data/` オフラインバックアップ・復元・整合性検査手順）。
+- **T443（`ded9b22`、D08）**: `prompts/common.txt` の自己矛盾（相手の趣味雑談と本人への直接質問の区別、`user_answers` のQ&Aメタ文字列貼り付け禁止と確定回答内容の本文反映の両立）を解消。
+- **T444（`705bf05`、D06/D12）**: `app.js` でプロフィール保存成功時に `invalidateGenerationResults()` を呼び古い生成結果を無効化。新規相手作成後の写真アップロード失敗時は `catch` 内で `await loadMatches(data.id)` を呼び、作成済み相手へUI選択を同期して重複作成を防止。
+- **T445（`cb08d57`、D17）**: `data/` ディレクトリ（`app.sqlite3` および `photos/`）のオフラインバックアップ・破壊・復元後にプロフィール・写真・履歴・確定事実が完全復元される統合テスト `test_offline_data_directory_backup_and_restore_preserves_full_state` を追加。
+- **T446（`28d15a3`、D15）**: 変更系API（`POST`/`PUT`/`DELETE`/`PATCH`）で `Origin` ヘッダが存在する場合に `_allowed_hosts()` と照合し、外部Originからのクロスサイト変更要求を `403 Forbidden` で拒否する `verify_mutation_origin` ミドルウェアと回帰テストを追加。
+- **T447（`42c9635`、D14）**: `prompt_context` に `MRA_PROMPT_HISTORY_CHAR_BUDGET`（既定12,000文字）による履歴文字数上限を導入。また `partner_requests_contact_stop` が直近60件だけでなく `_history_for_policy` 全体を走査し、60件超の会話でも過去の連絡停止要求が失われないよう修正。回帰テスト2件追加。
+- **T448（`c29f720`、D10/D11）**: `genai.Client` の試行別 timeout を `request_deadline` の残り時間（1〜30秒）でクランプし、グローバル期限超過を防止。`scripts/live_gemini_smoke.py` の環境変数優先順を `MRA_API_1_KEY` / `GEMINI_API_KEY` の双方に対応するよう統一。
+- **T449（`7e648e2`、D03）**: `_answers_verified_single_partner_question` の `料理習慣`（最近の料理）および `カフェ頻度` 分岐で `_confirmed_fact_values_for_question` も参照するよう統一。
+- **D18（最終報告書冒頭要約）**: `FINAL_REPORT.md` 冒頭に1ページの最新エグゼクティブサマリー（総合判定・根拠・残リスク・推奨運用条件）を追加。
+- 全pytest **1913 passed in 368.81s**、`node --check app.js` PASS、`git diff --check` PASS。

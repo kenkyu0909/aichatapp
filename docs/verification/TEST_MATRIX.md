@@ -1112,7 +1112,22 @@ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14
 
 | T440 | アプリ自身の確認質問への回答照合（P0正確さ） | pytest。`_ephemeral_answer_addresses_question` | FIXED | アプリ自身が尋ねた確認質問へ回答しても、相手文と確認質問のスコープ分類が食い違うと `_topic_is_verified` が偽のままで同じ質問を再発した。`_ephemeral_answer_addresses_question` を追加し、topic 別分岐で臨時回答を照合する箇所を置き換え。休日トピックの回帰テスト1件。全pytest **1901 passed in 394.61s**。commit `916ec41`。 |
 
-最新ID行: 440。T431〜T437をFIXEDとして追加。Actions: `0f77f1c`（T431）は Push [39001970969](https://github.com/kenkyu0909/aichatapp/actions/runs/39001970969) / PR [39001973826](https://github.com/kenkyu0909/aichatapp/actions/runs/39001973826)、`ba8906c`（T432）は Push [39002561869](https://github.com/kenkyu0909/aichatapp/actions/runs/39002561869) / PR [39002565203](https://github.com/kenkyu0909/aichatapp/actions/runs/39002565203)、`6428754`（T433）は Push [39003428787](https://github.com/kenkyu0909/aichatapp/actions/runs/39003428787) / PR [39003519038](https://github.com/kenkyu0909/aichatapp/actions/runs/39003519038)、`6d555b6`（T434）は Push [39005171268](https://github.com/kenkyu0909/aichatapp/actions/runs/39005171268) / PR [39005174295](https://github.com/kenkyu0909/aichatapp/actions/runs/39005174295)、`a369794`（T435）は Push [39006007280](https://github.com/kenkyu0909/aichatapp/actions/runs/39006007280) / PR [39006009668](https://github.com/kenkyu0909/aichatapp/actions/runs/39006009668) でいずれもsuccess。`efebc41`（T436）は Push [39006906484](https://github.com/kenkyu0909/aichatapp/actions/runs/39006906484) / PR [39006909435](https://github.com/kenkyu0909/aichatapp/actions/runs/39006909435) でもsuccess。D09は独立採点器の追加（T431）と009ランナー配線（T432）、規約一致修正（T433）で完了。D11は永続台帳の事前予約（T434）・原子性（T435）・要求全体の期限（T436）まで完了。実Gemini再実行（T437）も実施し、既存の `quality_checks_009.json` を上書きせず別ファイルへ記録した。Actions: `37aea6a`（T437）は Push [39008343305](https://github.com/kenkyu0909/aichatapp/actions/runs/39008343305) / PR [39008346994](https://github.com/kenkyu0909/aichatapp/actions/runs/39008346994) でsuccess。
+| T441 | 未知WH質問の決定論的フォールバックと文体連動（P0正確さ） | pytest。`_build_unclassified_question_fallback_candidate` | FIXED | 未分類の直接質問（`topic == "本人情報"` または `not topic`）で `user_answers` に本人回答があり、モデル生成候補がすべて安全検査で棄却された場合に、選択文体（`敬語` / `タメ口` / `混合` / `自動`）に連動した `相槌（1行） + 回答の逐語引用（句読点除去・1行） + 相手への質問（1行）` の安全な候補1案を合成するフォールバックを追加。`_answers_verified_single_partner_question` の語彙一致ルールは一切緩和せず、全候補ガード `_candidate_rejection_reasons` を通過することを検証。回帰テスト8件（文体6パターン・回答なし時の確認質問維持・全試行失敗時のフォールバック返却）。commit `97317e1`。 |
 
+| T442 | README整合（取得先・起動終了・依存固定・バックアップ手順、D16） | ドキュメント検査・整合確認 | FIXED | `README.md` に実リポジトリURL（`https://github.com/kenkyu0909/aichatapp.git`）、`start.bat`/`uvicorn` 起動と `Ctrl+C` 停止確認、全4生成モードと本人情報確認、検証済みPython（3.12.10 / 3.11）と依存パッケージ固定バージョン、および `data/`（`app.sqlite3` + `photos/`）のオフラインバックアップ・復元・SQLite/JSON整合性確認手順を記載。commit `40171be`。 |
 
+| T443 | 共通プロンプトの自己矛盾解消と重複整理（D08） | pytest・プロンプト検査 | FIXED | `prompts/common.txt` における趣味質問の自己矛盾（相手の趣味話題と本人への直接質問の区別）および `user_answers` のQ&Aメタデータ転記禁止と本人回答内容の反映指示の矛盾を解消し、重複行を整理。commit `ded9b22`。 |
 
+| T444 | プロフィール保存時の古い候補無効化と写真失敗時の相手一覧同期（D06, D12） | `node --check app.js`・UI契約 | FIXED | `app.js` でプロフィール保存成功時に `invalidateGenerationResults()` を呼び出して古いプロフィール前提の候補表示を無効化し、連絡先新規作成後の写真アップロード失敗時に `loadMatches(data.id)` で作成済み連絡先を左ペイン一覧へ同期。commit `705bf05`。 |
+
+| T445 | オフライン `data/` ディレクトリのバックアップ・復元テスト（D17） | pytest。`test_offline_data_directory_backup_and_restore_preserves_full_state` | FIXED | 構造化プロフィール・`avoid`・`confirmed_facts`・複数相手・識別写真・会話履歴・`api_usage` 台帳を保存後、`data/` を丸ごとバックアップし、データ消失・破損後に復元して別インスタンスから全データが100%復元・再生成利用可能であることを自動検証。commit `cb08d57`。 |
+
+| T446 | 変更要求（POST/PUT/DELETE/PATCH）の Origin 許可リスト検証（D15） | pytest。`verify_mutation_origin` | FIXED | `Origin` ヘッダーが付与された状態変更要求に対し、`_allowed_hosts()` 以外の Origin（例: `https://evil.example`）を 403 で拒否し、ローカル Origin および非ブラウザ（Originなし）を許可するミドルウェアとテストを追加。commit `28d15a3`。 |
+
+| T447 | プロンプト履歴文字数上限と窓外の連絡停止要求保持（D14） | pytest。`_trim_history_to_char_budget`・`partner_requests_contact_stop` | FIXED | `MRA_PROMPT_HISTORY_CHAR_BUDGET`（既定24000文字）でプロンプト入力履歴の文字数肥大化を防ぎつつ最新ターンを保持し、`partner_requests_contact_stop` が `_history_for_policy`（600件窓）を走査して60件超前の連絡停止要求も保持するよう修正。テスト2件。commit `42c9635`。 |
+
+| T448 | 単発SDKタイムアウトの残りDeadlineクランプとsmokeキー環境変数補完（D10, D11） | pytest・スクリプト検査 | FIXED | `generate()` でプロバイダー設定ごとのSDK初期タイムアウトを `request_deadline` の残り時間（1〜30秒）へクランプし、`scripts/live_gemini_smoke.py` で `GEMINI_API_KEY` と `MRA_API_1_KEY` を双方向補完。commit `c29f720`。 |
+
+| T449 | 保存済み `confirmed_facts` の料理・カフェ頻度バリデータ接続（D03） | pytest。`_answers_verified_single_partner_question` | FIXED | `_answers_verified_single_partner_question` の `料理習慣`（最近の料理）および `カフェ頻度` 分岐の証拠リストに `_confirmed_fact_values_for_question` を追加。全pytest **1913 passed in 368.81s**。commit `7e648e2`。 |
+
+最新ID行: 449。T441〜T449をFIXEDとして追加。全pytest **1913 passed in 368.81s**。
