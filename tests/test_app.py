@@ -3718,7 +3718,10 @@ def test_confirmed_movie_title_only_answer_is_still_accepted(client):
     "『青い灯台』は面白いと聞きました",
     "友達が『青い灯台』を観ました",
     "『青い灯台』を観たのは妹です",
+    "『青い灯台』を観たのは私の妹です",
     "『青い灯台』を観たと言われました",
+    "『青い灯台』を観たという話",
+    "『青い灯台』を観たとのことです",
     "『青い灯台』は観ましたか？",
 ])
 def test_candidate_viewing_of_title_rejects_non_first_person_claims(client, text):
@@ -3730,6 +3733,8 @@ def test_candidate_viewing_of_title_rejects_non_first_person_claims(client, text
 @pytest.mark.parametrize("text", [
     "『青い灯台』を観ました",
     "最近は『青い灯台』を観ました",
+    "『青い灯台』を観たのは友達と一緒です",
+    "友達と『青い灯台』を観ました",
 ])
 def test_candidate_viewing_of_title_accepts_first_person_claims(client, text):
     _, backend = client
