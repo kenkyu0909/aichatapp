@@ -7916,6 +7916,94 @@ def _content_nouns(text: str) -> set[str]:
     return {token for token in tokens if token not in _REPETITION_NOUN_STOPWORDS}
 
 
+def _latest_partner_nouns(context: dict) -> set[str]:
+    """Content nouns of the partner's latest message."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return set()
+    return _content_nouns(partner_messages[-1])
+
+
+def _self_fact_nouns(context: dict) -> set[str]:
+    """Content nouns the user already talked about (own messages, answers, profile)."""
+    sources = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ]
+    sources += [
+        str(answer.get("answer", ""))
+        for answer in [
+            *(context.get("session_answers") or []),
+            *(context.get("ephemeral_user_answers") or []),
+        ]
+    ]
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    if isinstance(facts, dict):
+        sources += [str(value) for value in facts.values() if isinstance(value, (str, list))]
+    return _content_nouns(" ".join(sources))
+
+
+def _candidate_drifts_from_partner_topic(text: str, context: dict) -> bool:
+    """True when a line only rehashes the user's own older topic.
+
+    The partner's latest message introduces concrete nouns; a line whose own
+    nouns are all older self facts and never touch the partner's topic reads as
+    an unrelated aside (a plant story right after the partner talked about bread).
+    """
+    partner_nouns = _latest_partner_nouns(context)
+    if not partner_nouns:
+        return False
+    self_nouns = _self_fact_nouns(context)
+    if not self_nouns:
+        return False
+    for line in text.splitlines():
+        nouns = _content_nouns(line)
+        if not nouns or nouns & partner_nouns:
+            continue
+        if nouns <= self_nouns:
+            return True
+    return False
+
+
+def _question_repeats_previous_ask(text: str, context: dict) -> bool:
+    """True when the question only paraphrases the user's own previous question."""
+    prior_me = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ]
+    if not prior_me:
+        return False
+    previous_questions = [
+        line
+        for line in prior_me[-1].splitlines()
+        if _is_ask_sentence(line) and _normalized_repetition_key(line)
+    ]
+    if not previous_questions:
+        return False
+    for line in text.splitlines():
+        if not _is_ask_sentence(line):
+            continue
+        candidate_key = _normalized_repetition_key(line)
+        candidate_nouns = _content_nouns(line)
+        if not candidate_key or not candidate_nouns:
+            continue
+        for previous in previous_questions:
+            previous_nouns = _content_nouns(previous)
+            if not previous_nouns or not candidate_nouns <= previous_nouns:
+                continue
+            if SequenceMatcher(
+                None, candidate_key, _normalized_repetition_key(previous)
+            ).ratio() >= 0.6:
+                return True
+    return False
+
+
 def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6) -> list[str]:
     """Reasons why a candidate repeats the user's own recent lines or questions."""
     prior_me = [
@@ -7923,8 +8011,6 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         for message in context.get("history", [])
         if message.get("role") == "me"
     ][-lookback:]
-    if not prior_me:
-        return []
     prior_lines = {
         _normalized_repetition_key(line)
         for body in prior_me
@@ -7983,6 +8069,10 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         }
         if candidate_interrogatives & recent_interrogatives:
             reasons.append("同じ話題の質問が続く")
+    if _candidate_drifts_from_partner_topic(text, context):
+        reasons.append("直前の相手の話題と離れている")
+    if _question_repeats_previous_ask(text, context):
+        reasons.append("直前の自分の質問と同じ")
     return reasons
 
 

@@ -16108,6 +16108,75 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t476_off_topic_self_disclosure_is_demoted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "私は朝はパン派で、トーストにバターだけのやつが好きなんです"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {"question": "休日は普段どんなふうに過ごすか教えてください", "answer": "家ではポトスやガジュマルを育てています。"},
+        ],
+    }
+    drifting = backend.Candidate(
+        label="話題ずれ",
+        text="トーストにバターの組み合わせって最高ですよね！\n私は家でポトスやガジュマルを育てながらのんびり過ごすことが多いです🪴",
+    )
+    on_topic = backend.Candidate(
+        label="つながる", text="トーストにバターの組み合わせって最高ですよね！\n私も朝はトースト派です😊"
+    )
+    assert "直前の相手の話題と離れている" in backend._recent_self_repetition_reasons(drifting.text, context)
+    assert "直前の相手の話題と離れている" not in backend._recent_self_repetition_reasons(on_topic.text, context)
+    ordered, notice = backend._demote_repetitive_self_candidates([drifting, on_topic], context)
+    assert ordered[0] is on_topic
+    assert notice
+
+
+def test_t476_paraphrased_question_repeat_is_demoted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "屋台の焼きそばと、あとは古本のワゴンが出るみたいです"},
+            {"role": "me", "body": "屋台の焼きそばに古本のワゴンまであるなんてワクワクしますね！\n古本のワゴンではどんなジャンルの本を見るのが好きですか？"},
+            {"role": "them", "body": "土曜日は本の話もできたらうれしいです"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    paraphrased = backend.Candidate(
+        label="言い換え", text="土曜日とても楽しみです😊\n古本のワゴンではどんな本を探すのが好きですか？"
+    )
+    different_angle = backend.Candidate(
+        label="別角度", text="土曜日とても楽しみです😊\n古い本は装丁で選んだりするんですか？"
+    )
+    assert "直前の自分の質問と同じ" in backend._recent_self_repetition_reasons(paraphrased.text, context)
+    assert "直前の自分の質問と同じ" not in backend._recent_self_repetition_reasons(
+        different_angle.text, context
+    )
+    ordered, notice = backend._demote_repetitive_self_candidates(
+        [paraphrased, different_angle], context
+    )
+    assert ordered[0] is different_angle
+    assert notice
+
+
+def test_t476_prompts_carry_continuity_guidance(client):
+    _, backend = client
+    reply_prompt = backend.read_prompt("reply")
+    assert "相手の直前の話題に近い話" in reply_prompt
+    assert "直前の自分の質問とほぼ同じ質問も続けず" in reply_prompt
+    assert "別の対象へ移ります" in reply_prompt
+
+
 def test_t475_short_reaction_repeat_is_demoted(client):
     _, backend = client
     context = {
