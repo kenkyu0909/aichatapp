@@ -2452,6 +2452,50 @@ def _partner_trailing_direct_question(context: dict) -> str:
     return ""
 
 
+def _answers_for_partner_question(context: dict) -> list[dict]:
+    """Confirmed answers that address the partner's trailing question.
+
+    An answer only counts when its own question is the same ask or when the
+    personal-information scope (kind and precision) matches, so an answer about
+    another aspect of the same topic is not relayed as if it answered this one.
+    """
+    focus = _partner_trailing_direct_question(context)
+    if not focus:
+        return []
+    answers = [
+        *(context.get("session_answers") or []),
+        *(context.get("ephemeral_user_answers") or []),
+    ]
+    normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
+    normalized_focus = normalize(focus)
+    focus_topic = _topic_for_personal_question(focus)
+    ordered: list[dict] = []
+    for answer in answers:
+        asked = normalize(answer.get("question", ""))
+        if normalized_focus and asked and (
+            normalized_focus in asked or asked in normalized_focus
+        ):
+            ordered.append(answer)
+    if focus_topic:
+        for answer in answers:
+            if answer in ordered:
+                continue
+            if str(answer.get("answer", "")).strip() and _ephemeral_answer_addresses_question(
+                focus_topic, focus, str(answer.get("question", ""))
+            ):
+                ordered.append(answer)
+    return ordered
+
+
+def _answered_question_answer(context: dict) -> str:
+    """Return the confirmed answer for the partner's trailing direct question."""
+    for answer in _answers_for_partner_question(context):
+        answer_text = str(answer.get("answer", "")).strip()
+        if answer_text:
+            return answer_text
+    return ""
+
+
 def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     """Preflight explicit personal questions against user-confirmed facts.
 
@@ -7834,6 +7878,98 @@ def _candidate_is_acknowledgment_plus_question(text: str) -> bool:
     )
 
 
+def _normalized_repetition_key(value: str) -> str:
+    return re.sub(r"[\s　、。，．！!？?😊☺️✨🌱😆😂🥲🌸❤️💕👍☕️📚]", "", str(value))
+
+
+def _question_intent_key(line: str) -> str:
+    """Normalize a question so paraphrases of the same ask share one key."""
+    value = _normalized_repetition_key(line)
+    value = re.sub(r"か$", "", value)
+    value = re.sub(
+        r"(?:あったりします|あったりする|あります|ある|いたりします|います|いる|でした|ました)$", "", value
+    )
+    value = re.sub(r"(?:とか|など|なんか|あたり)?(?:は|が|も)?$", "", value)
+    value = re.sub(r"(?:とか|など|なんか|あたり)$", "", value)
+    return value
+
+
+def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6) -> list[str]:
+    """Reasons why a candidate repeats the user's own recent lines or questions."""
+    prior_me = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ][-lookback:]
+    if not prior_me:
+        return []
+    prior_lines = {
+        _normalized_repetition_key(line)
+        for body in prior_me
+        for line in str(body).splitlines()
+        if _normalized_repetition_key(line)
+    }
+    prior_questions = {
+        _question_intent_key(line)
+        for body in prior_me
+        for line in str(body).splitlines()
+        if _is_ask_sentence(line) and len(_question_intent_key(line)) >= 5
+    }
+    reasons: list[str] = []
+    for line in text.splitlines():
+        key = _normalized_repetition_key(line)
+        if len(key) >= 6 and key in prior_lines:
+            reasons.append("直近の自分の発言と同じ行")
+            break
+    for line in text.splitlines():
+        if not _is_ask_sentence(line):
+            continue
+        key = _question_intent_key(line)
+        if len(key) >= 5 and key in prior_questions:
+            reasons.append("直近の自分と同じ趣旨の質問")
+            break
+    return reasons
+
+
+def _demote_repetitive_self_candidates(
+    candidates: list[Candidate], context: dict
+) -> tuple[list[Candidate], str]:
+    """Move candidates that repeat the user's own recent lines to the back."""
+    if len(candidates) < 2:
+        return candidates, ""
+    repeated = [candidate for candidate in candidates if _recent_self_repetition_reasons(candidate.text, context)]
+    if not repeated or len(repeated) == len(candidates):
+        return candidates, ""
+    fresh = [candidate for candidate in candidates if candidate not in repeated]
+    notice = (
+        "直近の自分の発言や質問と重なる候補があるため、重ならない候補を先に表示しています。"
+        "本文を確認して選んでください。"
+    )
+    return [*fresh, *repeated], notice
+
+
+def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
+    """True when the candidate body is the user's own confirmed answer text."""
+    raw_answer = _answered_question_answer(context) or _unclassified_personal_question_user_answer(context)
+    if not raw_answer:
+        return False
+    normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
+    normalized_answer = normalize(raw_answer)
+    if not normalized_answer:
+        return False
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines or len(lines) > 5:
+        return False
+    body = [line for line in lines if "?" not in line and "？" not in line]
+    if not body:
+        return False
+    if all(normalize(line) and normalize(line) in normalized_answer for line in body):
+        return True
+    return len(body) > 1 and all(
+        normalize(line) and normalize(line) in normalized_answer for line in body[1:]
+    )
+
+
 def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> bool:
     """Reject replies that materially exceed the measured partner sentence range.
 
@@ -7843,6 +7979,10 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
     considerate response without allowing an unbounded reply.
     """
     if context.get("mode") != "reply":
+        return False
+    if _candidate_is_verified_answer_relay(candidate.text, context):
+        # The user's own confirmed answer keeps its lines; the ceiling must not
+        # force the answer to be trimmed or merged.
         return False
 
     history = context.get("history", [])
@@ -8480,20 +8620,18 @@ def _answer_lines_for_candidate(raw_answer: str) -> list[str]:
     return lines
 
 
-def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
-    """Synthesize 1 safe fallback candidate when all model candidates fail on an answered unclassified question."""
-    raw_answer = _unclassified_personal_question_user_answer(context)
-    if not raw_answer:
-        return None
+def _compose_answer_relay_candidate(
+    context: dict, question: str, raw_answer: str
+) -> Candidate | None:
+    """Compose the deterministic 相槌＋確認済み回答＋質問 candidate for one answer.
+
+    The answer text is relayed verbatim (one sentence per line) and the result
+    must still pass every candidate check except the length ceiling, which the
+    user's own answer must not be shortened to satisfy.
+    """
     clean_answer = "\n".join(_answer_lines_for_candidate(raw_answer))
     if not clean_answer:
         return None
-    partner_messages = [
-        str(item.get("body", ""))
-        for item in context.get("history", [])
-        if item.get("role") == "them"
-    ]
-    question = partner_messages[-1] if partner_messages else ""
     compound_parts = _compound_direct_personal_question_parts(question)
     if len(compound_parts) == 1:
         question = compound_parts[0][1]
@@ -8508,6 +8646,18 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
     )
     partner_shares_info = _partner_shares_info_with_question(question)
+    prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
+    last_prior_me = prior_me[-1] if prior_me else ""
+    if partner_label:
+        if casual:
+            followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
+        else:
+            followup = f"{partner_label}はどうですかね？" if f"{partner_label}はどうですか？" in last_prior_me else f"{partner_label}はどうですか？"
+    else:
+        if casual:
+            followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
+        else:
+            followup = "そちらはどうですかね？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
     if is_schedule_or_accept:
         if has_invitation_acceptance:
             ack = "うれしいな！" if casual else "うれしいです😊"
@@ -8520,32 +8670,8 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     elif partner_shares_info:
         ack = "そうなんだ！" if casual else "そうなんですね！"
-        prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
-        last_prior_me = prior_me[-1] if prior_me else ""
-        if partner_label:
-            if casual:
-                followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
-            else:
-                followup = f"{partner_label}はどうですかね？" if f"{partner_label}はどうですか？" in last_prior_me else f"{partner_label}はどうですか？"
-        else:
-            if casual:
-                followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
-            else:
-                followup = "そちらはどうですかね？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
-        prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
-        last_prior_me = prior_me[-1] if prior_me else ""
-        if partner_label:
-            if casual:
-                followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
-            else:
-                followup = f"{partner_label}はどうですかね？" if f"{partner_label}はどうですか？" in last_prior_me else f"{partner_label}はどうですか？"
-        else:
-            if casual:
-                followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
-            else:
-                followup = "そちらはどうですかね？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
         candidate_text = f"{clean_answer}\n{followup}"
     candidate = Candidate(
         label="回答を反映した返信",
@@ -8555,6 +8681,37 @@ def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate 
     if _candidate_rejection_reasons(candidate, context):
         return None
     return candidate
+
+
+def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
+    """Synthesize 1 safe fallback candidate when all model candidates fail on an answered unclassified question."""
+    raw_answer = _unclassified_personal_question_user_answer(context)
+    if not raw_answer:
+        return None
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    return _compose_answer_relay_candidate(context, question, raw_answer)
+
+
+def _build_answered_question_fallback_candidate(context: dict) -> Candidate | None:
+    """Relay the confirmed answer verbatim when every model candidate was rejected.
+
+    The candidate still has to pass the same checks as model output, so a relay
+    is only produced when the answer really addresses the partner's question.
+    """
+    focus = _partner_trailing_direct_question(context)
+    if not focus:
+        return None
+    ordered = _answers_for_partner_question(context)
+    for answer in ordered:
+        relay = _compose_answer_relay_candidate(context, focus, str(answer.get("answer", "")))
+        if relay is not None:
+            return relay
+    return None
 
 
 def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate | None:
@@ -8957,10 +9114,13 @@ def filter_safe_candidates(
         })
         return result
 
+    accepted, repetition_notice = _demote_repetitive_self_candidates(accepted, candidate_context)
     result["recommended"] = accepted[0].model_dump()
     result["alternatives"] = [candidate.model_dump() for candidate in accepted[1:]]
     result["generation_blocked"] = False
     notices: list[str] = []
+    if repetition_notice:
+        notices.append(repetition_notice)
     if deterministic_fallback_used:
         notices.append(
             "生成された候補が安全検査を通過しなかったため、確認済みの回答をそのまま反映した最小限の安全な候補を1案表示しています。"
@@ -9647,6 +9807,36 @@ def _generate_impl(data: GenerateInput):
                                 for answer in data.user_answers
                                 if (topic := _question_topic(answer.get("question", ""))) is not None
                             }
+                            if direct_ask and not data.skipped_user_info:
+                                relay_candidate = (
+                                    _build_answered_question_fallback_candidate(context)
+                                    or _build_unclassified_question_fallback_candidate(context)
+                                )
+                                if relay_candidate is not None:
+                                    return {
+                                        "needs_user_info": False,
+                                        "skipped_user_info": False,
+                                        "generation_blocked": False,
+                                        "user_questions": [],
+                                        "optional_user_questions": [],
+                                        "user_info_reason": "",
+                                        "recommended": relay_candidate.model_dump(),
+                                        "alternatives": [],
+                                        "reason": "",
+                                        "strategy": "確認済みの回答をそのまま反映しました。",
+                                        "conversation_stage": getattr(parsed, "conversation_stage", "") or "Stage 2",
+                                        "invite_decision": getattr(parsed, "invite_decision", "")
+                                        or "continue_conversation",
+                                        "decision_reason": "生成候補がすべて棄却されたため、確認済みの回答をそのまま返します。",
+                                        "next_action": "相手の返信を待ちます",
+                                        "candidate_notice": "生成された候補が安全検査を通過しなかったため、確認済みの回答をそのまま反映した最小限の安全な候補を1案表示しています。",
+                                        "deterministic_fallback_used": True,
+                                        "demo": False,
+                                        "api_alias": account,
+                                        "model": model,
+                                        "api_attempt_count": len(attempted_models),
+                                        "attempted_models": attempted_models,
+                                    }
                             if (
                                 direct_ask
                                 and "未確認の本人事実" in blocked_reasons

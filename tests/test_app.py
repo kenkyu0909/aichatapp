@@ -9313,11 +9313,15 @@ def test_unrelated_unsupported_claim_does_not_become_user_question(client, monke
 
     assert response.status_code == 200
     assert fake_models.calls == 2
-    assert body["generation_blocked"] is True, body
+    # T474: an answered direct question no longer stalls. The verified answer is
+    # relayed verbatim, and the unrelated personal claim is never shown.
+    assert body["generation_blocked"] is False, body
     assert body["needs_user_info"] is False
     assert body["user_questions"] == []
-    assert body["recommended"] is None and body["alternatives"] == []
-    assert "カフェ" not in body["blocking_reason"]
+    assert body["recommended"] is not None and body["alternatives"] == []
+    accepted_texts = [body["recommended"]["text"]]
+    assert all("カフェ" not in text for text in accepted_texts), body
+    assert "少し調べてから買います" in body["recommended"]["text"], body
 
 
 def test_unjustified_model_user_question_gets_one_safe_retry(client, monkeypatch):
@@ -15914,6 +15918,188 @@ def test_t473_reply_prompt_carries_the_natural_conversation_guidance(client):
     for mode in ("reply", "first", "followup", "like"):
         mode_prompt = backend.read_prompt(mode)
         assert "してみますか" in mode_prompt
+
+
+def test_t474_answered_question_stall_relays_the_answer(client, monkeypatch):
+    from google import genai
+
+    c, _backend = client
+    c.put("/api/profile", json={
+        "content": json.dumps({
+            "name": "水野そよか",
+            "job": "経理",
+            "hobbies": ["喫茶店めぐり", "小さな美術館", "読書"],
+            "memo": "休日は喫茶店めぐりが好きで窓ぎわの席で本を読んでいます。",
+        }, ensure_ascii=False),
+        "avoid": "根拠のない共通点",
+    })
+    mid = add_match(c, "架空くろかわ")
+    c.post(f"/api/matches/{mid}/messages", json={
+        "role": "them",
+        "body": "話がそれちゃいましたが、中野でよく寄る喫茶店はプリンが名物なんです！\n水野さんは甘いものは好きですか？",
+    })
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [],
+                "user_info_reason": "",
+                "recommended": {
+                    "label": "共有",
+                    "text": "甘いものは苦手なほうなんです\n最近は和菓子ばかり食べています",
+                    "reply_move": "grounded_share",
+                },
+                "alternatives": [],
+                "reason": "未確認の好みを共有する",
+                "strategy": "自己開示",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "会話を続ける段階です",
+                "next_action": "相手の返信を待ちます",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+        "user_answers": [
+            {
+                "question": "好きなカフェやお店の雰囲気があれば教えてください",
+                "answer": "静かな喫茶店で窓ぎわの席に座るのが好きです。",
+            },
+            {
+                "question": "相手の「水野さんは甘いものは好きですか？」にどう答えたいか教えてください",
+                "answer": "甘いものは好きです。喫茶店では季節のタルトをつい選んでしまいます。",
+            },
+        ],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is False, body
+    assert body["needs_user_info"] is False, body
+    assert body["recommended"] is not None, body
+    relay_text = body["recommended"]["text"]
+    assert "甘いものは好きです" in relay_text
+    assert "季節のタルト" in relay_text
+    assert "苦手" not in relay_text
+    assert body["deterministic_fallback_used"] is True, body
+
+
+def test_t474_answer_scope_must_match_the_partner_question(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "黒川はどういう雰囲気の喫茶店が好きですか？"},
+            {"role": "me", "body": "静かな喫茶店が好きです"},
+            {"role": "them", "body": "水野さんはどういう雰囲気の喫茶店が好きですか？"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [
+            {"question": "カフェに行く頻度はどのくらいですか？", "answer": "月に2回くらいです。"},
+        ],
+    }
+    assert backend._answered_question_answer(context) == ""
+    assert backend._build_answered_question_fallback_candidate(context) is None
+
+    matching = dict(context)
+    matching["ephemeral_user_answers"] = [
+        {"question": "カフェの雰囲気はどんな感じが好きですか？", "answer": "静かで落ち着いた雰囲気が好きです。"},
+    ]
+    assert backend._answered_question_answer(matching) != ""
+    assert backend._build_answered_question_fallback_candidate(matching) is not None
+
+
+def test_t474_repetitive_lines_and_questions_are_demoted(client):
+    _, backend = client
+
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "きれいな絵本を見てるだけでも癒やされますよね✨\nお気に入りの絵本とかはありますか？"},
+            {"role": "them", "body": "児童書のコーナーを見るのも好きです"},
+            {"role": "me", "body": "当日お会いできるのすごくワクワクしてきました✨"},
+            {"role": "them", "body": "私は紙の本ばかりです"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    repeated_line = backend.Candidate(
+        label="重複行", text="当日お会いできるのすごくワクワクしてきました✨"
+    )
+    repeated_question = backend.Candidate(
+        label="重複質問", text="紙の本いいですよね✨\nお気に入りの絵本とかはあったりしますか？"
+    )
+    fresh = backend.Candidate(label="新規", text="紙の本のめくり感覚わかります✨")
+    line_reasons = backend._recent_self_repetition_reasons(repeated_line.text, context)
+    assert "直近の自分の発言と同じ行" in line_reasons, line_reasons
+    question_reasons = backend._recent_self_repetition_reasons(repeated_question.text, context)
+    assert "直近の自分と同じ趣旨の質問" in question_reasons, question_reasons
+
+    ordered, notice = backend._demote_repetitive_self_candidates(
+        [repeated_line, repeated_question, fresh], context
+    )
+    assert ordered[0] is fresh
+    assert notice
+
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=repeated_line,
+        alternatives=[repeated_question, fresh],
+        reason="反応",
+        strategy="共有",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="会話を続けます",
+        next_action="返信を待ちます",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    assert filtered["recommended"]["text"] == fresh.text, filtered
+    assert "重ならない候補を先に表示" in filtered["candidate_notice"], filtered
+
+
+def test_t474_feelings_and_impressions_are_not_unverified_facts(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "私は甘いものだと絶対プリン派です！固めのプリンが好きで笑"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    for text in (
+        "それめっちゃわかります笑",
+        "えっそうなんですか！？",
+        "また話したいです",
+        "会えるの楽しみです",
+        "私もそう思います！",
+    ):
+        reasons = backend._candidate_rejection_reasons(backend.Candidate(label="感想", text=text), context)
+        assert "未確認の本人事実" not in reasons, (text, reasons)
+
+
+def test_t474_prompts_carry_deepening_and_impression_guidance(client):
+    _, backend = client
+    reply_prompt = backend.read_prompt("reply")
+    assert "一段だけ進め" in reply_prompt
+    assert "お気に入りの〜はありますか" in reply_prompt
+    assert "それめっちゃわかります笑" in reply_prompt
+    assert "本人の事実主張ではない" in reply_prompt
 
 
 def test_t473_condescending_offers_are_rewritten_or_rejected(client):
