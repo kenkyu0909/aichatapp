@@ -1092,6 +1092,23 @@ def _looks_like_question_text(text: str) -> bool:
     )
 
 
+def _is_ask_sentence(text: str) -> bool:
+    """True when the text itself ends with a question form.
+
+    ``「心に残っている本」ですか、先月読んだ…読み返しました。`` only echoes the
+    app's question inside the partner's own talk, so it must not count as an ask
+    the partner made.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    core = re.sub(r"[\s」』）)]+$", "", stripped)
+    if core.endswith("？") or core.endswith("?"):
+        return True
+    core = re.sub(r"[。．]+$", "", core)
+    return re.search(r"(ですか|ますか|ませんか|でしょうか|いかがですか|ますの|かしら)$", core) is not None
+
+
 def _last_question_sentence(text: str) -> str:
     """Return the clause that actually asks the user something.
 
@@ -1107,7 +1124,7 @@ def _last_question_sentence(text: str) -> str:
         return stripped
     sentences = [part.strip() for part in re.split(r"(?<=[。．！!?？])", stripped) if part.strip()]
     if len(sentences) >= 2:
-        question_sentences = [part for part in sentences if _looks_like_question_text(part)]
+        question_sentences = [part for part in sentences if _is_ask_sentence(part)]
         if len(question_sentences) != 1:
             return stripped
         sentence = question_sentences[0]
@@ -1116,7 +1133,7 @@ def _last_question_sentence(text: str) -> str:
     # ``…古本屋の帰りに美術館へ寄るのですが、水野さんはどんな展示を…``: the
     # leading clause is the partner's own talk, so only the asking clause counts.
     clauses = [part.strip() for part in re.split(r"[、，]", sentence) if part.strip()]
-    asking_clauses = [part for part in clauses if _looks_like_question_text(part)]
+    asking_clauses = [part for part in clauses if _is_ask_sentence(part)]
     if len(asking_clauses) == 1 and len(clauses) > 1:
         sentence = asking_clauses[0]
     return sentence

@@ -14872,6 +14872,30 @@ def test_museum_question_inside_statement_clause_is_still_asked(client):
     assert "美術館ではどんな展示" in preflight.question
 
 
+def test_echoed_confirmation_before_the_ask_does_not_hide_the_question(client):
+    _, backend = client
+    partner = (
+        "「心に残っている本」ですか、先月読んだ林芙美子の短編集がそれで、終わりの数行を何度も読み返しました。"
+        "それから、古本屋の帰りに小さな美術館へ寄ることも多く、先週は日本画の展示を見てきました。"
+        "水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+    )
+    ask = "水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+    assert backend._last_question_sentence(partner) == ask
+    assert backend._topic_for_personal_question(partner) == "読書"
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {"facts": {"hobbies": ["喫茶店めぐり", "小さな美術館", "読書"]}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._topic_is_verified("読書", context, partner) is True
+
+    preflight = backend.missing_personal_fact_question(context)
+    assert preflight is not None
+    assert "美術館ではどんな展示" in preflight.question
+
+
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
     client, tmp_path, monkeypatch
 ):
