@@ -1072,9 +1072,14 @@ def _topic_for_personal_question(text: str) -> str | None:
                 if re.search(r"[?？]|(?:ですか|ますか|でしょうか|何|どんな|どう|どこ|いつ|どちら|どの|教えて)", s)
             ]
             if q_sentences and q_sentences[-1] != text:
-                q_topic = _topic_for_personal_question(q_sentences[-1])
-                if q_topic:
+                last_q = q_sentences[-1]
+                q_topic = _topic_for_personal_question(last_q)
+                if q_topic and q_topic != "本人情報":
                     return q_topic
+                if q_topic == "本人情報":
+                    if re.search(r"仕事|経理|業務|職業|平日|日中|過ご|一日の流れ|ルーティン|スケジュール|休日|週末|性格|予定|空い|趣味", last_q):
+                        return "本人情報"
+
     # Do not mistake a question about a third party or a general service for
     # a request for the user's own information merely because it mentions a
     # personal topic.
