@@ -16108,6 +16108,29 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t475_short_reaction_repeat_is_demoted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "そうですね！\nお会いできるの本当に楽しみにしてます✨"},
+            {"role": "them", "body": "また土曜日に！よい週末を"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    repeated = backend.Candidate(label="反応反復", text="そうですね！")
+    fresh = backend.Candidate(label="別の話題", text="週末はお互いゆっくり過ごせるといいですね✨")
+    reasons = backend._recent_self_repetition_reasons(repeated.text, context)
+    assert "直近の自分の発言と同じ行" in reasons, reasons
+    ordered, notice = backend._demote_repetitive_self_candidates([repeated, fresh], context)
+    assert ordered[0] is fresh
+    assert notice
+
+
 def test_t475_prompts_carry_topic_switch_and_tsukkomi_guidance(client):
     _, backend = client
     reply_prompt = backend.read_prompt("reply")

@@ -7940,7 +7940,7 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
     reasons: list[str] = []
     for line in text.splitlines():
         key = _normalized_repetition_key(line)
-        if len(key) >= 6 and key in prior_lines:
+        if len(key) >= 5 and key in prior_lines:
             reasons.append("直近の自分の発言と同じ行")
             break
     for line in text.splitlines():
