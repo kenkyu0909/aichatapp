@@ -7898,6 +7898,24 @@ def _question_intent_key(line: str) -> str:
     return value
 
 
+_REPETITION_NOUN_STOPWORDS = {
+    "自分", "相手", "最近", "普段", "今日", "明日", "昨日", "毎日", "今回", "本当", "感じ",
+    "気持ち", "時間", "場所", "方針", "予定", "質問", "回答", "話題", "内容", "会話",
+}
+
+_REPETITION_INTERROGATIVES = (
+    "どんな", "どの", "どちら", "どっち", "どこ", "なに", "いつ", "いくつ", "お気に入り", "好きな",
+)
+
+_TOGETHER_CLOSING_THEME = re.compile(r"当日|お会いできる|会えるの|楽しみ")
+
+
+def _content_nouns(text: str) -> set[str]:
+    """Salient noun candidates (kanji or katakana runs) used to compare topics."""
+    tokens = re.findall(r"[一-龯]{2,}|[ァ-ヶー]{2,}", str(text))
+    return {token for token in tokens if token not in _REPETITION_NOUN_STOPWORDS}
+
+
 def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6) -> list[str]:
     """Reasons why a candidate repeats the user's own recent lines or questions."""
     prior_me = [
@@ -7932,6 +7950,39 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         if len(key) >= 5 and key in prior_questions:
             reasons.append("直近の自分と同じ趣旨の質問")
             break
+    recent = prior_me[-2:]
+    if _TOGETHER_CLOSING_THEME.search(text) and any(
+        _TOGETHER_CLOSING_THEME.search(str(body)) for body in recent
+    ):
+        # Once the plan is fixed, "I look forward to that day" lines repeat easily.
+        reasons.append("直近と同じ趣旨の行")
+    candidate_questions = [line for line in text.splitlines() if _is_ask_sentence(line)]
+    if candidate_questions:
+        candidate_nouns = {
+            token for line in candidate_questions for token in _content_nouns(line)
+        }
+        recent_nouns = {
+            token
+            for body in recent
+            for line in str(body).splitlines()
+            if _is_ask_sentence(line)
+            for token in _content_nouns(line)
+        }
+        if candidate_nouns & recent_nouns:
+            reasons.append("同じ話題の質問が続く")
+        candidate_interrogatives = {
+            token for line in candidate_questions for token in _REPETITION_INTERROGATIVES if token in line
+        }
+        recent_interrogatives = {
+            token
+            for body in recent
+            for line in str(body).splitlines()
+            if _is_ask_sentence(line)
+            for token in _REPETITION_INTERROGATIVES
+            if token in line
+        }
+        if candidate_interrogatives & recent_interrogatives:
+            reasons.append("同じ話題の質問が続く")
     return reasons
 
 
@@ -8714,9 +8765,13 @@ def _compose_answer_relay_candidate(
             followup = "そっちは都合どう？" if casual else "そちらはご都合どうですか？"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     elif partner_shares_info:
-        ack = "そうなんだ！" if casual else "そうなんですね！"
+        # The partner shared their own news and then asked a question. Acknowledge
+        # the news briefly instead of the "I see" reaction: a question turn should
+        # not open with そうなんですね！ (T455/T475).
+        ack = "いいね！" if casual else "いいですね！"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
+        # A pure question turn: answer first, without a reaction line.
         candidate_text = f"{clean_answer}\n{followup}"
     candidate = Candidate(
         label="回答を反映した返信",

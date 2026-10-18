@@ -16016,6 +16016,108 @@ def test_t474_answer_scope_must_match_the_partner_question(client):
     assert backend._build_answered_question_fallback_candidate(matching) is not None
 
 
+def test_t475_same_topic_question_streak_is_demoted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "絵本も素敵ですね📚\nお気に入りの絵本とかってあるんですか？"},
+            {"role": "them", "body": "絵本は色づかいがきれいなものをよく眺めます"},
+            {"role": "me", "body": "きれいな絵本を見るのワクワクします✨\nどんな絵本が好きなんですか？"},
+            {"role": "them", "body": "きれいな色のものをよく見ます"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    third_question = backend.Candidate(
+        label="同じ話題", text="色づかいがきれいな絵本いいですね✨\nどんなデザインやイラストが好きなんですか？"
+    )
+    other_topic = backend.Candidate(
+        label="別の話題", text="紙の本のめくり感覚っていいですよね😊"
+    )
+    reasons = backend._recent_self_repetition_reasons(third_question.text, context)
+    assert "同じ話題の質問が続く" in reasons, reasons
+    ordered, notice = backend._demote_repetitive_self_candidates(
+        [third_question, other_topic], context
+    )
+    assert ordered[0] is other_topic
+    assert notice
+
+
+def test_t475_closing_lines_after_schedule_are_demoted(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "土曜の午後なら大丈夫です\n14時ごろからだと嬉しいです"},
+            {"role": "them", "body": "14時いいですね！駅の近くで待ち合わせましょー"},
+            {"role": "me", "body": "当日お会いできるのが今から楽しみですね✨"},
+            {"role": "them", "body": "私は入口側の席が落ち着きます笑"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    repetitive = backend.Candidate(
+        label="楽しみ反復", text="入口側の席いいですよね\n当日お会いできるのがますます楽しみです✨"
+    )
+    fresh_topic = backend.Candidate(
+        label="別の話題", text="入口側の席ってすごく落ち着きますよね笑\n中野の喫茶店はモーニングも人気なんですか？"
+    )
+    reasons = backend._recent_self_repetition_reasons(repetitive.text, context)
+    assert "直近と同じ趣旨の行" in reasons, reasons
+    ordered, notice = backend._demote_repetitive_self_candidates([repetitive, fresh_topic], context)
+    assert ordered[0] is fresh_topic
+    assert notice
+
+
+def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client):
+    _, backend = client
+    shared_then_asked = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "そういえば休みの日は古本屋をのぞいたり街をぶらぶら歩いたりしてます\n水野さんは外に出かける方ですか？"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [
+            {"question": "旅行はお好きですか？", "answer": "旅行は好きです。景色の写真を撮るために出かけることもあります。"},
+        ],
+    }
+    relay = backend._build_answered_question_fallback_candidate(shared_then_asked)
+    assert relay is not None
+    assert relay.text.splitlines()[0] == "いいですね！", relay.text
+    assert "そうなんですね！" not in relay.text
+
+    pure_question = dict(shared_then_asked)
+    pure_question["history"] = [
+        {"role": "them", "body": "水野さんは甘いものは好きですか？"},
+    ]
+    pure_question["ephemeral_user_answers"] = [
+        {"question": "相手の「水野さんは甘いものは好きですか？」にどう答えたいか教えてください", "answer": "甘いものは好きです。"},
+    ]
+    simple_relay = backend._build_answered_question_fallback_candidate(pure_question)
+    assert simple_relay is not None
+    assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
+
+
+def test_t475_prompts_carry_topic_switch_and_tsukkomi_guidance(client):
+    _, backend = client
+    reply_prompt = backend.read_prompt("reply")
+    assert "同じ話題で質問するのは1〜2往復まで" in reply_prompt
+    assert "当日が楽しみ" in reply_prompt
+    assert "話題として拾ってかまいません" in reply_prompt
+    assert "それは気になります笑" in reply_prompt
+    assert "そうなんですね！" in reply_prompt
+
+
 def test_t474_partial_answer_lines_are_not_accepted_as_a_relay(client):
     _, backend = client
     context = {
