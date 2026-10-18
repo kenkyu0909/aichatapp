@@ -8218,7 +8218,7 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
 
 
 
-_ACK_POOL_POLITE = ("そうなんですね！", "いいですね！", "なるほどですね！")
+_ACK_POOL_POLITE = ("そうなんですね！", "いいですね！", "わかります！")
 _ACK_POOL_CASUAL = ("そうなんだ！", "いいね！", "なるほど！")
 
 

@@ -15281,6 +15281,6 @@ def test_acknowledgment_supplement_keeps_original_when_recheck_fails(client, mon
 def _strip_leading_ack(text):
     """Drop a deterministic leading acknowledgment line (T468) added by the final pass."""
     first, _, rest = text.partition("\n")
-    if rest and first in {"そうなんですね！", "いいですね！", "なるほどですね！", "そうなんだ！", "いいね！", "なるほど！"}:
+    if rest and first in {"そうなんですね！", "いいですね！", "わかります！", "そうなんだ！", "いいね！", "なるほど！"}:
         return rest
     return text
