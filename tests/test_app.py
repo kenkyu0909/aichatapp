@@ -16016,6 +16016,30 @@ def test_t474_answer_scope_must_match_the_partner_question(client):
     assert backend._build_answered_question_fallback_candidate(matching) is not None
 
 
+def test_t474_invitation_turn_relays_answer_with_acceptance(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "手作りのカレーとドーナツどちらも美味しそうですね！\nちなみにその喫茶店はどんな雰囲気のお店なんですか？"},
+            {"role": "them", "body": "今度よかったらご飯でも行きませんか？おいしいカレーのお店があるんです"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め。質問は一度にひとつ"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [
+            {"question": "カレーの種類や具で好きなものを教えてください", "answer": "カレーは中辛で野菜がたくさん入っているのが好きです。"},
+        ],
+        "session_answers": [],
+    }
+    relay = backend._build_answered_question_fallback_candidate(context)
+    assert relay is not None
+    assert backend.candidate_answers_partner_invitation(relay.text) is True
+    assert "カレーは中辛で野菜がたくさん入っているのが好きです" in relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
 def test_t474_repetitive_lines_and_questions_are_demoted(client):
     _, backend = client
 

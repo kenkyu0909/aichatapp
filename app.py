@@ -7950,12 +7950,19 @@ def _demote_repetitive_self_candidates(
 
 def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     """True when the candidate body is the user's own confirmed answer text."""
-    raw_answer = _answered_question_answer(context) or _unclassified_personal_question_user_answer(context)
-    if not raw_answer:
-        return False
     normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
-    normalized_answer = normalize(raw_answer)
-    if not normalized_answer:
+    sources: list[str] = []
+    direct_answer = _answered_question_answer(context) or _unclassified_personal_question_user_answer(context)
+    if direct_answer:
+        sources.append(normalize(direct_answer))
+    if partner_latest_message_has_invitation(context):
+        sources.extend(
+            normalize(answer.get("answer", ""))
+            for answer in (context.get("ephemeral_user_answers") or [])
+            if normalize(answer.get("answer", ""))
+        )
+    sources = [source for source in sources if source]
+    if not sources:
         return False
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines or len(lines) > 5:
@@ -7963,11 +7970,24 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     body = [line for line in lines if "?" not in line and "？" not in line]
     if not body:
         return False
-    if all(normalize(line) and normalize(line) in normalized_answer for line in body):
-        return True
-    return len(body) > 1 and all(
-        normalize(line) and normalize(line) in normalized_answer for line in body[1:]
-    )
+    matched = [
+        line for line in body if normalize(line) and any(normalize(line) in source for source in sources)
+    ]
+    if not matched:
+        return False
+    unmatched = [line for line in body if line not in matched]
+    return all(_is_answer_relay_template_line(line) for line in unmatched)
+
+
+_ANSWER_RELAY_TEMPLATE_LINE = re.compile(
+    r"^(?:いいですね|ぜひ行きましょ|ぜひ行きましょう|そうなんですね|そうなんだ|うれしいです|うれしいな|"
+    r"ありがとうございます|ありがとう|そちらは|そっちは|.{1,8}さんはどう)"
+)
+
+
+def _is_answer_relay_template_line(line: str) -> bool:
+    """True when the line is one of the deterministic relay's own openers."""
+    return bool(_ANSWER_RELAY_TEMPLATE_LINE.match(line.strip()))
 
 
 def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> bool:
@@ -8646,6 +8666,7 @@ def _compose_answer_relay_candidate(
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
     )
     partner_shares_info = _partner_shares_info_with_question(question)
+    partner_invites = partner_latest_message_has_invitation(context)
     prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
     last_prior_me = prior_me[-1] if prior_me else ""
     if partner_label:
@@ -8658,7 +8679,10 @@ def _compose_answer_relay_candidate(
             followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
         else:
             followup = "そちらはどうですかね？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
-    if is_schedule_or_accept:
+    if partner_invites:
+        accept_line = "ぜひ行きましょー" if casual else "ぜひ行きましょう😊"
+        candidate_text = f"いいですね！\n{accept_line}\n{clean_answer}\n{followup}"
+    elif is_schedule_or_accept:
         if has_invitation_acceptance:
             ack = "うれしいな！" if casual else "うれしいです😊"
         else:
@@ -8707,6 +8731,12 @@ def _build_answered_question_fallback_candidate(context: dict) -> Candidate | No
     if not focus:
         return None
     ordered = _answers_for_partner_question(context)
+    if partner_latest_message_has_invitation(context):
+        # An invitation asks for a decision, not for one specific fact. Any
+        # answer already confirmed in this turn may accompany the acceptance.
+        for answer in reversed(context.get("ephemeral_user_answers") or []):
+            if answer not in ordered and str(answer.get("answer", "")).strip():
+                ordered.append(answer)
     for answer in ordered:
         relay = _compose_answer_relay_candidate(context, focus, str(answer.get("answer", "")))
         if relay is not None:
