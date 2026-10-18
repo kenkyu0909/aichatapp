@@ -1093,12 +1093,12 @@ def _looks_like_question_text(text: str) -> bool:
 
 
 def _last_question_sentence(text: str) -> str:
-    """Return the only question sentence when a message ends with one ask.
+    """Return the clause that actually asks the user something.
 
     A partner message often mixes their own statements with a single question at
     the end (``…旅先の古本屋は面白いんです。水野さんはどんな展示を見ますか？``).
     Classifying the whole text lets words from those statements pick the topic
-    and hides the real ask, so guards classify this sentence instead. Messages
+    and hides the real ask, so guards classify this clause instead. Messages
     that ask several questions keep their original text so compound handling and
     scope checks stay intact.
     """
@@ -1106,12 +1106,20 @@ def _last_question_sentence(text: str) -> str:
     if not stripped:
         return stripped
     sentences = [part.strip() for part in re.split(r"(?<=[。．！!?？])", stripped) if part.strip()]
-    if len(sentences) < 2:
-        return stripped
-    question_sentences = [part for part in sentences if _looks_like_question_text(part)]
-    if len(question_sentences) != 1:
-        return stripped
-    return question_sentences[0]
+    if len(sentences) >= 2:
+        question_sentences = [part for part in sentences if _looks_like_question_text(part)]
+        if len(question_sentences) != 1:
+            return stripped
+        sentence = question_sentences[0]
+    else:
+        sentence = stripped
+    # ``…古本屋の帰りに美術館へ寄るのですが、水野さんはどんな展示を…``: the
+    # leading clause is the partner's own talk, so only the asking clause counts.
+    clauses = [part.strip() for part in re.split(r"[、，]", sentence) if part.strip()]
+    asking_clauses = [part for part in clauses if _looks_like_question_text(part)]
+    if len(asking_clauses) == 1 and len(clauses) > 1:
+        sentence = asking_clauses[0]
+    return sentence
 
 
 def _replace_last_partner_body(context: dict, body: str) -> dict:
@@ -2338,6 +2346,17 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
     return False
 
 
+def _focus_question_carries_own_subject(text: str) -> bool:
+    """Tell a self-contained ask apart from a short follow-up that leans on the previous line.
+
+    ``水野さんは美術館ではどんな展示を…`` names its own subject, so it must be
+    checked even when the rest of the message is about another confirmed topic.
+    ``よく行きますか？`` only makes sense against the sentence before it, so the
+    whole message stays the unit of classification there.
+    """
+    return re.search(r"どんな|どの|どちら|どれ|どこ|何|なに|いつ|いくつ", text) is not None
+
+
 def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     """Preflight explicit personal questions against user-confirmed facts.
 
@@ -2349,8 +2368,6 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     partner described their own bookshops).
     """
     question = _missing_personal_fact_question_once(context)
-    if question is None:
-        return None
     partner_messages = [
         str(item.get("body", "")) for item in context.get("history", []) if item.get("role") == "them"
     ]
@@ -2362,7 +2379,11 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     focused = _missing_personal_fact_question_once(
         _replace_last_partner_body(context, focus)
     )
-    if focused is not None:
+    if (
+        focused is not None
+        and (question is None or focused.question != question.question)
+        and _focus_question_carries_own_subject(focus)
+    ):
         return focused
     return question
 

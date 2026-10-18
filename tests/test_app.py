@@ -14756,7 +14756,10 @@ def test_last_question_sentence_only_trims_a_single_trailing_question(client):
     _, backend = client
 
     mixed = "旅先の古本屋は面白いんです。水野さんは美術館では、どんな展示を見ますか？"
-    assert backend._last_question_sentence(mixed) == "水野さんは美術館では、どんな展示を見ますか？"
+    assert backend._last_question_sentence(mixed) == "どんな展示を見ますか？"
+
+    statement_then_ask = "古本屋の帰りに美術館へ寄ることも多いのですが、水野さんはどんな展示を見ますか？"
+    assert backend._last_question_sentence(statement_then_ask) == "水野さんはどんな展示を見ますか？"
 
     compound = "映画館派ですか？それとも家で観る派ですか？今度一緒に映画を観に行きませんか？"
     assert backend._last_question_sentence(compound) == compound
@@ -14816,15 +14819,16 @@ def test_museum_question_after_partner_story_is_asked_and_enforced(client):
     }
     preflight = backend.missing_personal_fact_question(context)
     assert preflight is not None
-    assert question in preflight.question
+    ask = "どんな展示を見に行かれることが多いですか？"
+    assert ask in preflight.question
 
-    answer_question = f"相手の「{question}」にどう答えたいか教えてください"
+    answer_question = f"相手の「{ask}」にどう答えたいか教えてください"
     answer = "京都と横浜で、日本画の小さな企画展を見に行くことが多いです。"
     answered = {
         **context,
         "ephemeral_user_answers": [{"question": answer_question, "answer": answer}],
     }
-    assert backend._topic_is_verified("本人情報", answered, question) is True
+    assert backend._topic_is_verified("本人情報", answered, ask) is True
 
     evasive = backend.Candidate(
         label="話題転換",
@@ -14838,6 +14842,34 @@ def test_museum_question_after_partner_story_is_asked_and_enforced(client):
         text="京都と横浜で日本画の小さな企画展を見に行くことが多いです\n最近は何か気になる展示はありましたか？",
     )
     assert backend._candidate_rejection_reasons(direct, answered) == []
+
+
+def test_museum_question_inside_statement_clause_is_still_asked(client):
+    _, backend = client
+    partner = (
+        "「当時の街の匂いまで想像できる」と言っていただけると、うれしくなります。"
+        "作家で言うと、岡本かの子や林芙美子の随筆をよく読み返しています。"
+        "古本屋の帰りに小さな美術館へ寄ることも多いのですが、水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+    )
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {
+            "facts": {
+                "hobbies": ["喫茶店めぐり", "小さな美術館", "読書"],
+                "style": "丁寧で自然な敬語。質問は一度にひとつ",
+            }
+        },
+        "ephemeral_user_answers": [],
+    }
+    # The whole message reads as the partner's reading talk and 読書 is already
+    # confirmed, which used to excuse the museum question.
+    assert backend._topic_for_personal_question(partner) == "読書"
+    assert backend._topic_is_verified("読書", context, partner) is True
+
+    preflight = backend.missing_personal_fact_question(context)
+    assert preflight is not None
+    assert "美術館ではどんな展示" in preflight.question
 
 
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
