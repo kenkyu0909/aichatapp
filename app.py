@@ -7559,8 +7559,8 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
         partner_sentences >= 2
         or _unclassified_personal_question_user_answer(context) is not None
     ) and _candidate_is_acknowledgment_plus_question(candidate.text):
-        # Allow the acknowledge-then-ask shape one extra line, capped at three.
-        maximum_sentences = min(maximum_sentences + 1, 3)
+        # Allow the acknowledge-then-ask shape one extra line without reducing longer ceilings.
+        maximum_sentences = max(maximum_sentences, min(maximum_sentences + 1, 4))
     return _candidate_sentence_count(candidate.text) > maximum_sentences
 
 
