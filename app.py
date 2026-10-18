@@ -515,8 +515,8 @@ class RequestDeadlineExceededError(RuntimeError):
 
 
 INVITATION_PATTERN = re.compile(
-    r"(?:一緒に|ご一緒に).{0,16}(?:行きません|行ってみません|行けたら|どうですか|しませんか)|"
-    r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか))|"
+    r"(?:一緒に?|ご一緒に?).{0,16}(?:行きません|行ってみません|行けたら|どうですか|しませんか|しません)|"
+    r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか|しません))|"
     r"(?:近いうちに|近々|そのうち|近日|いずれ).{0,20}(?:(?:お)?(?:会い|行き|来|食べ)し?ません(?:か|？|\?)|(?:お)?(?:会い|行き)(?:ましょう|ましょうか)|(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}どう(?:ですか|でしょう|？|\?))|"
     r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
 )
@@ -6713,7 +6713,11 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             any(_frequency_claim_is_supported(segment, evidence) for evidence in frequency_evidence)
             for segment in frequency_answers
         )
-    if topic == "本人情報" and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question):
+    if (
+        topic == "本人情報"
+        and re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question)
+        and not re.search(r"過ご|一日の流れ|どんな一日|どういう一日|ルーティン", question)
+    ):
         # Profile-backed occupation facts are trusted evidence, but the generic
         # confirmation validator below only accepts ephemeral user answers.
         # Match concise answers to the exact profile value and keep additional
@@ -7681,6 +7685,28 @@ def _is_duplicate_or_near_identical_to_prior_me(candidate_text: str, prior_me_te
     return False
 
 
+PARTNER_INVITATION_RESPONSE_PATTERN = re.compile(
+    r"ぜひ(?:ご一緒|行き|お話し|お話|行けたら|行こう|お願いします|よろしく|楽しみに)?|"
+    r"(?:喜んで|うれしい|嬉しい|ありがとうございます|お誘い|ご提案).{0,24}(?:ぜひ|ご一緒|行きたい|嬉しい|うれしい|楽しみ|話|行けたら|お会い)|"
+    r"(?:一緒|ご一緒).{0,16}(?:行きたい|行きましょう|行けたら|楽しみ|しましょう|お話し)|"
+    r"(?:行きたい|行きます|楽しみにして|楽しみにしてい|楽しみです|楽しみだな|心待ち|お会いできるの)"
+)
+
+
+def partner_latest_message_has_invitation(context: dict) -> bool:
+    """True when the latest partner message proposes meeting, cafe, meal, etc."""
+    history = context.get("history", [])
+    latest_partner = next((m for m in reversed(history) if m.get("role") == "them"), None)
+    if not latest_partner:
+        return False
+    return bool(INVITATION_PATTERN.search(str(latest_partner.get("body", ""))))
+
+
+def candidate_answers_partner_invitation(candidate_text: str) -> bool:
+    """True when candidate explicitly accepts, welcomes, or confirms partner invitation."""
+    return bool(PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text))
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -7738,6 +7764,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("会うことへの慎重さの直後の質問")
     if partner_latest_message_expresses_meeting_unease(context) and MINIMIZING_REASSURANCE_PATTERN.search(text):
         reasons.append("相手の不安を軽く扱う表現")
+    if partner_latest_message_has_invitation(context) and not candidate_answers_partner_invitation(text):
+        reasons.append("相手からの誘いに未回答")
     return reasons
 
 
@@ -8229,6 +8257,15 @@ _ACK_POOL_POLITE = ("そうなんですね！", "いいですね！", "わかり
 _ACK_POOL_CASUAL = ("そうなんだ！", "いいね！", "なるほど！")
 
 
+PARTNER_REACTION_CLAUSE_PATTERN = re.compile(
+    r"^(?:そうなんですね|そうなんですか|そうなんだ|そうなんだね|なるほど|たしかに|確かに|"
+    r"いいですね|いいね|素敵ですね|すてきですね|楽しそうですね|楽しそうだね|面白そうですね|おもしろそうですね|"
+    r"美味しそうですね|おいしそうですね|落ち着きますよね|ぴったりですね|ぴったりです|"
+    r".{0,40}(?:気持ちよさそう|楽しそう|面白そう|美味しそう|素敵|すてき|良さそう|よさそう|行きたい|気になる|憧れます)(?:ですね|ですよね|です|ます|だね|だよ)?[！!。]?|"
+    r"(?:気分転換|息抜き|リフレッシュ).{0,10}(?:になりますね|になりそう|ですね|ぴったりです|ですね)[！!。]?)$"
+)
+
+
 def _partner_latest_message_shares_new_info(context: dict) -> bool:
     """True when the latest partner message carries news/opinions (not question-only, refusal, farewell or heavy topics)."""
     if context.get("mode") not in {"reply", "followup"}:
@@ -8258,7 +8295,11 @@ def _partner_latest_message_shares_new_info(context: dict) -> bool:
         cleaned = re.sub(
             r"^(?:こんにちは|こんばんは|はじめまして|マッチありがとう(?:ございます)?|ありがとうございます|よろしくお?願いします)[！!、\s]*", "", sentence
         )
-        if len(cleaned) >= 6 and not _candidate_has_partner_question(cleaned):
+        if (
+            len(cleaned) >= 6
+            and not _candidate_has_partner_question(cleaned)
+            and not PARTNER_REACTION_CLAUSE_PATTERN.match(cleaned.strip())
+        ):
             return True
     return False
 

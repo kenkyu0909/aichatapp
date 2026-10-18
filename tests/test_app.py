@@ -15284,3 +15284,46 @@ def _strip_leading_ack(text):
     if rest and first in {"そうなんですね！", "いいですね！", "わかります！", "そうなんだ！", "いいね！", "なるほど！"}:
         return rest
     return text
+
+
+
+def test_candidate_ignoring_partner_invitation_is_rejected(client):
+    _, backend = client
+    p = "もしよろしければ、今度その古民家カフェをご一緒しませんか？美味しいタルトと珈琲を楽しみながら、本の話などできたら嬉しいです。"
+    context = {"mode": "reply", "history": [{"role": "them", "body": p}]}
+    ignoring_cand = backend.Candidate(
+        label="スルー",
+        text="緑に囲まれた静かな古民家カフェとても素敵ですね！\nそこのカフェのコーヒーやスイーツはどんな種類があるのでしょうか？",
+        reply_move="expand",
+    )
+    answering_cand = backend.Candidate(
+        label="承諾",
+        text="素敵なご提案をありがとうございます！\n緑に囲まれた古民家カフェでゆっくりお話しできるのを楽しみにしています😊",
+        reply_move="react",
+    )
+    assert "相手からの誘いに未回答" in backend._candidate_rejection_reasons(ignoring_cand, context)
+    assert "相手からの誘いに未回答" not in backend._candidate_rejection_reasons(answering_cand, context)
+
+
+def test_work_day_routine_question_does_not_accept_bare_occupation(client):
+    _, backend = client
+    q = "普段お仕事の日はどんな風に過ごされているんですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": q}],
+        "my_profile": {"facts": {"job": "経理", "occupation": "経理"}},
+        "ephemeral_user_answers": [],
+    }
+    bare_occupation_cand = backend.Candidate(
+        label="職業",
+        text="経理の仕事をしています\n黒川さんはどうですか？",
+        reply_move="react",
+    )
+    assert not backend._answers_verified_single_partner_question(bare_occupation_cand, context)
+
+
+def test_pure_reaction_plus_question_skips_new_info_acknowledgment(client):
+    _, backend = client
+    p = "海沿いの散歩、潮風を感じられてすごく気持ちよさそうですね！気分転換にもぴったりです。そよかさんは普段お仕事の日はどんな風に過ごされているんですか？"
+    context = {"mode": "reply", "history": [{"role": "them", "body": p}]}
+    assert not backend._partner_latest_message_shares_new_info(context)
