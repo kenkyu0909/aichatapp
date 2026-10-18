@@ -1067,6 +1067,63 @@ def _is_user_relationship_status_question(text: str) -> bool:
     ))
 
 
+PREFERENCE_QUESTION_CUE = re.compile(
+    r"(?:好き|お好き)(?:な(?:の|ん)?(?:です)?|です|でした|だ|だった)?(?:ですか|でしょうか|なんですか|なんですね|かな|か|っけ)"
+    r"|(?:何|なに|どんな|どの|どれ|どういう|どのへん)[^。\n！!?？]{0,16}(?:好き|お好き)"
+    r"|(?:好き|お好き)[^。\n！!?？]{0,12}(?:ありますか|いますか|ますか|ですか|でしょうか|教えて)"
+    r"|(?:好き|お好き)[^。\n！!?？]{0,8}[?？]"
+)
+
+
+def _has_preference_question_cue(text: str) -> bool:
+    """Return True only when a preference word is used as a question.
+
+    ``喫茶店が好きです`` and ``…雰囲気でした`` are the partner's own statements;
+    a bare ``好き`` in them must not be read as a question about the user.
+    """
+    return bool(PREFERENCE_QUESTION_CUE.search(text))
+
+
+def _looks_like_question_text(text: str) -> bool:
+    """Return True when the text carries an explicit question marker."""
+    return bool(
+        re.search(r"[?？]|ですか|ますか|でしょうか|ませんか|んですか|ましたか|ください|教えて", text)
+        or UNPUNCTUATED_CASUAL_PERSONAL_QUESTION.search(text)
+    )
+
+
+def _last_question_sentence(text: str) -> str:
+    """Return the only question sentence when a message ends with one ask.
+
+    A partner message often mixes their own statements with a single question at
+    the end (``…旅先の古本屋は面白いんです。水野さんはどんな展示を見ますか？``).
+    Classifying the whole text lets words from those statements pick the topic
+    and hides the real ask, so guards classify this sentence instead. Messages
+    that ask several questions keep their original text so compound handling and
+    scope checks stay intact.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return stripped
+    sentences = [part.strip() for part in re.split(r"(?<=[。．！!?？])", stripped) if part.strip()]
+    if len(sentences) < 2:
+        return stripped
+    question_sentences = [part for part in sentences if _looks_like_question_text(part)]
+    if len(question_sentences) != 1:
+        return stripped
+    return question_sentences[0]
+
+
+def _replace_last_partner_body(context: dict, body: str) -> dict:
+    """Return a copy of the context whose last partner message carries ``body``."""
+    history = list(context.get("history", []))
+    for index in range(len(history) - 1, -1, -1):
+        if history[index].get("role") == "them":
+            history[index] = {**history[index], "body": body}
+            return {**context, "history": history}
+    return context
+
+
 def _topic_for_personal_question(text: str) -> str | None:
     if re.search(r"[。\n！!]+|(?<=[?？])\s*", text):
         sentences = [s.strip() for s in re.split(r"[。\n！!]+|(?<=[?？])\s*", text) if s.strip()]
@@ -1377,7 +1434,7 @@ def _topic_for_personal_question(text: str) -> str | None:
                 if re.search(r"映画.{0,10}(?:観ますか|見ますか|観るんですか|見るんですか|観ることありますか|見ることありますか)", text):
                     return "映画"
             # Do not mistake statements about the partner for a question about the user.
-            if re.search(r"(?:あなた|自分|普段|最近|好き|お好き|予定|タイプ|頻度|経験|何系|どんな(?!に|.{0,12}でも)|どの(?![^?？!！\r\n]{0,12}でも)|どこ(?![へにとからまで]?でも|か)|何が|何ですか|教えて|おすすめ|週末|(?<!つ)いつ(?!い|か|も|でも|までも|だって)|地域|どのあたり)", text):
+            if _has_preference_question_cue(text) or re.search(r"(?:あなた|自分|普段|最近|予定|タイプ|頻度|経験|何系|どんな(?!に|.{0,12}でも)|どの(?![^?？!！\r\n]{0,12}でも)|どこ(?![へにとからまで]?でも|か)|何が|何ですか|教えて|おすすめ|週末|(?<!つ)いつ(?!い|か|も|でも|までも|だって)|地域|どのあたり)", text):
                 return topic
     # Japanese often omits the subject; safely ask about an otherwise unknown
     # personal preference, habit, or experience instead of inventing one.
@@ -1386,7 +1443,7 @@ def _topic_for_personal_question(text: str) -> str | None:
         text,
     ):
         return None
-    if re.search(
+    if _looks_like_question_text(text) and re.search(
         r"(?:普段|最近|これまで|経験|タイプ|派ですか|それとも|どちら|得意|作れる|できます|何かできる|頻度|好き|お好き|よく|何系|どんな(?!に|.{0,12}(?:でも|にも|へも|とも|からも|までも))|何を|どこ(?![へにとからまで]?(?:でも|も)|か)|どの(?![^?？!！\r\n]{0,12}(?:でも|にも|へも|とも|からも|までも))|住ん|地域|食べた|買|観た|見た|読んだ|担当業務|どういう仕事|どんな(?:お)?職業|どんな(?:お)?仕事|どんな(?:お)?業務|どんな分野.{0,6}(?:お仕事|仕事)|業界|業種|仕事|学校|休日|週末|性格|予定|空い|趣味|おすすめ)",
         text,
     ):
@@ -2282,11 +2339,36 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
 
 
 def missing_personal_fact_question(context: dict) -> UserQuestion | None:
-    """Preflight explicit personal questions against user-confirmed profile/answer facts.
+    """Preflight explicit personal questions against user-confirmed facts.
 
-    Prior app-side messages are intentionally excluded: historical AI text may contain
-    hallucinated personal claims and is not a source of truth.
+    A message whose body mixes the partner's own statements with a single
+    trailing question is first checked as the whole text, then re-checked as the
+    trailing question alone. That keeps answers recorded against the full
+    message valid while still asking about the question the partner actually
+    ended with (for example a question about the user's museums after the
+    partner described their own bookshops).
     """
+    question = _missing_personal_fact_question_once(context)
+    if question is None:
+        return None
+    partner_messages = [
+        str(item.get("body", "")) for item in context.get("history", []) if item.get("role") == "them"
+    ]
+    if not partner_messages:
+        return question
+    focus = _last_question_sentence(partner_messages[-1])
+    if focus == partner_messages[-1].strip():
+        return question
+    focused = _missing_personal_fact_question_once(
+        _replace_last_partner_body(context, focus)
+    )
+    if focused is not None:
+        return focused
+    return question
+
+
+def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
+    """Preflight a single reading of the last partner message."""
     if context.get("mode") not in {"reply", "followup"}:
         return None
     partner_messages = [m["body"] for m in context.get("history", []) if m.get("role") == "them"]
@@ -2315,13 +2397,13 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
             return personal_fact_question(topic, question_text)
     if question_parts:
         return None
-    topic = _topic_for_personal_question(last_partner_msg)
+    question_text = last_partner_msg
+    topic = _topic_for_personal_question(question_text)
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
-    if not topic and _is_unclassified_direct_question(partner_messages[-1]) and _is_unclassified_question_about_user(partner_messages[-1]):
+    if not topic and _is_unclassified_direct_question(question_text) and _is_unclassified_question_about_user(question_text):
         if _unclassified_personal_question_user_answer(context) is not None:
             return None
-        question_text = partner_messages[-1]
         quoted_question = question_text.strip().replace("\n", " ")[:180]
         if INVITATION_PATTERN.search(question_text):
             return UserQuestion(
@@ -2347,23 +2429,23 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
             question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
             purpose="直接質問への本人の回答が未確認のため確認します",
         )
-    if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
+    if not topic or _topic_is_verified(topic, context, question_text):
         return None
     if topic == "本人情報":
-        if _is_current_student_status_question(partner_messages[-1]):
-            return personal_fact_question(topic, partner_messages[-1])
-        if SAME_DAY_ACTIVITY_QUESTION.search(partner_messages[-1]):
-            return personal_fact_question(topic, partner_messages[-1])
-        if FUTURE_ACTIVITY_QUESTION.search(partner_messages[-1]):
-            return personal_fact_question(topic, partner_messages[-1])
-        if _past_activity_scope(partner_messages[-1]):
-            return personal_fact_question(topic, partner_messages[-1])
-        quoted_question = partner_messages[-1].strip().replace("\n", " ")[:180]
+        if _is_current_student_status_question(question_text):
+            return personal_fact_question(topic, question_text)
+        if SAME_DAY_ACTIVITY_QUESTION.search(question_text):
+            return personal_fact_question(topic, question_text)
+        if FUTURE_ACTIVITY_QUESTION.search(question_text):
+            return personal_fact_question(topic, question_text)
+        if _past_activity_scope(question_text):
+            return personal_fact_question(topic, question_text)
+        quoted_question = question_text.strip().replace("\n", " ")[:180]
         return UserQuestion(
             question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
             purpose="相手から本人の情報について直接質問されていますが、内容を分類できないため回答を確認します",
         )
-    return personal_fact_question(topic, partner_messages[-1])
+    return personal_fact_question(topic, question_text)
 
 
 def model_user_info_questions_are_necessary(context: dict, questions: list[UserQuestion]) -> bool:
@@ -6589,6 +6671,11 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
     question = partner_messages[-1]
     if _negative_binary_question_has_ambiguous_answer(context, question):
         return False
+    focus = _last_question_sentence(question)
+    if focus != question.strip() and _answers_verified_single_partner_question(
+        candidate, _replace_last_partner_body(context, focus)
+    ):
+        return True
     topic = _topic_for_personal_question(question)
     if not topic:
         if _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):

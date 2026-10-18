@@ -14751,6 +14751,95 @@ def test_direct_reading_question_evasion_rejected_when_user_answered(client):
     reasons_wrong = backend._candidate_rejection_reasons(wrong_title, context)
     assert "相手からの直接質問に未回答" in reasons_wrong
 
+
+def test_last_question_sentence_only_trims_a_single_trailing_question(client):
+    _, backend = client
+
+    mixed = "旅先の古本屋は面白いんです。水野さんは美術館では、どんな展示を見ますか？"
+    assert backend._last_question_sentence(mixed) == "水野さんは美術館では、どんな展示を見ますか？"
+
+    compound = "映画館派ですか？それとも家で観る派ですか？今度一緒に映画を観に行きませんか？"
+    assert backend._last_question_sentence(compound) == compound
+
+    quoted = "「昨日どこに行った？」その時は何してた？"
+    assert backend._last_question_sentence(quoted) == quoted
+
+    plain = "喫茶店のオムライスは私も大好きです。どこか懐かしい気持ちになりました。"
+    assert backend._last_question_sentence(plain) == plain
+
+
+def test_partner_statement_with_suki_is_not_a_personal_question(client):
+    _, backend = client
+    statement = (
+        "喫茶店のオムライスは私も大好きです。"
+        "これまでで一番印象に残っているのは、京都の喫茶店で食べた薄焼き卵のオムライスです。"
+        "どこか昔の映画に出てくるような雰囲気でした。"
+    )
+    assert backend._has_preference_question_cue(statement) is False
+    assert backend._topic_for_personal_question(statement) is None
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": statement}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.missing_personal_fact_question(context) is None
+    assert not backend._candidate_rejection_reasons(
+        backend.Candidate(label="相槌", text="オムライスの話もいいですね\nまた聞かせてください"), context
+    )
+
+    # Preference questions themselves must stay classified.
+    assert backend._has_preference_question_cue("喫茶店は好きですか？") is True
+    assert backend._topic_for_personal_question("喫茶店は好きですか？") == "カフェ好み"
+    assert backend._topic_for_personal_question("映画は好きでしたか？") == "映画"
+
+
+def test_museum_question_after_partner_story_is_asked_and_enforced(client):
+    _, backend = client
+    question = "水野さんは美術館では、どんな展示を見に行かれることが多いですか？"
+    partner = (
+        "「美術館の帰りに近くの古本屋をのぞく」という過ごし方、とてもいいですね。"
+        "私も小さな美術館の帰りにふらっと本屋に寄るのが好きです。"
+        "旅先の古本屋は、地元の本が並んでいて面白いんです。" + question
+    )
+    # The whole message classifies as the partner's own travel talk, which used to
+    # hide the trailing question.
+    assert backend._topic_for_personal_question(partner) == "旅行"
+    assert backend._topic_for_personal_question(backend._last_question_sentence(partner)) == "本人情報"
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": partner}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    preflight = backend.missing_personal_fact_question(context)
+    assert preflight is not None
+    assert question in preflight.question
+
+    answer_question = f"相手の「{question}」にどう答えたいか教えてください"
+    answer = "京都と横浜で、日本画の小さな企画展を見に行くことが多いです。"
+    answered = {
+        **context,
+        "ephemeral_user_answers": [{"question": answer_question, "answer": answer}],
+    }
+    assert backend._topic_is_verified("本人情報", answered, question) is True
+
+    evasive = backend.Candidate(
+        label="話題転換",
+        text="古本屋めぐりもいいですね\n私も旅先では本屋に寄ることが多いです\n最近は何か面白い本を見つけましたか？",
+    )
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, answered)
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+
+    direct = backend.Candidate(
+        label="素直な回答",
+        text="京都と横浜で日本画の小さな企画展を見に行くことが多いです\n最近は何か気になる展示はありましたか？",
+    )
+    assert backend._candidate_rejection_reasons(direct, answered) == []
+
+
 def test_offline_data_directory_backup_and_restore_preserves_full_state(
     client, tmp_path, monkeypatch
 ):
