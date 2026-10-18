@@ -31,7 +31,11 @@ DATA = Path(os.getenv("APP_DATA_DIR", str(BASE / "data"))).resolve()
 PHOTOS = DATA / "photos"
 DB = DATA / "app.sqlite3"
 PROMPTS = BASE / "prompts"
-GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+_configured_model = os.getenv("GEMINI_MODEL", "").strip()
+if _configured_model and _configured_model not in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
+    GEMINI_MODEL_PRIORITY = (_configured_model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+else:
+    GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
 GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
 _provider_attempt_lock = threading.Lock()
 _provider_last_attempt: dict[tuple[str, str], float] = {}
@@ -5260,11 +5264,8 @@ def gemini_configurations() -> list[tuple[str, str, str]]:
     keys = {"API1": key1, "API2": key2}
     return [
         (account, keys[account], model)
-        for model, account_order in (
-            (GEMINI_MODEL_PRIORITY[0], ("API1", "API2")),
-            (GEMINI_MODEL_PRIORITY[1], ("API1", "API2")),
-        )
-        for account in account_order
+        for model in GEMINI_MODEL_PRIORITY
+        for account in ("API1", "API2")
         if keys[account]
     ]
 
