@@ -10,7 +10,7 @@
 - 代表ファイル `会話テスト/conversation_test.html` と `conversation_test.json` を差し替えた。どちらも repo 外なので追跡ファイルに差分はない。詳細は `会話テスト/ds4_T470_report.md`。
 - コード変更はないため今回 pytest と Firefox は実行していない。PR #4 は OPEN/Draft、HEAD `7d24955`（push run 39095089060 / PR run 39095091297 は success）。
 - 総合判定は据え置き。会話1系列の確認であり、既存のNO-GOを変える証拠には足りない。残課題は候補停止6件の原因（相手役の一文を個人質問と誤判定する分類）と、質問過多・引用定型の自然さ。
-- この追記のPush後にGitHub Actionsを確認し、結果を次項に記録する。
+- `ffbcfba` の Push run [39100644897](https://github.com/kenkyu0909/aichatapp/actions/runs/39100644897) と PR run [39100647188](https://github.com/kenkyu0909/aichatapp/actions/runs/39100647188) は success。どちらも pytest 1946 passed / 1 warning（217秒と273秒）、JavaScript構文検査、Firefox環境確認、Artifact保存も成功した。PR #4 は OPEN/Draft のまま。
 
 ## 2026-10-18 12:50 JST ds4への引き継ぎ（作業停止）
 
