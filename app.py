@@ -2445,6 +2445,10 @@ def _partner_trailing_direct_question(context: dict) -> str:
         return ""
     if _topic_for_personal_question(focus) is not None:
         return focus.strip()
+    if _is_concrete_date_or_place_proposal(messages[-1]):
+        # 「じゃあ週末どうですか？」 asks the user to decide without naming a
+        # weekday or a slot, so the personal-question classifier does not cover it.
+        return focus.strip()
     if _is_unclassified_direct_question(focus) and _is_unclassified_question_about_user(focus):
         return focus.strip()
     if any(token in focus for token in _user_name_tokens(context)):

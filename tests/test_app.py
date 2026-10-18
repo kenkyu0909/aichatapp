@@ -16016,6 +16016,24 @@ def test_t474_answer_scope_must_match_the_partner_question(client):
     assert backend._build_answered_question_fallback_candidate(matching) is not None
 
 
+def test_t474_schedule_proposal_question_is_recognized_as_a_direct_ask(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "いいですね！\nぜひ行きましょう😊"},
+            {"role": "them", "body": "やった！じゃあ週末どうですか？私は土曜の午後が空いてます"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "invite_gently",
+        "ephemeral_user_answers": [],
+    }
+    assert backend._partner_trailing_direct_question(context) == "じゃあ週末どうですか？"
+    assert backend._answered_question_answer(context) == ""
+
+
 def test_t474_invitation_turn_relays_answer_with_acceptance(client):
     _, backend = client
     context = {
