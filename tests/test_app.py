@@ -16016,6 +16016,34 @@ def test_t474_answer_scope_must_match_the_partner_question(client):
     assert backend._build_answered_question_fallback_candidate(matching) is not None
 
 
+def test_t474_partial_answer_lines_are_not_accepted_as_a_relay(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "いいですね！\nぜひ行きましょう😊"},
+            {"role": "them", "body": "土曜日の午後なら空いていますか？"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「土曜日の午後なら空いていますか？」にどう答えたいか教えてください",
+                "answer": "土曜日の午後なら空いています。",
+            },
+        ],
+    }
+    assert backend._answered_question_answer(context) == "土曜日の午後なら空いています。"
+    assert backend._candidate_is_verified_answer_relay("土曜日の午後なら空いています", context) is True
+    assert backend._candidate_is_verified_answer_relay(
+        "そうなんですね！\n土曜日の午後なら空いています\n黒川さんはどうですか？", context
+    ) is True
+    assert backend._candidate_is_verified_answer_relay("空いています", context) is False
+    assert backend._candidate_is_verified_answer_relay("午後なら空いています", context) is False
+
+
 def test_t474_schedule_proposal_question_is_recognized_as_a_direct_ask(client):
     _, backend = client
     context = {

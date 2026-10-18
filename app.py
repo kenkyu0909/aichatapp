@@ -7958,15 +7958,22 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     sources: list[str] = []
     direct_answer = _answered_question_answer(context) or _unclassified_personal_question_user_answer(context)
     if direct_answer:
-        sources.append(normalize(direct_answer))
+        sources.append(str(direct_answer))
     if partner_latest_message_has_invitation(context):
         sources.extend(
-            normalize(answer.get("answer", ""))
+            str(answer.get("answer", ""))
             for answer in (context.get("ephemeral_user_answers") or [])
-            if normalize(answer.get("answer", ""))
+            if str(answer.get("answer", "")).strip()
         )
-    sources = [source for source in sources if source]
+    sources = [source for source in sources if normalize(source)]
     if not sources:
+        return False
+    units = {
+        unit
+        for source in sources
+        for unit in _normalized_answer_sentence_units(source)
+    }
+    if not units:
         return False
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines or len(lines) > 5:
@@ -7974,13 +7981,21 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     body = [line for line in lines if "?" not in line and "？" not in line]
     if not body:
         return False
-    matched = [
-        line for line in body if normalize(line) and any(normalize(line) in source for source in sources)
-    ]
+    matched = [line for line in body if normalize(line) in units]
     if not matched:
         return False
     unmatched = [line for line in body if line not in matched]
     return all(_is_answer_relay_template_line(line) for line in unmatched)
+
+
+def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
+    """Sentence-level units of a confirmed answer, normalized for comparison."""
+    normalized = unicodedata.normalize("NFKC", str(answer_text))
+    units = [
+        re.sub(r"[\s　、。，．！!？?]", "", part)
+        for part in re.split(r"[。．.!！?？]+|\n+", normalized)
+    ]
+    return [unit for unit in units if unit]
 
 
 _ANSWER_RELAY_TEMPLATE_LINE = re.compile(
