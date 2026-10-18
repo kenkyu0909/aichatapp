@@ -6639,7 +6639,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             r"(?:作りました|作っていました|作ってました|作ってみました|作った(?:んです|んだ)?|作り|作っ|ました|た)?"
             r"(?:です|なんです|なんだ|ね|よ)?"
         )
-        neutral_reactions = {"そうなんですね", "なるほど", "たしかに", "えーそうなんですね", "へーそうなんですね"}
+        neutral_reactions = {
+            "そうなんですね", "そうなんだ", "いいですね", "いいね", "なるほど", "わかります", "分かります",
+            "たしかに", "えーそうなんですね", "へーそうなんですね",
+        }
         matched_answer = False
         for line in (part.strip() for part in candidate.text.splitlines() if part.strip()):
             normalized_line = normalized(line)
@@ -6731,7 +6734,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
                 for segment in (part.strip() for part in segments if part.strip()):
                     normalized_segment = re.sub(r"[\s、。！!？?😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]", "", segment)
-                    if normalized_segment in {"はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ"}:
+                    if normalized_segment in {
+                        "はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ",
+                        "いいですね", "いいね", "なるほど", "わかります", "分かります",
+                    }:
                         continue
                     if _is_partner_directed_followup_question(segment, question):
                         continue
@@ -7002,6 +7008,7 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 compact_ack = re.sub(r"[\s、。！!？?😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]", "", segment)
                 if compact_ack in {
                     "はい", "うん", "ええ", "そうですね", "そうなんですね", "そうなんだ",
+                    "いいですね", "いいね", "なるほど", "わかります", "分かります",
                     "うれしいです", "嬉しいです", "うれしいな", "嬉しいな", "うれしい", "嬉しい",
                     "ありがとうございます", "ありがとう", "お誘いありがとうございます",
                     "ぜひ", "ぜひぜひ", "ぜひお願いします", "ぜひよろしくお願いします", "よろしくお願いします",
@@ -7274,7 +7281,7 @@ def _candidate_contains_substantive_answer_clause(text: str) -> bool:
         # do not mistake the body of a follow-up question for an answer.
         if value.endswith("か"):
             continue
-        value = re.sub(r"^(?:えー|えっ|へー|あー|なるほど|たしかに|そうなんですね|そうなんだ|わかります|分かります)[\s　]*", "", value)
+        value = re.sub(r"^(?:えー|えっ|へー|あー|なるほど|たしかに|そうなんですね|そうなんだ|いいですね|いいね|わかります|分かります)[\s　]*", "", value)
         value = re.sub(r"(?:ですか|ますか|んですか|のですか|でしょうか|かな？|かな\?)\s*$", "", value)
         value = re.sub(r"[\s　😊☺️😄😂🥲😭🌸❤️💕👍✨☕📚]+$", "", value)
         if len(value) >= 4 and not reaction_only.fullmatch(value):
