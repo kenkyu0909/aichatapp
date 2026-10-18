@@ -3730,9 +3730,9 @@ def test_shared_prompt_requires_acknowledgment_and_a_question(client):
     _, backend = client
     prompt = backend.read_prompt("reply")
 
-    assert "原則としてどの候補にも答えやすい質問を1つ添えます" in prompt
+    assert "質問は毎回でなくてよく" in prompt
+    assert "2〜3通に1回の軽さ" in prompt
     assert "原則として短い相槌を1つ入れて" in prompt
-    assert "原則として質問を1つ添えて" in prompt
 
 
 def test_reply_length_guard_exempts_first_messages_but_caps_serious_context(client):
@@ -15779,5 +15779,190 @@ def test_t472_polite_fallbacks_and_prompts_avoid_stiff_keigo(client):
         prompt = backend.read_prompt(mode)
         assert "カジュアルな敬語" in prompt
         assert "固い言い回しは使いません" in prompt or "固い言い回しは避け" in prompt
+
+
+def test_t473_stiff_keigo_is_rewritten_before_candidate_checks(client):
+    _, backend = client
+
+    assert backend._soften_stiff_keigo("黒川さんはご都合いかがですか？") == "黒川さんはご都合どうですか？"
+    assert backend._soften_stiff_keigo("〜でしょうか？") == "〜ですか？"
+    assert backend._soften_stiff_keigo("教えていただけますか") == "教えてもらえますか"
+    assert backend._soften_stiff_keigo("よろしければお越しください") == "よかったら来てください"
+    assert backend._soften_stiff_keigo("承知いたしました") == "わかりました"
+    assert backend._soften_stiff_keigo("変わらない文です") == "変わらない文です"
+
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "今月の後半なら週末が空いてます！水野さんはいつ頃がよさそうですか？"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="日程調整", text="今月の後半ですね！\n土曜日と日曜日はどちらのほうがご都合いかがですか？"
+        ),
+        alternatives=[],
+        reason="日程を確認する",
+        strategy="日程調整",
+        conversation_stage="Stage 5",
+        invite_decision="schedule_after_acceptance",
+        decision_reason="日程調整の段階です",
+        next_action="曜日を確認します",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    assert filtered["recommended"] is not None, filtered
+    assert "いかがですか" not in filtered["recommended"]["text"]
+    assert "ご都合どうですか" in filtered["recommended"]["text"]
+
+    unsafe = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="未確認", text="行きつけの喫茶店があるんです\n静かな場所が好きです😊"
+        ),
+        alternatives=[],
+        reason="自己開示",
+        strategy="共有",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="会話を続けます",
+        next_action="相手に返します",
+    )
+    rejected = backend.filter_safe_candidates(unsafe, 3, context)
+    accepted_texts = [rejected["recommended"]["text"]] if rejected.get("recommended") else []
+    accepted_texts += [item["text"] for item in rejected.get("alternatives", [])]
+    assert all("行きつけの喫茶店" not in text for text in accepted_texts), rejected
+    assert any(
+        "未確認の本人事実" in item["reasons"]
+        for item in rejected.get("candidate_rejections", [])
+    ), rejected
+
+
+def test_t473_unclassified_personal_question_asks_instead_of_blocking(client, monkeypatch):
+    from google import genai
+
+    c, _backend = client
+    c.put("/api/profile", json={
+        "content": json.dumps({
+            "name": "水野そよか",
+            "age": "27",
+            "area": "神奈川県横浜市",
+            "job": "経理",
+            "hobbies": ["喫茶店めぐり", "観葉植物", "小さな美術館", "読書"],
+            "memo": "休日は喫茶店めぐりが好きで窓ぎわの席で本を読んでいます。",
+        }, ensure_ascii=False),
+        "avoid": "根拠のない共通点",
+    })
+    mid = add_match(c, "架空くろかわ")
+    partner_question = "水野さんはどこか行ってみたい場所とかありますか？"
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [],
+                "user_info_reason": "",
+                "recommended": {
+                    "label": "共有",
+                    "text": "行きつけの喫茶店があるんです\n静かな場所が好きです😊",
+                    "reply_move": "grounded_share",
+                },
+                "alternatives": [],
+                "reason": "未確認の趣味を共有する",
+                "strategy": "自己開示",
+                "conversation_stage": "Stage 3",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "会話を続ける段階です",
+                "next_action": "相手の返信を待ちます",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is False, body
+    assert body["needs_user_info"] is True, body
+    assert body["recommended"] is None and body["alternatives"] == []
+    assert body["user_questions"] and partner_question in body["user_questions"][0]["question"]
+
+
+def test_t473_reply_prompt_carries_the_natural_conversation_guidance(client):
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+    assert "質問は1つの候補につき1つまで" in prompt
+    assert "2〜3通に1回" in prompt
+    assert "invite_decisionがinvite_gently" in prompt
+    assert "Stage 5以降" in prompt
+    assert "相手が出した具体的な話題を一つ拾い" in prompt
+    assert "自分の似た経験や本音を一言添え" in prompt
+    assert "してみますか" in prompt
+    for mode in ("reply", "first", "followup", "like"):
+        mode_prompt = backend.read_prompt(mode)
+        assert "してみますか" in mode_prompt
+
+
+def test_t473_condescending_offers_are_rewritten_or_rejected(client):
+    _, backend = client
+
+    assert backend._soften_stiff_keigo("今度お休みの日にお出かけしてみますか？") == "今度お休みの日にお出かけしませんか？"
+    assert backend._soften_stiff_keigo("一緒に本屋を回ってみましょうか") == "一緒に本屋を回ってみませんか"
+    for text in ("今度行ってあげます", "教えてあげますよ", "行ってもいいですよ"):
+        assert backend._has_condescending_offer(text) is True, text
+    assert backend._has_condescending_offer("よかったら一緒に行きませんか？") is False
+    assert backend._has_condescending_offer("無理しないでくださいね") is False
+
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "静かな美術館が好きなんです。水野さんはどうですか？"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "consider_invite",
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="誘い", text="静かな美術館いいですよね\n今度お休みの日にお出かけしてみますか？"
+        ),
+        alternatives=[backend.Candidate(label="上から目線", text="今度行ってあげます")],
+        reason="誘う",
+        strategy="誘い",
+        conversation_stage="Stage 3",
+        invite_decision="consider_invite",
+        decision_reason="誘いを検討する段階です",
+        next_action="相手の反応を見ます",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    assert filtered["recommended"] is not None, filtered
+    assert "してみますか" not in filtered["recommended"]["text"]
+    assert "しませんか" in filtered["recommended"]["text"]
+    accepted_texts = [filtered["recommended"]["text"]] + [item["text"] for item in filtered.get("alternatives", [])]
+    assert all("行ってあげます" not in text for text in accepted_texts), filtered
+    assert any(
+        "上から目線の表現" in item["reasons"]
+        for item in filtered.get("candidate_rejections", [])
+    ), filtered
+
+
 
 

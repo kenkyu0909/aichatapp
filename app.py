@@ -2409,6 +2409,49 @@ def _suppress_remembered_question(
     return question
 
 
+def _user_name_tokens(context: dict) -> list[str]:
+    """Return the names the partner may use to address the user.
+
+    Registered names may be written without a space (``水野そよか``), while the
+    partner addresses the surname (``水野さん``). Short prefixes are added so a
+    question that names the user still counts as asking about the user.
+    """
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    raw = str(facts.get("name") or "").strip()
+    if not raw:
+        return []
+    tokens = {raw, *raw.split()}
+    compact = re.sub(r"\s+", "", raw)
+    for length in (2, 3):
+        if len(compact) > length:
+            tokens.add(compact[:length])
+    return sorted(token for token in tokens if len(token) >= 2)
+
+
+def _partner_trailing_direct_question(context: dict) -> str:
+    """Return the partner's last question when it asks the user about themselves.
+
+    Used only when every generated candidate was rejected for asserting an
+    unconfirmed personal fact: the partner directly asked something about the
+    user, so the safe recovery is to ask the user instead of stopping.
+    """
+    messages = [
+        str(item.get("body", "")) for item in context.get("history", []) if item.get("role") == "them"
+    ]
+    if not messages:
+        return ""
+    focus = _last_question_sentence(messages[-1]) or messages[-1]
+    if not _is_ask_sentence(focus):
+        return ""
+    if _topic_for_personal_question(focus) is not None:
+        return focus.strip()
+    if _is_unclassified_direct_question(focus) and _is_unclassified_question_about_user(focus):
+        return focus.strip()
+    if any(token in focus for token in _user_name_tokens(context)):
+        return focus.strip()
+    return ""
+
+
 def missing_personal_fact_question(context: dict) -> UserQuestion | None:
     """Preflight explicit personal questions against user-confirmed facts.
 
@@ -8031,6 +8074,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("未確認の本人事実")
     if not _answers_verified_partner_question(candidate, context):
         reasons.append("相手からの直接質問に未回答")
+    if _has_condescending_offer(text):
+        reasons.append("上から目線の表現")
     if _unsupported_partner_claim(candidate, context):
         reasons.append("未確認の相手情報")
     if (
@@ -8793,6 +8838,54 @@ def _supplement_acknowledgment_lines(candidates: list[Candidate], context: dict)
     return result
 
 
+_STIFF_KEIGO_REWRITES = (
+    ("いかがでしょうか", "どうですか"),
+    ("いかがですか", "どうですか"),
+    ("いかがです", "どうですか"),
+    ("いただけますでしょうか", "もらえますか"),
+    ("いただけますか", "もらえますか"),
+    ("いただくことはできますか", "もらえますか"),
+    ("でしょうか", "ですか"),
+    ("よろしければ", "よかったら"),
+    ("お越しください", "来てください"),
+    ("心待ちにしております", "楽しみにしています"),
+    ("心待ちにしています", "楽しみにしています"),
+    ("承知いたしました", "わかりました"),
+    ("承知しました", "わかりました"),
+    ("してみましょうか", "しませんか"),
+    ("してみますか", "しませんか"),
+    ("してみようか", "しませんか"),
+    ("てみましょうか", "てみませんか"),
+    ("てみますか", "てみませんか"),
+    ("てみようか", "てみませんか"),
+)
+
+
+CONDESCENDING_OFFER_PATTERN = re.compile(
+    r"(?:して|させて)あげ(?:ます|る|ましょう)|"
+    r"(?:ても|でも)いいですよ|(?:ても|でも)いいよ|"
+    r"行ってあげます|教えてあげます|見せてあげます"
+)
+
+
+def _has_condescending_offer(text: str) -> bool:
+    """Detect offers that sound like granting the partner permission or a favour."""
+    return bool(CONDESCENDING_OFFER_PATTERN.search(text))
+
+
+def _soften_stiff_keigo(text: str) -> str:
+    """Rewrite stiff honorific wording into the casual-friendly register the prompt asks for.
+
+    The rewritten text is only kept when it passes the same candidate checks as
+    the model output, so a mechanical replacement never bypasses the safety gate.
+    """
+    softened = text
+    for stiff, casual in _STIFF_KEIGO_REWRITES:
+        if stiff in softened:
+            softened = softened.replace(stiff, casual)
+    return softened
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -8813,6 +8906,11 @@ def filter_safe_candidates(
         "invite_decision": getattr(value, "invite_decision", None),
     }
     for candidate in source_candidates:
+        softened_text = _soften_stiff_keigo(candidate.text)
+        if softened_text != candidate.text:
+            softened_candidate = candidate.model_copy(update={"text": softened_text})
+            if not _candidate_rejection_reasons(softened_candidate, candidate_context):
+                candidate = softened_candidate
         reasons = _candidate_rejection_reasons(candidate, candidate_context)
         normalized = re.sub(r"\s+", "", candidate.text)
         if normalized in seen:
@@ -9533,6 +9631,42 @@ def _generate_impl(data: GenerateInput):
                                     "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
                                 )
                                 continue
+                            blocked_reasons = sorted({
+                                reason
+                                for item in filtered_result.get("candidate_rejections", [])
+                                for reason in item.get("reasons", [])
+                            })
+                            direct_ask = (
+                                "" if data.skipped_user_info else _partner_trailing_direct_question(context)
+                            )
+                            direct_ask_topic = (
+                                _topic_for_personal_question(direct_ask) if direct_ask else None
+                            )
+                            answered_topics = {
+                                topic
+                                for answer in data.user_answers
+                                if (topic := _question_topic(answer.get("question", ""))) is not None
+                            }
+                            if (
+                                direct_ask
+                                and "未確認の本人事実" in blocked_reasons
+                                and (direct_ask_topic is None or direct_ask_topic not in answered_topics)
+                            ):
+                                quoted_ask = direct_ask.strip().replace("\n", " ")[:180]
+                                ask_question = f"相手の「{quoted_ask}」にどう答えたいか教えてください"
+                                if not _session_answer_remembers(context, ask_question):
+                                    return {
+                                        **user_info_question_response(
+                                            ask_question,
+                                            "相手から本人への直接質問があり、確認済みの情報だけでは安全な候補を作れなかったため回答を確認します",
+                                            "相手から本人への直接質問がありましたが、候補に確認できない本人情報が含まれていました。候補を表示せず回答を確認します。",
+                                        ),
+                                        "demo": False,
+                                        "api_alias": account,
+                                        "model": model,
+                                        "api_attempt_count": len(attempted_models),
+                                        "attempted_models": attempted_models,
+                                    }
                             blocked_result = blocked_user_info_response(
                                 "安全性と文章形式の確認を通過する候補を作れなかったため、候補を表示せず停止しました。",
                                 skipped=data.skipped_user_info,
