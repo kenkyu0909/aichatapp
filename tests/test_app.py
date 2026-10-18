@@ -16108,6 +16108,17 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t477_prompts_distinguish_shared_then_asked_from_pure_question(client):
+    _, backend = client
+    reply_prompt = backend.read_prompt("reply")
+    assert "自分の話をしたうえで質問してきたターン" in reply_prompt
+    assert "答えの前に短い相槌を1つ入れます" in reply_prompt
+    assert "質問だけのターン" in reply_prompt
+    assert "答えから始めてかまいません" in reply_prompt
+    first_prompt = backend.read_prompt("first")
+    assert "相手が質問してきたターンの返信は、事実の回答を必ず含めます" in first_prompt
+
+
 def test_t476_off_topic_self_disclosure_is_demoted(client):
     _, backend = client
     context = {
