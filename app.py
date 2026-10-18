@@ -9873,7 +9873,7 @@ def _generate_impl(data: GenerateInput):
                                     }
                             if (
                                 direct_ask
-                                and "未確認の本人事実" in blocked_reasons
+                                and ({"未確認の本人事実", "相手からの直接質問に未回答"} & set(blocked_reasons))
                                 and (direct_ask_topic is None or direct_ask_topic not in answered_topics)
                             ):
                                 quoted_ask = direct_ask.strip().replace("\n", " ")[:180]
