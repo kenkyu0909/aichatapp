@@ -2059,7 +2059,10 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
                 and re.search(r"何年|何年間|勤続|職歴|経験年数", answer.get("question", ""))
                 for answer in context.get("ephemeral_user_answers", [])
             )
-        if re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question_text):
+        if (
+            re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question_text)
+            and not re.search(r"過ご|一日の流れ|どんな一日|どういう一日|ルーティン", question_text)
+        ):
             if re.search(r"会社名|どこの会社|勤務先|会社は", question_text):
                 return any(facts.get(key) for key in ("employer", "company_name", "勤務先"))
             if _verified_job_or_school_values(facts, question_text):
@@ -8100,7 +8103,10 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
     candidate_text: str | None = None
 
     # 1. Occupation / Work / School question
-    if re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question):
+    if (
+        re.search(r"仕事|職業|働いて|勤務|学校|大学|学生|職種|業務|業界|業種|分野|専攻|学んで|勉強", question)
+        and not re.search(r"過ご|一日の流れ|どんな一日|どういう一日|ルーティン", question)
+    ):
         known_occupations = _verified_job_or_school_values(facts, question)
         if known_occupations:
             norm_job = _normalize_occupation_label(known_occupations[0])

@@ -15327,3 +15327,18 @@ def test_pure_reaction_plus_question_skips_new_info_acknowledgment(client):
     p = "海沿いの散歩、潮風を感じられてすごく気持ちよさそうですね！気分転換にもぴったりです。そよかさんは普段お仕事の日はどんな風に過ごされているんですか？"
     context = {"mode": "reply", "history": [{"role": "them", "body": p}]}
     assert not backend._partner_latest_message_shares_new_info(context)
+
+
+def test_work_day_routine_question_triggers_user_info_clarification(client):
+    _, backend = client
+    p = "海沿いの散歩、潮風を感じられてすごく気持ちよさそうですね！気分転換にもぴったりです。そよかさんは普段お仕事の日はどんな風に過ごされているんですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": p}],
+        "my_profile": {"facts": {"job": "経理", "occupation": "経理"}},
+        "ephemeral_user_answers": [],
+    }
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "どう答えたいか" in clarification.question or "本人" in clarification.purpose
+
