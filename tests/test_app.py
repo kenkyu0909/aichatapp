@@ -15342,3 +15342,41 @@ def test_work_day_routine_question_triggers_user_info_clarification(client):
     assert clarification is not None
     assert "どう答えたいか" in clarification.question or "本人" in clarification.purpose
 
+
+def test_candidate_referring_to_self_in_third_person_is_rejected(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "そよかさんの好きそうな古民家カフェを見つけました！"}],
+        "my_profile": {"facts": {"name": "水野そよか"}},
+    }
+    self_named_cand = backend.Candidate(
+        label="三人称",
+        text="中庭に木々がある古民家カフェだなんてとても素敵ですね！\nそよかさんを思い出してくださったことが嬉しくてぜひ行ってみたいです",
+        reply_move="react",
+    )
+    first_person_cand = backend.Candidate(
+        label="一人称",
+        text="中庭に木々がある古民家カフェだなんてとても素敵ですね！\n私を思い出してくださったことが嬉しくてぜひ行ってみたいです",
+        reply_move="react",
+    )
+    assert "本人の名前を三人称呼称" in backend._candidate_rejection_reasons(self_named_cand, context)
+    assert "本人の名前を三人称呼称" not in backend._candidate_rejection_reasons(first_person_cand, context)
+
+
+def test_reaction_preamble_does_not_misclassify_last_question_as_cafe_preference(client):
+    _, backend = client
+    p = "お気に入りの喫茶店で過ごす時間、本当に落ち着きますよね！そよかさんは普段お仕事の日はどんな風に過ごされているんですか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": p}],
+        "my_profile": {"facts": {"name": "水野そよか", "job": "経理"}},
+        "ephemeral_user_answers": [],
+    }
+    clarification = backend.missing_personal_fact_question(context)
+    assert clarification is not None
+    assert "カフェ" not in clarification.question
+    assert "好きなカフェ" not in clarification.question
+    assert "どう答えたいか" in clarification.question or "本人" in clarification.purpose
+
+

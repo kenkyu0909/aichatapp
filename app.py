@@ -1064,8 +1064,8 @@ def _is_user_relationship_status_question(text: str) -> bool:
 
 
 def _topic_for_personal_question(text: str) -> str | None:
-    if re.search(r"[。\n]", text):
-        sentences = [s.strip() for s in re.split(r"[。\n]+", text) if s.strip()]
+    if re.search(r"[。\n！!]+|(?<=[?？])\s*", text):
+        sentences = [s.strip() for s in re.split(r"[。\n！!]+|(?<=[?？])\s*", text) if s.strip()]
         if len(sentences) > 1:
             q_sentences = [
                 s for s in sentences
@@ -7710,6 +7710,30 @@ def candidate_answers_partner_invitation(candidate_text: str) -> bool:
     return bool(PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text))
 
 
+def _candidate_refers_to_self_with_honorific(candidate_text: str, context: dict) -> bool:
+    """True when candidate refers to the app user by their own name with honorific (e.g. そよかさん)."""
+    facts = context.get("my_profile", {}).get("facts", {})
+    if not isinstance(facts, dict):
+        return False
+    raw_name = str(facts.get("name") or facts.get("名前") or "").strip()
+    if not raw_name:
+        return False
+    names = set()
+    cleaned = re.sub(r"[\s　]+", " ", raw_name).strip()
+    names.add(cleaned)
+    parts = cleaned.split()
+    for p in parts:
+        if len(p) >= 2:
+            names.add(p)
+    if len(cleaned) >= 4 and len(parts) <= 1:
+        names.add(cleaned[2:])
+        names.add(cleaned[:2])
+    for n in names:
+        if len(n) >= 2 and re.search(rf"{re.escape(n)}(?:さん|ちゃん|君|くん|様)", candidate_text):
+            return True
+    return False
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -7726,6 +7750,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
         reasons.append("未完成プレースホルダー")
+    if _candidate_refers_to_self_with_honorific(text, context):
+        reasons.append("本人の名前を三人称呼称")
     if context.get("mode") == "first":
         reasons.extend(_first_message_required_content_reasons(text, context))
     if candidate_has_missing_sentence_break(text):
@@ -8731,6 +8757,9 @@ def _generate_impl(data: GenerateInput):
         system_instruction += (
             "\n【文体指定】落ち着いた丁寧な敬語（です・ます調）で書いてください。"
         )
+    system_instruction += (
+        "\n【呼称の厳守】一人称（私など）を使って話し、自分自身を名前や「〇〇さん」などの三人称で呼んではいけません。"
+    )
     attempted_models: list[dict[str, str]] = []
     fact_repair_used = False
     invite_repair_used = False
