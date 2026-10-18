@@ -6741,7 +6741,7 @@ def test_v2_partial_safe_candidate_set_fills_missing_slot_and_keeps_original_saf
     body = response.json()
     assert len(calls) == 2
     assert "不足分の候補だけ" in calls[1]["config"].system_instruction
-    texts = [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]]
+    texts = [_strip_leading_ack(t) for t in [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]]]
     assert texts == [
         "新しいお店を探すの楽しそうですね！",
         "最近見つけたお店で印象に残ったところはありますか？",
@@ -6807,7 +6807,7 @@ def test_v2_partial_safe_candidate_set_keeps_shortage_when_replacement_is_unsafe
     assert len(calls) == 2
     assert body["generation_blocked"] is False
     assert body["available_candidate_count"] == 2
-    assert [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]] == [
+    assert [_strip_leading_ack(t) for t in [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]]] == [
         "新しいお店を探すの楽しそうですね！",
         "最近見つけたお店で印象に残ったところはありますか？",
     ]
@@ -12832,7 +12832,7 @@ def test_v2_partial_candidate_retry_failure_keeps_safe_candidates_and_status(
     body = response.json()
     assert body["generation_blocked"] is False
     assert body["available_candidate_count"] == 2
-    assert [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]] == [
+    assert [_strip_leading_ack(t) for t in [body["recommended"]["text"], *[item["text"] for item in body["alternatives"]]]] == [
         partial["recommended"]["text"], partial["alternatives"][1]["text"],
     ]
     assert "2案です（指定は3案）" in body["candidate_notice"]
@@ -15213,3 +15213,74 @@ def test_food_ordering_claim_requires_grounding(client):
     assert not backend._has_unverified_general_personal_claim(cand_text, context_grounded_ephemeral)
     assert "未確認の本人事実" not in backend.unsupported_personal_claim_topics([cand], context_grounded_ephemeral)
 
+
+def _ack_supplement_context(partner_body, tone="混合", me_bodies=(), invite_decision=None):
+    history = [{"role": "me", "body": body} for body in me_bodies]
+    history.append({"role": "them", "body": partner_body})
+    return {
+        "mode": "reply",
+        "history": history,
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {}, "avoid": []},
+        "reply_preferences": {"tone": tone},
+        "invite_decision": invite_decision,
+    }
+
+
+def test_acknowledgment_supplement_prepends_ack_when_partner_shares_new_info(client):
+    _, backend = client
+    context = _ack_supplement_context("最近は神保町で昔の短編集を見つけて読んでいます。ずっと探していた本でした。", tone="敬語")
+    cand = backend.Candidate(label="a", text="読書の時間はいいですよ\n黒川さんは普段どんな本を読みますか？", reply_move="react")
+    result = backend._supplement_acknowledgment_lines([cand], context)
+    assert result[0].text.splitlines()[0] in backend._ACK_POOL_POLITE
+    assert result[0].text.endswith(cand.text)
+    assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(result[0].text.splitlines()[0])
+
+
+def test_acknowledgment_supplement_uses_casual_pool_and_avoids_prior_ack(client):
+    _, backend = client
+    context = _ack_supplement_context(
+        "最近は神保町で昔の短編集を見つけて読んでるよ。ずっと探していた本だった。",
+        tone="タメ口",
+        me_bodies=["そうなんだ！\nこんにちは"],
+    )
+    cand = backend.Candidate(label="a", text="私は星新一を読んでるよ\n黒川さんは何読んでる？", reply_move="react")
+    result = backend._supplement_acknowledgment_lines([cand], context)
+    first_line = result[0].text.splitlines()[0]
+    assert first_line in backend._ACK_POOL_CASUAL
+    assert first_line != "そうなんだ！"
+
+
+def test_acknowledgment_supplement_skips_question_only_turn_and_existing_ack(client):
+    _, backend = client
+    cand = backend.Candidate(label="a", text="星新一を読んでいます\n黒川さんはどうですか？", reply_move="react")
+    question_only = _ack_supplement_context("普段どんな本を読まれますか？", tone="敬語")
+    assert backend._supplement_acknowledgment_lines([cand], question_only)[0].text == cand.text
+    shared = _ack_supplement_context("最近は神保町で昔の短編集を見つけて読んでいます。", tone="敬語")
+    with_ack = backend.Candidate(label="b", text="いいですね！\n星新一を読んでいます", reply_move="react")
+    assert backend._supplement_acknowledgment_lines([with_ack], shared)[0].text == with_ack.text
+
+
+def test_acknowledgment_supplement_skips_heavy_refusal_and_schedule_turns(client):
+    _, backend = client
+    cand = backend.Candidate(label="a", text="星新一を読んでいます\n黒川さんはどうですか？", reply_move="react")
+    heavy = _ack_supplement_context("最近仕事のことで悩んでいて、少し落ち込んでいます。", tone="敬語")
+    assert backend._supplement_acknowledgment_lines([cand], heavy)[0].text == cand.text
+    schedule = _ack_supplement_context("最近は神保町で昔の短編集を見つけて読んでいます。", tone="敬語", invite_decision="schedule_after_acceptance")
+    assert backend._supplement_acknowledgment_lines([cand], schedule)[0].text == cand.text
+
+
+def test_acknowledgment_supplement_keeps_original_when_recheck_fails(client, monkeypatch):
+    _, backend = client
+    context = _ack_supplement_context("最近は神保町で昔の短編集を見つけて読んでいます。", tone="敬語")
+    cand = backend.Candidate(label="a", text="星新一を読んでいます\n黒川さんはどうですか？", reply_move="react")
+    monkeypatch.setattr(backend, "_candidate_rejection_reasons", lambda c, ctx: ["文量上限"])
+    assert backend._supplement_acknowledgment_lines([cand], context)[0].text == cand.text
+
+
+def _strip_leading_ack(text):
+    """Drop a deterministic leading acknowledgment line (T468) added by the final pass."""
+    first, _, rest = text.partition("\n")
+    if rest and first in {"そうなんですね！", "いいですね！", "なるほどですね！", "そうなんだ！", "いいね！", "なるほど！"}:
+        return rest
+    return text

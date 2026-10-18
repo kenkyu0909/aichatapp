@@ -8218,6 +8218,77 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
 
 
 
+_ACK_POOL_POLITE = ("そうなんですね！", "いいですね！", "なるほどですね！")
+_ACK_POOL_CASUAL = ("そうなんだ！", "いいね！", "なるほど！")
+
+
+def _partner_latest_message_shares_new_info(context: dict) -> bool:
+    """True when the latest partner message carries news/opinions (not question-only, refusal, farewell or heavy topics)."""
+    if context.get("mode") not in {"reply", "followup"}:
+        return False
+    if partner_requests_contact_stop(context):
+        return False
+    if partner_has_active_invitation_refusal(context):
+        return False
+    if partner_latest_message_expresses_meeting_unease(context):
+        return False
+    if context.get("invite_decision") in {
+        "respect_no", "do_not_repeat_invite", "wait", "continue_or_close", "schedule_after_acceptance",
+    }:
+        return False
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    latest = partner_messages[-1]
+    if re.search(r"相談|悩|つらい|辛い|落ち込|不安|しんどい|亡く|病気|おやすみ|またね|失礼|ありがとうございました", latest):
+        return False
+    sentences = [s.strip() for s in re.findall(r"[^。！!？?\n]+[。！!？?]?", latest) if s.strip()]
+    for sentence in sentences:
+        cleaned = re.sub(
+            r"^(?:こんにちは|こんばんは|はじめまして|マッチありがとう(?:ございます)?|ありがとうございます|よろしくお?願いします)[！!、\s]*", "", sentence
+        )
+        if len(cleaned) >= 6 and not _candidate_has_partner_question(cleaned):
+            return True
+    return False
+
+
+def _supplement_acknowledgment_lines(candidates: list[Candidate], context: dict) -> list[Candidate]:
+    """Prepend a short acknowledgment line to safe candidates lacking one (deterministic, re-validated)."""
+    if not candidates or not _partner_latest_message_shares_new_info(context):
+        return candidates
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    prior_me = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "me"
+    ]
+    last_me = prior_me[-1] if prior_me else ""
+    casual = _fallback_should_use_casual_tone(context, partner_messages[-1], "")
+    pool = _ACK_POOL_CASUAL if casual else _ACK_POOL_POLITE
+    usable = [ack for ack in pool if ack.rstrip("！") not in last_me] or list(pool)
+    result: list[Candidate] = []
+    offset = len(prior_me)
+    for index, candidate in enumerate(candidates):
+        if ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(candidate.text):
+            result.append(candidate)
+            continue
+        ack = usable[(offset + index) % len(usable)]
+        updated = candidate.model_copy(update={"text": f"{ack}\n{candidate.text}"})
+        if _candidate_rejection_reasons(updated, context):
+            result.append(candidate)
+        else:
+            result.append(updated)
+    return result
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -8466,6 +8537,37 @@ def blocked_user_info_response(
 
 @app.post("/api/generate")
 def generate(data: GenerateInput):
+    result = _generate_impl(data)
+    return _apply_acknowledgment_supplement_to_result(result, data)
+
+
+def _apply_acknowledgment_supplement_to_result(result, data: GenerateInput):
+    """Final deterministic pass: add a short acknowledgment line to candidates lacking one.
+
+    Applied after all retry/provenance bookkeeping so text-keyed candidate sources stay valid.
+    """
+    if not isinstance(result, dict) or result.get("generation_blocked") or result.get("needs_user_info"):
+        return result
+    recommended = result.get("recommended")
+    if not isinstance(recommended, dict) or not recommended.get("text"):
+        return result
+    alternatives = [
+        item for item in result.get("alternatives") or [] if isinstance(item, dict) and item.get("text")
+    ]
+    try:
+        context = build_context(data)
+        context["invite_decision"] = result.get("invite_decision")
+        entries = [recommended, *alternatives]
+        candidates = [Candidate(label=str(item.get("label", "")), text=item["text"]) for item in entries]
+        updated = _supplement_acknowledgment_lines(candidates, context)
+    except Exception:
+        return result
+    for entry, new_candidate in zip(entries, updated):
+        entry["text"] = new_candidate.text
+    return result
+
+
+def _generate_impl(data: GenerateInput):
     if _conflicting_user_answer_question(data.user_answers) is not None:
         raise HTTPException(
             400,
