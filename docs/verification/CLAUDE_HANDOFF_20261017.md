@@ -35,14 +35,14 @@
 
 ## 3. 会話テスト（実API）の成果物
 
-リポジトリ外、`C:\Users\poiuy\desktop\aichatapp2\会話テスト\` にあります。
+リポジトリ外、`C:\Users\poiuy\desktop\aichatapp2\会話テスト\` にあります。作業用のファイルはサブフォルダへ整理済みです（HTMLは直下、`json/`、`scripts/`、`data/`、`reports/`）。
 
-- `run20.py`: 20通ドライバ。サブコマンド `start [--partner <開始文>] [--force]` / `turn [--first] [--partner <返信>] [--append-partner <追加発話>] [--select N] [--direction ...] [--answer <回答>] [--drop-pending] [--attempts N]` / `reset` / `profile` / `render` / `status`。
+- `scripts/run20.py`: 20通ドライバ。サブコマンド `start [--partner <開始文>] [--force]` / `turn [--first] [--partner <返信>] [--append-partner <追加発話>] [--select N] [--direction ...] [--answer <回答>] [--drop-pending] [--attempts N]` / `reset` / `profile` / `render` / `status`。既定の保存先は `json/conversation_test.json`、`conversation_test.html`（直下）、`data/`。
   - **初回はアプリ側から**: `start`（相手文なし）→ `turn --first`（mode=first）。
   - プロフィールはWeb UIと同じJSON形式（name/age/area/job/hobbies/personality/style/goal/memo）で保存。プレーンテキストだと構造化factsが空になり確認がループする。
   - `blocks[]` に停止理由、`conversation_test.html` に全候補と停止理由を出力。
-- `conversation_test.json` / `conversation_test.html`: 直近の実API 20通。アプリ側プロフィール=水野そよか、相手役=黒川いつき。
-- `probe.py`: 内部判定の切り分け（`probe_out.json` 出力、API消費なし）。
+- `json/conversation_test.json` / `conversation_test.html`（直下）: 直近の実API 20通。アプリ側プロフィール=水野そよか、相手役=黒川いつき。
+- `scripts/probe.py`: 内部判定の切り分け（`reports/probe_out.json` 出力、API消費なし）。
 - 直近結果: 20/20、`LIMIT_REACHED`、候補停止8回（直接質問に未回答7 / 未確認の本人事実6 / 禁止句読点5 / 長すぎる候補1。1回に複数理由が付く）。相槌と質問がほぼ全候補に入った。
 
 ユーザーからの直近フィードバック（今後も満たすこと）:
@@ -120,7 +120,7 @@ python -m pytest -q                     # 全件（約6.5-7分）
 python -m pytest tests/test_app.py -k "verified or personal_fact or clarification or length_guard" -q
 
 # 会話テスト（実API。小規模に）
-$f = "C:\Users\poiuy\desktop\aichatapp2\会話テスト\run20.py"
+$f = "C:\Users\poiuy\desktop\aichatapp2\会話テスト\scripts\run20.py"
 python $f reset
 python $f start
 python $f turn --first --attempts 4

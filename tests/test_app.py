@@ -15633,6 +15633,38 @@ def test_t472_memo_sentence_answers_seat_question(client):
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(direct, context)
 
 
+def test_t472_memo_answer_term_is_required_and_contradictions_are_rejected(client):
+    _, backend = client
+    ask = (
+        "喫茶店は長居したくなりますね。落ち着く席があると本当にほっとします。"
+        "水野さんは喫茶店で過ごすとき、どんな席を選ぶことが多いですか？"
+    )
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": ask}],
+        "my_profile": {
+            "facts": {
+                "memo": "休日は喫茶店めぐりが好きです。窓ぎわの席でコーヒーを飲みながら短い小説を読んでいます。"
+            }
+        },
+        "ephemeral_user_answers": [],
+    }
+    focus = backend._last_question_sentence(ask)
+    reflected = backend._memo_answer_reflected_in_candidate
+
+    matching = backend.Candidate(label="一致", text="窓ぎわの席が好きです\nそちらはどうですか？")
+    assert reflected(focus, matching, context) is True
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(matching, context)
+
+    other_value = backend.Candidate(label="別の値", text="カウンター席が好きです\nそちらはどうですか？")
+    assert reflected(focus, other_value, context) is False
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(other_value, context)
+
+    negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です\nそちらはどうですか？")
+    assert reflected(focus, negated, context) is False
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(negated, context)
+
+
 def test_t472_stage_floor_after_accepted_invitation(client):
     c, backend = client
     match_id = add_match(c, "誘いの承諾")

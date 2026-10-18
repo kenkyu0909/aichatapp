@@ -8206,15 +8206,53 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
     return best[1] if best else None
 
 
+MEMO_CONTRADICTION_CUES = (
+    "苦手", "嫌い", "きらい", "避け", "無理", "したくない", "ではない", "じゃない",
+    "ありません", "ません", "ない",
+)
+
+
+def _memo_answer_terms(question: str, sentence: str) -> set[str]:
+    """Return the terms the memo answer adds to the question, such as ``窓``.
+
+    Sharing only the question's own wording makes a candidate that contradicts
+    the memo (``カウンター席が好きです`` for a memo about a window seat) pass the
+    check, so the answer value itself has to appear in the candidate.
+    """
+    return _memo_terms(sentence) - _memo_terms(question)
+
+
+def _memo_answer_contradicted(candidate_text: str, answer_terms: set[str]) -> bool:
+    """True when the candidate negates or denies the memo's answer value."""
+    normalized = re.sub(r"[\s　、。，．!！?？]", "", str(candidate_text))
+    prefix = re.split(r"[?？]", normalized, maxsplit=1)[0]
+    for term in answer_terms:
+        for cue in MEMO_CONTRADICTION_CUES:
+            if re.search(re.escape(term) + r".{0,12}?" + re.escape(cue), prefix):
+                return True
+            if re.search(re.escape(cue) + r".{0,12}?" + re.escape(term), prefix):
+                return True
+    return False
+
+
 def _memo_answer_reflected_in_candidate(question: str, candidate, context: dict) -> bool:
-    """Check that a candidate relays the memo sentence answering the question."""
+    """Check that a candidate relays the memo sentence answering the question.
+
+    The candidate has to carry the memo's own answer value (a term the question
+    does not use) and must not deny it.
+    """
     sentence = _memo_answer_sentence(question, context)
     if not sentence:
         return False
-    shared = _memo_terms(question) & _memo_terms(sentence)
-    prefix = re.split(r"[?？]", getattr(candidate, "text", "") or "", maxsplit=1)[0]
+    answer_terms = _memo_answer_terms(question, sentence)
+    if not answer_terms:
+        return False
+    text = getattr(candidate, "text", "") or ""
+    prefix = re.split(r"[?？]", text, maxsplit=1)[0]
     normalized_prefix = re.sub(r"[\s　]+", "", prefix)
-    return any(term in normalized_prefix for term in shared)
+    if not any(term in normalized_prefix for term in answer_terms):
+        return False
+    return not _memo_answer_contradicted(text, answer_terms)
 
 
 def _confirmed_answer_reflected_in_candidate(question: str, candidate, context: dict) -> bool:
