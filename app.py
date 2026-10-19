@@ -6914,6 +6914,37 @@ def _build_schedule_confirmation_fallback_candidate(context: dict) -> Candidate 
     return candidate
 
 
+def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
+    """話題転換の指示に沿う短い候補を合成する (T493).
+
+    指定の話題に触れた候補をモデルが作れなかったときの受け皿。相手の直前の
+    発言へ短く応じてから、指定の話題へ問いかける。
+    """
+    requested = _topic_change_requested(context)
+    if not requested or requested == "別の話題":
+        return None
+    partner_label = _established_partner_address(context) or _fallback_partner_honorific_name(context)
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    casual = _fallback_should_use_casual_tone(context, question, "")
+    verb = _ACTIVITY_FOLLOWUP_VERB.get(requested, "する")
+    subject = f"{partner_label}は" if partner_label else ""
+    line2 = (
+        f"{subject}{requested}はよく{verb}？"
+        if casual
+        else f"{subject}{requested}はよく{verb}んですか？"
+    )
+    ack = "そうなんですね！" if not casual else "そうなんだ！"
+    candidate = Candidate(label="話題の転換", text=f"{ack}\n{line2}", reply_move="expand")
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate | None:
     """誘いへの承諾だけを1案合成する (T488).    承諾の回答が無いときでも、日程と無関係なメモ文を添えずに短く承諾する。
     """
@@ -8208,6 +8239,7 @@ _ACTIVITY_FOLLOWUP_VERB = {
     "将棋": "やる", "囲碁": "やる", "ゲーム": "やる", "ボードゲーム": "やる", "麻雀": "やる",
     "読書": "する", "料理": "する", "散歩": "する", "遠回り": "する", "買い物": "する", "旅行": "する",
     "手紙": "書く", "日記": "書く",
+    "映画": "観る", "本": "読む", "音楽": "聴く", "写真": "撮る", "カフェ": "行く", "温泉": "行く",
 }
 
 
@@ -9584,8 +9616,8 @@ def _topic_change_requested(context: dict) -> str:
     topic = ""
     requested = False
     for text in (direction, extra):
-        match = re.search(r"([\u4e00-\u9fafァ-ヶ]{2,6})の話", text)
-        if match:
+        match = re.search(r"([\u4e00-\u9fafァ-ヶ]{1,6})の話", text)
+        if match and match.group(1) != "別":
             topic = match.group(1)
             requested = True
         if re.search(r"話題を変え|話題を切り替え|別の話題|別の話|話題を移", text):
@@ -10273,6 +10305,16 @@ def filter_safe_candidates(
         return result
 
     accepted, repetition_notice = _demote_repetitive_self_candidates(accepted, candidate_context)
+    # T493: 話題転換の指示があるときは、指定の話題に触れている候補を先頭に出す。
+    requested_topic = _topic_change_requested(candidate_context)
+    if requested_topic and requested_topic != "別の話題":
+        preferred = [item for item in accepted if requested_topic in item.text]
+        if preferred:
+            accepted = preferred + [item for item in accepted if item not in preferred]
+        else:
+            switch_candidate = _build_topic_change_fallback_candidate(candidate_context)
+            if switch_candidate is not None:
+                accepted = [switch_candidate, *accepted]
     result["recommended"] = accepted[0].model_dump()
     result["alternatives"] = [candidate.model_dump() for candidate in accepted[1:]]
     result["generation_blocked"] = False

@@ -17493,6 +17493,7 @@ def test_t493_topic_change_request_is_detected(client):
     )
     assert backend._topic_change_requested({"reply_preferences": {"direction": "自然に会話を広げる", "extra": "少し短めに"}}) == ""
     assert backend._topic_change_requested({}) == ""
+    assert backend._topic_change_requested({"reply_preferences": {"direction": "", "extra": "本の話にしたい"}}) == "本"
 
 
 def test_t493_topic_change_candidate_is_not_demoted(client):
@@ -17521,6 +17522,34 @@ def test_t493_topic_change_candidate_is_not_demoted(client):
     assert "直前の相手の話題と離れている" not in backend._candidate_rejection_reasons(
         switched, instructed
     )
+
+
+def test_t493_topic_change_candidate_is_promoted_first(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "去年はパンジーを長く楽しめました。花がらを摘むのが日課でした"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語", "direction": "自然に会話を広げる", "extra": "映画の話にしたい"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="反応", text="花がら摘みって大切ですよね✨"),
+        alternatives=[backend.Candidate(label="映画", text="映画とかもよく観るんですが最近観た作品はありますか？")],
+        reason="反応",
+        strategy="",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="",
+        next_action="",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    assert "映画" in filtered["recommended"]["text"]
 
 
 
