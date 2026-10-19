@@ -4038,6 +4038,57 @@ def _trusted_fact_text(context: dict, *, include_negated: bool = False) -> str:
     return " ".join(_trusted_fact_clauses(context, include_negated=include_negated))
 
 
+LEGACY_FACTS_ENV = "MRA_LEGACY_FACTS_PATH"
+
+
+def load_legacy_facts(path: str | None) -> list[str]:
+    """明示的に指定された本人事実ファイルだけを読み込む (T494).
+
+    既定では読み込まない。環境変数 MRA_LEGACY_FACTS_PATH などで明示された
+    パスがあるときだけ、本人の確認済み事実として使う。リポジトリには実データを
+    置かず、テストは架空のデータで行う。
+    """
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    facts: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                facts.append(text)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+
+    if isinstance(data, dict):
+        collect(data.get("facts_flat") or data.get("facts") or data)
+    else:
+        collect(data)
+    return facts
+
+
+def _merge_legacy_facts(profile: dict, legacy_path: str | None) -> dict:
+    """読み込んだ本人事実を profile.facts に足して、確定事実として使えるようにする (T494)."""
+    facts = load_legacy_facts(legacy_path)
+    if not facts:
+        return profile
+    base = dict(profile or {})
+    base_facts = dict(base.get("facts") or {}) if isinstance(base.get("facts"), dict) else {}
+    existing = base_facts.get("legacy_facts") or []
+    base_facts["legacy_facts"] = [*existing, *facts]
+    base["facts"] = base_facts
+    return base
+
+
 def _shared_personal_claim_is_grounded(claim: str, trusted_clauses: list[str]) -> bool:
     normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
     normalized_claim = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_claim)
@@ -6101,6 +6152,8 @@ def build_context(data: GenerateInput) -> dict:
                     400, "最後のメッセージが自分の発言です。相手からの返信が来てから生成してください"
                 )
     session_answers = load_session_answers(data.match_id, data.clarification_session_id)
+    # T494: 明示的に指定されたときだけ、旧アプリから抽出した本人事実を確定事実へ足す。
+    profile = _merge_legacy_facts(profile, os.environ.get(LEGACY_FACTS_ENV))
     return {
         "mode": data.mode,
         "my_profile": profile,

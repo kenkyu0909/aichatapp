@@ -17552,6 +17552,41 @@ def test_t493_topic_change_candidate_is_promoted_first(client):
     assert "映画" in filtered["recommended"]["text"]
 
 
+def test_t494_legacy_facts_are_loaded_only_when_explicit(client, tmp_path):
+    _, backend = client
+    path = tmp_path / "facts.json"
+    path.write_text(json.dumps({"facts_flat": ["趣味は喫茶店めぐりです"]}, ensure_ascii=False), encoding="utf-8")
+    assert backend.load_legacy_facts(None) == []
+    assert backend.load_legacy_facts(str(tmp_path / "missing.json")) == []
+    assert backend.load_legacy_facts(str(path)) == ["趣味は喫茶店めぐりです"]
+    merged = backend._merge_legacy_facts({"facts": {"name": "架空"}}, str(path))
+    assert merged["facts"]["legacy_facts"] == ["趣味は喫茶店めぐりです"]
+    assert "喫茶店めぐり" in backend._trusted_fact_text({"my_profile": merged, "ephemeral_user_answers": []})
+    assert backend._merge_legacy_facts({"facts": {"name": "架空"}}, None) == {"facts": {"name": "架空"}}
+
+
+def test_t494_legacy_extractor_keeps_only_self_facts():
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parent.parent / "scripts" / "legacy_extract.py"
+    spec = importlib.util.spec_from_file_location("legacy_extract", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    messages = [
+        {"id": 1, "content": "私は休日は喫茶店めぐりをしています"},
+        {"id": 2, "content": "あなたはどんな本が好きですか？"},
+        {"id": 3, "content": "明日は駅で待ち合わせですね！"},
+        {"id": 4, "content": "私は横浜に住んでいます"},
+    ]
+    facts = module._extract_message_facts(messages, max_per_category=12)
+    flat = [item["text"] for items in facts.values() for item in items]
+    assert any("喫茶店" in text for text in flat)
+    assert any("横浜" in text for text in flat)
+    assert all("待ち合わせ" not in text for text in flat)
+    assert all("あなた" not in text for text in flat)
+
+
 
 
 
