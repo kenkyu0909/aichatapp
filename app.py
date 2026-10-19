@@ -8618,6 +8618,9 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         if _is_ask_sentence(line) and len(_question_intent_key(line)) >= 5
     }
     reasons: list[str] = []
+    # T493: ユーザーが話題転換を指示しているときは、深掘り・直前の話題との
+    # つながりの検査で話題転換の候補を後ろへ回さない。
+    topic_change_requested = bool(_topic_change_requested(context))
     for line in text.splitlines():
         key = _normalized_repetition_key(line)
         if len(key) >= 5 and key in prior_lines:
@@ -8638,6 +8641,8 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
     if _candidate_mixes_casual_tail(text, context):
         reasons.append("敬語設定にタメ口が混ざっている")
     for line in text.splitlines():
+        if topic_change_requested:
+            break
         if not _is_ask_sentence(line):
             continue
         key = _question_intent_key(line)
@@ -8679,7 +8684,7 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
                 reasons.append("直近と同じ趣旨の行")
                 break
     candidate_questions = [line for line in text.splitlines() if _is_ask_sentence(line)]
-    if candidate_questions:
+    if candidate_questions and not topic_change_requested:
         candidate_nouns = {
             token for line in candidate_questions for token in _content_nouns(line)
         }
@@ -8705,7 +8710,7 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         }
         if candidate_interrogatives & recent_interrogatives:
             reasons.append("同じ話題の質問が続く")
-    if _candidate_drifts_from_partner_topic(text, context):
+    if _candidate_drifts_from_partner_topic(text, context) and not topic_change_requested:
         reasons.append("直前の相手の話題と離れている")
     if _question_repeats_previous_ask(text, context):
         reasons.append("直前の自分の質問と同じ")
@@ -9043,7 +9048,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     if any(not line.strip() for line in text.splitlines()):
         reasons.append("空行")
     # T487: 書き出しが直前ではなく前のターンの相手発言に相槌している候補を落とす。
-    if _opening_line_reacts_to_stale_topic(text, context):
+    # T493: 話題転換の指示があるときは対象外にする。
+    if _opening_line_reacts_to_stale_topic(text, context) and not _topic_change_requested(context):
         reasons.append("直前の相手の話題と離れている")
     # T488: 相手の直前の発言を助詞違いでなぞるだけの書き出しを落とす。
     if _opening_line_echoes_partner(text, context):
@@ -9563,6 +9569,30 @@ def _repeats_last_me_time_opening(text: str, context: dict) -> bool:
     if not partner_messages:
         return False
     return last_time.group(0) not in partner_messages[-1]
+
+
+def _topic_change_requested(context: dict) -> str:
+    """ユーザーの話題転換の指示を返す（無ければ空文字）(T493).
+
+    direction が「話題を変える」のときや、extra に「〜の話にしたい」
+    「話題を変えたい」などがあるときに、指示された話題（例: 映画）を返す。
+    話題の指定が無いまま転換だけを求められた場合は「別の話題」を返す。
+    """
+    prefs = context.get("reply_preferences") or {}
+    direction = str(prefs.get("direction", "") or "")
+    extra = str(prefs.get("extra", "") or "")
+    topic = ""
+    requested = False
+    for text in (direction, extra):
+        match = re.search(r"([\u4e00-\u9fafァ-ヶ]{2,6})の話", text)
+        if match:
+            topic = match.group(1)
+            requested = True
+        if re.search(r"話題を変え|話題を切り替え|別の話題|別の話|話題を移", text):
+            requested = True
+    if not requested:
+        return ""
+    return topic or "別の話題"
 
 
 def _recent_relay_text(context: dict, lookback: int = 3) -> str:

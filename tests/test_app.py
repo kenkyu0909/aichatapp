@@ -17482,6 +17482,47 @@ def test_t492_activity_topic_uses_a_natural_followup(client):
     assert "どんな" not in candidate.text
 
 
+def test_t493_topic_change_request_is_detected(client):
+    _, backend = client
+    assert backend._topic_change_requested({"reply_preferences": {"direction": "話題を変える", "extra": ""}}) == "別の話題"
+    assert (
+        backend._topic_change_requested(
+            {"reply_preferences": {"direction": "自然に会話を広げる", "extra": "映画の話に持っていきたい"}}
+        )
+        == "映画"
+    )
+    assert backend._topic_change_requested({"reply_preferences": {"direction": "自然に会話を広げる", "extra": "少し短めに"}}) == ""
+    assert backend._topic_change_requested({}) == ""
+
+
+def test_t493_topic_change_candidate_is_not_demoted(client):
+    _, backend = client
+    history = [
+        {"role": "them", "body": "休みは将棋を指すこともあります。水野さんは将棋は指しますか？"},
+        {"role": "me", "body": "指します\n映画をよく観ます"},
+        {"role": "them", "body": "将棋は続けるのが好きなんです"},
+    ]
+    base = {
+        "mode": "reply",
+        "history": history,
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    switched = backend.Candidate(label="転換", text="将棋いいですよね😊\n映画をよく観ます")
+    assert "直前の相手の話題と離れている" in backend._recent_self_repetition_reasons(switched.text, base)
+    instructed = {
+        **base,
+        "reply_preferences": {"tone": "敬語", "direction": "話題を変える", "extra": "映画の話にしたい"},
+    }
+    assert "直前の相手の話題と離れている" not in backend._recent_self_repetition_reasons(
+        switched.text, instructed
+    )
+    assert "直前の相手の話題と離れている" not in backend._candidate_rejection_reasons(
+        switched, instructed
+    )
+
+
 
 
 
