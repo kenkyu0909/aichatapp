@@ -6210,17 +6210,34 @@ _PIVOT_RUNON_PATTERN = re.compile(
 )
 
 
+def _fix_pivot_left(left: str) -> str:
+    """分割で行末に残った逆接を言い切りの形に直す (T490)."""
+    for pivot, period in (("んですが", "んです"), ("ですが", "です"), ("ますが", "ます")):
+        if left.endswith(pivot):
+            return left[: -len(pivot)] + period + "！"
+    return left
+
+
 def split_pivot_run_on_line(text: str) -> str:
     """T486: 「〜ですが◯◯さんは…」の長い1行を、ピボットの後で2行に割る。
 
     候補は句読点を持てないため、逆接のあとに相手への質問が続くときは改行で
-    区切らないと1行に2文が並んで読みにくくなる。
+    区切らないと1行に2文が並んで読みにくくなる。T490: 割った左側が「〜んですが」
+    で宙ぶらりんにならないよう言い切りの形に直す。けど系は分割せず残す。
     """
-    lines: list[str] = []
+    result: list[str] = []
     for line in (text.splitlines() or [text]):
-        fixed = _PIVOT_RUNON_PATTERN.sub(r"\1\n", line)
-        lines.extend(fixed.split("\n"))
-    return "\n".join(lines)
+        while True:
+            match = _PIVOT_RUNON_PATTERN.search(line)
+            if not match:
+                result.append(line)
+                break
+            if match.group(1) in ("けど", "けれど", "けれども"):
+                result.append(line)
+                break
+            result.append(_fix_pivot_left(line[: match.end()]))
+            line = line[match.end():]
+    return "\n".join(result)
 
 
 def candidate_has_placeholder(text: str) -> bool:
@@ -7154,6 +7171,25 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         ):
             return True
         return False
+    if topic == "料理習慣" and _personal_information_scope(topic, question) != (topic, "recent_experience"):
+        # T490: 確認済みの回答があるのに、相手のことのように受け止めるだけで
+        # 回答の中身（します／作ります）を伝えていない候補を落とす。
+        answers = [
+            str(answer.get("answer", "")).strip()
+            for answer in context.get("ephemeral_user_answers", [])
+            if str(answer.get("answer", "")).strip()
+        ]
+        if answers:
+            normalize_answer = lambda value: re.sub(r"[\s、。，．！!？?😊☺️✨😄😂🥲😭🌸❤️💕👍☕📚]", "", str(value))
+            normalized_candidate = normalize_answer(candidate.text)
+            clauses = [
+                normalize_answer(clause)
+                for answer in answers
+                for clause in re.split(r"[。．.!！?？、]+", answer)
+                if normalize_answer(clause)
+            ]
+            if clauses:
+                return any(clause in normalized_candidate for clause in clauses)
     if topic == "予定":
         confirmed_evidence: list[str] = []
         for answer in context.get("ephemeral_user_answers", []):
@@ -7818,9 +7854,11 @@ def _is_unclassified_question_about_user(text: str) -> bool:
         r"[一-龯ぁ-んァ-ヶ]{1,8}(?:る|った)こと(?:が|は|も)?(?:あります|ある)(?:んですか|か)?|"
         r"(?:撮|描|弾|歌|踊|登|走|泳|飼|集め)(?:りますか|るんですか|ってますか|っていますか)|"
         r"(?:どこから|どれから|何から)[^?？\n]{0,14}(?:ますか|るんですか|ですか|ましたか)|"
-        r"(?:は|も|って)[^?？\n]{0,10}(?:飲みますか|食べますか|飲むんですか|食べるんですか|召し上がりますか)",
+        r"(?:は|も|って)[^?？\n]{0,10}(?:飲みますか|食べますか|飲むんですか|食べるんですか|召し上がりますか)|"
+        r"(?:は|も|って)[^?？\n]{0,8}(?:しますか|していますか|ていますか|続けていますか|行きますか|観ますか|見ますか|"
+        r"聴きますか|聞きますか|読みますか|作りますか|育てますか|買いますか|使いますか)",
         question,
-    ):
+    ) and not re.search(r"いつ|何時|何日|何曜|何月|いつごろ", question):
         return True
     # T485: 「AとBならどっち」「AとBどっちが多い」型の選択式質問も、本人の
     # 好み・頻度を尋ねる直接質問として扱う（回答せずに聞き返すのを防ぐ）。

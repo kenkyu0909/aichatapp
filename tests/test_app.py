@@ -17074,10 +17074,20 @@ def test_t486_pivot_question_is_split_onto_its_own_line(client):
     _, backend = client
     text = "ページをめくる感触が好きなんですがいつきさんはどんな本を見つけることが多いですか？"
     assert backend.split_pivot_run_on_line(text) == (
-        "ページをめくる感触が好きなんですが\nいつきさんはどんな本を見つけることが多いですか？"
+        "ページをめくる感触が好きなんです！\nいつきさんはどんな本を見つけることが多いですか？"
     )
     assert backend.split_pivot_run_on_line("好きなんですがよろしくお願いします") == "好きなんですがよろしくお願いします"
     assert backend.split_pivot_run_on_line("天気がいいと公園は気持ちいいですよね✨") == "天気がいいと公園は気持ちいいですよね✨"
+
+
+def test_t490_pivot_split_does_not_leave_a_dangling_but(client):
+    _, backend = client
+    text = "私は古い映画をよく観るんですが黒川さんはどんなジャンルを観るんですか？"
+    assert backend.split_pivot_run_on_line(text) == (
+        "私は古い映画をよく観るんです！\n黒川さんはどんなジャンルを観るんですか？"
+    )
+    # けど系は分割せず、宙ぶらりんの行を作らない
+    assert backend.split_pivot_run_on_line("映画は好きだけど黒川さんは観ますか？") == "映画は好きだけど黒川さんは観ますか？"
 
 
 def test_t486_partner_states_a_conflicting_time(client):
@@ -17351,6 +17361,32 @@ def test_t489_schedule_change_is_not_finalized_before_partner_confirms(client):
     confirmed = dict(context)
     confirmed["history"] = context["history"][:-1] + [{"role": "them", "body": "南口に14時集合になりました"}]
     assert backend._schedule_change_pending(confirmed) is False
+
+
+def test_t490_general_action_question_is_a_direct_personal_question(client):
+    _, backend = client
+    assert backend._is_unclassified_question_about_user("水野さんは季節の散歩はよくしますか？")
+    assert backend._is_unclassified_question_about_user("水野さんは何か育てていますか？")
+    assert backend._is_unclassified_question_about_user("水野さんは映画は観ますか？")
+    assert not backend._is_unclassified_question_about_user("水野さんはいつ行きますか？")
+
+
+def test_t490_cooking_answer_must_be_relayed(client):
+    _, backend = client
+    question = "最近は簡単なパスタばかり作っています。水野さんは料理はしますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "ephemeral_user_answers": [
+            {"question": question, "answer": "します。簡単なものだけですが作ります。"},
+        ],
+    }
+    evasive = backend.Candidate(label="evasive", text="そうなんですね！\nおうちで料理するんですね✨")
+    assert backend._answers_verified_single_partner_question(evasive, context) is False
+    relay = backend.Candidate(label="relay", text="簡単なものだけですが作ります")
+    assert backend._answers_verified_single_partner_question(relay, context) is True
 
 
 
