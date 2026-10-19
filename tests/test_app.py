@@ -16108,6 +16108,88 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t479_partner_address_stays_consistent(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "こんにちは！こちらこそよろしくお願いします😊"},
+            {"role": "me", "body": "はじめまして！\n本の話ができるのうれしいです😊\n黒川さんは休日は何をされてることが多いですか？"},
+            {"role": "them", "body": "古本屋めぐりが多いです"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    assert backend._established_partner_address(context) == "黒川さん"
+    consistent = backend.Candidate(
+        label="統一", text="古本屋めぐりっていいですよね📚"
+    )
+    mixed = backend.Candidate(
+        label="揺れ", text="古本屋めぐりいいですよね📚\nいつきさんはどんな本を探すことが多いですか？"
+    )
+    assert "相手の呼び方が揺れている" not in backend._recent_self_repetition_reasons(
+        consistent.text, context
+    )
+    assert "相手の呼び方が揺れている" in backend._recent_self_repetition_reasons(
+        mixed.text, context
+    )
+    ordered, notice = backend._demote_repetitive_self_candidates([mixed, consistent], context)
+    assert ordered[0] is consistent
+    assert notice
+
+
+def test_t479_same_interrogative_and_verb_is_the_same_ask(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルム写真も趣味なんです"},
+            {"role": "me", "body": "フィルム写真おしゃれですねー✨\nどんな被写体を撮ることが多いんですか？"},
+            {"role": "them", "body": "現像の上がりを待つ時間が好きです"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    repeated = backend.Candidate(
+        label="同趣旨", text="現像のワクワク感わかります✨\nどんな街や景色を撮ることが多いんですか？"
+    )
+    different = backend.Candidate(
+        label="別", text="現像のワクワク感わかります✨\nお気に入りのフィルムはありますか？"
+    )
+    assert "直前の自分の質問と同じ" in backend._recent_self_repetition_reasons(repeated.text, context)
+    assert "直前の自分の質問と同じ" not in backend._recent_self_repetition_reasons(
+        different.text, context
+    )
+
+    place_context = dict(context)
+    place_context["history"] = [
+        {"role": "them", "body": "喫茶店は中野の北口が多いです"},
+        {"role": "me", "body": "喫茶店のプリン美味しそうですね🍮\nちなみにいつきさんはどんな喫茶店に行くことが多いですか？"},
+        {"role": "them", "body": "北口は古いお店が多いんです"},
+    ]
+    place_repeat = backend.Candidate(
+        label="同趣旨", text="固めのプリン最高ですね🍮\nちなみに普段はどんなエリアの喫茶店に行かれるんですか？"
+    )
+    place_reasons = backend._recent_self_repetition_reasons(place_repeat.text, place_context)
+    assert (
+        "直前の自分の質問と同じ" in place_reasons or "同じ話題の質問が続く" in place_reasons
+    ), place_reasons
+
+
+def test_t479_prompts_avoid_quoting_the_partner(client):
+    _, backend = client
+    reply_prompt = backend.read_prompt("reply")
+    assert "相手の言葉をそのまま引用して返しません" in reply_prompt
+    assert "自分の気持ちとして言い直します" in reply_prompt
+    assert "相手の呼び方は、その会話で最初に使った呼び方" in reply_prompt
+
+
 def test_t478_repeated_question_is_not_promoted_back_to_first(client):
     _, backend = client
     context = {

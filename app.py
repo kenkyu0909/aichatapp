@@ -7938,6 +7938,71 @@ def _content_nouns(text: str) -> set[str]:
     return {token for token in tokens if token not in _REPETITION_NOUN_STOPWORDS}
 
 
+_QUESTION_ACTION_VERBS = (
+    "撮る",
+    "撮り",
+    "見る",
+    "見",
+    "行く",
+    "行か",
+    "行き",
+    "食べ",
+    "飲",
+    "読",
+    "買",
+    "探",
+    "選",
+    "作",
+    "集め",
+    "通",
+)
+
+_PARTNER_ADDRESS_STOPWORDS = {"さん", "くん", "ちゃん"}
+
+
+def _partner_address_forms(context: dict) -> set[str]:
+    """Honorific address forms the conversation may use for the partner."""
+    facts = (context.get("other") or {}) if isinstance(context.get("other"), dict) else {}
+    raw_name = str(facts.get("name") or "").strip()
+    forms: set[str] = set()
+    if raw_name:
+        cleaned = re.sub(r"[\s　]+", " ", raw_name).strip()
+        tokens = cleaned.split(" ")
+        stems = {token for token in tokens if len(token) >= 2} | {cleaned}
+        if len(tokens) <= 1 and len(cleaned) >= 4:
+            stems |= {cleaned[:2], cleaned[2:]}
+        forms |= {f"{stem}さん" for stem in stems if stem}
+        forms |= {f"{stem}くん" for stem in stems if stem}
+        forms |= {f"{stem}ちゃん" for stem in stems if stem}
+    return {form for form in forms if len(form) >= 3}
+
+
+def _established_partner_address(context: dict) -> str:
+    """Return the address the conversation already uses for the partner."""
+    prior_me = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ]
+    forms = sorted(_partner_address_forms(context), key=len, reverse=True)
+    if not forms:
+        return ""
+    for body in prior_me:
+        for form in forms:
+            if form in body:
+                return form
+    return _fallback_partner_honorific_name(context) or ""
+
+
+def _candidate_mixes_partner_address(text: str, context: dict) -> bool:
+    """True when a candidate uses a different honorific name than the established one."""
+    established = _established_partner_address(context)
+    if not established:
+        return False
+    used = {form for form in _partner_address_forms(context) if form in text}
+    return bool(used) and established not in used
+
+
 def _latest_partner_nouns(context: dict) -> set[str]:
     """Content nouns of the partner's latest message."""
     partner_messages = [
@@ -8013,15 +8078,30 @@ def _question_repeats_previous_ask(text: str, context: dict) -> bool:
             continue
         candidate_key = _normalized_repetition_key(line)
         candidate_nouns = _content_nouns(line)
-        if not candidate_key or not candidate_nouns:
-            continue
+        candidate_interrogatives = {
+            token for token in _REPETITION_INTERROGATIVES if token in line
+        }
+        candidate_verbs = {verb for verb in _QUESTION_ACTION_VERBS if verb in line}
         for previous in previous_questions:
-            previous_nouns = _content_nouns(previous)
-            if not previous_nouns or not candidate_nouns <= previous_nouns:
+            previous_key = _normalized_repetition_key(previous)
+            if not previous_key:
                 continue
-            if SequenceMatcher(
-                None, candidate_key, _normalized_repetition_key(previous)
-            ).ratio() >= 0.6:
+            previous_nouns = _content_nouns(previous)
+            if candidate_nouns and previous_nouns and candidate_nouns <= previous_nouns:
+                if SequenceMatcher(None, candidate_key, previous_key).ratio() >= 0.6:
+                    return True
+            # Same interrogative and the same action verb asks the same thing with
+            # different object words (どんな被写体を撮る → どんな街や景色を撮る).
+            previous_interrogatives = {
+                token for token in _REPETITION_INTERROGATIVES if token in previous
+            }
+            previous_verbs = {verb for verb in _QUESTION_ACTION_VERBS if verb in previous}
+            if (
+                candidate_interrogatives
+                and candidate_interrogatives & previous_interrogatives
+                and candidate_verbs
+                and candidate_verbs & previous_verbs
+            ):
                 return True
     return False
 
@@ -8095,6 +8175,8 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         reasons.append("直前の相手の話題と離れている")
     if _question_repeats_previous_ask(text, context):
         reasons.append("直前の自分の質問と同じ")
+    if _candidate_mixes_partner_address(text, context):
+        reasons.append("相手の呼び方が揺れている")
     return reasons
 
 
