@@ -17389,6 +17389,41 @@ def test_t490_cooking_answer_must_be_relayed(client):
     assert backend._answers_verified_single_partner_question(relay, context) is True
 
 
+def test_t491_verb_stem_is_not_a_followup_topic(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "天気がいい日は遠回りして帰ります。水野さんは遠回りするのは好きですか？"}
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+    }
+    assert backend._latest_topic_noun(context) == ""
+
+
+def test_t491_relay_ack_and_followup_vary(client):
+    _, backend = client
+    question = "水野さんはゲームはしますか？"
+    answer = "します。簡単なボードゲームをよくやります。"
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "水野さんは温泉はよく行きますか？"},
+            {"role": "me", "body": "いいですね！\nよく行きます\n黒川さんはどんな温泉が好きなんですか？"},
+            {"role": "them", "body": question},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+    candidate = backend._compose_answer_relay_candidate(context, question, answer)
+    assert candidate is not None
+    assert candidate.text.splitlines()[0] != "いいですね！"
+    assert "どんな" not in candidate.text
+
+
 
 
 

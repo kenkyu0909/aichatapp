@@ -8316,6 +8316,11 @@ def _latest_topic_noun(context: dict) -> str:
         token = match.group(0)
         if token in _REPETITION_NOUN_STOPWORDS:
             continue
+        # T491: 「遠回」り のように送り仮名が続く語は動詞由来の切り出しで名詞に
+        # ならない。助詞（のはがをにでとへもやかねよ）以外のひらがなが続くときは使わない。
+        following = latest_partner[match.end(): match.end() + 1]
+        if following and "\u3041" <= following <= "\u3096" and following not in "のはがをにでとへもやかねよ":
+            continue
         # T485: 修飾語だけを切り出さないよう、続く「系/風/タイプ/派」や
         # 「〜の〈名詞〉」までを1つの名詞句として扱う（「ハード」→「ハード系のパン」）。
         extension = re.match(
@@ -9472,6 +9477,30 @@ def _answer_lines_for_candidate(raw_answer: str) -> list[str]:
     return lines
 
 
+def _recent_relay_text(context: dict, lookback: int = 3) -> str:
+    """直近の自分の発言（フォールバックの型の重複判定用）(T491)."""
+    prior = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ]
+    return " ".join(prior[-lookback:])
+
+
+_RELAY_ACK_STEMS_POLITE = ("いいですね", "わかります", "そうなんですね")
+_RELAY_ACK_STEMS_CASUAL = ("いいね", "わかる", "そうなんだ")
+
+
+def _pick_relay_ack(context: dict, casual: bool) -> str:
+    """相槌を数パターンから直近で使っていないものを選ぶ (T491)."""
+    recent = _recent_relay_text(context)
+    stems = _RELAY_ACK_STEMS_CASUAL if casual else _RELAY_ACK_STEMS_POLITE
+    for stem in stems:
+        if stem not in recent:
+            return stem + "！"
+    return stems[len(recent) % len(stems)] + "！"
+
+
 def _compose_answer_relay_candidate(
     context: dict, question: str, raw_answer: str
 ) -> Candidate | None:
@@ -9530,14 +9559,26 @@ def _compose_answer_relay_candidate(
     topic_noun = _latest_topic_noun(context)
     # T488: 「どんな中野の商店街が…」のような不自然な聞き返しを避ける。複合語は
     # 使わずに聞き返しを省く。
+    # T491: 聞き返しの型を数パターンから直近で使っていないものを選び、ときどき省く。
     if topic_noun and partner_label and "の" not in topic_noun:
-        followup = (
+        recent = _recent_relay_text(context)
+        like_form = (
             f"{partner_label}はどんな{topic_noun}が好きなんですか？"
             if not casual
             else f"{partner_label}はどんな{topic_noun}が好き？"
         )
-        if followup in last_prior_me:
+        go_form = (
+            f"{partner_label}は{topic_noun}はよく行くんですか？"
+            if not casual
+            else f"{partner_label}は{topic_noun}はよく行く？"
+        )
+        unused = [form for form in (like_form, go_form) if form not in recent]
+        if unused:
+            followup = unused[0]
+        elif re.search(r"どんな|よく行く", recent):
             followup = ""
+        else:
+            followup = (like_form, go_form)[len(prior_me) % 2]
     else:
         followup = ""
     if partner_invites:
@@ -9565,7 +9606,7 @@ def _compose_answer_relay_candidate(
         # The partner shared their own news and then asked a question. Acknowledge
         # the news briefly instead of the "I see" reaction: a question turn should
         # not open with そうなんですね！ (T455/T475).
-        ack = "いいね！" if casual else "いいですね！"
+        ack = _pick_relay_ack(context, casual)
         candidate_text = "\n".join(part for part in (ack, clean_answer, followup) if part)
     else:
         # A pure question turn: answer first, without a reaction line.
