@@ -16108,6 +16108,59 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t478_repeated_question_is_not_promoted_back_to_first(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルムを現像してもらってます"},
+            {"role": "me", "body": "フィルムの現像までお願いできるお店ってすてきですね！\nどんな写真を撮ることが多いですか？"},
+            {"role": "them", "body": "土曜日は本の話も写真の話もできたらうれしいです"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    repeated = {
+        "label": "同じ話題の質問",
+        "text": "写真のお話もできるのわくわくします📸\nどんな景色を撮ることが多いですか？",
+        "reply_move": "expand",
+    }
+    fresh = {
+        "label": "受け止め",
+        "text": "本の話も写真の話もすごく楽しみですね✨\n当日はよろしくおねがいします！",
+        "reply_move": "react",
+    }
+    ordered = backend._prioritize_question_candidate(
+        [repeated, fresh], context, invite_decision="schedule_after_acceptance"
+    )
+    assert ordered[0]["text"] == fresh["text"], ordered
+
+
+def test_t478_softens_kashikomarimashita_and_rejects_garbled_form(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("中野駅の改札前でかしこまりました！") == "中野駅の改札前でわかりました！"
+    assert backend.candidate_has_high_confidence_japanese_error("中野駅の改札前でかこまりました！") is True
+    assert backend.candidate_has_high_confidence_japanese_error("中野駅の改札前でかしこまりました！") is False
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "じゃあ土曜の15時に駅前で！"}],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    softened = backend.Candidate(
+        label="確認", text="中野駅の改札前でわかりました！\n当日お会いできるのを楽しみにしています"
+    )
+    assert "明らかな誤字" not in backend._candidate_rejection_reasons(softened, context)
+    garbled = backend.Candidate(label="誤字", text="中野駅の改札前でかこまりました！\nよろしくお願いします")
+    assert "明らかな誤字" in backend._candidate_rejection_reasons(garbled, context)
+
+
 def test_t477_relay_reacts_when_the_partner_shared_before_asking(client):
     _, backend = client
     context = {

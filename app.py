@@ -7725,6 +7725,8 @@ def candidate_has_meeting_related_question(text: str) -> bool:
 _HIGH_CONFIDENCE_MALFORMED_WORDS = (
     re.compile(r"雰囲(?!気)"),
     re.compile(r"(?:頼|読|飲|休|歩|住|進|選|遊|運|学|励|並|喜|悩)(?:たく|たい)"),
+    # かしこまりました の崩れた形（かこまりました・かしこまりましたでした 等）。
+    re.compile(r"か[こご]まりました|かしこまりましたでした"),
 )
 
 
@@ -7850,10 +7852,15 @@ def _prioritize_question_candidate(
         return candidates
 
     def candidate_tier(text: str) -> int:
+        repetition_reasons = _recent_self_repetition_reasons(text, context)
         has_a = bool(ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text))
         has_q = _candidate_has_partner_question(text)
-        if _candidate_repeats_recent_self_question(text, context):
+        if _candidate_repeats_recent_self_question(text, context) or repetition_reasons:
             has_q = False
+        if repetition_reasons:
+            # A candidate that repeats a recent line/question or drifts from the
+            # partner's topic must not be promoted over a fresh one.
+            return 0
         if has_a and has_q:
             return 3
         if has_q:
@@ -9232,6 +9239,7 @@ _STIFF_KEIGO_REWRITES = (
     ("心待ちにしています", "楽しみにしています"),
     ("承知いたしました", "わかりました"),
     ("承知しました", "わかりました"),
+    ("かしこまりました", "わかりました"),
     ("してみましょうか", "しませんか"),
     ("してみますか", "しませんか"),
     ("してみようか", "しませんか"),
