@@ -13733,42 +13733,42 @@ def test_generate_stops_at_request_deadline_before_provider_call(client, monkeyp
             "みなとみらいの海沿いをよく散歩します",
             "自動",
             "",
-            "みなとみらいの海沿いをよく散歩します\nそちらはどうしてるんですか？",
+            "みなとみらいの海沿いをよく散歩します",
         ),
         (
             "喫茶店は静かな店内のほうが落ち着きます。そよかさんはにぎやかなお店と静かなお店、どちらが好みですか？",
             "私も静かなお店のほうが落ち着くので好きです。",
             "自動",
             "",
-            "私も静かなお店のほうが落ち着くので好きです\nそちらはどうしてるんですか？",
+            "私も静かなお店のほうが落ち着くので好きです",
         ),
         (
             "最近何してたの？",
             "家でゆっくりしてたよ！",
             "タメ口",
             "",
-            "家でゆっくりしてたよ\nそっちはどうしてる？",
+            "家でゆっくりしてたよ",
         ),
         (
             "それでどうなったんですか？",
             "無事に解決したよ",
             "敬語",
             "",
-            "無事に解決したよ\nそちらはどうしてるんですか？",
+            "無事に解決したよ",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "混合（敬語ベース＋少し砕ける）",
             "",
-            "無事に解決したよ\nそちらはどうしてるんですか？",
+            "無事に解決したよ",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "自動",
             "タメ口",
-            "無事に解決したよ\nそっちはどうしてる？",
+            "無事に解決したよ",
         ),
     ],
 )
@@ -13923,7 +13923,7 @@ def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on
     assert body["available_candidate_count"] == 1
     assert (
         body["recommended"]["text"]
-        == "みなとみらいの海沿いをよく散歩します\nそちらはどうしてるんですか？"
+        == "みなとみらいの海沿いをよく散歩します"
     )
     assert body["alternatives"] == []
 
@@ -15632,7 +15632,7 @@ def test_t472_memo_sentence_answers_seat_question(client):
 
     direct = backend.Candidate(
         label="素直な回答",
-        text="窓ぎわの席でコーヒーを飲みながら本を読むことが多いです\nそちらはどうしてるんですか？",
+        text="窓ぎわの席でコーヒーを飲みながら本を読むことが多いです",
     )
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(direct, context)
 
@@ -15656,15 +15656,15 @@ def test_t472_memo_answer_term_is_required_and_contradictions_are_rejected(clien
     focus = backend._last_question_sentence(ask)
     reflected = backend._memo_answer_reflected_in_candidate
 
-    matching = backend.Candidate(label="一致", text="窓ぎわの席が好きです\nそちらはどうしてるんですか？")
+    matching = backend.Candidate(label="一致", text="窓ぎわの席が好きです")
     assert reflected(focus, matching, context) is True
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(matching, context)
 
-    other_value = backend.Candidate(label="別の値", text="カウンター席が好きです\nそちらはどうしてるんですか？")
+    other_value = backend.Candidate(label="別の値", text="カウンター席が好きです")
     assert reflected(focus, other_value, context) is False
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(other_value, context)
 
-    negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です\nそちらはどうしてるんですか？")
+    negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です")
     assert reflected(focus, negated, context) is False
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(negated, context)
 
@@ -16106,6 +16106,127 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     simple_relay = backend._build_answered_question_fallback_candidate(pure_question)
     assert simple_relay is not None
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
+
+
+def test_t481_casual_tail_is_demoted_under_polite_settings(client):
+    _, backend = client
+    polite = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルムカメラも持って行くんですね"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    casual_candidate = backend.Candidate(
+        label="タメ口", text="フィルムカメラも持って行くんだね✨\nどんな写真を撮るのか楽しみだな😊"
+    )
+    polite_candidate = backend.Candidate(
+        label="敬語", text="フィルムカメラも持って行くんですね✨\nどんな写真を撮るのか楽しみです😊"
+    )
+    assert "敬語設定にタメ口が混ざっている" in backend._recent_self_repetition_reasons(
+        casual_candidate.text, polite
+    )
+    assert "敬語設定にタメ口が混ざっている" not in backend._recent_self_repetition_reasons(
+        polite_candidate.text, polite
+    )
+    ordered, notice = backend._demote_repetitive_self_candidates(
+        [casual_candidate, polite_candidate], polite
+    )
+    assert ordered[0] is polite_candidate
+    assert notice
+
+    casual_pref = dict(polite)
+    casual_pref["reply_preferences"] = {"tone": "タメ口"}
+    assert "敬語設定にタメ口が混ざっている" not in backend._recent_self_repetition_reasons(
+        casual_candidate.text, casual_pref
+    )
+
+
+def test_t481_same_line_opening_is_treated_as_duplicate(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "駅前で待ち合わせましょー"},
+            {"role": "me", "body": "駅前ですね！\n分かりやすくて安心です😊"},
+            {"role": "them", "body": "よろしくお願いします"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [],
+    }
+    repeated = backend.Candidate(label="同じ書き出し", text="駅前ですね✨\n当日が楽しみです😊")
+    fresh = backend.Candidate(label="別", text="土曜が待ち遠しいです✨\n当日が楽しみです😊")
+    reasons = backend._recent_self_repetition_reasons(repeated.text, context)
+    assert (
+        "直近の自分の発言と同じ書き出し" in reasons or "直近の自分の発言と同じ行" in reasons
+    ), reasons
+    assert "直近の自分の発言と同じ書き出し" not in backend._recent_self_repetition_reasons(
+        fresh.text, context
+    ) and "直近の自分の発言と同じ行" not in backend._recent_self_repetition_reasons(
+        fresh.text, context
+    )
+    ordered, notice = backend._demote_repetitive_self_candidates([repeated, fresh], context)
+    assert ordered[0] is fresh
+    assert notice
+
+
+def test_t481_fallback_asks_back_with_the_partner_topic(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "街を歩くのが好きです"},
+            {"role": "them", "body": "レトロな看板を見つけるのが好きなんです\n水野さんは街では何を見ますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [
+            {"question": "相手の「水野さんは街では何を見ますか？」にどう答えたいか教えてください", "answer": "看板と古い建物を見ることが多いです。"},
+        ],
+    }
+    relay = backend._build_answered_question_fallback_candidate(context)
+    assert relay is not None, context
+    assert "看板" in relay.text
+    assert "看板" in relay.text.splitlines()[-1], relay.text
+    assert "どうしてるんですか" not in relay.text, relay.text
+
+    no_topic = dict(context)
+    no_topic["history"] = [{"role": "them", "body": "それでどうなったの？"}]
+    no_topic["ephemeral_user_answers"] = [
+        {"question": "それでどうなったの？", "answer": "無事に解決しました。"},
+    ]
+    plain = backend._build_answered_question_fallback_candidate(no_topic)
+    assert plain is not None
+    assert plain.text == "無事に解決しました", plain.text
+
+
+def test_t481_detail_fixes_for_duplication_notation_and_sentence_break(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("フィルムカメラのカメラってどんなものですか？") == "フィルムカメラってどんなものですか？"
+    assert backend._soften_stiff_keigo("よかったら今度いきませんか？") == "よかったら今度行きませんか？"
+    assert backend._soften_stiff_keigo("またいきましょう") == "また行きましょう"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "明日は早起きなんです"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    glued = backend.Candidate(label="連結", text="ゆっくり休んでくださいねおやすみなさい✨")
+    assert "文の区切り不足" in backend._candidate_rejection_reasons(glued, context)
+    split = backend.Candidate(label="改行", text="ゆっくり休んでくださいね\nおやすみなさい✨")
+    assert "文の区切り不足" not in backend._candidate_rejection_reasons(split, context)
 
 
 def test_t480_friendly_keigo_rewrites_honorifics_without_breaking_checks(client):

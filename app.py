@@ -6164,6 +6164,12 @@ def candidate_has_missing_sentence_break(text: str) -> bool:
             return True
         if SENTENCE_ENDING_BEFORE_START_PATTERN.search(line):
             return True
+        # T481: あいさつ・締めの語が助詞も句点も無しに連結した行（「〜くださいねおやすみなさい」）。
+        if re.search(
+            r"(?:ください|くださいね|ますね|ですね|ましたね)(?:おやすみなさい|おやすみ|ありがとうございます|よろしくお願いします|またね)",
+            line,
+        ):
+            return True
         # Common emoji can mark a sentence boundary with or without a space.
         if re.search(r"(?:😊|☺️|😄|😂|🥲|😭|✨|🌸|❤️|💕|👍|☕|🍰|🌿|🎬|📚)[ \t]*[ぁ-んァ-ヶ一-龠]", line):
             return True
@@ -7921,6 +7927,7 @@ def _question_intent_key(line: str) -> str:
 
 
 _REPETITION_NOUN_STOPWORDS = {
+    "レトロ", "モダン", "クラシック", "ナチュラル", "シンプル", "ベーシック",
     "自分", "相手", "最近", "普段", "今日", "明日", "昨日", "毎日", "今回", "本当", "感じ",
     "気持ち", "時間", "場所", "方針", "予定", "質問", "回答", "話題", "内容", "会話",
 }
@@ -8015,6 +8022,35 @@ def _latest_partner_nouns(context: dict) -> set[str]:
     return _content_nouns(partner_messages[-1])
 
 
+def _latest_topic_noun(context: dict) -> str:
+    """最後の相手の発言から、聞き返しに使える内容語を1つ選ぶ (T481)."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return ""
+    nouns = [
+        token
+        for token in re.findall(r"[\u4e00-\u9faf]{2,}|[\u30a1-\u30f6\u30fc]{2,}", partner_messages[-1])
+        if token not in _REPETITION_NOUN_STOPWORDS
+    ]
+    if not nouns:
+        return ""
+    user_names = set(_user_name_tokens(context))
+    nouns = [
+        noun
+        for noun in nouns
+        if noun not in user_names and not re.search(r"(?:さん|くん|ちゃん)$", noun)
+    ]
+    if not nouns:
+        return ""
+    mine = _self_fact_nouns(context)
+    fresh = [noun for noun in nouns if noun not in mine]
+    return (fresh or nouns)[0]
+
+
 def _self_fact_nouns(context: dict) -> set[str]:
     """Content nouns the user already talked about (own messages, answers, profile)."""
     sources = [
@@ -8106,6 +8142,38 @@ def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     return False
 
 
+_CASUAL_TAIL_PATTERN = re.compile(
+    r"(?:だね|だな|だよ|だよね|じゃん|だろ|かな|だねぇ|だわ)(?:[！!✨😊☺️😆😂🌸❤️]|$)"
+)
+
+
+def _tone_prefers_polite(context: dict) -> bool:
+    """True when the conversation should stay in です・ます (敬語)."""
+    tone = str((context.get("reply_preferences") or {}).get("tone", "") or "").strip()
+    if tone == "敬語" or tone.startswith("混合"):
+        return True
+    if tone in {"タメ口", "カジュアル"}:
+        return False
+    style = str((context.get("my_profile") or {}).get("facts", {}).get("style", "") or "")
+    return bool(re.search(r"敬語|丁寧|ですます", style))
+
+
+def _candidate_mixes_casual_tail(text: str, context: dict) -> bool:
+    """True when a candidate ends a line in plain (タメ口) form under 敬語 settings."""
+    if not _tone_prefers_polite(context):
+        return False
+    for line in str(text).splitlines():
+        stripped = line.strip()
+        if stripped and _CASUAL_TAIL_PATTERN.search(stripped):
+            return True
+    return False
+
+
+def _line_opening_key(line: str) -> str:
+    """First characters of a line, ignoring symbols and emoji (T481)."""
+    return _normalized_repetition_key(line)[:8]
+
+
 def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6) -> list[str]:
     """Reasons why a candidate repeats the user's own recent lines or questions."""
     prior_me = [
@@ -8131,6 +8199,20 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         if len(key) >= 5 and key in prior_lines:
             reasons.append("直近の自分の発言と同じ行")
             break
+    if "直近の自分の発言と同じ行" not in reasons:
+        prior_openings = {
+            _line_opening_key(line)
+            for body in prior_me
+            for line in str(body).splitlines()
+            if len(_line_opening_key(line)) >= 5
+        }
+        for line in text.splitlines():
+            opening = _line_opening_key(line)
+            if len(opening) >= 5 and opening in prior_openings:
+                reasons.append("直近の自分の発言と同じ書き出し")
+                break
+    if _candidate_mixes_casual_tail(text, context):
+        reasons.append("敬語設定にタメ口が混ざっている")
     for line in text.splitlines():
         if not _is_ask_sentence(line):
             continue
@@ -8947,16 +9029,17 @@ def _compose_answer_relay_candidate(
     partner_invites = partner_latest_message_has_invitation(context)
     prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
     last_prior_me = prior_me[-1] if prior_me else ""
-    if partner_label:
-        if casual:
-            followup = f"{partner_label}はどうしてる？" if f"{partner_label}はどうしてる？" in last_prior_me else f"{partner_label}はどうしてる？"
-        else:
-            followup = f"{partner_label}はどうしてるんですか？" if f"{partner_label}はどうしてるんですか？" in last_prior_me else f"{partner_label}はどうしてるんですか？"
+    topic_noun = _latest_topic_noun(context)
+    if topic_noun and partner_label:
+        followup = (
+            f"{partner_label}はどんな{topic_noun}が好きなんですか？"
+            if not casual
+            else f"{partner_label}はどんな{topic_noun}が好き？"
+        )
+        if followup in last_prior_me:
+            followup = ""
     else:
-        if casual:
-            followup = "そっちはどうしてる？" if "そっちはどうしてる？" in last_prior_me else "そっちはどうしてる？"
-        else:
-            followup = "そちらはどうしてるんですか？" if "そちらはどうしてるんですか？" in last_prior_me else "そちらはどうしてるんですか？"
+        followup = ""
     if partner_invites:
         accept_line = "ぜひ行きましょー" if casual else "ぜひ行きましょう😊"
         candidate_text = f"いいですね！\n{accept_line}\n{clean_answer}\n{followup}"
@@ -8978,13 +9061,23 @@ def _compose_answer_relay_candidate(
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     else:
         # A pure question turn: answer first, without a reaction line.
-        candidate_text = f"{clean_answer}\n{followup}"
+        candidate_text = f"{clean_answer}\n{followup}" if followup else clean_answer
     candidate = Candidate(
         label="回答を反映した返信",
         text=candidate_text,
         reply_move="react",
     )
     if _candidate_rejection_reasons(candidate, context):
+        # 聞き返しの1行だけが繰り返しの検査に触れた場合は、その行を省いて出す（T481）。
+        lines = candidate_text.splitlines()
+        if len(lines) >= 2 and ("?" in lines[-1] or "？" in lines[-1]):
+            trimmed = Candidate(
+                label=candidate.label,
+                text="\n".join(lines[:-1]),
+                reply_move=candidate.reply_move,
+            )
+            if not _candidate_rejection_reasons(trimmed, context):
+                return trimmed
         return None
     return candidate
 
@@ -9339,6 +9432,8 @@ _STIFF_KEIGO_REWRITES = (
     ("使われている", "使ってる"),
     ("使われてる", "使ってる"),
     ("ありますね", "ありますよね"),
+    ("いきませんか", "行きませんか"),
+    ("いきましょう", "行きましょう"),
     ("してみましょうか", "しませんか"),
     ("してみますか", "しませんか"),
     ("してみようか", "しませんか"),
@@ -9361,6 +9456,7 @@ def _has_condescending_offer(text: str) -> bool:
 
 
 _PARTNER_HONORIFIC_REWRITES = (
+    (re.compile(r"([\u30a1-\u30f6\u4e00-\u9faf]{2,4})\u306e\1"), r"\1"),
     (re.compile(r"(.{1,14}?)をされてるんですね"), r"\1なんですね"),
     (re.compile(r"(.{1,14}?)をされているんですね"), r"\1なんですね"),
     (re.compile(r"(.{1,14}?)をされるんですね"), r"\1なんですね"),
