@@ -17579,12 +17579,51 @@ def test_t494_legacy_extractor_keeps_only_self_facts():
         {"id": 3, "content": "明日は駅で待ち合わせですね！"},
         {"id": 4, "content": "私は横浜に住んでいます"},
     ]
-    facts = module._extract_message_facts(messages, max_per_category=12)
+    facts, needs_review = module._extract_message_facts(messages, max_per_category=12)
     flat = [item["text"] for items in facts.values() for item in items]
     assert any("喫茶店" in text for text in flat)
     assert any("横浜" in text for text in flat)
     assert all("待ち合わせ" not in text for text in flat)
     assert all("あなた" not in text for text in flat)
+    assert not needs_review
+
+
+def test_t495_job_conflict_goes_to_needs_review():
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parent.parent / "scripts" / "legacy_extract.py"
+    spec = importlib.util.spec_from_file_location("legacy_extract", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    messages = [{"id": 1, "content": "うちはデスクワークなんで自由な会社みたいな感じです"}]
+    facts, needs_review = module._extract_message_facts(messages, max_per_category=12, occupation="大学院生")
+    flat = [item["text"] for items in facts.values() for item in items]
+    assert all("デスクワーク" not in text for text in flat)
+    assert any("デスクワーク" in item["text"] for item in needs_review)
+
+
+def test_t495_switch_question_is_the_same_intent(client):
+    _, backend = client
+    assert backend._question_shares_object_and_intent(
+        "お庭仕事のあとに本を読んだりするんですか？",
+        "お庭仕事のあとに本を読むこともあるんですか？",
+    )
+
+
+def test_t495_topic_change_fallback_adds_a_connector(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "去年はパンジーを長く楽しめました。花がらを摘むのが日課でした"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語", "direction": "", "extra": "映画の話にしたい"},
+    }
+    candidate = backend._build_topic_change_fallback_candidate(context)
+    assert candidate is not None
+    assert "ちなみに" in candidate.text
+    assert "映画" in candidate.text
 
 
 

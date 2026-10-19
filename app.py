@@ -6987,9 +6987,9 @@ def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
     verb = _ACTIVITY_FOLLOWUP_VERB.get(requested, "する")
     subject = f"{partner_label}は" if partner_label else ""
     line2 = (
-        f"{subject}{requested}はよく{verb}？"
+        f"ちなみに{subject}{requested}はよく{verb}？"
         if casual
-        else f"{subject}{requested}はよく{verb}んですか？"
+        else f"ちなみに{subject}{requested}はよく{verb}んですか？"
     )
     ack = "そうなんですね！" if not casual else "そうなんだ！"
     candidate = Candidate(label="話題の転換", text=f"{ack}\n{line2}", reply_move="expand")
@@ -8333,7 +8333,7 @@ _QUESTION_PREDICATE_CLASSES = (
     ("decide", re.compile(r"決ま|決め|どうする|どうします|どうしましょう")),
     ("prefer", re.compile(r"好き|好み|気に入|苦手|興味")),
     ("frequency", re.compile(r"よく|頻度|どのくらい|どれくらい|何回|たまに|時々")),
-    ("experience", re.compile(r"こと(?:が|は|も)?(?:あります|ある)|経験")),
+    ("experience", re.compile(r"こと(?:が|は|も)?(?:あります|ある)|経験|(?:たり|だり)(?:し|する|して)?(?:ますか|るんですか|んですか)|こともある")),
     ("place", re.compile(r"どこ|場所|どのあたり|どのへん")),
     ("schedule", re.compile(r"いつ|予定|空いて|都合|何時|時間帯|日程")),
 )
