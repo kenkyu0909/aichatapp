@@ -89,7 +89,13 @@ def test_saved_quality009_live_candidates_replay_through_current_safety_filter(t
             item["text"]
             for item in [filtered["recommended"], *filtered["alternatives"]]
         }
-        assert retained_texts <= {item["text"] for item in source_candidates}
+        # T480/T481: 候補の検査で硬い敬語を言い換える場合があるため、保持された本文は
+        # 元の候補か、その言い換え結果のいずれかであることを確認する（新しい候補は作らない）。
+        allowed_texts = set()
+        for item in source_candidates:
+            allowed_texts.add(item["text"])
+            allowed_texts.add(backend._soften_stiff_keigo(item["text"]))
+        assert retained_texts <= allowed_texts
 
 
 def test_smoke_quality_distinguishes_complete_and_safe_partial_candidate_sets():
