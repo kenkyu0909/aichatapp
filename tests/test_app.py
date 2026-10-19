@@ -13733,42 +13733,42 @@ def test_generate_stops_at_request_deadline_before_provider_call(client, monkeyp
             "みなとみらいの海沿いをよく散歩します",
             "自動",
             "",
-            "みなとみらいの海沿いをよく散歩します\nそちらはどうですか？",
+            "みなとみらいの海沿いをよく散歩します\nそちらはどうしてるんですか？",
         ),
         (
             "喫茶店は静かな店内のほうが落ち着きます。そよかさんはにぎやかなお店と静かなお店、どちらが好みですか？",
             "私も静かなお店のほうが落ち着くので好きです。",
             "自動",
             "",
-            "私も静かなお店のほうが落ち着くので好きです\nそちらはどうですか？",
+            "私も静かなお店のほうが落ち着くので好きです\nそちらはどうしてるんですか？",
         ),
         (
             "最近何してたの？",
             "家でゆっくりしてたよ！",
             "タメ口",
             "",
-            "家でゆっくりしてたよ\nそっちはどう？",
+            "家でゆっくりしてたよ\nそっちはどうしてる？",
         ),
         (
             "それでどうなったんですか？",
             "無事に解決したよ",
             "敬語",
             "",
-            "無事に解決したよ\nそちらはどうですか？",
+            "無事に解決したよ\nそちらはどうしてるんですか？",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "混合（敬語ベース＋少し砕ける）",
             "",
-            "無事に解決したよ\nそちらはどうですか？",
+            "無事に解決したよ\nそちらはどうしてるんですか？",
         ),
         (
             "それでどうなったの？",
             "無事に解決したよ",
             "自動",
             "タメ口",
-            "無事に解決したよ\nそっちはどう？",
+            "無事に解決したよ\nそっちはどうしてる？",
         ),
     ],
 )
@@ -13923,7 +13923,7 @@ def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on
     assert body["available_candidate_count"] == 1
     assert (
         body["recommended"]["text"]
-        == "みなとみらいの海沿いをよく散歩します\nそちらはどうですか？"
+        == "みなとみらいの海沿いをよく散歩します\nそちらはどうしてるんですか？"
     )
     assert body["alternatives"] == []
 
@@ -14435,7 +14435,7 @@ def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partne
     }
     fb_polite = backend._build_unclassified_question_fallback_candidate(polite_context)
     assert fb_polite is not None
-    assert fb_polite.text == "うれしいです😊\n土曜日の午後なら空いています\n黒川さんはご都合どうですか？"
+    assert fb_polite.text == "うれしいです😊\n土曜日の午後なら空いています\n黒川さんはいつ空いてます？"
     assert backend._candidate_rejection_reasons(fb_polite, polite_context) == []
 
     casual_context = {
@@ -14448,7 +14448,7 @@ def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partne
     }
     fb_casual = backend._build_unclassified_question_fallback_candidate(casual_context)
     assert fb_casual is not None
-    assert fb_casual.text == "うれしいな！\n土曜日の午後なら空いてるよ\n黒川さんは都合どうかな？"
+    assert fb_casual.text == "うれしいな！\n土曜日の午後なら空いてるよ\n黒川さんはいつ空いてる？"
     assert backend._candidate_rejection_reasons(fb_casual, casual_context) == []
 
     plain_schedule_question = "来週あたりで都合のいい曜日はありますか？"
@@ -14465,7 +14465,7 @@ def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partne
     }
     fb_plain = backend._build_unclassified_question_fallback_candidate(plain_context)
     assert fb_plain is not None
-    assert fb_plain.text == "ありがとうございます！\n土曜日の午後なら空いています\n黒川さんはご都合どうですか？"
+    assert fb_plain.text == "ありがとうございます！\n土曜日の午後なら空いています\n黒川さんはいつ空いてます？"
     assert backend._candidate_rejection_reasons(fb_plain, plain_context) == []
 
 
@@ -15632,7 +15632,7 @@ def test_t472_memo_sentence_answers_seat_question(client):
 
     direct = backend.Candidate(
         label="素直な回答",
-        text="窓ぎわの席でコーヒーを飲みながら本を読むことが多いです\nそちらはどうですか？",
+        text="窓ぎわの席でコーヒーを飲みながら本を読むことが多いです\nそちらはどうしてるんですか？",
     )
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(direct, context)
 
@@ -15656,15 +15656,15 @@ def test_t472_memo_answer_term_is_required_and_contradictions_are_rejected(clien
     focus = backend._last_question_sentence(ask)
     reflected = backend._memo_answer_reflected_in_candidate
 
-    matching = backend.Candidate(label="一致", text="窓ぎわの席が好きです\nそちらはどうですか？")
+    matching = backend.Candidate(label="一致", text="窓ぎわの席が好きです\nそちらはどうしてるんですか？")
     assert reflected(focus, matching, context) is True
     assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(matching, context)
 
-    other_value = backend.Candidate(label="別の値", text="カウンター席が好きです\nそちらはどうですか？")
+    other_value = backend.Candidate(label="別の値", text="カウンター席が好きです\nそちらはどうしてるんですか？")
     assert reflected(focus, other_value, context) is False
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(other_value, context)
 
-    negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です\nそちらはどうですか？")
+    negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です\nそちらはどうしてるんですか？")
     assert reflected(focus, negated, context) is False
     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(negated, context)
 
@@ -15704,7 +15704,7 @@ def test_t472_stage_does_not_regress_without_a_new_event(client):
     )
     c.post(
         f"/api/matches/{match_id}/messages",
-        json={"role": "them", "body": "そういえば最近は喫茶店めぐりをしています。そちらはどうですか？"},
+        json={"role": "them", "body": "そういえば最近は喫茶店めぐりをしています。そちらはどうしてるんですか？"},
     )
     backend.store_conversation_stage(match_id, "Stage 3")
     data = backend.GenerateInput(mode="reply", match_id=match_id, response_version=2)
@@ -15771,7 +15771,7 @@ def test_t472_polite_fallbacks_and_prompts_avoid_stiff_keigo(client):
     assert fallback is not None
     for phrase in stiff:
         assert phrase not in fallback.text
-    assert "ご都合どうですか" in fallback.text
+    assert "いつ空いてます？" in fallback.text
 
     for pool in (backend._ACK_POOL_POLITE, backend._ACK_POOL_CASUAL):
         for phrase in stiff:
@@ -16106,6 +16106,89 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     simple_relay = backend._build_answered_question_fallback_candidate(pure_question)
     assert simple_relay is not None
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
+
+
+def test_t480_friendly_keigo_rewrites_honorifics_without_breaking_checks(client):
+    _, backend = client
+    cases = {
+        "書店員をされてるんですね！": "書店員なんですね！",
+        "よく行かれるんですか？": "よく行くんですか？",
+        "入ったりもされるんですか？": "入ったりもするんですか？",
+        "どんなカメラを使われているんですか？": "どんなカメラを使ってるんですか？",
+        "北口は喫茶店がたくさんありますね✨": "北口は喫茶店がたくさんありますよね✨",
+        "行ってみましょうか": "行ってみませんか",
+    }
+    for original, expected in cases.items():
+        assert backend._soften_stiff_keigo(original) == expected, original
+    assert backend._soften_stiff_keigo("書店員をされてるんですね！") == "書店員なんですね！"
+    assert backend._soften_stiff_keigo("どんなカメラを使われているんですか？") == "どんなカメラを使ってるんですか？"
+    assert backend._soften_stiff_keigo("ありますね") == "ありますよね"
+    assert backend._soften_stiff_keigo("行かれるんですか？") == "行くんですか？"
+
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "古本屋めぐりが好きなんです"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="敬語", text="古本屋めぐりが好きなんですね！\nどんな本を探されるんですか？"
+        ),
+        alternatives=[],
+        reason="反応",
+        strategy="共有",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="会話を続けます",
+        next_action="返信を待ちます",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    assert filtered["recommended"] is not None, filtered
+    assert "探される" not in filtered["recommended"]["text"], filtered
+    assert filtered["recommended"]["text"].splitlines()[0] == "古本屋めぐりが好きなんですね！"
+
+
+def test_t480_fallback_schedule_text_is_light(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "ぜひ！じゃあ今週末はどうですか？私は土曜も日曜も空いてます"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「私は土曜も日曜も空いてます」に答えるため該当する日の予定や過ごし方を教えてください",
+                "answer": "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。",
+            },
+        ],
+    }
+    relay = backend._build_answered_question_fallback_candidate(context)
+    assert relay is not None, context
+    assert "ご都合どうですか" not in relay.text
+    assert "いつ空いてます？" in relay.text, relay.text
+
+
+def test_t480_prompts_state_friendly_keigo_principles(client):
+    _, backend = client
+    for mode in ("reply", "first", "followup", "like"):
+        prompt = backend.read_prompt(mode)
+        assert "少し年上の友達" in prompt, mode
+        assert "尊敬語" in prompt and "謙譲語" in prompt, mode
+    reply_prompt = backend.read_prompt("reply")
+    assert "書店員をされてるんですね！" in reply_prompt
+    assert "ありますよね" in reply_prompt
+    assert "いつ空いてます？" in reply_prompt
 
 
 def test_t479_partner_address_stays_consistent(client):

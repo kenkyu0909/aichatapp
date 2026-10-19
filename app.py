@@ -8949,14 +8949,14 @@ def _compose_answer_relay_candidate(
     last_prior_me = prior_me[-1] if prior_me else ""
     if partner_label:
         if casual:
-            followup = f"{partner_label}はどうかな？" if f"{partner_label}はどう？" in last_prior_me else f"{partner_label}はどう？"
+            followup = f"{partner_label}はどうしてる？" if f"{partner_label}はどうしてる？" in last_prior_me else f"{partner_label}はどうしてる？"
         else:
-            followup = f"{partner_label}はどうですかね？" if f"{partner_label}はどうですか？" in last_prior_me else f"{partner_label}はどうですか？"
+            followup = f"{partner_label}はどうしてるんですか？" if f"{partner_label}はどうしてるんですか？" in last_prior_me else f"{partner_label}はどうしてるんですか？"
     else:
         if casual:
-            followup = "そっちはどうかな？" if "そっちはどう？" in last_prior_me else "そっちはどう？"
+            followup = "そっちはどうしてる？" if "そっちはどうしてる？" in last_prior_me else "そっちはどうしてる？"
         else:
-            followup = "そちらはどうですかね？" if "そちらはどうですか？" in last_prior_me else "そちらはどうですか？"
+            followup = "そちらはどうしてるんですか？" if "そちらはどうしてるんですか？" in last_prior_me else "そちらはどうしてるんですか？"
     if partner_invites:
         accept_line = "ぜひ行きましょー" if casual else "ぜひ行きましょう😊"
         candidate_text = f"いいですね！\n{accept_line}\n{clean_answer}\n{followup}"
@@ -8966,9 +8966,9 @@ def _compose_answer_relay_candidate(
         else:
             ack = "ありがとう！" if casual else "ありがとうございます！"
         if partner_label:
-            followup = f"{partner_label}は都合どうかな？" if casual else f"{partner_label}はご都合どうですか？"
+            followup = f"{partner_label}はいつ空いてる？" if casual else f"{partner_label}はいつ空いてます？"
         else:
-            followup = "そっちは都合どう？" if casual else "そちらはご都合どうですか？"
+            followup = "そっちはいつ空いてる？" if casual else "そちらはいつ空いてます？"
         candidate_text = f"{ack}\n{clean_answer}\n{followup}"
     elif partner_shares_info:
         # The partner shared their own news and then asked a question. Acknowledge
@@ -9322,6 +9322,23 @@ _STIFF_KEIGO_REWRITES = (
     ("承知いたしました", "わかりました"),
     ("承知しました", "わかりました"),
     ("かしこまりました", "わかりました"),
+    # T480: 相手を立てる尊敬語・謙譲語を普通の動詞へ戻す（です・ますは保つ）。
+    # 安全な語だけを対象にし、意味が変わる広い置換（〜される→〜する 等）は入れない。
+    ("させていただきます", "します"),
+    ("させていただく", "する"),
+    ("いたします", "します"),
+    ("されてるんですね", "なんですね"),
+    ("されているんですね", "なんですね"),
+    ("されるんですね", "なんですね"),
+    ("されてるんですか", "してるんですか"),
+    ("されているんですか", "してるんですか"),
+    ("されるんですか", "するんですか"),
+    ("されてる", "してる"),
+    ("されている", "してる"),
+    ("行かれる", "行く"),
+    ("使われている", "使ってる"),
+    ("使われてる", "使ってる"),
+    ("ありますね", "ありますよね"),
     ("してみましょうか", "しませんか"),
     ("してみますか", "しませんか"),
     ("してみようか", "しませんか"),
@@ -9343,6 +9360,15 @@ def _has_condescending_offer(text: str) -> bool:
     return bool(CONDESCENDING_OFFER_PATTERN.search(text))
 
 
+_PARTNER_HONORIFIC_REWRITES = (
+    (re.compile(r"(.{1,14}?)をされてるんですね"), r"\1なんですね"),
+    (re.compile(r"(.{1,14}?)をされているんですね"), r"\1なんですね"),
+    (re.compile(r"(.{1,14}?)をされるんですね"), r"\1なんですね"),
+    (re.compile(r"(.{1,14}?)をされてるんですか"), r"\1なんですか"),
+    (re.compile(r"(.{1,14}?)をされてる"), r"\1してる"),
+)
+
+
 def _soften_stiff_keigo(text: str) -> str:
     """Rewrite stiff honorific wording into the casual-friendly register the prompt asks for.
 
@@ -9350,6 +9376,8 @@ def _soften_stiff_keigo(text: str) -> str:
     the model output, so a mechanical replacement never bypasses the safety gate.
     """
     softened = text
+    for pattern, replacement in _PARTNER_HONORIFIC_REWRITES:
+        softened = pattern.sub(replacement, softened)
     for stiff, casual in _STIFF_KEIGO_REWRITES:
         if stiff in softened:
             softened = softened.replace(stiff, casual)
