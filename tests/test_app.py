@@ -16108,6 +16108,41 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
     assert simple_relay.text.startswith("甘いものは好きです"), simple_relay.text
 
 
+def test_t477_relay_reacts_when_the_partner_shared_before_asking(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "ぜひ！じゃあ今週末はどうですか？私は土曜も日曜も空いてます"},
+        ],
+        "other": {"name": "黒川 いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「私は土曜も日曜も空いてます」に答えるため該当する日の予定や過ごし方を教えてください",
+                "answer": "土曜の午後は予定がないので大丈夫です。15時ごろから空いています。",
+            },
+        ],
+    }
+    relay = backend._build_answered_question_fallback_candidate(context)
+    assert relay is not None, context
+    first_line = relay.text.splitlines()[0]
+    assert first_line in {"いいですね！", "うれしいです😊", "ありがとうございます！"}, relay.text
+    assert "土曜の午後は予定がないので大丈夫です" in relay.text
+
+    pure_question = dict(context)
+    pure_question["history"] = [{"role": "them", "body": "水野さんは甘いものは好きですか？"}]
+    pure_question["invite_decision"] = "continue_conversation"
+    pure_question["ephemeral_user_answers"] = [
+        {"question": "相手の「水野さんは甘いものは好きですか？」にどう答えたいか教えてください", "answer": "甘いものは好きです。"},
+    ]
+    simple = backend._build_answered_question_fallback_candidate(pure_question)
+    assert simple is not None
+    assert simple.text.startswith("甘いものは好きです"), simple.text
+
+
 def test_t477_prompts_distinguish_shared_then_asked_from_pure_question(client):
     _, backend = client
     reply_prompt = backend.read_prompt("reply")

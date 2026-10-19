@@ -2473,12 +2473,27 @@ def _answers_for_partner_question(context: dict) -> list[dict]:
     normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
     normalized_focus = normalize(focus)
     focus_topic = _topic_for_personal_question(focus)
+    latest_partner = next(
+        (
+            str(item.get("body", ""))
+            for item in reversed(context.get("history", []))
+            if item.get("role") == "them"
+        ),
+        "",
+    )
+    # The app's clarification can quote the partner's statement rather than the
+    # trailing question ("私は土曜も日曜も空いてます" for "じゃあ今週末はどうですか？").
+    match_keys = [normalized_focus] + [
+        normalize(part)
+        for part in re.split(r"[。\n！!？?]+", latest_partner)
+        if len(normalize(part)) >= 4
+    ]
     ordered: list[dict] = []
     for answer in answers:
         asked = normalize(answer.get("question", ""))
-        if normalized_focus and asked and (
-            normalized_focus in asked or asked in normalized_focus
-        ):
+        if not asked:
+            continue
+        if any(key and (key in asked or asked in key) for key in match_keys):
             ordered.append(answer)
     if focus_topic:
         for answer in answers:
@@ -8828,6 +8843,18 @@ def _compose_answer_relay_candidate(
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
     )
     partner_shares_info = _partner_shares_info_with_question(question)
+    if not partner_shares_info:
+        # The question may be cut out of a longer message that shared news
+        # ("…私は土曜も日曜も空いてます。じゃあ今週末はどうですか？").
+        latest_partner = next(
+            (
+                str(item.get("body", ""))
+                for item in reversed(context.get("history", []))
+                if item.get("role") == "them"
+            ),
+            "",
+        )
+        partner_shares_info = _partner_shares_info_with_question(latest_partner)
     partner_invites = partner_latest_message_has_invitation(context)
     prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
     last_prior_me = prior_me[-1] if prior_me else ""
