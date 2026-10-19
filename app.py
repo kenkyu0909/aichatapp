@@ -6164,9 +6164,19 @@ def candidate_has_missing_sentence_break(text: str) -> bool:
             return True
         if SENTENCE_ENDING_BEFORE_START_PATTERN.search(line):
             return True
-        # T481: あいさつ・締めの語が助詞も句点も無しに連結した行（「〜くださいねおやすみなさい」）。
+        # T481/T482: あいさつ・締めの語が助詞も句点も無しに別の文へ連結した行
+        # （「〜くださいねおやすみなさい」「おやすみなさいまた明日お話しましょうね」）。
         if re.search(
-            r"(?:ください|くださいね|ますね|ですね|ましたね)(?:おやすみなさい|おやすみ|ありがとうございます|よろしくお願いします|またね)",
+            r"(?:ください|くださいね|ますね|ですね|ましたね|ましょう|ましょうね|です|ます|でした|ました)"
+            r"(?:おやすみなさい|おやすみ|ありがとうございます|ありがとう|よろしくお願いします|またね|また明日)",
+            line,
+        ):
+            return True
+        if re.search(
+            r"^(?:おやすみなさい|おやすみ(?!なさい)|おはようございます|おはよう(?!ござい)|こんにちは|こんばんは|はじめまして|"
+            r"ありがとうございます|ありがとう(?!ござい)|よろしくお願いします|よろしくお願いいたします|またね|ではまた|"
+            r"それでは|失礼します|失礼いたします|お疲れさまです|お疲れ様です|いってきます|ただいま)"
+            r"(?![$。！!?？、\s])[\s]*(?=[ぁ-んァ-ヶ一-龠])",
             line,
         ):
             return True
@@ -7627,6 +7637,15 @@ def _is_unclassified_question_about_user(text: str) -> bool:
         r"(?:何語|何度|どこ(?:にある|です)?|何時に|どう練習|ルール|何のスポーツ|開店|営業して|猫はいます)", question
     ):
         return False
+    # T482: はい/いいえで答えられる、本人の習慣・経験の直接質問（「写真は撮ったり
+    # しますか？」「〜ることはありますか」「撮りますか？」）。
+    if re.search(
+        r"(?:たり|だり)(?:し|する|して|しています|してます)?(?:ますか|るんですか|いるんですか|いるの)|"
+        r"[一-龯ぁ-んァ-ヶ]{1,8}(?:る|った)こと(?:が|は|も)?(?:あります|ある)(?:んですか|か)?|"
+        r"(?:撮|描|弾|歌|踊|登|走|泳|飼|集め)(?:りますか|るんですか|ってますか|っていますか)",
+        question,
+    ):
+        return True
     return bool(INVITATION_PATTERN.search(question) or re.search(
         r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
         r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
@@ -7964,6 +7983,43 @@ _QUESTION_ACTION_VERBS = (
     "通",
 )
 
+# T482: 同じ対象（名詞）と述語の意味（意図）が重なる質問を同趣旨と見なすための分類。
+_QUESTION_PREDICATE_CLASSES = (
+    ("decide", re.compile(r"決ま|決め|どうする|どうします|どうしましょう")),
+    ("prefer", re.compile(r"好き|好み|気に入|苦手|興味")),
+    ("frequency", re.compile(r"よく|頻度|どのくらい|どれくらい|何回|たまに|時々")),
+    ("experience", re.compile(r"こと(?:が|は|も)?(?:あります|ある)|経験")),
+    ("place", re.compile(r"どこ|場所|どのあたり|どのへん")),
+    ("schedule", re.compile(r"いつ|予定|空いて|都合|何時|時間帯|日程")),
+)
+
+_QUESTION_OBJECT_TERMS = (
+    "本", "写真", "カメラ", "映画", "料理", "旅行", "カフェ", "喫茶店", "音楽",
+    "スポーツ", "絵", "歌", "犬", "猫", "花", "服", "仕事", "休日", "週末",
+    "朝食", "昼食", "夕食", "パン", "お菓子", "ゲーム", "アニメ", "漫画",
+    "小説", "エッセイ", "展覧会", "美術館", "温泉", "山", "海", "景色",
+)
+
+
+def _question_shares_object_and_intent(candidate: str, previous: str) -> bool:
+    """True when two questions ask the same thing with different surface forms.
+
+    The interrogative and the verb may differ (「当日持っていく本はもう決めてるん
+    ですか？」 vs 「どんなジャンルの本を持って行くか決まったんですか？」). A shared
+    object noun plus a shared predicate class (decide / prefer / …) marks the same
+    ask, so a paraphrase cannot slip past as a fresh question.
+    """
+    if not (_is_ask_sentence(candidate) and _is_ask_sentence(previous)):
+        return False
+    candidate_objects = {term for term in _QUESTION_OBJECT_TERMS if term in candidate} | _content_nouns(candidate)
+    previous_objects = {term for term in _QUESTION_OBJECT_TERMS if term in previous} | _content_nouns(previous)
+    if not (candidate_objects & previous_objects):
+        return False
+    candidate_classes = {name for name, pattern in _QUESTION_PREDICATE_CLASSES if pattern.search(candidate)}
+    previous_classes = {name for name, pattern in _QUESTION_PREDICATE_CLASSES if pattern.search(previous)}
+    return bool(candidate_classes & previous_classes)
+
+
 _PARTNER_ADDRESS_STOPWORDS = {"さん", "くん", "ちゃん"}
 
 
@@ -8218,6 +8274,14 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
             continue
         key = _question_intent_key(line)
         if len(key) >= 5 and key in prior_questions:
+            reasons.append("直近の自分と同じ趣旨の質問")
+            break
+        if any(
+            _question_shares_object_and_intent(line, previous)
+            for body in prior_me
+            for previous in str(body).splitlines()
+            if _is_ask_sentence(previous)
+        ):
             reasons.append("直近の自分と同じ趣旨の質問")
             break
     recent = prior_me[-2:]

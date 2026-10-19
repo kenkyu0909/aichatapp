@@ -16229,6 +16229,73 @@ def test_t481_detail_fixes_for_duplication_notation_and_sentence_break(client):
     assert "文の区切り不足" not in backend._candidate_rejection_reasons(split, context)
 
 
+def test_t482_unanswered_polar_personal_question_is_not_evaded(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルム写真が好きなんです"},
+            {"role": "me", "body": "フィルムの質感いいですよね✨"},
+            {"role": "them", "body": "写真は撮ったりしますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    assert backend._is_unclassified_question_about_user("写真は撮ったりしますか？") is True
+    assert "写真は撮ったりしますか？" in backend._partner_trailing_direct_question(context)
+    evasive = backend.Candidate(label="逃避", text="景色を写真におさめるのも素敵ですよね✨")
+    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+
+    answered = dict(context)
+    answered["ephemeral_user_answers"] = [
+        {"question": "相手の「写真は撮ったりしますか？」にどう答えたいか教えてください", "answer": "よく撮ります"}
+    ]
+    direct = backend.Candidate(label="回答", text="よく撮ります！\n景色を撮るのが好きなんです")
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(direct, answered)
+
+
+def test_t482_same_object_and_intent_question_is_not_reasked(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "当日持っていく本はもう決めてるんですか？"},
+            {"role": "them", "body": "まだ迷ってるんですよね"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    reask = backend.Candidate(label="同趣旨", text="どんなジャンルの本を持って行くか決まったんですか？")
+    assert "直近の自分と同じ趣旨の質問" in backend._recent_self_repetition_reasons(reask.text, context)
+    fresh = backend.Candidate(label="別", text="当日は何を持って行くんですか？")
+    assert "直近の自分と同じ趣旨の質問" not in backend._recent_self_repetition_reasons(
+        fresh.text, context
+    )
+
+
+def test_t482_glued_greeting_sentence_is_rejected_generally(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "今日はありがとうございました"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    glued = backend.Candidate(label="連結", text="おやすみなさいまた明日お話しましょうね")
+    assert "文の区切り不足" in backend._candidate_rejection_reasons(glued, context)
+    standalone = backend.Candidate(label="分離", text="ありがとうございます！\nおやすみなさい")
+    assert "文の区切り不足" not in backend._candidate_rejection_reasons(standalone, context)
+
+
 def test_t480_friendly_keigo_rewrites_honorifics_without_breaking_checks(client):
     _, backend = client
     cases = {
