@@ -6829,6 +6829,27 @@ def _build_schedule_conflict_fallback_candidate(context: dict) -> Candidate | No
     return candidate
 
 
+def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate | None:
+    """誘いへの承諾だけを1案合成する (T488).
+
+    承諾の回答が無いときでも、日程と無関係なメモ文を添えずに短く承諾する。
+    """
+    if not partner_latest_message_has_invitation(context):
+        return None
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    casual = _fallback_should_use_casual_tone(context, question, "")
+    text = "いいね！\nぜひ行きましょー" if casual else "いいですね！\nぜひ行きましょう😊"
+    candidate = Candidate(label="誘いへの返事", text=text, reply_move="react")
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def _is_partner_directed_followup_question(text: str, direct_question: str) -> bool:
     """Allow a clear question to the partner beside a verified personal answer."""
     normalized = text.strip()
@@ -7760,7 +7781,8 @@ def _is_unclassified_question_about_user(text: str) -> bool:
         r"(?:たり|だり)(?:し|する|して|しています|してます)?(?:ますか|るんですか|いるんですか|いるの)|"
         r"[一-龯ぁ-んァ-ヶ]{1,8}(?:る|った)こと(?:が|は|も)?(?:あります|ある)(?:んですか|か)?|"
         r"(?:撮|描|弾|歌|踊|登|走|泳|飼|集め)(?:りますか|るんですか|ってますか|っていますか)|"
-        r"(?:どこから|どれから|何から)[^?？\n]{0,14}(?:ますか|るんですか|ですか|ましたか)",
+        r"(?:どこから|どれから|何から)[^?？\n]{0,14}(?:ますか|るんですか|ですか|ましたか)|"
+        r"(?:は|も|って)[^?？\n]{0,10}(?:飲みますか|食べますか|飲むんですか|食べるんですか|召し上がりますか)",
         question,
     ):
         return True
@@ -8337,6 +8359,48 @@ def _opening_line_reacts_to_stale_topic(text: str, context: dict) -> bool:
     return bool(opening_nouns & _older_partner_nouns(context))
 
 
+_ECHO_OPENING_SUFFIX = re.compile(
+    r"(?:なんですね|んですね|なんです|のですね|ですよね|だよね|ですね|だね|みたいですね|ってことですね)[!！]?$"
+)
+
+
+def _strip_particles(text: str) -> str:
+    """助詞・句読点・記号を除いた比較用の文字列 (T488)."""
+    return re.sub(r"[\s、。，．！!？?はがをにでもへとのって]", "", str(text))
+
+
+def _opening_line_echoes_partner(text: str, context: dict) -> bool:
+    """1行目が相手の直前の発言を助詞違いでなぞっているだけのとき True (T488).
+
+    相槌として相手の言葉をそのまま繰り返すだけの返し（「生活のリズムがばらばら
+    なんですね」）を避ける。T479 の方針をコード側でも補う。追加の質問や自分の
+    話が続く候補は対象外にする。
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    if len(lines) != 1:
+        return False
+    raw = re.sub(r"[^\w\u3040-\u30ff\u4e00-\u9faf]+$", "", lines[0].strip())
+    stripped = _ECHO_OPENING_SUFFIX.sub("", raw).strip()
+    if stripped == raw:
+        # 「〜なんですね」のような相槌の語尾が無ければ、なぞりではない。
+        return False
+    opener_key = _strip_particles(stripped)
+    if len(opener_key) < 5:
+        return False
+    partner_bodies = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_bodies:
+        return False
+    latest = partner_bodies[-1].strip()
+    if re.search(r"[?？]\s*$|(?:ですか|ますか|でしょうか|ませんか)\s*$", latest):
+        # 相手の質問への回答はなぞりではない。
+        return False
+    return opener_key in _strip_particles(latest)
+
+
 def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     """True when the question only paraphrases the user's own previous question."""
     prior_me = [
@@ -8865,6 +8929,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T487: 書き出しが直前ではなく前のターンの相手発言に相槌している候補を落とす。
     if _opening_line_reacts_to_stale_topic(text, context):
         reasons.append("直前の相手の話題と離れている")
+    # T488: 相手の直前の発言を助詞違いでなぞるだけの書き出しを落とす。
+    if _opening_line_echoes_partner(text, context):
+        reasons.append("相手の言葉をなぞるだけ")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -8875,7 +8942,15 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     verified_answer_relay = _candidate_is_verified_answer_relay(text, context)
     if not verified_answer_relay and unsupported_personal_claim_topics([candidate], context):
         reasons.append("未確認の本人事実")
-    if not _answers_verified_partner_question(candidate, context) and not verified_answer_relay:
+    answered_partner_question = _answers_verified_partner_question(candidate, context) or verified_answer_relay
+    # T488: 誘いへの承諾（「ぜひ行きましょう」）は、回答が未確認でも誘いへの返事として成立する。
+    if (
+        not answered_partner_question
+        and partner_latest_message_has_invitation(context)
+        and re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい|いいですね|いいね", text)
+    ):
+        answered_partner_question = True
+    if not answered_partner_question:
         reasons.append("相手からの直接質問に未回答")
     if _has_condescending_offer(text):
         reasons.append("上から目線の表現")
@@ -9032,6 +9107,11 @@ def _memo_terms(text: str) -> set[str]:
     return terms
 
 
+def _standalone_kanji(text: str) -> set[str]:
+    """1字だけで独立して現れる漢字（「席を」「窓ぎわの席で」の「席」）を集める (T488)."""
+    return {run for run in re.findall(r"[一-龯]+", unicodedata.normalize("NFKC", str(text))) if len(run) == 1}
+
+
 def _memo_answer_sentence(question: str, context: dict) -> str | None:
     """Return the memo sentence that already answers the partner's question.
 
@@ -9057,6 +9137,17 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
         shared = question_terms & _memo_terms(sentence)
         if not shared:
             continue
+        # T488: 質問の「商店街」とメモの「喫茶店」の「店」のような、別の語の一部と
+        # してのみ重なる1字で無関係な文を答えにしない。2字以上の重なり、または
+        # 両方で独立して現れる1字（「席」）の重なりを要求する。
+        if not any(len(term) >= 2 for term in shared):
+            question_standalone = _standalone_kanji(question)
+            sentence_standalone = _standalone_kanji(sentence)
+            if not any(
+                len(term) == 1 and term in question_standalone and term in sentence_standalone
+                for term in shared
+            ):
+                continue
         score = (focus_term in shared, len(shared), -len(sentence))
         if best is None or score > best[0]:
             best = (score, sentence)
@@ -9348,7 +9439,9 @@ def _compose_answer_relay_candidate(
     prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
     last_prior_me = prior_me[-1] if prior_me else ""
     topic_noun = _latest_topic_noun(context)
-    if topic_noun and partner_label:
+    # T488: 「どんな中野の商店街が…」のような不自然な聞き返しを避ける。複合語は
+    # 使わずに聞き返しを省く。
+    if topic_noun and partner_label and "の" not in topic_noun:
         followup = (
             f"{partner_label}はどんな{topic_noun}が好きなんですか？"
             if not casual
@@ -9870,6 +9963,8 @@ def filter_safe_candidates(
         deterministic_fallback_used = True
     if not accepted:
         fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        if fallback_candidate is None:
+            fallback_candidate = _build_invitation_acceptance_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_verified_profile_fact_fallback_candidate(candidate_context)
         if fallback_candidate is None and candidate_context.get("mode") == "first":

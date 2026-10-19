@@ -17226,6 +17226,99 @@ def test_t487_trait_noun_is_not_a_followup_topic(client):
     assert backend._latest_topic_noun(context) == ""
 
 
+MEMO_TEXT = (
+    "休日は喫茶店めぐりが好きで、窓ぎわの席でコーヒーを飲みながら短い小説やエッセイを読んでいます。"
+    "オムライスと季節のタルトが好きで、喫茶店ではタルトを選ぶことが多いです。"
+)
+
+
+def test_t488_memo_answer_must_match_the_question_subject(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "my_profile": {"facts": {"name": "水野そよか", "memo": MEMO_TEXT}, "avoid": []},
+    }
+    question = "中野の商店街は夕方になると魚屋の匂いがして好きなんです。水野さんは商店街はよく歩きますか？"
+    assert backend._memo_answer_sentence(question, context) is None
+    coffee = "喫茶店ではいつも何を頼みますか？"
+    assert backend._memo_answer_sentence(coffee, context) is not None
+
+
+def test_t488_invitation_acceptance_drops_unrelated_memo_line(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "そういえば今度の日曜、中野の古本市があるんです。よかったら一緒に行きませんか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "memo": MEMO_TEXT}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "schedule_after_acceptance",
+    }
+    acceptance = backend._build_invitation_acceptance_fallback_candidate(context)
+    assert acceptance is not None
+    assert acceptance.text == "いいですね！\nぜひ行きましょう😊"
+    assert "喫茶店" not in acceptance.text
+    assert (
+        backend._memo_answer_sentence(
+            "そういえば今度の日曜、中野の古本市があるんです。よかったら一緒に行きませんか？", context
+        )
+        is None
+    )
+
+
+def test_t488_drink_eat_question_is_a_yes_no_personal_question(client):
+    _, backend = client
+    assert backend._is_unclassified_question_about_user("水野さんは甘い飲み物は飲みますか？")
+    assert backend._is_unclassified_question_about_user("水野さんは甘いものは食べますか？")
+
+
+def test_t488_followup_omits_compound_place_phrase(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "中野の商店街は夕方になると魚屋の匂いがして好きなんです。水野さんは商店街はよく歩きますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [
+            {
+                "question": "中野の商店街は夕方になると魚屋の匂いがして好きなんです。水野さんは商店街はよく歩きますか？",
+                "answer": "よく歩きます。",
+            },
+        ],
+    }
+    candidate = backend._compose_answer_relay_candidate(
+        context,
+        "中野の商店街は夕方になると魚屋の匂いがして好きなんです。水野さんは商店街はよく歩きますか？",
+        "よく歩きます。",
+    )
+    assert candidate is not None
+    assert "どんな" not in candidate.text
+
+
+def test_t488_echo_opening_is_flagged(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "私は朝の静けさも好きなので、生活のリズムはばらばらです"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    echo = backend.Candidate(label="なぞり", text="生活のリズムがばらばらなんですね😊")
+    assert "相手の言葉をなぞるだけ" in backend._candidate_rejection_reasons(echo, context)
+    fresh = backend.Candidate(label="言い直し", text="生活のリズムがばらばらなんですね😊\n私もつい夜ふかししてしまいます")
+    assert "相手の言葉をなぞるだけ" not in backend._candidate_rejection_reasons(fresh, context)
+    reworded = backend.Candidate(label="言い換え", text="自分に合ったリズムで過ごすのがいちばんですね😊")
+    assert "相手の言葉をなぞるだけ" not in backend._candidate_rejection_reasons(reworded, context)
+
+
 
 
 
