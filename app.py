@@ -8204,6 +8204,13 @@ _REPETITION_NOUN_STOPWORDS = {
     "一緒", "来週", "今週", "先週", "当日",
 }
 
+_ACTIVITY_FOLLOWUP_VERB = {
+    "将棋": "やる", "囲碁": "やる", "ゲーム": "やる", "ボードゲーム": "やる", "麻雀": "やる",
+    "読書": "する", "料理": "する", "散歩": "する", "遠回り": "する", "買い物": "する", "旅行": "する",
+    "手紙": "書く", "日記": "書く",
+}
+
+
 _REPETITION_INTERROGATIVES = (
     "どんな", "どの", "どちら", "どっち", "どこ", "なに", "いつ", "いくつ", "お気に入り", "好きな",
 )
@@ -9041,6 +9048,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T488: 相手の直前の発言を助詞違いでなぞるだけの書き出しを落とす。
     if _opening_line_echoes_partner(text, context):
         reasons.append("相手の言葉をなぞるだけ")
+    # T492: 直前の自分の発言と同じ時刻で書き出し、相手がその時刻を出していない候補を落とす。
+    if _repeats_last_me_time_opening(text, context):
+        reasons.append("直近の自分の発言と同じ書き出し")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -9504,7 +9514,55 @@ def _answer_lines_for_candidate(raw_answer: str) -> list[str]:
         cleaned = re.sub(r"[\s、，,]+", "", part)
         if cleaned:
             lines.append(cleaned)
+    # T492: 「好きです」「します」のような一語の答えの後ろに言い直しが続くときは、
+    # 一語の方を落として言い直しだけを使う（「好きです／冬の空を見るのが好きです」
+    # →「冬の空を見るのが好きです」）。
+    if len(lines) >= 2 and lines[0] in _BARE_ANSWER_LINES:
+        lines = lines[1:]
     return lines
+
+
+_BARE_ANSWER_LINES = {
+    "はい", "いいえ", "うん", "そうです", "好きです", "好き", "します", "する",
+    "よくします", "よく行きます", "行きます", "見ます", "観ます", "読みます", "飲みます",
+    "食べます", "指します", "あります", "います", "書きます", "撮ります", "作ります",
+    "育てています", "好きなんです", "好物です", "見てます",
+}
+
+
+def _repeats_last_me_time_opening(text: str, context: dict) -> bool:
+    """直前の自分の発言と同じ時刻で書き出し、相手がその時刻を出していない候補 (T492)."""
+    prior_me = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ]
+    if not prior_me:
+        return False
+    last_lines = [line for line in prior_me[-1].splitlines() if line.strip()]
+    if not last_lines:
+        return False
+    last_time = re.search(r"\d{1,2}時", last_lines[0])
+    if not last_time:
+        return False
+    # 食い違いの確認（「あれ14時じゃなかったでしたっけ？」）は同じ時刻を意図的に
+    # 引くので、重複の書き出しとは扱わない。
+    if _SCHEDULE_CONFLICT_ACK.search(text):
+        return False
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    first_time = re.search(r"\d{1,2}時", lines[0])
+    if not first_time or first_time.group(0) != last_time.group(0):
+        return False
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    return last_time.group(0) not in partner_messages[-1]
 
 
 def _recent_relay_text(context: dict, lookback: int = 3) -> str:
@@ -9592,23 +9650,31 @@ def _compose_answer_relay_candidate(
     # T491: 聞き返しの型を数パターンから直近で使っていないものを選び、ときどき省く。
     if topic_noun and partner_label and "の" not in topic_noun:
         recent = _recent_relay_text(context)
-        like_form = (
-            f"{partner_label}はどんな{topic_noun}が好きなんですか？"
-            if not casual
-            else f"{partner_label}はどんな{topic_noun}が好き？"
-        )
-        go_form = (
-            f"{partner_label}は{topic_noun}はよく行くんですか？"
-            if not casual
-            else f"{partner_label}は{topic_noun}はよく行く？"
-        )
-        unused = [form for form in (like_form, go_form) if form not in recent]
+        if topic_noun in _ACTIVITY_FOLLOWUP_VERB:
+            # T492: 将棋・読書のような行為は「どんな〜が好き」が不自然なので、
+            # 「〜はよく（やる／する／書く）んですか？」の型を使う。
+            verb = _ACTIVITY_FOLLOWUP_VERB[topic_noun]
+            options = [
+                f"{partner_label}は{topic_noun}はよく{verb}んですか？"
+                if not casual
+                else f"{partner_label}は{topic_noun}はよく{verb}？"
+            ]
+        else:
+            options = [
+                f"{partner_label}はどんな{topic_noun}が好きなんですか？"
+                if not casual
+                else f"{partner_label}はどんな{topic_noun}が好き？",
+                f"{partner_label}は{topic_noun}はよく行くんですか？"
+                if not casual
+                else f"{partner_label}は{topic_noun}はよく行く？",
+            ]
+        unused = [form for form in options if form not in recent]
         if unused:
             followup = unused[0]
-        elif re.search(r"どんな|よく行く", recent):
+        elif re.search(r"どんな|よく行く|よくやる|よくする|よく書く", recent):
             followup = ""
         else:
-            followup = (like_form, go_form)[len(prior_me) % 2]
+            followup = options[len(prior_me) % len(options)]
     else:
         followup = ""
     if partner_invites:

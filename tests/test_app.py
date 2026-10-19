@@ -17440,6 +17440,48 @@ def test_t491_short_schedule_line_gets_a_short_confirmation(client):
     assert len(candidate.text) <= 40
 
 
+def test_t492_bare_answer_line_is_merged(client):
+    _, backend = client
+    assert backend._answer_lines_for_candidate("好きです。冬の空を見るのが好きです。") == ["冬の空を見るのが好きです"]
+    assert backend._answer_lines_for_candidate("します。簡単なものだけですが作ります。") == ["簡単なものだけですが作ります"]
+    assert backend._answer_lines_for_candidate("よく行きます。") == ["よく行きます"]
+
+
+def test_t492_repeated_time_opening_is_rejected(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "じゃあ日曜の12時に駅の東口で待ち合わせにしましょう"},
+            {"role": "me", "body": "12時ですね！\n当日を楽しみにしています😊"},
+            {"role": "them", "body": "東口の広場は日当たりがよくて歩きやすいんです。旗が目印です"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    repeated = backend.Candidate(label="重複", text="12時ですね！\n旗が目印なんですね😊")
+    assert "直近の自分の発言と同じ書き出し" in backend._candidate_rejection_reasons(repeated, context)
+    fresh = backend.Candidate(label="別", text="旗が目印なんですね😊\n分かりやすいです")
+    assert "直近の自分の発言と同じ書き出し" not in backend._candidate_rejection_reasons(fresh, context)
+
+
+def test_t492_activity_topic_uses_a_natural_followup(client):
+    _, backend = client
+    question = "休みは将棋を指すこともあります。水野さんは将棋は指しますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [{"question": question, "answer": "指します。たまに友人と指します。"}],
+    }
+    candidate = backend._compose_answer_relay_candidate(context, question, "指します。たまに友人と指します。")
+    assert candidate is not None
+    assert "どんな" not in candidate.text
+
+
 
 
 
