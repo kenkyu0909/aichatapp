@@ -8711,11 +8711,13 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
         reasons.append("相手の既知情報を再質問")
-    if unsupported_personal_claim_topics([candidate], context):
+    # T485: 本人が確認した回答をそのまま伝える候補は、回答中の語が別トピックの
+    # 断定パターンへ部分一致しても（例「カレーパンが好きです」→カレー好み）、
+    # 未確認の本人事実として落とさない。
+    verified_answer_relay = _candidate_is_verified_answer_relay(text, context)
+    if not verified_answer_relay and unsupported_personal_claim_topics([candidate], context):
         reasons.append("未確認の本人事実")
-    if not _answers_verified_partner_question(candidate, context) and not _candidate_is_verified_answer_relay(
-        candidate.text, context
-    ):
+    if not _answers_verified_partner_question(candidate, context) and not verified_answer_relay:
         reasons.append("相手からの直接質問に未回答")
     if _has_condescending_offer(text):
         reasons.append("上から目線の表現")

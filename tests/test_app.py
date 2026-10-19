@@ -17021,6 +17021,29 @@ def test_t485_closing_repetition_is_deprioritized(client):
     assert "直近と同じ趣旨の行" in reasons, reasons
 
 
+def test_t485_verified_answer_relay_survives_partial_topic_match(client):
+    _, backend = client
+    question = "甘い系と食事系ならどっちが好みですか？"
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "喫茶店のカレーとドーナツが好きなんですよ。水野さんは喫茶店では何を頼みますか？"},
+            {"role": "me", "body": "わかります！\n喫茶店ではコーヒーと季節のタルトを頼むことが多いです😊"},
+            {"role": "them", "body": question},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "ephemeral_user_answers": [
+            {"question": question, "answer": "食事系のほうが好きです。おかずパンやカレーパンが好きです。"},
+        ],
+    }
+    relay = backend.Candidate(label="回答を反映した返信", text="食事系のほうが好きです\nおかずパンやカレーパンが好きです")
+    assert backend._candidate_is_verified_answer_relay(relay.text, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(relay, context)
+    invented = backend.Candidate(label="創作", text="おかずパンやカレーパンが好きなので、週に3回はパン屋に通っています")
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(invented, context)
+
+
 
 
 
