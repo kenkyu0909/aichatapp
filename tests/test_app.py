@@ -14465,7 +14465,7 @@ def test_schedule_and_invitation_acceptance_fallback_uses_natural_ack_and_partne
     }
     fb_plain = backend._build_unclassified_question_fallback_candidate(plain_context)
     assert fb_plain is not None
-    assert fb_plain.text == "ありがとうございます！\n土曜日の午後なら空いています\n黒川さんはいつ空いてます？"
+    assert fb_plain.text == "土曜日の午後なら空いています\n黒川さんはいつ空いてます？"
     assert backend._candidate_rejection_reasons(fb_plain, plain_context) == []
 
 
@@ -16364,7 +16364,7 @@ def test_t480_fallback_schedule_text_is_light(client):
     relay = backend._build_answered_question_fallback_candidate(context)
     assert relay is not None, context
     assert "ご都合どうですか" not in relay.text
-    assert "いつ空いてます？" in relay.text, relay.text
+    assert "いつ空いてます？" not in relay.text, relay.text
 
 
 def test_t480_prompts_state_friendly_keigo_principles(client):
@@ -16903,7 +16903,7 @@ def test_t483_schedule_turn_still_appends_the_ask_back(client):
         "mode": "reply",
         "history": [
             {"role": "me", "body": "北口の喫茶店は落ち着いた雰囲気のところが多いですよね✨"},
-            {"role": "them", "body": "週末は土曜の午後が空いてます"},
+            {"role": "them", "body": "来週あたりで、水野さんの都合のいい日はありますか？"},
         ],
         "other": {"name": "黒川いつき", "description": "書店員"},
         "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
@@ -16911,17 +16911,47 @@ def test_t483_schedule_turn_still_appends_the_ask_back(client):
         "invite_decision": "schedule_after_acceptance",
         "ephemeral_user_answers": [
             {
-                "question": "相手の「週末は土曜の午後が空いてます」についてどう返信したいか教えてください",
+                "question": "相手の「来週あたりで、水野さんの都合のいい日はありますか？」に答えるため該当する日の予定や過ごし方を教えてください",
                 "answer": "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。",
             }
         ],
     }
     relay = backend._compose_answer_relay_candidate(
-        context, "週末は土曜の午後が空いてます", "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。"
+        context, "来週あたりで、水野さんの都合のいい日はありますか？", "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。"
     )
     assert relay is not None, context
-    assert "ありがとうございます" in relay.text, relay.text
+    assert "ありがとうございます" not in relay.text, relay.text
     assert "いつ空いてま" in relay.text, relay.text
+
+
+def test_t484_partner_stated_availability_suppresses_the_ask_back(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "新しくできた喫茶店、気になります😊"},
+            {"role": "them", "body": "土曜と日曜ならだいたい空いてます"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「土曜と日曜ならだいたい空いてます」についてどう返信したいか教えてください",
+                "answer": "土曜の昼なら空いてます。",
+            }
+        ],
+    }
+    assert backend._partner_states_own_availability("土曜と日曜ならだいたい空いてます") is True
+    assert backend._partner_states_own_availability("水野さんはいつ空いてますか？") is False
+    relay = backend._compose_answer_relay_candidate(
+        context, "土曜と日曜ならだいたい空いてます", "土曜の昼なら空いてます。"
+    )
+    assert relay is not None, context
+    assert "いつ空いてま" not in relay.text, relay.text
+    assert "ありがとうございます" not in relay.text, relay.text
+    assert relay.text.splitlines()[0].startswith("土曜の昼なら空いてます"), relay.text
 
 
 def test_t483_empathy_endings_count_as_acknowledgments(client):

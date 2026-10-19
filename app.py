@@ -543,6 +543,9 @@ REFUSAL_REINVITATION_PATTERN = re.compile(
     r"(?:会えたら|会えると|誘わせて).{0,16}(?:嬉し|うれし|いいな)|"
     r"(?:また|改めて).{0,8}誘わせて|(?:会う|誘う).{0,10}(?:機会|タイミング)があれば"
 )
+PARTNER_OWN_AVAILABILITY_PATTERN = re.compile(
+    r"空いてます|空いてる|空いて|あいてます|暇|フリー|都合がいい|都合が良い|予定がない|予定はない"
+)
 MINIMIZING_REASSURANCE_PATTERN = re.compile(
     r"安心してください|心配しないで|気にしないで|(?:不安|心配).{0,12}大丈夫|大丈夫.{0,12}(?:不安|心配しなくて)|焦らず.{0,18}(?:やり取り|会話|話)"
 )
@@ -8581,6 +8584,24 @@ def partner_latest_message_has_invitation(context: dict) -> bool:
     return bool(INVITATION_PATTERN.search(str(latest_partner.get("body", ""))))
 
 
+def _partner_states_own_availability(text: str) -> bool:
+    """True when the partner already told us their own available day/time (T484).
+
+    A statement such as "土曜と日曜ならだいたい空いてます" counts; a question to
+    us such as "水野さんはいつ空いてますか？" does not.
+    """
+    body = str(text)
+    for match in PARTNER_OWN_AVAILABILITY_PATTERN.finditer(body):
+        tail = body[match.end():match.end() + 1]
+        if tail in {"か", "？", "?"}:
+            continue
+        head = body[max(0, match.start() - 10):match.start()]
+        if re.search(r"(?:さん|あなた|水野|そよか)(?:は|って|の)?$", head):
+            continue
+        return True
+    return False
+
+
 def candidate_answers_partner_invitation(candidate_text: str) -> bool:
     """True when candidate explicitly accepts, welcomes, or confirms partner invitation."""
     return bool(PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text))
@@ -9096,19 +9117,14 @@ def _compose_answer_relay_candidate(
     has_invitation_acceptance = bool(
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
     )
+    partner_invited_recently = bool(
+        re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", latest_partner_body)
+    )
     partner_shares_info = _partner_shares_info_with_question(question)
     if not partner_shares_info:
         # The question may be cut out of a longer message that shared news
         # ("…私は土曜も日曜も空いてます。じゃあ今週末はどうですか？").
-        latest_partner = next(
-            (
-                str(item.get("body", ""))
-                for item in reversed(context.get("history", []))
-                if item.get("role") == "them"
-            ),
-            "",
-        )
-        partner_shares_info = _partner_shares_info_with_question(latest_partner)
+        partner_shares_info = _partner_shares_info_with_question(latest_partner_body)
     partner_invites = partner_latest_message_has_invitation(context)
     prior_me = [m.get("body", "") for m in context.get("history", []) if m.get("role") == "me"]
     last_prior_me = prior_me[-1] if prior_me else ""
@@ -9127,15 +9143,20 @@ def _compose_answer_relay_candidate(
         accept_line = "ぜひ行きましょー" if casual else "ぜひ行きましょう😊"
         candidate_text = f"いいですね！\n{accept_line}\n{clean_answer}\n{followup}"
     elif is_schedule_or_accept:
-        if has_invitation_acceptance:
+        # T484: use the acknowledgment only right after the partner invited us,
+        # and skip the "when are you free?" ask-back when the partner already
+        # told us their own available day/time (we align with our own answer).
+        if has_invitation_acceptance or partner_invites or partner_invited_recently:
             ack = "うれしいな！" if casual else "うれしいです😊"
         else:
-            ack = "ありがとう！" if casual else "ありがとうございます！"
-        if partner_label:
+            ack = ""
+        if _partner_states_own_availability(latest_partner_body):
+            followup = ""
+        elif partner_label:
             followup = f"{partner_label}はいつ空いてる？" if casual else f"{partner_label}はいつ空いてます？"
         else:
             followup = "そっちはいつ空いてる？" if casual else "そちらはいつ空いてます？"
-        candidate_text = f"{ack}\n{clean_answer}\n{followup}"
+        candidate_text = "\n".join(part for part in (ack, clean_answer, followup) if part)
     elif partner_shares_info:
         # The partner shared their own news and then asked a question. Acknowledge
         # the news briefly instead of the "I see" reaction: a question turn should
