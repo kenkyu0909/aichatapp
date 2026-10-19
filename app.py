@@ -9124,10 +9124,22 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
     memo = _profile_memo_text(context)
     if not memo:
         return None
-    question_terms = _memo_terms(question)
+    # T488: 発言が「前置き＋質問」のときは質問文だけを対象にする。前置きに出た
+    # 場所（喫茶店）だけを頼りに、飲み物の質問へ食事のメモを返さないため。
+    sentences = [s.strip() for s in re.split(r"[\n。．!！?？]+", str(question)) if s.strip()]
+    focus_question = str(question)
+    if len(sentences) > 1:
+        question_sentences = [
+            s
+            for s in sentences
+            if re.search(r"ですか|ますか|でしょうか|ませんか|何|どんな|どう|どこ|いつ|どっち|どちら", s)
+        ]
+        if question_sentences:
+            focus_question = question_sentences[-1]
+    question_terms = _memo_terms(focus_question)
     if not question_terms:
         return None
-    focus_positions = {term: question.rfind(term) for term in question_terms}
+    focus_positions = {term: focus_question.rfind(term) for term in question_terms}
     focus_term = max(focus_positions, key=lambda term: focus_positions[term])
     best: tuple[tuple, str] | None = None
     for sentence in re.split(r"[\n。．.!！?？]+", memo):

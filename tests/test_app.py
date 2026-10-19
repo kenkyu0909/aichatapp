@@ -17242,6 +17242,8 @@ def test_t488_memo_answer_must_match_the_question_subject(client):
     assert backend._memo_answer_sentence(question, context) is None
     coffee = "喫茶店ではいつも何を頼みますか？"
     assert backend._memo_answer_sentence(coffee, context) is not None
+    drink = "喫茶店ではレモンティーばかり頼みます。水野さんは甘い飲み物は飲みますか？"
+    assert backend._memo_answer_sentence(drink, context) is None
 
 
 def test_t488_invitation_acceptance_drops_unrelated_memo_line(client):
