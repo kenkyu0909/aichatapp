@@ -7759,7 +7759,8 @@ def _is_unclassified_question_about_user(text: str) -> bool:
     if re.search(
         r"(?:たり|だり)(?:し|する|して|しています|してます)?(?:ますか|るんですか|いるんですか|いるの)|"
         r"[一-龯ぁ-んァ-ヶ]{1,8}(?:る|った)こと(?:が|は|も)?(?:あります|ある)(?:んですか|か)?|"
-        r"(?:撮|描|弾|歌|踊|登|走|泳|飼|集め)(?:りますか|るんですか|ってますか|っていますか)",
+        r"(?:撮|描|弾|歌|踊|登|走|泳|飼|集め)(?:りますか|るんですか|ってますか|っていますか)|"
+        r"(?:どこから|どれから|何から)[^?？\n]{0,14}(?:ますか|るんですか|ですか|ましたか)",
         question,
     ):
         return True
@@ -8303,6 +8304,35 @@ def _candidate_drifts_from_partner_topic(text: str, context: dict) -> bool:
     return False
 
 
+def _older_partner_nouns(context: dict) -> set[str]:
+    """過去の相手発言（最新を除く）に現れた内容語 (T487)."""
+    partner_bodies = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    return _content_nouns(" ".join(partner_bodies[:-1]))
+
+
+def _opening_line_reacts_to_stale_topic(text: str, context: dict) -> bool:
+    """1行目が直前ではなく前のターンの話題に相槌しているときだけ True (T487).
+
+    相手が話題を変えたのに、書き出しが1つ前の相手発言に反応している行
+    （夜型の話なのに「フィルムの現像待ち…」で始まる）を、直前の話題から
+    離れているとして扱う。最新の話題に触れている行は対象外。
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    opening_nouns = _content_nouns(lines[0])
+    if not opening_nouns:
+        return False
+    latest_nouns = _latest_partner_nouns(context)
+    if not latest_nouns or opening_nouns & latest_nouns:
+        return False
+    return bool(opening_nouns & _older_partner_nouns(context))
+
+
 def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     """True when the question only paraphrases the user's own previous question."""
     prior_me = [
@@ -8828,6 +8858,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("明らかな誤字")
     if any(not line.strip() for line in text.splitlines()):
         reasons.append("空行")
+    # T487: 書き出しが直前ではなく前のターンの相手発言に相槌している候補を落とす。
+    if _opening_line_reacts_to_stale_topic(text, context):
+        reasons.append("直前の相手の話題と離れている")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -9322,8 +9355,11 @@ def _compose_answer_relay_candidate(
     else:
         followup = ""
     if partner_invites:
-        accept_line = "ぜひ行きましょー" if casual else "ぜひ行きましょう😊"
-        candidate_text = f"いいですね！\n{accept_line}\n{clean_answer}\n{followup}"
+        # T487: 回答自体が承諾（「ぜひ行きたいです」）を含むときは、承諾の相槌を
+        # 重ねない。空行が残らないよう空の行は詰める。
+        already_accepts = bool(re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい", clean_answer))
+        accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
+        candidate_text = "\n".join(part for part in ("いいですね！", accept_line, clean_answer, followup) if part)
     elif is_schedule_or_accept:
         # T484: use the acknowledgment only right after the partner invited us,
         # and skip the "when are you free?" ask-back when the partner already
@@ -9344,10 +9380,10 @@ def _compose_answer_relay_candidate(
         # the news briefly instead of the "I see" reaction: a question turn should
         # not open with そうなんですね！ (T455/T475).
         ack = "いいね！" if casual else "いいですね！"
-        candidate_text = f"{ack}\n{clean_answer}\n{followup}"
+        candidate_text = "\n".join(part for part in (ack, clean_answer, followup) if part)
     else:
         # A pure question turn: answer first, without a reaction line.
-        candidate_text = f"{clean_answer}\n{followup}" if followup else clean_answer
+        candidate_text = "\n".join(part for part in (clean_answer, followup) if part)
     candidate = Candidate(
         label="回答を反映した返信",
         text=candidate_text,
@@ -9735,6 +9771,11 @@ _STIFF_KEIGO_REWRITES = (
     ("がお好き", "が好き"),
     ("もお好き", "も好き"),
     ("お好き", "好き"),
+    # T487: 「何時に変更するか教えてもらえますか」のような硬い確認を普通の形へ。
+    ("何時に変更するか教えてもらえますか", "何時になったんですか"),
+    ("何時に変更するか教えていただけますか", "何時になったんですか"),
+    ("何時に変更になるか教えてもらえますか", "何時になったんですか"),
+    ("変更するか教えてもらえますか", "変わったんですか"),
 )
 
 
@@ -9795,7 +9836,7 @@ def filter_safe_candidates(
         "invite_decision": getattr(value, "invite_decision", None),
     }
     for candidate in source_candidates:
-        split_text = split_pivot_run_on_line(candidate.text)
+        split_text = split_pivot_run_on_line(candidate.text).rstrip("\n")
         if split_text != candidate.text:
             candidate = candidate.model_copy(update={"text": split_text})
         softened_text = _soften_stiff_keigo(candidate.text)

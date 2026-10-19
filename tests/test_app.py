@@ -17154,6 +17154,64 @@ def test_t486_followup_topic_stays_on_the_question(client):
     assert backend._latest_topic_noun(photo) == "写真"
 
 
+def test_t487_dokokara_question_is_a_direct_personal_question(client):
+    _, backend = client
+    assert backend._is_unclassified_question_about_user("水野さんは本屋だとどこから見ますか？")
+    assert backend._is_unclassified_question_about_user("水野さんはどこから読みますか？")
+
+
+def test_t487_answer_relay_has_no_trailing_blank_line_and_no_duplicate_accept(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "そういえば来週の土曜、街の古本市があるんですよ。よかったら一緒に行きませんか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "そういえば来週の土曜、街の古本市があるんですよ。よかったら一緒に行きませんか？",
+                "answer": "ぜひ行きたいです。",
+            },
+        ],
+    }
+    candidate = backend._compose_answer_relay_candidate(
+        context, "そういえば来週の土曜、街の古本市があるんですよ。よかったら一緒に行きませんか？", "ぜひ行きたいです。"
+    )
+    assert candidate is not None
+    assert not candidate.text.endswith("\n")
+    assert "\n\n" not in candidate.text
+    assert "ぜひ行きましょう" not in candidate.text
+    assert candidate.text.count("ぜひ") == 1
+
+
+def test_t487_opening_line_does_not_react_to_a_previous_turn(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルムで撮ることもあるんですよ。現像待ちの時間がたのしみで"},
+            {"role": "me", "body": "フィルムの現像待ちの時間ってなんだか楽しみになりますよね✨"},
+            {"role": "them", "body": "休みの前の晩はつい夜更かししちゃいます。水野さんは夜型ですか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    stale = backend.Candidate(label="古い相槌", text="フィルムの現像待ちワクワクしますよね✨\n私も夜ふかししがちです")
+    assert "直前の相手の話題と離れている" in backend._candidate_rejection_reasons(stale, context)
+    fresh = backend.Candidate(label="新しい相槌", text="夜ふかししちゃいますよね\n私も夜に本を読むことが多いです")
+    assert "直前の相手の話題と離れている" not in backend._candidate_rejection_reasons(fresh, context)
+
+
+def test_t487_stiff_request_for_new_time_is_softened(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("何時に変更するか教えてもらえますか？") == "何時になったんですか？"
+
+
 
 
 
