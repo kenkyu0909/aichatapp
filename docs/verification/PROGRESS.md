@@ -1,5 +1,17 @@
 # 検証進捗
 
+## 2026-10-20 09:30 JST T494 旧アプリの本人情報の取り込み（読み取り専用）、明示時のみ読み込み、相手プロフィールのランダム選択、敬語20通
+
+- T494 の要望（旧アプリの会話履歴から本人情報を集めて返信に使う／相手役は旧アプリの相手プロフィールからランダム）に対応した。commit `49f76b0`。
+- 取り込み: `scripts/legacy_extract.py` を追加（データなし・パスは引数）。旧 `app.db` を `file:...?mode=ro` で読み、user_profile・user_knowledge・手入力メッセージ（sender='self' AND source='manual'）から本人の事実だけを小さく抽出し、根拠ID付きで JSON と MD に出す。結果はリポジトリ外の `会話テスト\data\user_facts_from_legacy.json`（38件）と `会話テスト\reports\user_facts_from_legacy.md`。
+- アプリの取り込み: 環境変数 `MRA_LEGACY_FACTS_PATH` が指定されたときだけ `load_legacy_facts` → `_merge_legacy_facts` で profile.facts.legacy_facts に足し、`_trusted_fact_clauses` 経由で確定事実にする。既定では読み込まない。
+- 相手プロフィール: `run20.py` の start に `--partner-from-legacy`／`--seed` を追加し contacts.profile から1件選ぶ（読み取り専用）。
+- 走行: 相手役は seed=7 で選んだ1件（リポジトリ外の台本）、`MRA_LEGACY_FACTS_PATH` 指定。アプリ20通、相手19通、候補停止0、接続エラー0、状態 `LIMIT_REACHED`。記録は `会話テスト/json/conversation_test_keigo20_ds4_t494.json` と `.html`、データは `data_keigo20_ds4_t494`、報告は `reports/ds4_T494_report.md`。代表ファイルはこの走行へ差し替えた。
+- 個人情報: リポジトリは PUBLIC のため、旧アプリの会話・名前・プロフィール・抽出結果は一切コミットしていない。コミットは汎用スクリプトと架空データの回帰テストのみ。出力は `会話テスト` フォルダ（リポジトリ外）にのみ置いた。コミット前に git status／diff を確認した。
+- 指標: 相槌の主指標（相手が話した19ターン）は第1候補 **73.7%** (14/19) / 全候補 **86.5%** (32/37)。第1候補は目標（80%）に届かず。参考の全20ターン値は 75.0% / 87.2%、厳格は 90.9% / 85.0%、質問含有率は 81.8% / 75.0%。
+- 試験とCI: `pytest -k t494` は2件成功。`tests` 全体は **2036 passed / 0 failed**。Actions は `49f76b0`（Push run 39340015590 / PR run 39340022020）が success。
+- 総合判定は据え置き。会話1系列と単位試験の結果であり、既存のNO-GOを変える証拠には足りない。
+
 ## 2026-10-20 08:30 JST T493 ユーザーの話題転換指示（direction/extra）の優先、方向に「話題を変える」追加、検査との両立、敬語20通
 
 - T493 の要望（生成前にユーザーが話題を指定できるようにする）に対応し、敬語20通を途中3回の指示つきで行った。アプリ20通、相手19通。API要求28回、候補停止0回。状態は `LIMIT_REACHED`。記録は repo 外 `会話テスト/json/conversation_test_keigo20_ds4_t493.json` と `会話テスト/conversation_test_keigo20_ds4_t493.html`、データは `会話テスト/data/data_keigo20_ds4_t493`、報告は `会話テスト/reports/ds4_T493_report.md`。代表ファイルはこの走行へ差し替えた。
