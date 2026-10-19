@@ -17424,6 +17424,22 @@ def test_t491_relay_ack_and_followup_vary(client):
     assert "どんな" not in candidate.text
 
 
+def test_t491_short_schedule_line_gets_a_short_confirmation(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "じゃあ日曜の12時に駅の東口で待ち合わせにしましょう"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "schedule_after_acceptance",
+    }
+    candidate = backend._build_schedule_confirmation_fallback_candidate(context)
+    assert candidate is not None
+    assert "12時" in candidate.text
+    assert len(candidate.text) <= 40
+
+
 
 
 

@@ -6882,10 +6882,40 @@ def _build_schedule_reask_fallback_candidate(context: dict) -> Candidate | None:
     return candidate
 
 
-def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate | None:
-    """誘いへの承諾だけを1案合成する (T488).
+def _build_schedule_confirmation_fallback_candidate(context: dict) -> Candidate | None:
+    """日時を受け止めるだけの短い返事を合成する (T491).
 
-    承諾の回答が無いときでも、日程と無関係なメモ文を添えずに短く承諾する。
+    短い日程確定の相手発言に、長い候補しか作れないときの受け皿。時刻だけを
+    受け止め、当日を楽しみにする短い1案にする。
+    """
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return None
+    latest = partner_messages[-1]
+    if "？" in latest or "?" in latest:
+        return None
+    hours = sorted(_extract_schedule_elements(latest).get("hours") or set())
+    if not hours:
+        return None
+    casual = _fallback_should_use_casual_tone(context, latest, "")
+    time_label = hours[0]
+    text = (
+        f"{time_label}ですね！\n当日たのしみにしてるね😊"
+        if casual
+        else f"{time_label}ですね！\n当日を楽しみにしています😊"
+    )
+    candidate = Candidate(label="日時の受け止め", text=text, reply_move="react")
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
+def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate | None:
+    """誘いへの承諾だけを1案合成する (T488).    承諾の回答が無いときでも、日程と無関係なメモ文を添えずに短く承諾する。
     """
     if not partner_latest_message_has_invitation(context):
         return None
@@ -9616,19 +9646,24 @@ def _compose_answer_relay_candidate(
         text=candidate_text,
         reply_move="react",
     )
-    if _candidate_rejection_reasons(candidate, context):
-        # 聞き返しの1行だけが繰り返しの検査に触れた場合は、その行を省いて出す（T481）。
-        lines = candidate_text.splitlines()
-        if len(lines) >= 2 and ("?" in lines[-1] or "？" in lines[-1]):
-            trimmed = Candidate(
-                label=candidate.label,
-                text="\n".join(lines[:-1]),
-                reply_move=candidate.reply_move,
-            )
-            if not _candidate_rejection_reasons(trimmed, context):
-                return trimmed
-        return None
-    return candidate
+    if not _candidate_rejection_reasons(candidate, context):
+        return candidate
+    # T491: 相槌や聞き返しが文脈の検査に触れたときは行を落として出し、最後は
+    # 確認済みの回答そのもの（最も安全）まで縮める。答えを伝えない手は選ばない。
+    lines = candidate_text.splitlines()
+    attempts = []
+    if len(lines) >= 2:
+        attempts.append("\n".join(lines[:-1]))
+    attempts.append(clean_answer)
+    seen = {candidate_text}
+    for text in attempts:
+        if text in seen or not text.strip():
+            continue
+        seen.add(text)
+        trial = Candidate(label="回答を反映した返信", text=text, reply_move="react")
+        if not _candidate_rejection_reasons(trial, context):
+            return trial
+    return None
 
 
 def _build_unclassified_question_fallback_candidate(context: dict) -> Candidate | None:
@@ -10103,7 +10138,9 @@ def filter_safe_candidates(
         ]
         deterministic_fallback_used = True
     if not accepted:
-        fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        fallback_candidate = _build_schedule_confirmation_fallback_candidate(candidate_context)
+        if fallback_candidate is None:
+            fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_schedule_reask_fallback_candidate(candidate_context)
         if fallback_candidate is None:
