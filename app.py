@@ -6829,6 +6829,42 @@ def _build_schedule_conflict_fallback_candidate(context: dict) -> Candidate | No
     return candidate
 
 
+def _schedule_change_pending(context: dict) -> bool:
+    """日時の食い違いを確認した後、相手が新しい時刻をまだ明示していない状態 (T489)."""
+    history = context.get("history") or []
+    asked = any(
+        message.get("role") == "me"
+        and _SCHEDULE_CONFLICT_RESOLVED.search(str(message.get("body", "")))
+        for message in history
+    )
+    if not asked:
+        return False
+    partner_messages = [m for m in history if m.get("role") == "them"]
+    if not partner_messages:
+        return False
+    latest = _extract_schedule_elements(str(partner_messages[-1].get("body", "")))
+    has_time = bool(latest.get("hours")) or bool(set(latest.get("times") or set()) & _SCHEDULE_TIME_OF_DAY)
+    return not has_time
+
+
+def _build_schedule_reask_fallback_candidate(context: dict) -> Candidate | None:
+    """日時変更を確認した後、相手が時刻を明示するまで確定させない再確認 (T489)."""
+    if not _schedule_change_pending(context):
+        return None
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    casual = _fallback_should_use_casual_tone(context, question, "")
+    line = "何時になったの？" if casual else "何時になったんですか？"
+    candidate = Candidate(label="日時の再確認", text=line, reply_move="react")
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
+
+
 def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate | None:
     """誘いへの承諾だけを1案合成する (T488).
 
@@ -8963,6 +8999,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         and not _SCHEDULE_CONFLICT_ACK.search(text)
     ):
         reasons.append("確定済みの日時と食い違う")
+    # T489: 日時変更を確認した後、相手が時刻を明示するまで確定させない。
+    if _schedule_change_pending(context) and re.search(r"\d{1,2}時|午前|午後", text):
+        reasons.append("日時が未確定なのに確定させている")
     if _unsupported_partner_claim(candidate, context):
         reasons.append("未確認の相手情報")
     if (
@@ -9862,6 +9901,17 @@ _STIFF_KEIGO_REWRITES = (
     ("行かれる", "行く"),
     ("使われている", "使ってる"),
     ("使われてる", "使ってる"),
+    # T489: 尊敬の「〜られる」＋「んですか」を普通の形へ戻す。受け身と区別できる
+    # よう、対象の動詞を限定し、報告のあった「んですか」形だけを置換する。
+    ("撮られるんですか", "撮るんですか"),
+    ("読まれるんですか", "読むんですか"),
+    ("食べられるんですか", "食べるんですか"),
+    ("飲まれるんですか", "飲むんですか"),
+    ("書かれるんですか", "書くんですか"),
+    ("聞かれるんですか", "聞くんですか"),
+    ("作られるんですか", "作るんですか"),
+    ("見られるんですか", "見るんですか"),
+    ("観られるんですか", "観るんですか"),
     ("ありますね", "ありますよね"),
     ("いきませんか", "行きませんか"),
     ("いきましょう", "行きましょう"),
@@ -9975,6 +10025,8 @@ def filter_safe_candidates(
         deterministic_fallback_used = True
     if not accepted:
         fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        if fallback_candidate is None:
+            fallback_candidate = _build_schedule_reask_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_invitation_acceptance_fallback_candidate(candidate_context)
         if fallback_candidate is None:

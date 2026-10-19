@@ -17321,6 +17321,38 @@ def test_t488_echo_opening_is_flagged(client):
     assert "相手の言葉をなぞるだけ" not in backend._candidate_rejection_reasons(reworded, context)
 
 
+def test_t489_respectful_rareru_question_is_softened(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("どんな写真を撮られるんですか？") == "どんな写真を撮るんですか？"
+    assert backend._soften_stiff_keigo("よく本を読まれるんですか？") == "よく本を読むんですか？"
+    assert backend._soften_stiff_keigo("甘いものも食べられるんですか？") == "甘いものも食べるんですか？"
+    assert backend._soften_stiff_keigo("どんな音楽を聞かれるんですか？") == "どんな音楽を聞くんですか？"
+
+
+def test_t489_schedule_change_is_not_finalized_before_partner_confirms(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "じゃあ土曜の11時に待ち合わせにしましょう"},
+            {"role": "me", "body": "あれ11時じゃなかったでしたっけ？\nもしかして時間が変わったんですか？"},
+            {"role": "them", "body": "あと、雨天のときは中止になるそうです。晴れるといいですね"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    assert backend._schedule_change_pending(context) is True
+    accepting = backend.Candidate(label="確定", text="南口の14時に向かいますね")
+    assert "日時が未確定なのに確定させている" in backend._candidate_rejection_reasons(accepting, context)
+    reask = backend._build_schedule_reask_fallback_candidate(context)
+    assert reask is not None
+    assert "何時" in reask.text
+    confirmed = dict(context)
+    confirmed["history"] = context["history"][:-1] + [{"role": "them", "body": "南口に14時集合になりました"}]
+    assert backend._schedule_change_pending(confirmed) is False
+
+
 
 
 
