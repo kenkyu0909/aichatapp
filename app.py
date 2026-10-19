@@ -8249,6 +8249,10 @@ def _latest_topic_noun(context: dict) -> str:
     if question_clauses and not scoped_nouns:
         return ""
     nouns = scoped_nouns or nouns
+    # T487: 夜型・朝型のような性質語は「どんな〜」の話題にしない。
+    nouns = [noun for noun in nouns if not noun.endswith("型")]
+    if not nouns:
+        return ""
     user_names = set(_user_name_tokens(context))
     nouns = [
         noun

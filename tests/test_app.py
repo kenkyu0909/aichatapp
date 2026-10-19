@@ -17212,6 +17212,20 @@ def test_t487_stiff_request_for_new_time_is_softened(client):
     assert backend._soften_stiff_keigo("何時に変更するか教えてもらえますか？") == "何時になったんですか？"
 
 
+def test_t487_trait_noun_is_not_a_followup_topic(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "最近は動画を見ていると朝になってしまいます。水野さんはどちらかというと夜型ですか？"}
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    assert backend._latest_topic_noun(context) == ""
+
+
 
 
 
