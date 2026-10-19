@@ -16866,5 +16866,75 @@ def test_t473_condescending_offers_are_rewritten_or_rejected(client):
     ), filtered
 
 
+def test_t483_schedule_ask_back_is_limited_to_schedule_context(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "フィルムカメラで看板の写真も撮ってます"},
+            {"role": "me", "body": "商店街の写真屋さんで現像するなんて素敵なこだわりですね✨"},
+            {"role": "them", "body": "水野さんは写真は撮ったりしますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「水野さんは写真は撮ったりしますか？」にどう答えたいか教えてください",
+                "answer": "よく撮ります。景色や看板を撮ることが多いです。",
+            }
+        ],
+    }
+    relay = backend._compose_answer_relay_candidate(
+        context, "水野さんは写真は撮ったりしますか？", "よく撮ります。景色や看板を撮ることが多いです。"
+    )
+    assert relay is not None, context
+    text = relay.text
+    assert "空いて" not in text, text
+    assert not text.startswith("ありがとうございます"), text
+    assert text.splitlines()[0].startswith("よく撮ります"), text
+    assert "写真" in text.splitlines()[-1], text
+
+
+def test_t483_schedule_turn_still_appends_the_ask_back(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "北口の喫茶店は落ち着いた雰囲気のところが多いですよね✨"},
+            {"role": "them", "body": "週末は土曜の午後が空いてます"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+        "ephemeral_user_answers": [
+            {
+                "question": "相手の「週末は土曜の午後が空いてます」についてどう返信したいか教えてください",
+                "answer": "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。",
+            }
+        ],
+    }
+    relay = backend._compose_answer_relay_candidate(
+        context, "週末は土曜の午後が空いてます", "土曜の午後は予定がないので大丈夫です。14時ごろから空いています。"
+    )
+    assert relay is not None, context
+    assert "ありがとうございます" in relay.text, relay.text
+    assert "いつ空いてま" in relay.text, relay.text
+
+
+def test_t483_empathy_endings_count_as_acknowledgments(client):
+    _, backend = client
+    for text in (
+        "北口は喫茶店がたくさんありますよね✨",
+        "古い本だとついついジャケ買いしちゃいますよね😊",
+        "窓ぎわの席は落ち着きますよね",
+    ):
+        assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text), text
+    assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search("無理しちゃダメですよ") is None
+    assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search("よろしくお願いします") is None
+
+
 
 

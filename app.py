@@ -7774,7 +7774,7 @@ def _candidate_sentence_count(text: str) -> int:
 
 ACKNOWLEDGMENT_OR_QUESTION_MARKERS = re.compile(
     r"そうなんですね|そうなんですか|そうなんだ|そうなんだね|そうなんだよ|そうなんだー|そっか|なるほど|わかります|分かります|わかる|わかるな|"
-    r"たしかに|確かに|ですよね|だよね|いいですね|いいね|いいよね|素敵ですね|すてきですね|素敵だね|すてきだね|素敵|すてき|楽しそうですね|楽しそうだね|楽しそう|"
+    r"たしかに|確かに|ですよね|だよね|ますよね|よね|いいですね|いいね|いいよね|素敵ですね|すてきですね|素敵だね|すてきだね|素敵|すてき|楽しそうですね|楽しそうだね|楽しそう|"
     r"気になりますね|気になります|気になるな|気になる|面白そうですね|面白そうだね|面白そう|おもしろそう|面白いよね|おもしろいよね|面白い|おもしろい|聞いてみたいです|聞いてみたいな|大変でしたね|大変だったね|お疲れさま|お疲れ様|"
     r"うれしいです|嬉しいです|うれしいな|嬉しいな|うれしい|嬉しい|ありがとうございます|ありがとう|"
     r"ぜひ(?:行きましょう|お願いしたいです|お願いします|行きましょ|行こう|行きたい|行きたいな|行こうね)?|"
@@ -9069,10 +9069,29 @@ def _compose_answer_relay_candidate(
         question = compound_parts[0][1]
     casual = _fallback_should_use_casual_tone(context, question, clean_answer)
     partner_label = _fallback_partner_honorific_name(context)
-    is_schedule_or_accept = bool(
-        context.get("invite_decision") == "schedule_after_acceptance"
-        or _future_activity_scope(question)
+    latest_partner_body = next(
+        (
+            str(item.get("body", ""))
+            for item in reversed(context.get("history", []))
+            if item.get("role") == "them"
+        ),
+        "",
+    )
+    schedule_topic_in_question = bool(
+        _future_activity_scope(question)
         or re.search(r"ぜひ行きましょう|ぜひご一緒|都合|空いて|何曜日|時間帯|日程", question)
+    )
+    schedule_topic_in_latest = bool(
+        _future_activity_scope(latest_partner_body)
+        or re.search(r"空いて|都合|何曜日|時間帯|日程|週末|土曜|日曜|予定", latest_partner_body)
+    )
+    is_schedule_or_accept = bool(
+        schedule_topic_in_question
+        or (
+            context.get("invite_decision")
+            in {"schedule_after_acceptance", "invite_gently"}
+            and schedule_topic_in_latest
+        )
     )
     has_invitation_acceptance = bool(
         re.search(r"ぜひ|行きましょう|ご一緒|楽しみ|うれしい|嬉しい|いいですね", question)
