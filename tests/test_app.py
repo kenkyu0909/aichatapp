@@ -1106,7 +1106,9 @@ def test_first_mode_keeps_complete_candidate_and_reports_shortage(client):
 
     assert filtered["available_candidate_count"] == 1
     assert filtered["generation_blocked"] is False
-    assert filtered["recommended"]["text"] == complete
+    # T485 で「お好き」→「好き」の言い換えを足したため、保持本文は元候補か
+    # その言い換え結果のいずれかになる（どちらも安全検査を通っている）。
+    assert filtered["recommended"]["text"] in {complete, backend._soften_stiff_keigo(complete)}
     assert "指定は2案" in filtered["candidate_notice"]
 
 
@@ -16964,6 +16966,60 @@ def test_t483_empathy_endings_count_as_acknowledgments(client):
         assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search(text), text
     assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search("無理しちゃダメですよ") is None
     assert backend.ACKNOWLEDGMENT_OR_QUESTION_MARKERS.search("よろしくお願いします") is None
+
+
+def test_t485_choice_question_is_a_direct_personal_question(client):
+    _, backend = client
+    assert backend._is_unclassified_question_about_user("水野さんは甘い系と食事系ならどっちが好みですか？")
+    assert backend._is_unclassified_question_about_user("水野さんはイートインとテイクアウトならどっちが多いですか？")
+    assert backend._is_unclassified_question_about_user("朝と夜ならどっちが落ち着きますか？")
+    assert not backend._is_unclassified_question_about_user("友達はどっちが好きなんですか？")
+
+
+def test_t485_followup_uses_the_full_noun_phrase(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "ハード系のパンが好きなんですよ。水野さんはパンはよく買いますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+    }
+    assert backend._latest_topic_noun(context) == "ハード系のパン"
+
+
+def test_t485_stiff_keigo_softens_osuki(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("どんなお店のものもお好きなんですか？") == "どんなお店のものも好きなんですか？"
+    assert backend._soften_stiff_keigo("お好きなパンはありますか？") == "好きなパンはありますか？"
+
+
+def test_t485_short_reception_followed_by_text_is_a_missing_break(client):
+    _, backend = client
+    assert backend.candidate_has_missing_sentence_break("13時50分ですね了解です！")
+    assert backend.candidate_has_missing_sentence_break("わかりますあんバターってつい買っちゃいますよね✨")
+    assert backend.candidate_has_missing_sentence_break("土曜の14時ですね当日が楽しみです")
+    assert not backend.candidate_has_missing_sentence_break("わかりますよ")
+    assert not backend.candidate_has_missing_sentence_break("わかりますね")
+    assert not backend.candidate_has_missing_sentence_break("たしかにそうですね")
+
+
+def test_t485_closing_repetition_is_deprioritized(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "じゃあ土曜の14時にパン屋さんの前で待ち合わせましょー、そろそろ眠いです。おやすみなさい"},
+            {"role": "me", "body": "土曜の14時ですね！\n当日楽しみにしていますね✨"},
+            {"role": "them", "body": "当日は現地に13時50分ごろ着くようにします。遅れそうなら連絡しますね"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+    }
+    reasons = backend._recent_self_repetition_reasons("13時50分ですね！\n当日を楽しみにしていますね✨", context)
+    assert "直近と同じ趣旨の行" in reasons, reasons
+
 
 
 

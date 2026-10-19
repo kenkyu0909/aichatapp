@@ -6186,6 +6186,18 @@ def candidate_has_missing_sentence_break(text: str) -> bool:
         # Common emoji can mark a sentence boundary with or without a space.
         if re.search(r"(?:😊|☺️|😄|😂|🥲|😭|✨|🌸|❤️|💕|👍|☕|🍰|🌿|🎬|📚)[ \t]*[ぁ-んァ-ヶ一-龠]", line):
             return True
+        # T485: 短い受け止めの語（ですね・わかります・了解です等）の直後に
+        # 区切りなく別の文が続く行（「13時50分ですね了解です！」
+        # 「わかりますあんバターって…」）を検出する。助詞や「たしかにそう」の
+        # ように自然に続く語は否定先読みで除外する。
+        if re.search(
+            r"(?:ですね|ですよね|ますよね)(?:了解|おけ|大丈夫|承知|わかりました|当日|よろしく|また|では)|"
+            r"^(?:わかります|わかりました|了解です)"
+            r"(?!(?:よ|ね|わ|か|が|けど|けれど|から|ので|のに|し|の|で|そう|たしか|それ|これ|あの|その|この|ありがとう|という))"
+            r"[ぁ-んァ-ヶ一-龠]",
+            line,
+        ):
+            return True
         if re.search(r"\n", line):  # defensive; splitlines normally removes it
             return True
     return False
@@ -7649,6 +7661,14 @@ def _is_unclassified_question_about_user(text: str) -> bool:
         question,
     ):
         return True
+    # T485: 「AとBならどっち」「AとBどっちが多い」型の選択式質問も、本人の
+    # 好み・頻度を尋ねる直接質問として扱う（回答せずに聞き返すのを防ぐ）。
+    if re.search(r"(?:どっち|どちら|どれ)(?:が|は|のほうが|に|を)?", question) and re.search(
+        r"(?:と|や|か)(?=[^\n]{0,20}(?:どっち|どちら|どれ))", question
+    ):
+        return True
+    if re.search(r"(?:なら|だったら|では)(?:どっち|どちら|どれ)", question):
+        return True
     return bool(INVITATION_PATTERN.search(question) or re.search(
         r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
         r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
@@ -8090,11 +8110,21 @@ def _latest_topic_noun(context: dict) -> str:
     ]
     if not partner_messages:
         return ""
-    nouns = [
-        token
-        for token in re.findall(r"[\u4e00-\u9faf]{2,}|[\u30a1-\u30f6\u30fc]{2,}", partner_messages[-1])
-        if token not in _REPETITION_NOUN_STOPWORDS
-    ]
+    latest_partner = partner_messages[-1]
+    nouns: list[str] = []
+    for match in re.finditer(r"[\u4e00-\u9faf]{2,}|[\u30a1-\u30f6\u30fc]{2,}", latest_partner):
+        token = match.group(0)
+        if token in _REPETITION_NOUN_STOPWORDS:
+            continue
+        # T485: 修飾語だけを切り出さないよう、続く「系/風/タイプ/派」や
+        # 「〜の〈名詞〉」までを1つの名詞句として扱う（「ハード」→「ハード系のパン」）。
+        extension = re.match(
+            r"(?:系|風|タイプ|派)?(?:の)?(?:[\u4e00-\u9faf]{2,}|[\u30a1-\u30f6\u30fc]{2,})",
+            latest_partner[match.end():],
+        )
+        if extension and re.match(r"(?:系|風|タイプ|派|の)", extension.group(0)):
+            token = token + extension.group(0)
+        nouns.append(token)
     if not nouns:
         return ""
     user_names = set(_user_name_tokens(context))
@@ -8293,6 +8323,26 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
     ):
         # Once the plan is fixed, "I look forward to that day" lines repeat easily.
         reasons.append("直近と同じ趣旨の行")
+    # T485: 助詞だけが違う締めの行（「当日楽しみにしていますね」→
+    # 「当日を楽しみにしていますね」）も繰り返しとして後ろへ回す。
+    if "直近と同じ趣旨の行" not in reasons:
+        def _closing_key(value: str) -> str:
+            return re.sub(
+                r"(?:を|は|が|に|の|も|って|へ|で)",
+                "",
+                _normalized_repetition_key(value),
+            )
+
+        prior_closings = {
+            _closing_key(line)
+            for body in prior_me
+            for line in str(body).splitlines()
+            if _TOGETHER_CLOSING_THEME.search(line)
+        }
+        for line in text.splitlines():
+            if _TOGETHER_CLOSING_THEME.search(line) and _closing_key(line) in prior_closings:
+                reasons.append("直近と同じ趣旨の行")
+                break
     candidate_questions = [line for line in text.splitlines() if _is_ask_sentence(line)]
     if candidate_questions:
         candidate_nouns = {
@@ -9544,6 +9594,15 @@ _STIFF_KEIGO_REWRITES = (
     ("てみましょうか", "てみませんか"),
     ("てみますか", "てみませんか"),
     ("てみようか", "てみませんか"),
+    # T485: 「お好き」など相手の好みを立てる言い回しを普通の形へ戻す。
+    ("お好きなんですか", "好きなんですか"),
+    ("お好きなんで", "好きなんで"),
+    ("お好きですか", "好きですか"),
+    ("お好きなもの", "好きなもの"),
+    ("お好きな", "好きな"),
+    ("がお好き", "が好き"),
+    ("もお好き", "も好き"),
+    ("お好き", "好き"),
 )
 
 
