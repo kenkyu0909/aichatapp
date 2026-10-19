@@ -17108,6 +17108,50 @@ def test_t486_partner_states_a_conflicting_time(client):
         {"role": "them", "body": "当日は現地に14時集合でお願いします"}
     ]
     assert backend._partner_schedule_conflict(matching_context) is None
+    night_context = dict(context)
+    night_context["history"] = [
+        {"role": "them", "body": "水野さんは夜型ですか？"},
+        {"role": "me", "body": "夜型です\n夜に本を読むことが多いです"},
+        {"role": "them", "body": "土曜の午後なら空いてます。水野さんはどうですか？"},
+    ]
+    assert backend._partner_schedule_conflict(night_context) is None
+    resolved_context = dict(context)
+    resolved_context["history"] = context["history"] + [
+        {"role": "me", "body": "あれ14時じゃなかったでしたっけ？\nもしかして時間が変わったんですか？"}
+    ]
+    assert backend._partner_schedule_conflict(resolved_context) is None
+    suggestions = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="受入", text="西口ですね！\n当日が楽しみです😊"),
+        alternatives=[],
+        reason="日時確認",
+        strategy="",
+        conversation_stage="Stage 5",
+        invite_decision="schedule_after_acceptance",
+        decision_reason="日程確定",
+        next_action="当日を迎える",
+    )
+    filtered = backend.filter_safe_candidates(suggestions, requested_count=3, context=context)
+    assert filtered["recommended"]["text"] == fallback.text
+    assert "14時" in filtered["recommended"]["text"]
+
+
+def test_t486_followup_topic_stays_on_the_question(client):
+    _, backend = client
+    base = {"mode": "reply", "other": {"name": "黒川いつき"}, "my_profile": {"facts": {"name": "水野そよか"}}}
+    place = dict(base)
+    place["history"] = [{"role": "them", "body": "中野は路地に古い喫茶店が多いんです。知らない街を歩くのは好きですか？"}]
+    assert backend._latest_topic_noun(place) == ""
+    date_ctx = dict(base)
+    date_ctx["history"] = [
+        {"role": "them", "body": "そういえば来週の土曜、街の古本市があるんですよ。よかったら一緒に行きませんか？"}
+    ]
+    assert backend._latest_topic_noun(date_ctx) == ""
+    photo = dict(base)
+    photo["history"] = [{"role": "them", "body": "看板のフォントを見るのが好きなんです。水野さんは写真は撮りますか？"}]
+    assert backend._latest_topic_noun(photo) == "写真"
 
 
 

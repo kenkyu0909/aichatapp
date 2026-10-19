@@ -6765,16 +6765,30 @@ def _schedule_elements_before_latest(context: dict) -> dict[str, set[str]]:
 
 
 def _partner_schedule_conflict(context: dict) -> dict[str, str] | None:
-    """最後の相手発言の日時が、それ以前に示された日時と食い違うときだけ返す (T486)."""
+    """最後の相手発言の日時が、それ以前に示された日時と食い違うときだけ返す (T486).
+
+    「夜型」の「夜」のような時間帯と無関係な語を拾わないよう、時間帯は
+    午前・午後・夕方に限定する。すでに確認の返しを送っていれば対象外にする。
+    """
     history = context.get("history") or []
+    for message in history:
+        if message.get("role") == "me" and _SCHEDULE_CONFLICT_RESOLVED.search(str(message.get("body", ""))):
+            return None
     partner_messages = [m for m in history if m.get("role") == "them"]
     if not partner_messages:
         return None
     latest = _extract_schedule_elements(str(partner_messages[-1].get("body", "")))
+    latest_times = {value for value in latest.get("times", set()) if value in _SCHEDULE_TIME_OF_DAY}
     earlier = _schedule_elements_before_latest(context)
+    earlier_times = {value for value in earlier.get("times", set()) if value in _SCHEDULE_TIME_OF_DAY}
+    candidates = {
+        "hours": (latest.get("hours", set()), earlier.get("hours", set())),
+        "days": (latest.get("days", set()), earlier.get("days", set())),
+        "dates": (latest.get("dates", set()), earlier.get("dates", set())),
+        "times": (latest_times, earlier_times),
+    }
     for category in ("hours", "days", "dates", "times"):
-        new_values = latest.get(category) or set()
-        agreed_values = earlier.get(category) or set()
+        new_values, agreed_values = candidates[category]
         if not new_values or not agreed_values or (new_values & agreed_values):
             continue
         agreed = sorted(agreed_values, key=len, reverse=True)[0]
@@ -6786,6 +6800,8 @@ def _partner_schedule_conflict(context: dict) -> dict[str, str] | None:
 _SCHEDULE_CONFLICT_ACK = re.compile(
     r"あれ|じゃなかった|じゃないですか|違って|ちがって|変わった|変更|確認|合って(?:ます|る)|本当に|それで合って"
 )
+_SCHEDULE_CONFLICT_RESOLVED = re.compile(r"じゃなかった|違って|ちがって|変わった|変更になった|で合って")
+_SCHEDULE_TIME_OF_DAY = {"午前", "午後", "夕方"}
 
 
 def _schedule_conflict_confirmation_line(casual: bool, agreed: str) -> str:
@@ -8058,6 +8074,7 @@ _REPETITION_NOUN_STOPWORDS = {
     "レトロ", "モダン", "クラシック", "ナチュラル", "シンプル", "ベーシック",
     "自分", "相手", "最近", "普段", "今日", "明日", "昨日", "毎日", "今回", "本当", "感じ",
     "気持ち", "時間", "場所", "方針", "予定", "質問", "回答", "話題", "内容", "会話",
+    "一緒", "来週", "今週", "先週", "当日",
 }
 
 _REPETITION_INTERROGATIVES = (
@@ -8213,6 +8230,24 @@ def _latest_topic_noun(context: dict) -> str:
         nouns.append(token)
     if not nouns:
         return ""
+    # T486: 聞き返しは相手の質問文の話題に合わせる。直前の相手発言が質問なら、
+    # 質問文に現れない語（場面説明の中の地名「中野」や日付「来週の土曜」）は
+    # 使わない。質問が無いときだけ発言全体から選ぶ。
+    sentences = re.split(r"[。．!！\n]|(?<=[?？])", latest_partner)
+    question_clauses = [
+        sentence
+        for sentence in sentences
+        if re.search(r"[?？]|ですか|ますか|でしょうか|ませんか|何|どんな|どう|どこ|いつ|どっち|どちら", sentence)
+    ]
+    scope = " ".join(question_clauses) if question_clauses else latest_partner
+    scoped_nouns = []
+    for noun in nouns:
+        cores = re.findall(r"[\u4e00-\u9faf\u30a1-\u30f6]{2,}", noun)
+        if any(core in scope for core in cores):
+            scoped_nouns.append(noun)
+    if question_clauses and not scoped_nouns:
+        return ""
+    nouns = scoped_nouns or nouns
     user_names = set(_user_name_tokens(context))
     nouns = [
         noun
@@ -9781,10 +9816,15 @@ def filter_safe_candidates(
             break
 
     deterministic_fallback_used = False
+    schedule_conflict_candidate = _build_schedule_conflict_fallback_candidate(candidate_context)
+    if schedule_conflict_candidate is not None:
+        accepted = [
+            schedule_conflict_candidate,
+            *[item for item in accepted if item.text != schedule_conflict_candidate.text],
+        ]
+        deterministic_fallback_used = True
     if not accepted:
-        fallback_candidate = _build_schedule_conflict_fallback_candidate(candidate_context)
-        if fallback_candidate is None:
-            fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_verified_profile_fact_fallback_candidate(candidate_context)
         if fallback_candidate is None and candidate_context.get("mode") == "first":
