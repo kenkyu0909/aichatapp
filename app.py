@@ -6203,6 +6203,26 @@ def candidate_has_missing_sentence_break(text: str) -> bool:
     return False
 
 
+_PIVOT_RUNON_PATTERN = re.compile(
+    r"(ですが|ますが|けれども|けれど|けど)"
+    r"(?=[^\n]{0,14}?(?:どんな|いつ|何|なに|どこ|どっち|どちら|どの|誰|だれ|"
+    r"[一-龯ぁ-んァ-ヶ]{1,8}(?:さん|くん|ちゃん)(?:は|って|の)))"
+)
+
+
+def split_pivot_run_on_line(text: str) -> str:
+    """T486: 「〜ですが◯◯さんは…」の長い1行を、ピボットの後で2行に割る。
+
+    候補は句読点を持てないため、逆接のあとに相手への質問が続くときは改行で
+    区切らないと1行に2文が並んで読みにくくなる。
+    """
+    lines: list[str] = []
+    for line in (text.splitlines() or [text]):
+        fixed = _PIVOT_RUNON_PATTERN.sub(r"\1\n", line)
+        lines.extend(fixed.split("\n"))
+    return "\n".join(lines)
+
+
 def candidate_has_placeholder(text: str) -> bool:
     # A literal template token discussed as a quote is not an unresolved slot.
     unquoted = re.sub(r"「[^」]*」|『[^』]*』|\"[^\"]*\"|'[^']*'", "", text)
@@ -6725,6 +6745,72 @@ def _validate_schedule_elements_match(candidate_text: str, answer_text: str) -> 
             return False
 
     return True
+
+
+def _schedule_elements_before_latest(context: dict) -> dict[str, set[str]]:
+    """日時が確定した可能性のある、最後の相手発言より前の予定要素 (T486)."""
+    history = context.get("history") or []
+    last_partner_index = -1
+    for index, message in enumerate(history):
+        if message.get("role") == "them":
+            last_partner_index = index
+    combined = {"days": set(), "times": set(), "hours": set(), "dates": set()}
+    for index, message in enumerate(history):
+        if index >= last_partner_index:
+            continue
+        elements = _extract_schedule_elements(str(message.get("body", "")))
+        for category, values in elements.items():
+            combined[category] |= values
+    return combined
+
+
+def _partner_schedule_conflict(context: dict) -> dict[str, str] | None:
+    """最後の相手発言の日時が、それ以前に示された日時と食い違うときだけ返す (T486)."""
+    history = context.get("history") or []
+    partner_messages = [m for m in history if m.get("role") == "them"]
+    if not partner_messages:
+        return None
+    latest = _extract_schedule_elements(str(partner_messages[-1].get("body", "")))
+    earlier = _schedule_elements_before_latest(context)
+    for category in ("hours", "days", "dates", "times"):
+        new_values = latest.get(category) or set()
+        agreed_values = earlier.get(category) or set()
+        if not new_values or not agreed_values or (new_values & agreed_values):
+            continue
+        agreed = sorted(agreed_values, key=len, reverse=True)[0]
+        new = sorted(new_values, key=len, reverse=True)[0]
+        return {"category": category, "agreed": agreed, "new": new}
+    return None
+
+
+_SCHEDULE_CONFLICT_ACK = re.compile(
+    r"あれ|じゃなかった|じゃないですか|違って|ちがって|変わった|変更|確認|合って(?:ます|る)|本当に|それで合って"
+)
+
+
+def _schedule_conflict_confirmation_line(casual: bool, agreed: str) -> str:
+    suffix = "だっけ？" if casual else "でしたっけ？"
+    return f"あれ{agreed}じゃなかった{suffix}"
+
+
+def _build_schedule_conflict_fallback_candidate(context: dict) -> Candidate | None:
+    """日時が食い違うときの確認返しを1案だけ合成する (T486)."""
+    conflict = _partner_schedule_conflict(context)
+    if conflict is None:
+        return None
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    question = partner_messages[-1] if partner_messages else ""
+    casual = _fallback_should_use_casual_tone(context, question, "")
+    line1 = _schedule_conflict_confirmation_line(casual, conflict["agreed"])
+    line2 = "もしかして時間が変わったの？" if casual else "もしかして時間が変わったんですか？"
+    candidate = Candidate(label="日時の確認", text=f"{line1}\n{line2}", reply_move="react")
+    if _candidate_rejection_reasons(candidate, context):
+        return None
+    return candidate
 
 
 def _is_partner_directed_followup_question(text: str, direct_question: str) -> bool:
@@ -8721,6 +8807,15 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手からの直接質問に未回答")
     if _has_condescending_offer(text):
         reasons.append("上から目線の表現")
+    # T486: 相手が以前に示した日時と違う日時を述べたとき、そのまま受け入れる候補は
+    # 確認を挟むよう棄却する（「14時」のあとの「10時ですね！」を防ぐ）。
+    schedule_conflict = _partner_schedule_conflict(context)
+    if (
+        schedule_conflict is not None
+        and schedule_conflict["new"] in text
+        and not _SCHEDULE_CONFLICT_ACK.search(text)
+    ):
+        reasons.append("確定済みの日時と食い違う")
     if _unsupported_partner_claim(candidate, context):
         reasons.append("未確認の相手情報")
     if (
@@ -9141,7 +9236,7 @@ def _compose_answer_relay_candidate(
     if len(compound_parts) == 1:
         question = compound_parts[0][1]
     casual = _fallback_should_use_casual_tone(context, question, clean_answer)
-    partner_label = _fallback_partner_honorific_name(context)
+    partner_label = _established_partner_address(context) or _fallback_partner_honorific_name(context)
     latest_partner_body = next(
         (
             str(item.get("body", ""))
@@ -9302,7 +9397,7 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
         return None
 
     casual = _fallback_should_use_casual_tone(context, question, "")
-    partner_label = _fallback_partner_honorific_name(context)
+    partner_label = _established_partner_address(context) or _fallback_partner_honorific_name(context)
     other = context.get("other") or {}
     other_desc = str(other.get("description", "") or "")
     other_job = str(other.get("occupation", "") or "")
@@ -9665,6 +9760,9 @@ def filter_safe_candidates(
         "invite_decision": getattr(value, "invite_decision", None),
     }
     for candidate in source_candidates:
+        split_text = split_pivot_run_on_line(candidate.text)
+        if split_text != candidate.text:
+            candidate = candidate.model_copy(update={"text": split_text})
         softened_text = _soften_stiff_keigo(candidate.text)
         if softened_text != candidate.text:
             softened_candidate = candidate.model_copy(update={"text": softened_text})
@@ -9684,7 +9782,9 @@ def filter_safe_candidates(
 
     deterministic_fallback_used = False
     if not accepted:
-        fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
+        fallback_candidate = _build_schedule_conflict_fallback_candidate(candidate_context)
+        if fallback_candidate is None:
+            fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_verified_profile_fact_fallback_candidate(candidate_context)
         if fallback_candidate is None and candidate_context.get("mode") == "first":

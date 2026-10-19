@@ -17044,6 +17044,72 @@ def test_t485_verified_answer_relay_survives_partial_topic_match(client):
     assert "未確認の本人事実" in backend._candidate_rejection_reasons(invented, context)
 
 
+def test_t486_fallback_uses_the_established_partner_address(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "水野さんは本は紙と電子ならどっちが多いですか？"},
+            {"role": "me", "body": "圧倒的に紙の本が多いです\nいつきさんはどんな本を見つけることが多いですか？"},
+            {"role": "them", "body": "水野さんは写真は撮ったりしますか？"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "ephemeral_user_answers": [
+            {"question": "水野さんは写真は撮ったりしますか？", "answer": "よく撮ります"},
+        ],
+    }
+    assert backend._established_partner_address(context) == "いつきさん"
+    assert backend._fallback_partner_honorific_name(context) == "黒川さん"
+    candidate = backend._compose_answer_relay_candidate(
+        context, "水野さんは写真は撮ったりしますか？", "よく撮ります"
+    )
+    assert candidate is not None
+    assert "いつきさん" in candidate.text
+    assert "黒川さん" not in candidate.text
+
+
+def test_t486_pivot_question_is_split_onto_its_own_line(client):
+    _, backend = client
+    text = "ページをめくる感触が好きなんですがいつきさんはどんな本を見つけることが多いですか？"
+    assert backend.split_pivot_run_on_line(text) == (
+        "ページをめくる感触が好きなんですが\nいつきさんはどんな本を見つけることが多いですか？"
+    )
+    assert backend.split_pivot_run_on_line("好きなんですがよろしくお願いします") == "好きなんですがよろしくお願いします"
+    assert backend.split_pivot_run_on_line("天気がいいと公園は気持ちいいですよね✨") == "天気がいいと公園は気持ちいいですよね✨"
+
+
+def test_t486_partner_states_a_conflicting_time(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "じゃあ土曜の14時に待ち合わせましょー、そろそろ眠いです。おやすみなさい"},
+            {"role": "me", "body": "土曜の14時ですね！\n当日楽しみにしていますね✨"},
+            {"role": "them", "body": "当日は現地に10時集合でお願いします。遅れそうなら連絡しますね"},
+        ],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "schedule_after_acceptance",
+    }
+    conflict = backend._partner_schedule_conflict(context)
+    assert conflict == {"category": "hours", "agreed": "14時", "new": "10時"}, conflict
+    accepting = backend.Candidate(
+        label="受入", text="10時ですね！\n現地で待ち合わせるのを楽しみにしています😊"
+    )
+    assert "確定済みの日時と食い違う" in backend._candidate_rejection_reasons(accepting, context)
+    fallback = backend._build_schedule_conflict_fallback_candidate(context)
+    assert fallback is not None
+    assert "14時" in fallback.text
+    matching_context = dict(context)
+    matching_context["history"] = context["history"][:-1] + [
+        {"role": "them", "body": "当日は現地に14時集合でお願いします"}
+    ]
+    assert backend._partner_schedule_conflict(matching_context) is None
+
+
 
 
 
