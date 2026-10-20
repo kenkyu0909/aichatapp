@@ -2530,8 +2530,18 @@ def _answers_for_partner_question(context: dict) -> list[dict]:
         if any(key and (key in asked or asked in key) for key in match_keys):
             ordered.append(answer)
     if focus_topic:
+        # T501: 「おすすめのお店は？」への回答に、別の食事質問（朝ごはん等）の
+        # 回答をリレーしない。勧めを求める質問は、勧めを答えた質問だけを受ける。
+        recommendation_ask = bool(
+            re.search(r"おすすめ|お勧め|(?:どこの|どんな)(?:お)?店|行ってみたい(?:場所|店)", focus)
+        )
         for answer in answers:
             if answer in ordered:
+                continue
+            if recommendation_ask and not re.search(
+                r"おすすめ|お勧め|(?:どこの|どんな)(?:お)?店|行ってみたい(?:場所|店)",
+                str(answer.get("question", "")),
+            ):
                 continue
             if str(answer.get("answer", "")).strip() and _ephemeral_answer_addresses_question(
                 focus_topic, focus, str(answer.get("question", ""))
@@ -9307,7 +9317,16 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     if not matched:
         return False
     unmatched = [line for line in body if line not in matched]
-    return all(_is_answer_relay_template_line(line) for line in unmatched)
+    declines_invitation = any(
+        re.search(r"やめておきます|今回はやめ|行けません|遠いので|別の機会に", source)
+        for source in sources
+    )
+    for line in unmatched:
+        if not _is_answer_relay_template_line(line):
+            return False
+        if declines_invitation and re.search(r"ぜひ行き|行きましょう|行きたい|楽しみにしています", line):
+            return False
+    return True
 
 
 def _normalized_answer_sentence_units(answer_text: str) -> list[str]:

@@ -18143,6 +18143,46 @@ def test_t500_question_is_not_misread_as_partner_information(client):
     )
 
 
+def test_t501_answer_relay_matches_current_question_only(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [{'role': 'them', 'body': '札幌ならおすすめのお店とかありますか？'}],
+        'other': {'name': '架空あき', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'ephemeral_user_answers': [
+            {
+                'question': '相手の「朝ごはんは食べる派ですか？」にどう答えたいか教えてください',
+                'answer': '朝は軽く食べることが多いです。',
+            },
+            {
+                'question': '相手の「札幌ならおすすめのお店とかありますか？」にどう答えたいか教えてください',
+                'answer': 'すすきののお寿司屋さんがおすすめです。',
+            },
+        ],
+    }
+    answers = backend._answers_for_partner_question(context)
+    assert [item['answer'] for item in answers] == ['すすきののお寿司屋さんがおすすめです。']
+    assert backend._is_answer_relay_template_line('いいですね！')
+    assert backend._is_answer_relay_template_line('ぜひ行きましょう😊')
+    decline_context = {
+        'mode': 'reply',
+        'history': [{'role': 'them', 'body': '今度よかったらご飯でも行きませんか？'}],
+        'other': {'name': '架空あき', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'ephemeral_user_answers': [
+            {
+                'question': '相手の「今度よかったらご飯でも行きませんか？」にどう答えたいか教えてください',
+                'answer': '東京はさすがに遠いので、今回はやめておきます。',
+            },
+        ],
+    }
+    contradictory = 'いいですね！\nぜひ行きましょう😊\n東京はさすがに遠いので、今回はやめておきます'
+    assert not backend._candidate_is_verified_answer_relay(contradictory, decline_context)
+
+
 def test_t501_partner_answered_topic_is_not_asked_again(client):
     _, backend = client
     context = {
