@@ -18075,7 +18075,120 @@ def test_t499_far_invitation_blocks_and_asks_user(client, monkeypatch):
     assert "遠い" in body["user_questions"][0]["question"]
 
 
+def test_t500_memo_is_not_relayed_as_a_deterministic_answer(client):
+    _, backend = client
+    question = '洋画と邦画ならどちらが多いですか？'
+    context = {
+        'mode': 'reply',
+        'history': [{'role': 'them', 'body': question}],
+        'other': {'name': '架空あき', 'description': '21歳北海道'},
+        'my_profile': {
+            'facts': {
+                'name': 'S',
+                'memo': 'ホラー映画とサウナは苦手。洋画も邦画も観ますが、ミステリーが多いです。',
+            },
+            'avoid': [],
+        },
+        'reply_preferences': {'tone': '敬語'},
+        'ephemeral_user_answers': [],
+    }
+    assert backend._memo_answer_sentence(question, context)
+    assert backend._unclassified_personal_question_user_answer(context) is None
+    assert backend._build_answered_question_fallback_candidate(context) is None
+    assert backend._build_unclassified_question_fallback_candidate(context) is None
+    assert backend.missing_personal_fact_question(context) is None
 
 
+def test_t500_question_is_not_misread_as_partner_information(client):
+    _, backend = client
+
+    def context(body):
+        return {
+            'mode': 'reply',
+            'history': [{'role': 'them', 'body': body}],
+            'other': {'name': '架空あき', 'description': '21歳北海道'},
+            'my_profile': {'facts': {'name': 'S'}, 'avoid': []},
+            'reply_preferences': {'tone': '敬語'},
+            'ephemeral_user_answers': [],
+        }
+
+    bento_question = context('そちらはお弁当ですか？')
+    misread = backend.Candidate(label='取り違え', text='お弁当なんですね！')
+    assert '本人への質問を相手の情報として受け止めている' in backend._candidate_rejection_reasons(
+        misread, bento_question
+    )
+    answer = backend.Candidate(label='回答', text='お弁当のことが多いです')
+    assert '本人への質問を相手の情報として受け止めている' not in backend._candidate_rejection_reasons(
+        answer, bento_question
+    )
+
+    choice_question = context('犬派・猫派で言うと、そちらはどっちですか？')
+    choice_misread = backend.Candidate(label='取り違え', text='猫派なんですね！')
+    assert '本人への質問を相手の情報として受け止めている' in backend._candidate_rejection_reasons(
+        choice_misread, choice_question
+    )
+
+    statement = context('私はお弁当派です')
+    reaction = backend.Candidate(label='受け止め', text='お弁当なんですね！')
+    assert '本人への質問を相手の情報として受け止めている' not in backend._candidate_rejection_reasons(
+        reaction, statement
+    )
 
 
+def test_t500_respectful_past_tense_is_softened(client):
+    _, backend = client
+    softened = backend._soften_stiff_keigo('テニスをされていたんですね')
+    assert softened == 'テニスをしてたんですね'
+
+
+def test_t500_blocked_nameless_question_asks_the_user(client, monkeypatch):
+    from google import genai
+    from types import SimpleNamespace
+
+    c, _ = client
+    c.put(
+        '/api/profile',
+        json={'content': json.dumps({'name': 'S', 'area': '北海道札幌市'}, ensure_ascii=False), 'avoid': ''},
+    )
+    created = c.post(
+        '/api/matches',
+        json={'name': '架空あき', 'description': '21歳北海道'},
+    )
+    mid = created.json()['id']
+    c.post(
+        f'/api/matches/{mid}/messages',
+        json={'role': 'them', 'body': 'そちらはお弁当ですか？私はパン派なんです'},
+    )
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(
+                text=json.dumps(
+                    {
+                        'needs_user_info': False,
+                        'user_questions': [],
+                        'user_info_reason': '',
+                        'recommended': {'label': '取り違え', 'text': 'お弁当なんですね！'},
+                        'alternatives': [],
+                        'reason': '受け止める',
+                        'strategy': '相槌',
+                        'conversation_stage': 'Stage 2',
+                        'invite_decision': 'continue_conversation',
+                        'decision_reason': '質問に答える',
+                        'next_action': '返信を待つ',
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+    monkeypatch.setenv('MRA_API_1_KEY', 'offline-placeholder-key')
+    monkeypatch.setattr(genai, 'Client', lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        '/api/generate',
+        json={'mode': 'reply', 'match_id': mid, 'response_version': 2},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['needs_user_info'] is True
+    assert body['recommended'] is None
+    assert 'お弁当' in body['user_questions'][0]['question']

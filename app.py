@@ -2625,7 +2625,10 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
     if not topic and _is_unclassified_direct_question(question_text) and _is_unclassified_question_about_user(question_text):
-        if _unclassified_personal_question_user_answer(context) is not None:
+        if (
+            _unclassified_personal_question_user_answer(context) is not None
+            or _memo_answer_sentence(question_text, context) is not None
+        ):
             return None
         quoted_question = question_text.strip().replace("\n", " ")[:180]
         if INVITATION_PATTERN.search(question_text):
@@ -2655,7 +2658,10 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     if not topic or _topic_is_verified(topic, context, question_text):
         return None
     if topic == "本人情報":
-        if _unclassified_personal_question_user_answer(context, question_text) is not None:
+        if (
+            _unclassified_personal_question_user_answer(context, question_text) is not None
+            or _memo_answer_sentence(question_text, context) is not None
+        ):
             return None
         if _is_current_student_status_question(question_text):
             return personal_fact_question(topic, question_text)
@@ -8951,6 +8957,66 @@ def _candidate_only_asks_back_partner_question(text: str, context: dict) -> bool
     )
 
 
+def _question_echo_terms(source: str) -> set[str]:
+    """Return the content words a misread reaction would repeat (T500)."""
+    cleaned = re.sub(
+        r"そちら|そっち|あなた|どっち|どちら|どれ|ですか|でしょうか|ますか|なんですか",
+        " ",
+        source,
+    )
+    terms: set[str] = set()
+    for chunk in re.split(r"[・、,\s]+", cleaned):
+        for token in re.findall(r"[一-龯ァ-ヶー]{1,}", chunk):
+            if token not in {
+                "私", "僕", "俺", "何", "今", "今日", "最近", "普段",
+                "好き", "苦手", "得意", "平気", "大丈夫",
+            }:
+                terms.add(token)
+    return terms
+
+
+def _candidate_misreads_user_question_as_partner_info(text: str, context: dict) -> bool:
+    """相手が本人に聞いた質問を、相手自身の情報として受け止めた候補か (T500).
+
+    「そちらはお弁当ですか？」に対して「お弁当なんですね！」と返すのは、
+    相手の質問を相手の宣言と取り違えている。候補の「〜なんですね」行に、
+    質問の主題語がそのまま現れるときだけ真を返す。
+    """
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    ask = _last_question_sentence(partner_messages[-1]) or ""
+    if not _is_ask_sentence(ask):
+        return False
+    if re.search(r"ですよね|だよね|いいですよね|じゃないですか", ask):
+        # 同意を求める問いかけは、本人の情報を尋ねる質問ではない。
+        return False
+    if re.match(r"^(?:私|僕|俺)(?:は|も|が)", ask.strip()):
+        # 相手が自分のことを尋ねている形は、本人への質問ではない。
+        return False
+    terms = _question_echo_terms(ask)
+    if not terms:
+        # 「犬派・猫派で言うと、そちらはどっちですか？」のように主題が
+        # 質問文の前の節にある場合は、発言全体から主題語を拾う。
+        terms = _question_echo_terms(partner_messages[-1])
+    if not terms:
+        return False
+    for line in str(text).splitlines():
+        match = re.search(r"^(.*?)(?:なんですね|んですね|ですね)[!！。\s]*$", line.strip())
+        if not match:
+            continue
+        echo = _strip_particles(match.group(1))
+        if not echo:
+            continue
+        if any(term in echo for term in terms):
+            return True
+    return False
+
+
 def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     """True when the question only paraphrases the user's own previous question."""
     prior_me = [
@@ -9698,6 +9764,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # （確定事実があればそこから答える）。
     if _candidate_only_asks_back_partner_question(text, context):
         reasons.append("相手の質問の聞き返し")
+    if _candidate_misreads_user_question_as_partner_info(text, context):
+        reasons.append("本人への質問を相手の情報として受け止めている")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -10005,9 +10073,8 @@ def _unclassified_personal_question_user_answer(
     """Return the answer available for a single unclassified direct question.
 
     The answer comes from a confirmed dialog answer (this request or an earlier
-    turn of the same session) or from the profile memo, which the user wrote
-    themselves. ``question`` lets the send guards reuse the same lookup for the
-    exact question they check.
+    turn of the same session). The profile memo is not returned here: it is only
+    evidence for checking answers the model wrote (T500).
     """
     if context.get("mode") not in {"reply", "followup"}:
         return None
@@ -10059,7 +10126,7 @@ def _unclassified_personal_question_user_answer(
             answer_text = str(answer.get("answer", "")).strip()
             if re.sub(r"[\s　、。，．！!？?]", "", answer_text):
                 return answer_text
-        return _memo_answer_sentence(question, context)
+        return None
     if not topic and _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):
         normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
         normalized_question = normalize(question)
@@ -10073,7 +10140,7 @@ def _unclassified_personal_question_user_answer(
                 and normalize(answer_text)
             ):
                 return answer_text
-        return _memo_answer_sentence(question, context)
+        return None
     if topic in {"読書", "カフェ場所", "カフェ好み", "映画", "カフェ最近", "旅行最近"}:
         for answer in context.get("ephemeral_user_answers", []):
             answer_text = str(answer.get("answer", "")).strip()
@@ -10768,6 +10835,9 @@ _STIFF_KEIGO_REWRITES = (
     ("させていただきます", "します"),
     ("させていただく", "する"),
     ("いたします", "します"),
+    # T500: 過去の尊敬「〜されていた」を普通の形へ戻す。
+    ("されていたんですね", "してたんですね"),
+    ("されていたんですか", "してたんですか"),
     ("されてるんですね", "なんですね"),
     ("されているんですね", "なんですね"),
     ("されるんですね", "なんですね"),
@@ -11664,6 +11734,21 @@ def _generate_impl(data: GenerateInput):
                             direct_ask = (
                                 "" if data.skipped_user_info else _partner_trailing_direct_question(context)
                             )
+                            # T500: 全候補が落ちたときは、名指しの無い直接質問でも本人確認へ回す。
+                            if not direct_ask:
+                                last_partner = next(
+                                    (
+                                        str(item.get("body", ""))
+                                        for item in reversed(context.get("history", []))
+                                        if item.get("role") == "them"
+                                    ),
+                                    "",
+                                )
+                                last_ask = _last_question_sentence(last_partner) or ""
+                                if _is_ask_sentence(last_ask) and not re.match(
+                                    r"^(?:私|僕|俺)(?:は|も|が)", last_ask.strip()
+                                ):
+                                    direct_ask = last_ask
                             direct_ask_topic = (
                                 _topic_for_personal_question(direct_ask) if direct_ask else None
                             )
@@ -11724,7 +11809,7 @@ def _generate_impl(data: GenerateInput):
                                     }
                             if (
                                 direct_ask
-                                and ({"未確認の本人事実", "相手からの直接質問に未回答"} & set(blocked_reasons))
+                                and ({"未確認の本人事実", "相手からの直接質問に未回答", "本人への質問を相手の情報として受け止めている"} & set(blocked_reasons))
                                 and (direct_ask_topic is None or direct_ask_topic not in answered_topics)
                             ):
                                 quoted_ask = direct_ask.strip().replace("\n", " ")[:180]
