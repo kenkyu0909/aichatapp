@@ -18143,6 +18143,43 @@ def test_t500_question_is_not_misread_as_partner_information(client):
     )
 
 
+def test_t500_prior_answer_is_not_repeated(client):
+    _, backend = client
+
+    def context():
+        return {
+            'mode': 'reply',
+            'history': [
+                {
+                    'role': 'me',
+                    'body': '洋画も邦画も観ますがミステリーが多いです\nこさんは映画はよく観るんですか？',
+                },
+                {
+                    'role': 'them',
+                    'body': '朝は苦手ですか？私は休みの日は昼まで寝てしまいます',
+                },
+            ],
+            'other': {'name': '架空あき', 'description': '21歳北海道'},
+            'my_profile': {'facts': {'name': 'S'}, 'avoid': []},
+            'reply_preferences': {'tone': '敬語'},
+            'ephemeral_user_answers': [],
+        }
+
+    repeated = backend.Candidate(
+        label='繰り返し',
+        text='そうなんですね！\n洋画も邦画も観ますがミステリーが多いですね😊\n休日は朝まで起きられないこともありますか？',
+    )
+    assert '自分の以前の回答を繰り返している' in backend._candidate_rejection_reasons(
+        repeated, context()
+    )
+    fresh = backend.Candidate(
+        label='回答', text='朝は苦手です\n休日は昼まで寝てしまうんですね'
+    )
+    assert '自分の以前の回答を繰り返している' not in backend._candidate_rejection_reasons(
+        fresh, context()
+    )
+
+
 def test_t500_respectful_past_tense_is_softened(client):
     _, backend = client
     softened = backend._soften_stiff_keigo('テニスをされていたんですね')

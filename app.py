@@ -9468,6 +9468,40 @@ def _is_duplicate_or_near_identical_to_prior_me(candidate_text: str, prior_me_te
     return False
 
 
+def _candidate_reuses_prior_me_answer(text: str, context: dict) -> bool:
+    """Return True when the candidate repeats an answer the app already sent (T500).
+
+    「朝は苦手ですか？」への返信で、2ターン前の「洋画も邦画も…」をそのまま
+    繰り返す候補があった。直前1通との比較だけでは古い回答の再利用を拾えないため、
+    直近6通の自分の宣言文と照合する。
+    """
+    prior_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "me"
+    ][-6:]
+    prior_lines: list[str] = []
+    for body in prior_messages:
+        for line in body.splitlines():
+            if line.strip() and not _is_ask_sentence(line):
+                prior_lines.append(_normalized_repetition_key(line))
+    prior_lines = [line for line in prior_lines if len(line) >= 8]
+    if not prior_lines:
+        return False
+    for line in str(text).splitlines():
+        if not line.strip() or _is_ask_sentence(line):
+            continue
+        key = _normalized_repetition_key(line)
+        if len(key) < 8:
+            continue
+        for prior in prior_lines:
+            if key == prior:
+                return True
+            if SequenceMatcher(None, key, prior).ratio() >= 0.85:
+                return True
+    return False
+
+
 PARTNER_INVITATION_RESPONSE_PATTERN = re.compile(
     r"ぜひ(?:ご一緒|行き|お話し|お話|行けたら|行こう|お願いします|よろしく|楽しみに)?|"
     r"(?:喜んで|うれしい|嬉しい|ありがとうございます|お誘い|ご提案).{0,24}(?:ぜひ|ご一緒|行きたい|嬉しい|うれしい|楽しみ|話|行けたら|お会い)|"
@@ -9721,6 +9755,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     ]
     if recent_me_messages and _is_duplicate_or_near_identical_to_prior_me(text, recent_me_messages[-1]):
         reasons.append("直前の自分の発言と重複")
+    if _candidate_reuses_prior_me_answer(text, context):
+        reasons.append("自分の以前の回答を繰り返している")
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:
