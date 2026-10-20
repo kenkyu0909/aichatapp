@@ -9585,7 +9585,18 @@ def _partner_states_own_availability(text: str) -> bool:
 
 def candidate_answers_partner_invitation(candidate_text: str) -> bool:
     """True when candidate explicitly accepts, welcomes, or confirms partner invitation."""
-    return bool(PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text))
+    return bool(
+        PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text)
+        or PARTNER_INVITATION_REFUSAL_PATTERN.search(candidate_text)
+    )
+
+
+# T501: 誘いへの丁寧な断りも、誘いに答えた返信として成立する（承諾だけを返事と
+# みなすと、本人が確認した断りが「未回答」として棄却され続ける）。
+PARTNER_INVITATION_REFUSAL_PATTERN = re.compile(
+    r"やめておき|遠いので|行けません|行けな|難しいです|またの機会|別の機会|"
+    r"今度にします|控えます|見送り|今回はやめ|行くのは難し"
+)
 
 
 # T499: 本人と相手の地域を同じ粒度で比べるための対応表。県名と主要な市名を
@@ -9922,7 +9933,7 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("会うことへの慎重さの直後の質問")
     if partner_latest_message_expresses_meeting_unease(context) and MINIMIZING_REASSURANCE_PATTERN.search(text):
         reasons.append("相手の不安を軽く扱う表現")
-    if partner_latest_message_has_invitation(context) and not candidate_answers_partner_invitation(text):
+    if partner_latest_message_has_invitation(context) and not candidate_answers_partner_invitation(text) and not verified_answer_relay:
         reasons.append("相手からの誘いに未回答")
     return reasons
 
@@ -10519,9 +10530,16 @@ def _compose_answer_relay_candidate(
     if partner_invites:
         # T487: 回答自体が承諾（「ぜひ行きたいです」）を含むときは、承諾の相槌を
         # 重ねない。空行が残らないよう空の行は詰める。
+        # T501: 回答が丁寧な断りなら、承諾の相槌を添えず回答そのものを先頭にする。
         already_accepts = bool(re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい", clean_answer))
-        accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
-        candidate_text = "\n".join(part for part in ("いいですね！", accept_line, clean_answer, followup) if part)
+        declines_invite = bool(
+            re.search(r"やめておき|遠いので|行けません|行けな|難しいです|またの機会|別の機会|今度にします|控えます|見送り", clean_answer)
+        )
+        if declines_invite:
+            candidate_text = "\n".join(part for part in (clean_answer, followup) if part)
+        else:
+            accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
+            candidate_text = "\n".join(part for part in ("いいですね！", accept_line, clean_answer, followup) if part)
     elif is_schedule_or_accept:
         # T484: use the acknowledgment only right after the partner invited us,
         # and skip the "when are you free?" ask-back when the partner already

@@ -18183,6 +18183,34 @@ def test_t501_answer_relay_matches_current_question_only(client):
     assert not backend._candidate_is_verified_answer_relay(contradictory, decline_context)
 
 
+def test_t501_invitation_refusal_relay_is_kept(client):
+    _, backend = client
+    invite = 'そういえば今度の日曜、東京の商店街でイベントがあるんです。よかったら一緒に行きませんか？'
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'me', 'body': 'ライブに行ってみたいですよね✨\nよく聴くアーティストとかってあるんですか？'},
+            {'role': 'them', 'body': invite},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'residence': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'invite_decision': 'respect_no',
+        'ephemeral_user_answers': [
+            {
+                'question': f'相手の「{invite}」は北海道札幌市からは遠い場所ですが、この誘いにどう答えたいか教えてください',
+                'answer': '東京はさすがに遠いので、今回はやめておきます。',
+            }
+        ],
+        'session_answers': [],
+    }
+    relay = backend._build_answered_question_fallback_candidate(context)
+    assert relay is not None
+    assert 'やめておきます' in relay.text
+    assert 'ぜひ' not in relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
 def test_t501_partner_answered_topic_is_not_asked_again(client):
     _, backend = client
     context = {
