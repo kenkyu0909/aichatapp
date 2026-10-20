@@ -9420,7 +9420,11 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     for line in unmatched:
         if not _is_answer_relay_template_line(line):
             return False
-        if declines_invitation and re.search(r"ぜひ行き|行きましょう|行きたい|楽しみにしています", line):
+        if (
+            declines_invitation
+            and re.search(r"ぜひ行き|行きましょう|行きたい|楽しみにしています", line)
+            and not re.search(r"また|別の機会|今度|機会があれば", line)
+        ):
             return False
     return True
 

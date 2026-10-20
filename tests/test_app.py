@@ -18210,6 +18210,8 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     assert 'また札幌で何かあればぜひ行きたいです' in relay.text
     assert '行きましょう' not in relay.text
     assert backend._candidate_rejection_reasons(relay, context) == []
+    # T505: 前向きな一言を添えても、誘いを承諾した候補とみなさない。
+    assert backend._candidate_is_verified_answer_relay(relay.text, context) is True
 
 
 def test_t504_partner_declared_activity_is_not_asked_again(client):
