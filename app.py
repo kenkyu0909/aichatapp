@@ -10126,7 +10126,13 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
                     work_label = f"{matched_kw}のお仕事"
                 else:
                     work_label = f"{matched_kw}のお仕事"
-            if partner_label:
+                # T497: 学生と名乗った相手には仕事の聞き返しをしない。
+            partner_is_student = bool(
+                re.search(r"学生|大学|大学院|通っています|通って", other_desc + " " + other_job)
+            )
+            if partner_is_student:
+                followup = ""
+            elif partner_label:
                 followup = (
                     f"{partner_label}は{work_label}で特に楽しいのはどんなとき？"
                     if casual
@@ -10515,6 +10521,12 @@ def filter_safe_candidates(
         if fallback_candidate is None and candidate_context.get("mode") == "first":
             fallback_candidate = _build_first_message_fallback_candidate(candidate_context)
         if fallback_candidate is not None:
+            # T497: 決定的フォールバックにも尊敬語の言い換え（お好き→好き 等）を適用する。
+            softened_fallback = _soften_stiff_keigo(fallback_candidate.text)
+            if softened_fallback != fallback_candidate.text:
+                softened = fallback_candidate.model_copy(update={"text": softened_fallback})
+                if not _candidate_rejection_reasons(softened, candidate_context):
+                    fallback_candidate = softened
             accepted.append(fallback_candidate)
             deterministic_fallback_used = True
 

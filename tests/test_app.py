@@ -17746,6 +17746,53 @@ def test_t496_partner_job_is_not_guessed_from_hobby(client):
     assert "カフェのお仕事" not in candidate.text
 
 
+def test_t497_student_partner_is_not_asked_about_work(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "札幌の大学に通っています。そちらのお仕事は何をされていますか？"},
+        ],
+        "other": {"name": "あき", "description": "札幌の大学に通っています"},
+        "my_profile": {"facts": {"name": "S", "occupation": "大学院生"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend._build_verified_profile_fact_fallback_candidate(context)
+    assert candidate is not None
+    assert "大学院生をしています" in candidate.text
+    assert "お仕事で特に楽しいのは" not in candidate.text
+
+
+def test_t497_deterministic_fallback_is_softened(client):
+    _, backend = client
+    context = {
+        "mode": "first",
+        "history": [],
+        "other": {"name": "あき", "description": "読書が好きです"},
+        "my_profile": {"facts": {"name": "S", "hobbies": ["読書"]}, "avoid": []},
+        "invite_decision": "do_not_invite",
+        "ephemeral_user_answers": [],
+    }
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(label="不採用", text="よろしくお願いします"),
+        alternatives=[],
+        reason="初回",
+        strategy="",
+        conversation_stage="Stage 1",
+        invite_decision="do_not_invite",
+        decision_reason="",
+        next_action="",
+    )
+    filtered = backend.filter_safe_candidates(value, 3, context)
+    recommended = filtered.get("recommended") or {}
+    assert "お好き" not in str(recommended.get("text", ""))
+
+
 
 
 
