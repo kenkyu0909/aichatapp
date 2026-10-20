@@ -18212,6 +18212,37 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     assert backend._candidate_rejection_reasons(relay, context) == []
 
 
+def test_t503_memo_polarity_word_does_not_answer_another_topic(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '朝は苦手ですか？私は休みの日は昼まで寝てしまいます'},
+        ],
+        'my_profile': {
+            'facts': {
+                'name': 'S',
+                'area': '北海道札幌市',
+                'memo': '札幌に住んでいる。雨の日は苦手。夜型。',
+            },
+            'avoid': [],
+        },
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    # 「雨の日は苦手」の評価語だけを頼りに、朝の質問の答えにしない。
+    assert backend._memo_answer_sentence('朝は苦手ですか？', context) is None
+    question = backend.missing_personal_fact_question(context)
+    assert question is not None
+    assert '朝は苦手ですか' in question.question
+    evasive = backend.Candidate(
+        label='相槌のみ',
+        text='分かります休みの日はのんびり過ごすのもいいですよね✨\n普段はどんな映画を観ることが多いんですか？',
+    )
+    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive, context)
+
+
 def test_t502_direct_question_to_user_must_be_answered(client):
     _, backend = client
     profile = {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []}

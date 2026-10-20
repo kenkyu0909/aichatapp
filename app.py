@@ -10140,6 +10140,12 @@ MEMO_TERM_STOPWORDS = {
     "入", "出", "立", "持", "作", "使", "会", "合", "開", "買", "食", "飲", "住",
 }
 
+# T503: 「苦手」「好き」のような評価語だけでメモ文を結びつけると、別の話題
+# （「朝は苦手ですか？」と「雨の日は苦手」）を答えにしない。話題語の共有を必須にする。
+MEMO_POLARITY_STOPWORDS = {
+    "好き", "嫌い", "苦手", "得意", "平気", "大丈夫", "普通", "こと", "もの", "感じ",
+}
+
 
 def _profile_memo_text(context: dict) -> str:
     """Return the profile memo text, which describes facts the user already wrote."""
@@ -10208,6 +10214,8 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
         if not sentence:
             continue
         shared = question_terms & _memo_terms(sentence)
+        # T503: 評価語だけの共有では文を選ばない（話題語の共有を必須にする）。
+        shared = {term for term in shared if term not in MEMO_POLARITY_STOPWORDS}
         if not shared:
             continue
         # T488: 質問の「商店街」とメモの「喫茶店」の「店」のような、別の語の一部と
