@@ -7558,11 +7558,12 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
         # アンケートの単語（「公園が大好きです」等）を対象の合わない答えにしない。
         normalize_holiday = lambda value: re.sub(r"[\s、。，．！!？?]", "", str(value))
         asked_key = normalize_holiday(question)
+        holiday_words = ("休日", "休み", "過ごし", "週末")
         for answer in context.get("ephemeral_user_answers", []):
             answer_question = normalize_holiday(str(answer.get("question", "")))
             if not answer_question:
                 continue
-            if answer_question not in asked_key and asked_key not in answer_question:
+            if not (any(w in answer_question for w in holiday_words) and any(w in asked_key for w in holiday_words)):
                 continue
             answer_text = normalize_holiday(str(answer.get("answer", "")))
             if answer_text and answer_text not in normalize_holiday(candidate.text):

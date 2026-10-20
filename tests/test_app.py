@@ -17867,6 +17867,10 @@ def test_t498_holiday_answer_must_match_the_question(client):
     assert backend._answers_verified_single_partner_question(mismatched, context) is False
     matched = backend.Candidate(label="一致", text="いいですね！\n休日は散歩やカフェ巡りをして過ごすことが多いです")
     assert backend._answers_verified_single_partner_question(matched, context) is True
+    other_wording = dict(context)
+    other_wording["history"] = [{"role": "them", "body": "休日は普段どんなふうに過ごすか教えてください"}]
+    mismatched2 = backend.Candidate(label="取り違え2", text="いいですね！\n犬派・猫派は猫です")
+    assert backend._answers_verified_single_partner_question(mismatched2, other_wording) is False
 
 
 
