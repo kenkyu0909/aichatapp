@@ -96,7 +96,7 @@ def _classify(sentence: str) -> str | None:
 
 
 _SCHOOL_PROFILE = re.compile(r"大学院|大学|学生|学部|専攻|研究")
-_EMPLOYMENT = re.compile(r"会社|勤務|デスクワーク|会社員|正社員|パート|アルバイト|フリーランス")
+_EMPLOYMENT = re.compile(r"会社|勤務|デスクワーク|会社員|正社員|パート|アルバイト|フリーランス|在宅|リモートワーク")
 
 
 def _job_conflicts_with_profile(sentence: str, occupation: str) -> bool:

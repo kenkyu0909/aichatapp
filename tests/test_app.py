@@ -17596,11 +17596,11 @@ def test_t495_job_conflict_goes_to_needs_review():
     spec = importlib.util.spec_from_file_location("legacy_extract", script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    messages = [{"id": 1, "content": "うちはデスクワークなんで自由な会社みたいな感じです"}]
+    messages = [{"id": 1, "content": "うちは在宅中心で自由な職場なんです"}]
     facts, needs_review = module._extract_message_facts(messages, max_per_category=12, occupation="大学院生")
     flat = [item["text"] for items in facts.values() for item in items]
-    assert all("デスクワーク" not in text for text in flat)
-    assert any("デスクワーク" in item["text"] for item in needs_review)
+    assert all("在宅" not in text for text in flat)
+    assert any("在宅" in item["text"] for item in needs_review)
 
 
 def test_t495_legacy_name_is_replaced_in_outputs():
