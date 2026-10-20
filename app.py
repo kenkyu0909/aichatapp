@@ -4095,9 +4095,11 @@ SURVEY_ANSWERS_ENV = "MRA_SURVEY_ANSWERS_PATH"
 def load_survey_answers(path: str | None) -> list[dict[str, str]]:
     """選択式アンケートの回答を読み込む（既定では読み込まない）(T495).
 
-    ファイルは {"answers": [{"question": ..., "answer": ...}]} の形を想定し、
-    好み・苦手・どっち派を本人の確認済み回答として扱う。パスは環境変数で明示的に
-    指定するのみで、個人情報はリポジトリに置かない。
+    対応する形式:
+      {"choices": {"犬派・猫派": "猫", ...}, "ratings": {"食べ物": {"ラーメン": "好き", ...}}}
+    choices は性格・連絡・デートなどのどっち派、ratings は好き嫌い（大好き／好き／
+    苦手／経験なし／普通）。パスは環境変数で明示的に指定するのみで、個人情報は
+    リポジトリに置かない。
     """
     if not path:
         return []
@@ -4106,23 +4108,44 @@ def load_survey_answers(path: str | None) -> list[dict[str, str]]:
             data = json.load(handle)
     except (OSError, ValueError):
         return []
-    answers = data.get("answers") if isinstance(data, dict) else None
-    if not isinstance(answers, list):
+    if not isinstance(data, dict):
         return []
     result: list[dict[str, str]] = []
-    for item in answers:
-        if not isinstance(item, dict):
-            continue
-        question = str(item.get("question", "")).strip()
-        answer = str(item.get("answer", "")).strip()
-        if question and answer:
-            result.append({"question": question, "answer": answer})
+    choices = data.get("choices")
+    if isinstance(choices, dict):
+        for question, answer in choices.items():
+            question = str(question).strip()
+            answer = str(answer).strip()
+            if question and answer:
+                result.append({"question": question, "answer": answer})
+    ratings = data.get("ratings")
+    if isinstance(ratings, dict):
+        for category, items in ratings.items():
+            if not isinstance(items, dict):
+                continue
+            for item, rating in items.items():
+                item = str(item).strip()
+                rating = str(rating).strip()
+                if item and rating:
+                    result.append({"question": item, "answer": rating})
+    notes = data.get("notes")
+    if isinstance(notes, list):
+        for note in notes:
+            note = str(note).strip()
+            if note:
+                result.append({"question": "", "answer": note})
+    elif isinstance(notes, str) and notes.strip():
+        result.append({"question": "", "answer": notes.strip()})
     return result
 
 
 def _merged_survey_answers(existing: list[dict[str, str]]) -> list[dict[str, str]]:
     """環境変数が指定されたときだけ、アンケートの回答を確認済み回答に足す (T495)."""
-    loaded = load_survey_answers(os.environ.get(SURVEY_ANSWERS_ENV))
+    loaded = [
+        item
+        for item in load_survey_answers(os.environ.get(SURVEY_ANSWERS_ENV))
+        if item.get("question")
+    ]
     if not loaded:
         return existing
     return [*existing, *loaded]
@@ -4153,9 +4176,13 @@ def survey_fact_strings(path: str | None) -> list[str]:
             continue
         question = str(item.get("question", "")).strip()
         answer = str(item.get("answer", "")).strip()
-        if not question or not answer:
+        if not answer:
             continue
-        if any(pattern and pattern in question for pattern in do_not_assert):
+        if question and any(pattern and pattern in question for pattern in do_not_assert):
+            continue
+        if not question:
+            # notes: ユーザー自身が確定させた補足（例: 食い違いの両立のしかた）。
+            facts.append(answer)
             continue
         if answer in ("大好き", "好き"):
             facts.append(f"{question}が好きです")
@@ -4167,7 +4194,7 @@ def survey_fact_strings(path: str | None) -> list[str]:
             continue
         else:
             facts.append(f"{question}は{answer}がいいです" if "？" in question or "どっち" in question else f"{question}は{answer}")
-    return facts
+    return facts[:80]
 
 
 def _merge_survey_facts(profile: dict, survey_path: str | None) -> dict:

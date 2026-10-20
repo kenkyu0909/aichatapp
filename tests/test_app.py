@@ -17624,13 +17624,13 @@ def test_t495_survey_answers_are_loaded_only_when_explicit(client, tmp_path):
     _, backend = client
     path = tmp_path / "survey.json"
     path.write_text(
-        json.dumps({"answers": [{"question": "甘いものとしょっぱいものどっち派？", "answer": "甘いもの派"}]}, ensure_ascii=False),
+        json.dumps({"choices": {"犬派・猫派": "猫"}}, ensure_ascii=False),
         encoding="utf-8",
     )
     assert backend.load_survey_answers(None) == []
     assert backend.load_survey_answers(str(tmp_path / "missing.json")) == []
     loaded = backend.load_survey_answers(str(path))
-    assert loaded == [{"question": "甘いものとしょっぱいものどっち派？", "answer": "甘いもの派"}]
+    assert loaded == [{"question": "犬派・猫派", "answer": "猫"}]
     assert backend._merged_survey_answers([]) == []
     monkey_patch = {
         "question": "甘いものとしょっぱいものどっち派？",
