@@ -18159,6 +18159,14 @@ def test_t500_respectful_past_tense_is_softened(client):
         backend._soften_stiff_keigo('今は何か運動をされたりしますか？')
         == '今は何か運動をしたりしますか？'
     )
+    assert (
+        backend._soften_stiff_keigo('テニスをやられてたんですね！')
+        == 'テニスをやってたんですね！'
+    )
+    assert (
+        backend._soften_stiff_keigo('試合にやられてしまった')
+        == '試合にやられてしまった'
+    )
     assert backend.candidate_has_high_confidence_japanese_error('こさんは方はよくするんですか？')
     assert not backend.candidate_has_high_confidence_japanese_error('こさんはスポーツはよくするんですか？')
     assert (
