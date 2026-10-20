@@ -17903,6 +17903,25 @@ def test_t499_survey_question_names_are_rejected(client, tmp_path, monkeypatch):
     assert "アンケートの設問名がそのまま出ている" not in backend._candidate_rejection_reasons(
         natural, context
     )
+    topic_word = backend.Candidate(label="話題語", text="ラーメンは大好きです")
+    assert "アンケートの設問名がそのまま出ている" not in backend._candidate_rejection_reasons(
+        topic_word, context
+    )
+
+
+def test_t499_polar_question_about_user_requests_confirmation(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "朝は苦手ですか？私は休みの日は昼まで寝てしまいます"}],
+        "other": {"name": "架空あき", "description": "会社員"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    question = backend.missing_personal_fact_question(context)
+    assert question is not None
+    assert "朝は苦手ですか" in question.question
 
 
 def test_t499_reasking_partner_question_only_is_rejected(client):
@@ -17939,7 +17958,7 @@ def test_t499_far_invitation_acceptance_is_rejected(client):
                 "body": "今度の土曜、大阪の小さなマルシェがあるんです。よかったら一緒に行きませんか？",
             }
         ],
-        "other": {"name": "架空あき", "description": "大阪で事務の仕事をしています"},
+        "other": {"name": "架空あき", "description": "北海道札幌市で事務の仕事をしています"},
         "my_profile": {"facts": {"name": "S", "area": "北海道札幌市"}, "avoid": []},
         "reply_preferences": {"tone": "敬語"},
         "invite_decision": "invite_gently",
@@ -17959,6 +17978,23 @@ def test_t499_far_invitation_acceptance_is_rejected(client):
     assert backend._partner_invitation_is_far_from_user(local) is False
     local_accepting = backend.Candidate(label="承諾", text="ぜひ行きましょう！\n楽しみにしています")
     assert "遠方の誘いへの承諾" not in backend._candidate_rejection_reasons(local_accepting, local)
+
+    invite_answer = "大阪は遠いですが、日帰りで行けるので、ぜひ行きたいです。"
+    answered = {
+        **context,
+        "ephemeral_user_answers": [
+            {
+                "question": (
+                    "相手の「今度の土曜、大阪の小さなマルシェがあるんです。"
+                    "よかったら一緒に行きませんか？」にどう答えたいか教えてください"
+                ),
+                "answer": invite_answer,
+            }
+        ],
+    }
+    confirmed = backend.Candidate(label="確認済み", text=invite_answer)
+    assert "遠方の誘いへの承諾" not in backend._candidate_rejection_reasons(confirmed, answered)
+    assert backend.missing_personal_fact_question(answered) is None
 
 
 def test_t499_far_invitation_blocks_and_asks_user(client, monkeypatch):

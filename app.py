@@ -2380,6 +2380,27 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
     return False
 
 
+_POLAR_PERSONAL_QUESTION = re.compile(
+    r"^[^、。!?！？\n]{1,12}(?:は|が|も|って)[^、。!?！？\n]{0,8}"
+    r"(?:好き|嫌い|苦手|得意|平気|大丈夫)(?:ですか|でしょうか|なんですか)"
+)
+
+
+def _is_polar_personal_question(text: str) -> bool:
+    """Return True for a simple yes/no question about the user's preference.
+
+    ``朝は苦手ですか？`` names its own subject but has no interrogative word, so
+    it needs this check to be treated as a self-contained ask about the user.
+    Demonstratives are excluded because ``この店は…`` asks about a third party.
+    """
+    question = text.strip()
+    if question.startswith(
+        ("この", "その", "あの", "ここ", "そこ", "あそこ", "私の", "僕の", "俺の", "自分の")
+    ):
+        return False
+    return _POLAR_PERSONAL_QUESTION.match(question) is not None
+
+
 def _focus_question_carries_own_subject(text: str) -> bool:
     """Tell a self-contained ask apart from a short follow-up that leans on the previous line.
 
@@ -2388,7 +2409,10 @@ def _focus_question_carries_own_subject(text: str) -> bool:
     ``よく行きますか？`` only makes sense against the sentence before it, so the
     whole message stays the unit of classification there.
     """
-    return re.search(r"どんな|どの|どちら|どれ|どこ|何|なに|いつ|いくつ", text) is not None
+    return (
+        re.search(r"どんな|どの|どちら|どれ|どこ|何|なに|いつ|いくつ", text) is not None
+        or _is_polar_personal_question(text)
+    )
 
 
 def _session_answer_remembers(context: dict, question: str) -> bool:
@@ -2562,7 +2586,7 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     last_partner_msg = partner_messages[-1]
     # T499: 本人から遠い地域への誘いは、承諾する前に必ず本人へ確認する。
     far_question = _far_invitation_question(context)
-    if far_question:
+    if far_question and not _answers_for_partner_question(context):
         return UserQuestion(
             question=far_question,
             purpose="相手の誘いが本人の居住地域から遠いため、承諾する前に本人へ確認します",
@@ -8235,6 +8259,10 @@ def _is_unclassified_question_about_user(text: str) -> bool:
         return True
     if re.search(r"(?:なら|だったら|では)(?:どっち|どちら|どれ)", question):
         return True
+    # T499: 「朝は苦手ですか？」のような、主題＋好み/得手不得手の単純な
+    # はい/いいえ質問も本人への直接質問として確認する。
+    if _is_polar_personal_question(question):
+        return True
     return bool(INVITATION_PATTERN.search(question) or re.search(
         r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
         r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
@@ -9518,7 +9546,16 @@ def _partner_invitation_is_far_from_user(context: dict) -> bool:
     user_groups = _user_region_groups(context)
     if not user_groups:
         return False
-    partner_groups = _partner_region_groups(context)
+    latest_partner_body = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    invitation_groups = _region_groups(latest_partner_body)
+    partner_groups = invitation_groups or _partner_region_groups(context)
     return bool(partner_groups) and not (user_groups & partner_groups)
 
 
@@ -9577,6 +9614,19 @@ def _candidate_refers_to_self_with_honorific(candidate_text: str, context: dict)
     return False
 
 
+def _looks_like_survey_question_label(name: str) -> bool:
+    """設問名として不自然にそのまま出る形か (T499).
+
+    「犬派・猫派」のような複合ラベルや「〜方」「〜頻度」で終わる設問だけを
+    対象にする。ratings の内側キー（「お弁当」「ミステリー」など）は会話に
+    自然に出る話題語でもあるため、そのままでは棄却しない。
+    """
+    return "・" in name or name.endswith(
+        ("方", "派", "頻度", "ペース", "量", "期間", "時間帯", "長さ", "タイミング",
+         "会計", "リード", "性格", "代わり", "好み")
+    )
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -9597,7 +9647,7 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     survey_questions = _survey_question_names()
     if survey_questions:
         for question_name in survey_questions:
-            if question_name in text:
+            if question_name in text and _looks_like_survey_question_label(question_name):
                 reasons.append("アンケートの設問名がそのまま出ている")
                 break
     # T496: 「profile: 甘いもの…」のように項目名がそのまま出た候補は棄却する。
@@ -9661,7 +9711,7 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         answered_partner_question = True
     # T499: 本人から遠い地域（例：本人は北海道、相手は大阪）への誘いを承諾する候補は
     # 落として本人確認へ回す。
-    if _candidate_accepts_far_invitation(text, context):
+    if _candidate_accepts_far_invitation(text, context) and not verified_answer_relay:
         reasons.append("遠方の誘いへの承諾")
     if not answered_partner_question:
         reasons.append("相手からの直接質問に未回答")
