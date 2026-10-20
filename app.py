@@ -2560,6 +2560,13 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     if not partner_messages:
         return None
     last_partner_msg = partner_messages[-1]
+    # T499: 本人から遠い地域への誘いは、承諾する前に必ず本人へ確認する。
+    far_question = _far_invitation_question(context)
+    if far_question:
+        return UserQuestion(
+            question=far_question,
+            purpose="相手の誘いが本人の居住地域から遠いため、承諾する前に本人へ確認します",
+        )
     if _is_concrete_date_or_place_proposal(last_partner_msg):
         quoted_proposal = last_partner_msg.strip().replace("\n", " ")[:180]
         norm_quoted_proposal = re.sub(r"[\s　、。，．！!？?「」『』]", "", quoted_proposal)
@@ -4137,6 +4144,51 @@ def load_survey_answers(path: str | None) -> list[dict[str, str]]:
     elif isinstance(notes, str) and notes.strip():
         result.append({"question": "", "answer": notes.strip()})
     return result
+
+
+_SURVEY_QUESTION_NAMES_CACHE: dict[tuple[str, int], list[str]] = {}
+
+
+def _survey_question_names() -> list[str]:
+    """選択式アンケートの設問名を返す（環境変数指定時のみ）(T499).
+
+    choices のキー（「犬派・猫派」など）と ratings の内側キー（「ラーメン」など）を
+    3文字以上に限って返す。回答そのものではなく設問名が候補に出たことを検出する
+    ための一覧で、`MRA_SURVEY_ANSWERS_PATH` が未指定なら空リストを返す。
+    """
+    path = os.environ.get(SURVEY_ANSWERS_ENV)
+    if not path:
+        return []
+    try:
+        stamp = os.stat(path).st_mtime_ns
+    except OSError:
+        return []
+    cache_key = (str(path), stamp)
+    cached = _SURVEY_QUESTION_NAMES_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    names: list[str] = []
+    if isinstance(data, dict):
+        for section, keyed in (("choices", False), ("ratings", True)):
+            block = data.get(section)
+            if not isinstance(block, dict):
+                continue
+            keys = (
+                (key for items in block.values() if isinstance(items, dict) for key in items)
+                if keyed
+                else block.keys()
+            )
+            for key in keys:
+                name = str(key).strip()
+                if len(name) >= 3 and name not in names:
+                    names.append(name)
+    _SURVEY_QUESTION_NAMES_CACHE[cache_key] = names
+    return names
 
 
 def _natural_survey_answer(question: str, answer: str) -> str:
@@ -8827,6 +8879,43 @@ def _repeats_partner_fresh_statement(text: str, context: dict) -> bool:
     return False
 
 
+def _candidate_only_asks_back_partner_question(text: str, context: dict) -> bool:
+    """相手の直接質問を、宣言文なしでそのまま聞き返すだけの候補か (T499).
+
+    本人の確定事実があればそこから答えるべきで、聞き返しだけでは答えにならない。
+    別の話題への質問は対象外にするため、相手の質問と対象語・述語が重なるか、
+    正規化した文がほぼ一致するときだけ真を返す。
+    """
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    ask = _last_question_sentence(partner_messages[-1]) or ""
+    if not _is_ask_sentence(ask):
+        return False
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    if not lines:
+        return False
+    question_lines = [line for line in lines if _is_ask_sentence(line)]
+    if not question_lines:
+        return False
+    body = " ".join(question_lines)
+    if _candidate_contains_substantive_answer_clause(body):
+        return False
+    if _question_shares_object_and_intent(body, ask):
+        return True
+    candidate_key = _normalized_repetition_key(body)
+    ask_key = _normalized_repetition_key(ask)
+    return bool(
+        candidate_key
+        and ask_key
+        and SequenceMatcher(None, candidate_key, ask_key).ratio() >= 0.7
+    )
+
+
 def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     """True when the question only paraphrases the user's own previous question."""
     prior_me = [
@@ -9307,6 +9396,163 @@ def candidate_answers_partner_invitation(candidate_text: str) -> bool:
     return bool(PARTNER_INVITATION_RESPONSE_PATTERN.search(candidate_text))
 
 
+# T499: 本人と相手の地域を同じ粒度で比べるための対応表。県名と主要な市名を
+# 同じグループに入れ、表記違い（北海道札幌市 ⇔ 札幌）で別地域と誤判定しない。
+_REGION_ALIASES: dict[str, tuple[str, ...]] = {
+    "北海道": ("北海道", "札幌", "函館", "旭川", "小樽", "帯広", "釧路", "新千歳"),
+    "青森": ("青森",),
+    "岩手": ("岩手", "盛岡"),
+    "宮城": ("宮城", "仙台"),
+    "秋田": ("秋田",),
+    "山形": ("山形",),
+    "福島": ("福島", "郡山", "いわき"),
+    "茨城": ("茨城", "水戸", "つくば"),
+    "栃木": ("栃木", "宇都宮"),
+    "群馬": ("群馬", "前橋", "高崎"),
+    "埼玉": ("埼玉", "さいたま", "大宮", "川越"),
+    "千葉": ("千葉", "船橋", "柏"),
+    "東京": ("東京", "新宿", "渋谷", "池袋", "吉祥寺", "銀座", "品川", "上野", "中野", "秋葉原", "浅草"),
+    "神奈川": ("神奈川", "横浜", "川崎", "鎌倉", "箱根", "藤沢"),
+    "新潟": ("新潟",),
+    "富山": ("富山",),
+    "石川": ("石川", "金沢"),
+    "福井": ("福井",),
+    "山梨": ("山梨", "甲府"),
+    "長野": ("長野", "松本", "軽井沢"),
+    "岐阜": ("岐阜",),
+    "静岡": ("静岡", "浜松", "熱海", "伊豆"),
+    "愛知": ("愛知", "名古屋", "豊田"),
+    "三重": ("三重", "津"),
+    "滋賀": ("滋賀", "大津"),
+    "京都": ("京都", "祇園"),
+    "大阪": ("大阪", "梅田", "難波", "心斎橋", "天王寺", "堺"),
+    "兵庫": ("兵庫", "神戸", "姫路"),
+    "奈良": ("奈良",),
+    "和歌山": ("和歌山",),
+    "鳥取": ("鳥取",),
+    "島根": ("島根", "松江"),
+    "岡山": ("岡山",),
+    "広島": ("広島",),
+    "山口": ("山口",),
+    "徳島": ("徳島",),
+    "香川": ("香川", "高松"),
+    "愛媛": ("愛媛", "松山"),
+    "高知": ("高知",),
+    "福岡": ("福岡", "博多", "天神", "北九州"),
+    "佐賀": ("佐賀",),
+    "長崎": ("長崎",),
+    "熊本": ("熊本",),
+    "大分": ("大分",),
+    "宮崎": ("宮崎",),
+    "鹿児島": ("鹿児島",),
+    "沖縄": ("沖縄", "那覇"),
+}
+
+# 「東京都」の「京都」を近畿の京都と取り違えないよう、京都だけは直前を見る。
+_REGION_PATTERN = re.compile(
+    "|".join(
+        f"(?<!東)京都"
+        if alias == "京都"
+        else re.escape(alias)
+        for aliases in _REGION_ALIASES.values()
+        for alias in aliases
+    )
+)
+_REGION_BY_ALIAS = {
+    alias: group for group, aliases in _REGION_ALIASES.items() for alias in aliases
+}
+
+
+def _region_groups(text: str) -> set[str]:
+    """文中に出た都道府県グループを返す（主要都市は県へ寄せる）(T499)."""
+    return {
+        _REGION_BY_ALIAS[token]
+        for token in _REGION_PATTERN.findall(str(text))
+        if token in _REGION_BY_ALIAS
+    }
+
+
+def _user_region_groups(context: dict) -> set[str]:
+    """本人プロフィールから居住・待ち合わせ地域のグループを返す (T499)."""
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    values: list[str] = []
+    for key in ("area", "居住地", "region", "location", "address", "meeting_area", "会える地域"):
+        value = facts.get(key)
+        if isinstance(value, (list, tuple)):
+            values.extend(str(item) for item in value)
+        elif value:
+            values.append(str(value))
+    return _region_groups(" ".join(values))
+
+
+def _user_area_label(context: dict) -> str:
+    """本人確認の質問に添える本人の居住地表記を返す (T499)."""
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    for key in ("area", "居住地", "region", "location", "address"):
+        value = facts.get(key)
+        if value:
+            return str(value).strip()[:40]
+    return ""
+
+
+def _partner_region_groups(context: dict) -> set[str]:
+    """相手プロフィールと直近の相手発言から相手の地域グループを返す (T499)."""
+    other = context.get("other") if isinstance(context.get("other"), dict) else {}
+    values = [str(other.get("name") or ""), str(other.get("description") or "")]
+    for key in ("area", "region", "居住地", "location"):
+        if other.get(key):
+            values.append(str(other.get(key)))
+    partner_bodies = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    values.extend(partner_bodies[-2:])
+    return _region_groups(" ".join(values))
+
+
+def _partner_invitation_is_far_from_user(context: dict) -> bool:
+    """相手の誘いが本人の居住地域から遠い別地方か (T499)."""
+    if not partner_latest_message_has_invitation(context):
+        return False
+    user_groups = _user_region_groups(context)
+    if not user_groups:
+        return False
+    partner_groups = _partner_region_groups(context)
+    return bool(partner_groups) and not (user_groups & partner_groups)
+
+
+_FAR_INVITATION_ACCEPTANCE = re.compile(
+    r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい|いいですね|いいね|参加します|行きます"
+)
+
+
+def _candidate_accepts_far_invitation(text: str, context: dict) -> bool:
+    """遠い地域への誘いを承諾している候補か (T499)."""
+    return bool(
+        _FAR_INVITATION_ACCEPTANCE.search(text)
+        and _partner_invitation_is_far_from_user(context)
+    )
+
+
+def _far_invitation_question(context: dict) -> str:
+    """遠い地域への誘いを本人へ確認するための質問文を返す (T499)."""
+    if not _partner_invitation_is_far_from_user(context):
+        return ""
+    latest_partner_body = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    quoted_invite = latest_partner_body.strip().replace("\n", " ")[:180]
+    area_label = _user_area_label(context)
+    where = f"{area_label}からは遠い場所" if area_label else "遠い場所"
+    return f"相手の「{quoted_invite}」は{where}ですが、この誘いにどう答えたいか教えてください"
+
+
 def _candidate_refers_to_self_with_honorific(candidate_text: str, context: dict) -> bool:
     """True when candidate refers to the app user by their own name with honorific (e.g. そよかさん)."""
     facts = context.get("my_profile", {}).get("facts", {})
@@ -9347,6 +9593,13 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
         reasons.append("未完成プレースホルダー")
+    # T499: アンケートの設問名（「犬派・猫派」など）がそのまま答えに出た候補は棄却する。
+    survey_questions = _survey_question_names()
+    if survey_questions:
+        for question_name in survey_questions:
+            if question_name in text:
+                reasons.append("アンケートの設問名がそのまま出ている")
+                break
     # T496: 「profile: 甘いもの…」のように項目名がそのまま出た候補は棄却する。
     if re.search(r"\b(?:profile|memo|occupation|hobbies|my_info|speaking_style|gender|age)\s*[:：]", text):
         reasons.append("項目名がそのまま出ている")
@@ -9384,6 +9637,10 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T498: 相手が直前に答えた内容（好み・頻度の宣言）を聞き返す候補は落とす。
     if _repeats_partner_fresh_statement(text, context):
         reasons.append("相手が直前に答えた内容を聞き返す")
+    # T499: 相手の直接質問を宣言文なしでそのまま聞き返すだけの候補は落とす
+    # （確定事実があればそこから答える）。
+    if _candidate_only_asks_back_partner_question(text, context):
+        reasons.append("相手の質問の聞き返し")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -9402,6 +9659,10 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         and re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい|いいですね|いいね", text)
     ):
         answered_partner_question = True
+    # T499: 本人から遠い地域（例：本人は北海道、相手は大阪）への誘いを承諾する候補は
+    # 落として本人確認へ回す。
+    if _candidate_accepts_far_invitation(text, context):
+        reasons.append("遠方の誘いへの承諾")
     if not answered_partner_question:
         reasons.append("相手からの直接質問に未回答")
     if _has_condescending_offer(text):
@@ -10442,6 +10703,9 @@ _STIFF_KEIGO_REWRITES = (
     ("承知いたしました", "わかりました"),
     ("承知しました", "わかりました"),
     ("かしこまりました", "わかりました"),
+    # T499: 謙譲語の残り（「教えていただき」→「教えてくれて」）。
+    ("教えていただきありがとうございます", "教えてくれてありがとうございます"),
+    ("教えていただき、ありがとうございます", "教えてくれてありがとうございます"),
     # T480: 相手を立てる尊敬語・謙譲語を普通の動詞へ戻す（です・ますは保つ）。
     # 安全な語だけを対象にし、意味が変わる広い置換（〜される→〜する 等）は入れない。
     ("させていただきます", "します"),
@@ -11275,6 +11539,26 @@ def _generate_impl(data: GenerateInput):
                                 if message.get("role") == "them"
                             ]
                             direct_question = partner_messages[-1] if partner_messages else ""
+                            # T499: 遠い地域への誘いを承諾する候補しか作れなかったときは、
+                            # 勝手に承諾せず本人へ確認する（別トピックの本人確認より優先）。
+                            far_question = _far_invitation_question(context)
+                            if (
+                                far_question
+                                and not data.skipped_user_info
+                                and not _session_answer_remembers(context, far_question)
+                            ):
+                                return {
+                                    **user_info_question_response(
+                                        far_question,
+                                        "相手の誘いが本人の居住地域から遠いため、承諾する前に本人へ確認します",
+                                        "遠い地域への誘いを承諾する候補を表示せず、本人の希望を確認します。",
+                                    ),
+                                    "demo": False,
+                                    "api_alias": account,
+                                    "model": model,
+                                    "api_attempt_count": len(attempted_models),
+                                    "attempted_models": attempted_models,
+                                }
                             direct_topic = _topic_for_personal_question(direct_question)
                             if direct_topic and not _topic_is_verified(
                                 direct_topic, context, direct_question
@@ -11331,6 +11615,26 @@ def _generate_impl(data: GenerateInput):
                                 for answer in data.user_answers
                                 if (topic := _question_topic(answer.get("question", ""))) is not None
                             }
+                            # T499: 遠い地域への誘いを承諾する候補しか作れなかったときは、
+                            # 勝手に承諾せず本人へ確認する。
+                            far_question = far_question or _far_invitation_question(context)
+                            if (
+                                far_question
+                                and not data.skipped_user_info
+                                and not _session_answer_remembers(context, far_question)
+                            ):
+                                return {
+                                    **user_info_question_response(
+                                        far_question,
+                                        "相手の誘いが本人の居住地域から遠いため、承諾する前に本人へ確認します",
+                                        "遠い地域への誘いを承諾する候補を表示せず、本人の希望を確認します。",
+                                    ),
+                                    "demo": False,
+                                    "api_alias": account,
+                                    "model": model,
+                                    "api_attempt_count": len(attempted_models),
+                                    "attempted_models": attempted_models,
+                                }
                             if direct_ask and not data.skipped_user_info:
                                 relay_candidate = (
                                     _build_answered_question_fallback_candidate(context)

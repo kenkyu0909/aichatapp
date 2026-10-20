@@ -17873,6 +17873,151 @@ def test_t498_holiday_answer_must_match_the_question(client):
     assert backend._answers_verified_single_partner_question(mismatched2, other_wording) is False
 
 
+def test_t499_survey_question_names_are_rejected(client, tmp_path, monkeypatch):
+    _, backend = client
+    path = tmp_path / "survey.json"
+    path.write_text(
+        json.dumps(
+            {
+                "choices": {"犬派・猫派": "猫"},
+                "ratings": {"食べ物": {"ラーメン": "好き", "甘味": "好き"}},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "休日は何をして過ごしますか？"}],
+        "other": {"name": "架空あき", "description": "学生"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    assert backend._survey_question_names() == []
+    monkeypatch.setenv("MRA_SURVEY_ANSWERS_PATH", str(path))
+    assert backend._survey_question_names() == ["犬派・猫派", "ラーメン"]
+    leaked = backend.Candidate(label="設問名", text="犬派・猫派は猫です")
+    assert "アンケートの設問名がそのまま出ている" in backend._candidate_rejection_reasons(leaked, context)
+    natural = backend.Candidate(label="自然", text="猫が好きです")
+    assert "アンケートの設問名がそのまま出ている" not in backend._candidate_rejection_reasons(
+        natural, context
+    )
+
+
+def test_t499_reasking_partner_question_only_is_rejected(client):
+    _, backend = client
+    base = {
+        "mode": "reply",
+        "other": {"name": "架空あき", "description": "学生"},
+        "my_profile": {"facts": {"name": "S", "area": "北海道札幌市"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    morning = {**base, "history": [{"role": "them", "body": "朝は苦手ですか？"}]}
+    reasked = backend.Candidate(label="聞き返し", text="いいですね！\n朝は苦手ですか？")
+    assert "相手の質問の聞き返し" in backend._candidate_rejection_reasons(reasked, morning)
+    answered = backend.Candidate(label="回答", text="朝は苦手です。夜型なのでゆっくり起きます")
+    assert "相手の質問の聞き返し" not in backend._candidate_rejection_reasons(answered, morning)
+
+    sushi = {**base, "history": [{"role": "them", "body": "お寿司は好きですか？"}]}
+    reasked_sushi = backend.Candidate(label="聞き返し", text="お寿司は好きですか？")
+    assert "相手の質問の聞き返し" in backend._candidate_rejection_reasons(reasked_sushi, sushi)
+
+    other_topic = {**base, "history": [{"role": "them", "body": "朝は苦手ですか？"}]}
+    fresh = backend.Candidate(label="別話題", text="休日は何をして過ごすことが多いですか？")
+    assert "相手の質問の聞き返し" not in backend._candidate_rejection_reasons(fresh, other_topic)
+
+
+def test_t499_far_invitation_acceptance_is_rejected(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {
+                "role": "them",
+                "body": "今度の土曜、大阪の小さなマルシェがあるんです。よかったら一緒に行きませんか？",
+            }
+        ],
+        "other": {"name": "架空あき", "description": "大阪で事務の仕事をしています"},
+        "my_profile": {"facts": {"name": "S", "area": "北海道札幌市"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "invite_gently",
+        "ephemeral_user_answers": [],
+    }
+    assert backend._partner_invitation_is_far_from_user(context) is True
+    accepting = backend.Candidate(label="承諾", text="ぜひ行きましょう！\n楽しみにしています")
+    assert "遠方の誘いへの承諾" in backend._candidate_rejection_reasons(accepting, context)
+
+    local = dict(context)
+    local["history"] = [
+        {
+            "role": "them",
+            "body": "今度の土曜、札幌の小さなマルシェがあるんです。よかったら一緒に行きませんか？",
+        }
+    ]
+    assert backend._partner_invitation_is_far_from_user(local) is False
+    local_accepting = backend.Candidate(label="承諾", text="ぜひ行きましょう！\n楽しみにしています")
+    assert "遠方の誘いへの承諾" not in backend._candidate_rejection_reasons(local_accepting, local)
+
+
+def test_t499_far_invitation_blocks_and_asks_user(client, monkeypatch):
+    from google import genai
+    from types import SimpleNamespace
+
+    c, _ = client
+    c.put(
+        "/api/profile",
+        json={"content": json.dumps({"name": "S", "area": "北海道札幌市"}, ensure_ascii=False), "avoid": ""},
+    )
+    created = c.post(
+        "/api/matches",
+        json={"name": "架空あき", "description": "大阪で事務の仕事をしています"},
+    )
+    mid = created.json()["id"]
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={
+            "role": "them",
+            "body": "今度の土曜、大阪の小さなマルシェがあるんです。よかったら一緒に行きませんか？",
+        },
+    )
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(
+                text=json.dumps(
+                    {
+                        "needs_user_info": False,
+                        "user_questions": [],
+                        "user_info_reason": "",
+                        "recommended": {"label": "承諾", "text": "ぜひ行きましょう！\n楽しみにしています"},
+                        "alternatives": [],
+                        "reason": "誘いに前向きに返す",
+                        "strategy": "誘いを受ける",
+                        "conversation_stage": "Stage 2",
+                        "invite_decision": "invite_gently",
+                        "decision_reason": "相手から誘われているため",
+                        "next_action": "日程を決める",
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": mid, "response_version": 2},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["needs_user_info"] is True
+    assert body["recommended"] is None
+    assert "遠い" in body["user_questions"][0]["question"]
+
+
+
 
 
 
