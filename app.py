@@ -6562,7 +6562,7 @@ def candidate_has_missing_sentence_break(text: str) -> bool:
         # ように自然に続く語は否定先読みで除外する。
         if re.search(
             r"(?:ですね|ですよね|ますよね)(?:了解|おけ|大丈夫|承知|わかりました|当日|よろしく|また|では)|"
-            r"^(?:わかります|わかりました|了解です)"
+            r"^(?:わかります|分かります|わかりました|分かりました|了解です)"
             r"(?!(?:よ|ね|わ|か|が|けど|けれど|から|ので|のに|し|の|で|そう|たしか|それ|これ|あの|その|この|ありがとう|という))"
             r"[ぁ-んァ-ヶ一-龠]",
             line,
@@ -9647,6 +9647,28 @@ def _repeats_partner_declared_activity(text: str, context: dict) -> bool:
     return False
 
 
+def _asks_partner_bento_after_eating_out(text: str, context: dict) -> bool:
+    """相手が外食と述べた直後に、相手へお弁当の話を振っていないか (T507)."""
+    latest = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    if not latest or not re.search(r"お弁当|弁当", latest):
+        return False
+    if not re.search(
+        r"外食|外で食べ|食べに行き|ご飯に行き|ごはんに行き|ランチに行き|友達とご飯|友達とごはん", latest
+    ):
+        return False
+    for line in str(text).splitlines():
+        if _is_ask_sentence(line) and re.search(r"お弁当|弁当", line):
+            return True
+    return False
+
+
 def _asks_pet_walk_about_cat(text: str, context: dict) -> bool:
     """猫を飼っている相手に、猫の外歩きを尋ねていないか (T504)."""
     latest = next(
@@ -9990,6 +10012,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手が答えた活動を聞き返している")
     if _asks_pet_walk_about_cat(text, context):
         reasons.append("猫に外歩きを尋ねている")
+    if _asks_partner_bento_after_eating_out(text, context):
+        reasons.append("相手の外食の話と食い違うお弁当の質問")
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:

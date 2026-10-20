@@ -18214,6 +18214,38 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     assert backend._candidate_is_verified_answer_relay(relay.text, context) is True
 
 
+def test_t507_no_bento_question_after_partner_eats_out(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '普段は昼休みに友達とご飯に行きます。そちらはお弁当ですか？'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [
+            {
+                'question': '相手の「普段は昼休みに友達とご飯に行きます。そちらはお弁当ですか？」にどう答えたいか教えてください',
+                'answer': 'お弁当のことが多いです。',
+            }
+        ],
+    }
+    bad = backend.Candidate(
+        label='弁当質問', text='わかります！\nお弁当のことが多いです！\n普段はどんなお弁当を作ってるんですか？'
+    )
+    assert '相手の外食の話と食い違うお弁当の質問' in backend._candidate_rejection_reasons(bad, context)
+    ok = backend.Candidate(label='回答のみ', text='わかります！\nお弁当のことが多いです')
+    assert backend._candidate_rejection_reasons(ok, context) == []
+
+
+def test_t507_reaction_word_is_not_concatenated(client):
+    _, backend = client
+    assert backend.candidate_has_missing_sentence_break('分かります休みの日はのんびり過ごすのもいいですよね✨')
+    assert not backend.candidate_has_missing_sentence_break('わかります！\n休みの日はのんびり過ごすのもいいですよね✨')
+
+
 def test_t506_partner_routine_topic_is_not_asked_again(client):
     _, backend = client
     context = {
