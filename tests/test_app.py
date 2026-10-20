@@ -17639,6 +17639,36 @@ def test_t495_survey_answers_are_loaded_only_when_explicit(client, tmp_path):
     assert backend._merged_survey_answers([monkey_patch]) == [monkey_patch]
 
 
+def test_t495_survey_answers_become_facts_by_policy(client, tmp_path):
+    _, backend = client
+    path = tmp_path / "survey.json"
+    path.write_text(
+        json.dumps(
+            {
+                "answers": [
+                    {"question": "映画", "answer": "大好き"},
+                    {"question": "スキー", "answer": "苦手"},
+                    {"question": "ディズニー", "answer": "経験なし"},
+                    {"question": "コーヒー", "answer": "普通"},
+                    {"question": "初デートは昼と夜どっちがいい？", "answer": "昼から半日"},
+                ],
+                "do_not_assert": ["ディズニー"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    facts = backend.survey_fact_strings(str(path))
+    assert "映画が好きです" in facts
+    assert "スキーは苦手です" in facts
+    assert all("未経験" not in text for text in facts)
+    assert all("コーヒー" not in text for text in facts)
+    assert any("昼から半日" in text for text in facts)
+    merged = backend._merge_survey_facts({"facts": {"name": "S"}}, str(path))
+    assert any("映画が好きです" in text for text in merged["facts"]["survey_facts"])
+    assert backend._merge_survey_facts({"facts": {"name": "S"}}, None) == {"facts": {"name": "S"}}
+
+
 def test_t495_switch_question_is_the_same_intent(client):
     _, backend = client
     assert backend._question_shares_object_and_intent(

@@ -4128,6 +4128,61 @@ def _merged_survey_answers(existing: list[dict[str, str]]) -> list[dict[str, str
     return [*existing, *loaded]
 
 
+def survey_fact_strings(path: str | None) -> list[str]:
+    """アンケートの回答を本人の確定事実の文に変換する（既定では読み込まない）(T495).
+
+    「大好き／好き」は好きなもの、「苦手」は苦手なもの、「経験なし」は未経験、
+    「普通」は取り込まない。どっち派の回答は連絡・デートなどの好みとして使う。
+    旧情報と食い違う可能性がある話題は、JSON の "do_not_assert"（部分文字列の
+    リスト）に一致する間は確定事実にしない（ユーザーの確認待ち）。
+    """
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    answers = data.get("answers") if isinstance(data, dict) else None
+    if not isinstance(answers, list):
+        return []
+    do_not_assert = [str(x) for x in (data.get("do_not_assert") or []) if str(x)]
+    facts: list[str] = []
+    for item in answers:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        if not question or not answer:
+            continue
+        if any(pattern and pattern in question for pattern in do_not_assert):
+            continue
+        if answer in ("大好き", "好き"):
+            facts.append(f"{question}が好きです")
+        elif answer == "苦手":
+            facts.append(f"{question}は苦手です")
+        elif answer == "経験なし":
+            facts.append(f"{question}は未経験です")
+        elif answer == "普通":
+            continue
+        else:
+            facts.append(f"{question}は{answer}がいいです" if "？" in question or "どっち" in question else f"{question}は{answer}")
+    return facts
+
+
+def _merge_survey_facts(profile: dict, survey_path: str | None) -> dict:
+    """アンケートから作った確定事実を profile.facts に足す（指定がなければ何もしない）(T495)."""
+    facts = survey_fact_strings(survey_path)
+    if not facts:
+        return profile
+    base = dict(profile or {})
+    base_facts = dict(base.get("facts") or {}) if isinstance(base.get("facts"), dict) else {}
+    existing = base_facts.get("survey_facts") or []
+    base_facts["survey_facts"] = [*existing, *facts]
+    base["facts"] = base_facts
+    return base
+
+
 def _shared_personal_claim_is_grounded(claim: str, trusted_clauses: list[str]) -> bool:
     normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
     normalized_claim = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_claim)
@@ -6193,6 +6248,7 @@ def build_context(data: GenerateInput) -> dict:
     session_answers = load_session_answers(data.match_id, data.clarification_session_id)
     # T494: 明示的に指定されたときだけ、旧アプリから抽出した本人事実を確定事実へ足す。
     profile = _merge_legacy_facts(profile, os.environ.get(LEGACY_FACTS_ENV))
+    profile = _merge_survey_facts(profile, os.environ.get(SURVEY_ANSWERS_ENV))
     # T495: 選択式アンケートの回答も、明示的に指定されたときだけ確定回答に足す。
     session_answers = _merged_survey_answers(session_answers)
     return {
