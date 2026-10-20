@@ -9647,9 +9647,33 @@ def _repeats_partner_declared_activity(text: str, context: dict) -> bool:
     return False
 
 
-def _asks_partner_bento_after_eating_out(text: str, context: dict) -> bool:
-    """相手が外食と述べた直後に、相手へお弁当の話を振っていないか (T507)."""
-    latest = next(
+# T508: 相手が直前に述べた状況と、質問が前提にしている状況が両立しない場合。
+# (相手の状況, その状況と両立しない質問の語, 棄却理由)
+PARTNER_PREMISE_CONFLICT_RULES: tuple[tuple[str, str, str], ...] = (
+    (
+        r"外食|外で食べ|食べに行き|ご飯に行き|ごはんに行き|ランチに行き|友達とご飯|友達とごはん",
+        r"お弁当|弁当",
+        "相手の外食の話と食い違うお弁当の質問",
+    ),
+    (
+        r"在宅(?:勤務|ワーク)|テレワーク|リモートワーク|リモート勤務"
+        r"|家で(?:仕事|働いて|作業)|自宅で(?:仕事|働いて)",
+        r"通勤|満員電車|出社|会社(?:に|へ)(?:通って|行って)|電車で(?:通って|行って)",
+        "相手の在宅勤務の話と食い違う通勤の質問",
+    ),
+    (
+        r"一人暮らし|ひとり暮らし|1人暮らし|独り暮らし",
+        r"(?:ご)?家族(?:と|と一緒に|みんな|そろって)(?:一緒に)?(?:住|暮ら|生活)|"
+        r"(?:ご)?両親(?:と|と一緒に)(?:住|暮ら|生活)|"
+        r"(?:実家|親元)(?:に|から)(?:住|暮ら|通)",
+        "相手の一人暮らしの話と食い違う家族の質問",
+    ),
+)
+
+
+def _latest_partner_message(context: dict) -> str:
+    """直近の相手の発言（無ければ空文字）。"""
+    return next(
         (
             str(message.get("body", ""))
             for message in reversed(context.get("history", []))
@@ -9657,16 +9681,33 @@ def _asks_partner_bento_after_eating_out(text: str, context: dict) -> bool:
         ),
         "",
     )
-    if not latest or not re.search(r"お弁当|弁当", latest):
-        return False
-    if not re.search(
-        r"外食|外で食べ|食べに行き|ご飯に行き|ごはんに行き|ランチに行き|友達とご飯|友達とごはん", latest
-    ):
-        return False
-    for line in str(text).splitlines():
-        if _is_ask_sentence(line) and re.search(r"お弁当|弁当", line):
-            return True
-    return False
+
+
+def _partner_premise_conflict_reasons(text: str, context: dict) -> list[str]:
+    """相手の直前の状況と両立しない前提を質問に置いていないか (T508).
+
+    T507 のお弁当×外食を一般化した検査。相手が述べた状況（外食・在宅勤務・
+    一人暮らし）と食い違う前提の質問は、相手の状況を読み違えているため棄却する。
+    対象は質問文（``_is_ask_sentence``）だけで、本人の回答や相槌の行には触れない。
+    """
+    latest = _latest_partner_message(context)
+    if not latest:
+        return []
+    ask_lines = [line for line in str(text).splitlines() if _is_ask_sentence(line)]
+    if not ask_lines:
+        return []
+    reasons: list[str] = []
+    for statement_pattern, premise_pattern, reason in PARTNER_PREMISE_CONFLICT_RULES:
+        if not re.search(statement_pattern, latest):
+            continue
+        if any(re.search(premise_pattern, line) for line in ask_lines):
+            reasons.append(reason)
+    return reasons
+
+
+def _asks_partner_bento_after_eating_out(text: str, context: dict) -> bool:
+    """相手が外食と述べた直後に、相手へお弁当の話を振っていないか (T507)."""
+    return "相手の外食の話と食い違うお弁当の質問" in _partner_premise_conflict_reasons(text, context)
 
 
 def _asks_pet_walk_about_cat(text: str, context: dict) -> bool:
@@ -10012,8 +10053,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手が答えた活動を聞き返している")
     if _asks_pet_walk_about_cat(text, context):
         reasons.append("猫に外歩きを尋ねている")
-    if _asks_partner_bento_after_eating_out(text, context):
-        reasons.append("相手の外食の話と食い違うお弁当の質問")
+    # T508: 相手の直前の状況と食い違う前提の質問（T507のお弁当×外食を一般化）。
+    reasons.extend(_partner_premise_conflict_reasons(text, context))
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:

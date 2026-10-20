@@ -18246,6 +18246,52 @@ def test_t507_reaction_word_is_not_concatenated(client):
     assert not backend.candidate_has_missing_sentence_break('わかります！\n休みの日はのんびり過ごすのもいいですよね✨')
 
 
+def test_t508_remote_worker_is_not_asked_about_commute(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '仕事は週3回リモートワークで、家で作業しています'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    commute = backend.Candidate(
+        label='通勤質問', text='リモートワークいいですね✨\n通勤の満員電車は大変じゃないですか？'
+    )
+    assert '相手の在宅勤務の話と食い違う通勤の質問' in backend._candidate_rejection_reasons(commute, context)
+    fresh = backend.Candidate(
+        label='別角度', text='リモートワークいいですね✨\n集中しやすい時間帯とかありますか？'
+    )
+    assert backend._candidate_rejection_reasons(fresh, context) == []
+
+
+def test_t508_partner_living_alone_is_not_asked_about_family(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '今は一人暮らしで、のんびり過ごしています'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    family = backend.Candidate(
+        label='家族質問', text='一人暮らしなんですね✨\nご家族と一緒に暮らすのは考えてないんですか？'
+    )
+    assert '相手の一人暮らしの話と食い違う家族の質問' in backend._candidate_rejection_reasons(family, context)
+    fresh = backend.Candidate(
+        label='別角度', text='一人暮らしなんですね✨\n自炊はよくされるんですか？'
+    )
+    assert backend._candidate_rejection_reasons(fresh, context) == []
+
+
 def test_t506_partner_routine_topic_is_not_asked_again(client):
     _, backend = client
     context = {
