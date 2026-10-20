@@ -17879,7 +17879,7 @@ def test_t499_survey_question_names_are_rejected(client, tmp_path, monkeypatch):
     path.write_text(
         json.dumps(
             {
-                "choices": {"犬派・猫派": "猫"},
+                "choices": {"犬派・猫派": "猫", "お店選び": "事前に調べる"},
                 "ratings": {"食べ物": {"ラーメン": "好き", "甘味": "好き"}},
             },
             ensure_ascii=False,
@@ -17896,9 +17896,13 @@ def test_t499_survey_question_names_are_rejected(client, tmp_path, monkeypatch):
     }
     assert backend._survey_question_names() == []
     monkeypatch.setenv("MRA_SURVEY_ANSWERS_PATH", str(path))
-    assert backend._survey_question_names() == ["犬派・猫派", "ラーメン"]
+    assert backend._survey_question_names() == ["犬派・猫派", "お店選び", "ラーメン"]
     leaked = backend.Candidate(label="設問名", text="犬派・猫派は猫です")
     assert "アンケートの設問名がそのまま出ている" in backend._candidate_rejection_reasons(leaked, context)
+    leaked_choice = backend.Candidate(label="設問名", text="お店選びは事前に調べるです")
+    assert "アンケートの設問名がそのまま出ている" in backend._candidate_rejection_reasons(
+        leaked_choice, context
+    )
     natural = backend.Candidate(label="自然", text="猫が好きです")
     assert "アンケートの設問名がそのまま出ている" not in backend._candidate_rejection_reasons(
         natural, context
@@ -17922,6 +17926,24 @@ def test_t499_polar_question_about_user_requests_confirmation(client):
     question = backend.missing_personal_fact_question(context)
     assert question is not None
     assert "朝は苦手ですか" in question.question
+
+
+def test_t499_unrelated_survey_answer_does_not_answer_schedule_question(client):
+    _, backend = client
+    assert (
+        backend._ephemeral_answer_addresses_question(
+            "予定",
+            "昼過ぎのほうが人が少ないらしいです。午後は空いていますか？",
+            "お店選び",
+        )
+        is False
+    )
+    assert (
+        backend._ephemeral_answer_addresses_question(
+            "予定", "午後は空いていますか？", "午後は空いていますか？"
+        )
+        is True
+    )
 
 
 def test_t499_reasking_partner_question_only_is_rejected(client):

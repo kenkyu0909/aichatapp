@@ -1559,6 +1559,13 @@ def _same_personal_information_scope(topic: str, requested_text: str, answered_t
     # The answer side is often declarative and therefore cannot be classified as
     # a question. Keep it in the already-established topic and compare detail only.
     answered_scope = _personal_information_scope(topic, answered_text)
+    if topic == "予定":
+        schedule_marker = re.compile(
+            r"予定|空い|都合|午前|午後|何時|曜日|日時|日程|大丈夫|待ち合わせ|"
+            r"\d{1,2}時|月曜|火曜|水曜|木曜|金曜|土曜|日曜|平日|週末|今週|来週"
+        )
+        if schedule_marker.search(requested_text) and not schedule_marker.search(answered_text):
+            return False
     return requested_scope is not None and requested_scope == answered_scope
 
 
@@ -9623,7 +9630,7 @@ def _looks_like_survey_question_label(name: str) -> bool:
     """
     return "・" in name or name.endswith(
         ("方", "派", "頻度", "ペース", "量", "期間", "時間帯", "長さ", "タイミング",
-         "会計", "リード", "性格", "代わり", "好み")
+         "会計", "リード", "性格", "代わり", "好み", "選び")
     )
 
 
