@@ -18127,6 +18127,14 @@ def test_t500_question_is_not_misread_as_partner_information(client):
     assert '本人への質問を相手の情報として受け止めている' in backend._candidate_rejection_reasons(
         choice_misread, choice_question
     )
+    choice_echo = backend.Candidate(label='取り違え', text='猫も犬もどっちも好きなんですね✨')
+    assert '本人への質問を相手の情報として受け止めている' in backend._candidate_rejection_reasons(
+        choice_echo, choice_question
+    )
+    choice_answer = backend.Candidate(label='回答', text='猫が好きです。犬も好きです')
+    assert '本人への質問を相手の情報として受け止めている' not in backend._candidate_rejection_reasons(
+        choice_answer, choice_question
+    )
 
     statement = context('私はお弁当派です')
     reaction = backend.Candidate(label='受け止め', text='お弁当なんですね！')

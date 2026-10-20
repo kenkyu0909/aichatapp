@@ -8969,11 +8969,17 @@ def _question_echo_terms(source: str) -> set[str]:
     terms: set[str] = set()
     for chunk in re.split(r"[・、,\s]+", cleaned):
         for token in re.findall(r"[一-龯ァ-ヶー]{1,}", chunk):
-            if token not in {
+            if token in {
                 "私", "僕", "俺", "何", "今", "今日", "最近", "普段",
                 "好き", "苦手", "得意", "平気", "大丈夫",
             }:
-                terms.add(token)
+                continue
+            terms.add(token)
+            # 「犬派・猫派」のような選択肢は、派・型を外した語でも照合する
+            # （「猫も犬も好きなんですね」のような取り違えを拾う）。
+            base = re.sub(r"[派型系]$", "", token)
+            if base and base != token:
+                terms.add(base)
     return terms
 
 
@@ -9008,7 +9014,10 @@ def _candidate_misreads_user_question_as_partner_info(text: str, context: dict) 
     if not terms:
         return False
     for line in str(text).splitlines():
-        match = re.search(r"^(.*?)(?:なんですね|んですね|ですね)[!！。\s]*$", line.strip())
+        match = re.search(
+            r"^(.*?)(?:なんですね|んですね|ですね)(?:[^\w一-龯ぁ-んァ-ヶー]*)$",
+            line.strip(),
+        )
         if not match:
             continue
         echo = _strip_particles(match.group(1))
