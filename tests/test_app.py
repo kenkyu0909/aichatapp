@@ -18212,6 +18212,50 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     assert backend._candidate_rejection_reasons(relay, context) == []
 
 
+def test_t504_partner_declared_activity_is_not_asked_again(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '学生の頃はテニスをしていました。今は全然していません'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    repeated = backend.Candidate(
+        label='聞き返し', text='テニスをしてたんですね✨\n学生時代はどんな部活やスポーツをしていましたか？'
+    )
+    assert '相手が答えた活動を聞き返している' in backend._candidate_rejection_reasons(repeated, context)
+    fresh = backend.Candidate(
+        label='別角度', text='テニスをしてたんですね✨\n何か体を動かすのは今でも好きなんですか？'
+    )
+    assert backend._candidate_rejection_reasons(fresh, context) == []
+
+
+def test_t504_cat_walk_question_is_rejected(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '私は猫を飼っています。名前はモモです'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    cat_walk = backend.Candidate(
+        label='散歩', text='モモちゃん可愛いですね🐱\n外にお散歩に行ったりするのは好きですか？'
+    )
+    assert '猫に外歩きを尋ねている' in backend._candidate_rejection_reasons(cat_walk, context)
+    cosy = backend.Candidate(label='まったり', text='モモちゃん可愛いですね😊\nお休みの日は一緒にまったり過ごしたりするんですか？')
+    assert backend._candidate_rejection_reasons(cosy, context) == []
+
+
 def test_t503_memo_polarity_word_does_not_answer_another_topic(client):
     _, backend = client
     context = {

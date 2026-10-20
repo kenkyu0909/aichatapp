@@ -9611,6 +9611,55 @@ def _is_duplicate_or_near_identical_to_prior_me(candidate_text: str, prior_me_te
     return False
 
 
+def _repeats_partner_declared_activity(text: str, context: dict) -> bool:
+    """相手が語った過去の活動を、部活・スポーツの聞き返しで蒸し返していないか (T504)."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    declared = any(
+        re.search(
+            r"(?:学生|学生時代|子どもの頃|子供の頃|小さい頃|昔|以前)[^。\n]{0,24}"
+            r"(?:していた|やっていた|していました|やっていました|してた|やってた)",
+            body,
+        )
+        for body in partner_messages
+    )
+    if not declared:
+        return False
+    for line in str(text).splitlines():
+        if not _is_ask_sentence(line):
+            continue
+        if re.search(r"部活|クラブ活動|習い事", line):
+            return True
+        if re.search(r"スポーツ", line) and re.search(r"して|やって|していますか|していましたか", line):
+            return True
+    return False
+
+
+def _asks_pet_walk_about_cat(text: str, context: dict) -> bool:
+    """猫を飼っている相手に、猫の外歩きを尋ねていないか (T504)."""
+    latest = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    if not latest or not re.search(r"猫|ねこ|モモ", latest) or re.search(r"犬|いぬ", latest):
+        return False
+    return bool(
+        re.search(
+            r"(?:お散歩|散歩|外)[^?？\n]{0,14}(?:行き|行く|する|しませんか|するんですか|しますか|好き)",
+            text,
+        )
+    )
+
+
 def _candidate_reuses_prior_me_answer(text: str, context: dict) -> bool:
     """Return True when the candidate repeats an answer the app already sent (T500).
 
@@ -9930,6 +9979,10 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("直前の自分の発言と重複")
     if _candidate_reuses_prior_me_answer(text, context):
         reasons.append("自分の以前の回答を繰り返している")
+    if _repeats_partner_declared_activity(text, context):
+        reasons.append("相手が答えた活動を聞き返している")
+    if _asks_pet_walk_about_cat(text, context):
+        reasons.append("猫に外歩きを尋ねている")
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
     if "、" in text or "。" in text:
