@@ -17793,6 +17793,82 @@ def test_t497_deterministic_fallback_is_softened(client):
     assert "お好き" not in str(recommended.get("text", ""))
 
 
+def test_t498_unset_schedule_gets_a_wait_reply(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "じゃあ土曜の14時に待ち合わせにしましょう"},
+            {"role": "me", "body": "あれ14時じゃなかったでしたっけ？\nもしかして時間が変わったんですか？"},
+            {"role": "them", "body": "まだ確定ではないのですが、予定がずれるかもしれません"},
+        ],
+        "other": {"name": "あき", "description": "札幌の大学に通っています"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "schedule_after_acceptance",
+    }
+    assert backend._partner_schedule_unsetted(context) is True
+    fallback = backend._build_schedule_reask_fallback_candidate(context)
+    assert fallback is not None
+    assert "決まったら教えてください" in fallback.text
+    pressing = backend.Candidate(label="催促", text="何時になったんですか？")
+    assert "未確定と言われた後の時刻の質問" in backend._candidate_rejection_reasons(pressing, context)
+
+
+def test_t498_nodesu_exclamation_is_softened(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo("僕もよく歩くのです！") == "僕もよく歩くんです！"
+
+
+def test_t498_partner_artist_claim_requires_ground(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "音楽はキタニタツヤをよく聴いています"}],
+        "other": {"name": "あき", "description": "学生"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    claiming = backend.Candidate(label="乗っかり", text="キタニタツヤさんの曲いいですよね！\n僕も聴くのでテンション上がりました😊")
+    assert "未確認の本人事実" in backend._candidate_rejection_reasons(claiming, context)
+    neutral = backend.Candidate(label="共感", text="いいですね！\n気になります！")
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(neutral, context)
+
+
+def test_t498_does_not_reask_what_partner_just_answered(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "音楽は満遍なく聴きます"}],
+        "other": {"name": "あき", "description": "学生"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    reasking = backend.Candidate(label="聞き返し", text="いいですね！\n音楽はよく聴くんですか？")
+    assert "相手が直前に答えた内容を聞き返す" in backend._candidate_rejection_reasons(reasking, context)
+
+
+def test_t498_holiday_answer_must_match_the_question(client):
+    _, backend = client
+    question = "休みの日はどんなことをして過ごしますか？"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "other": {"name": "あき", "description": "学生"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [
+            {"question": question, "answer": "休日は散歩やカフェ巡りをして過ごすことが多いです。"},
+        ],
+    }
+    mismatched = backend.Candidate(label="取り違え", text="いいですね！\n公園が大好きです")
+    assert backend._answers_verified_single_partner_question(mismatched, context) is False
+    matched = backend.Candidate(label="一致", text="いいですね！\n休日は散歩やカフェ巡りをして過ごすことが多いです")
+    assert backend._answers_verified_single_partner_question(matched, context) is True
+
+
 
 
 

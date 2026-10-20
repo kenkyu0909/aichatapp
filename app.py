@@ -7063,8 +7063,22 @@ def _schedule_change_pending(context: dict) -> bool:
     return not has_time
 
 
+def _partner_schedule_unsetted(context: dict) -> bool:
+    """相手が日時を未確定だと述べた状態 (T498)."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    return bool(
+        re.search(r"まだ確定ではない|まだ決まって|未定|ずれるかもしれ|変更されるかもしれ", partner_messages[-1])
+    )
+
+
 def _build_schedule_reask_fallback_candidate(context: dict) -> Candidate | None:
-    """日時変更を確認した後、相手が時刻を明示するまで確定させない再確認 (T489)."""
+    """日時変更を確認した後、相手が時刻を明示するまで確定させない再確認 (T489/T498)."""
     if not _schedule_change_pending(context):
         return None
     partner_messages = [
@@ -7074,7 +7088,11 @@ def _build_schedule_reask_fallback_candidate(context: dict) -> Candidate | None:
     ]
     question = partner_messages[-1] if partner_messages else ""
     casual = _fallback_should_use_casual_tone(context, question, "")
-    line = "何時になったの？" if casual else "何時になったんですか？"
+    if _partner_schedule_unsetted(context):
+        # T498: 未確定と言われたら時刻を催促せず、決まったら教えてもらう形にする。
+        line = "決まったら教えてね！" if casual else "決まったら教えてください！"
+    else:
+        line = "何時になったの？" if casual else "何時になったんですか？"
     candidate = Candidate(label="日時の再確認", text=line, reply_move="react")
     if _candidate_rejection_reasons(candidate, context):
         return None
@@ -7535,6 +7553,21 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             # claim, even if the confirmed dish name appears in that sentence.
             return False
         return matched_answer
+    if topic == "休日":
+        # T498: 休日の過ごし方の質問には、その質問への確認済み回答の内容が必要。
+        # アンケートの単語（「公園が大好きです」等）を対象の合わない答えにしない。
+        normalize_holiday = lambda value: re.sub(r"[\s、。，．！!？?]", "", str(value))
+        asked_key = normalize_holiday(question)
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_question = normalize_holiday(str(answer.get("question", "")))
+            if not answer_question:
+                continue
+            if answer_question not in asked_key and asked_key not in answer_question:
+                continue
+            answer_text = normalize_holiday(str(answer.get("answer", "")))
+            if answer_text and answer_text not in normalize_holiday(candidate.text):
+                return False
+            return True
     if topic == "カフェ頻度":
         facts = context.get("my_profile", {}).get("facts", {})
         frequency_evidence = [
@@ -8769,6 +8802,30 @@ def _opening_line_echoes_partner(text: str, context: dict) -> bool:
     return opener_key in _strip_particles(latest)
 
 
+def _repeats_partner_fresh_statement(text: str, context: dict) -> bool:
+    """相手が直前に宣言した好み・頻度を、質問して聞き返しているか (T498)."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    latest = partner_messages[-1].strip()
+    if not latest or re.search(r"[?？]", latest):
+        return False
+    if not re.search(r"よく|満遍なく|たまに|時々|好き|嫌い|苦手|毎日|ほとんど", latest):
+        return False
+    latest_nouns = {noun for noun in re.findall(r"[一-龯ァ-ヶー]{2,}", latest)}
+    for line in text.splitlines():
+        if not _is_ask_sentence(line):
+            continue
+        line_nouns = set(re.findall(r"[一-龯ァ-ヶー]{2,}", line))
+        if line_nouns & latest_nouns and re.search(r"よく|どのくらい|どれくらい|たまに|好き", line):
+            return True
+    return False
+
+
 def _question_repeats_previous_ask(text: str, context: dict) -> bool:
     """True when the question only paraphrases the user's own previous question."""
     prior_me = [
@@ -9312,6 +9369,20 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T492: 直前の自分の発言と同じ時刻で書き出し、相手がその時刻を出していない候補を落とす。
     if _repeats_last_me_time_opening(text, context):
         reasons.append("直近の自分の発言と同じ書き出し")
+    # T498: 相手が日時を未確定と言った直後に時刻を催促する質問は落とす。
+    if _partner_schedule_unsetted(context) and re.search(r"何時|いつになった|いつごろ", text):
+        reasons.append("未確定と言われた後の時刻の質問")
+    # T498: 相手が挙げた固有名詞（アーティスト等）を、根拠なく「僕も聴く／好き」と
+    # 言う候補は落とす（共感は「気になります」程度に）。
+    for proper_noun in re.findall(r"[ァ-ヶー]{3,}", text):
+        if proper_noun not in _trusted_fact_text(context):
+            after = text[text.index(proper_noun) + len(proper_noun):][:10]
+            if re.match(r"(?:さん)?(?:の曲|を聴く|も聴く|も好き|も観る|もよく)", after):
+                reasons.append("未確認の本人事実")
+                break
+    # T498: 相手が直前に答えた内容（好み・頻度の宣言）を聞き返す候補は落とす。
+    if _repeats_partner_fresh_statement(text, context):
+        reasons.append("相手が直前に答えた内容を聞き返す")
     if _candidate_exceeds_mirrored_length(candidate, context):
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
@@ -10400,6 +10471,9 @@ _STIFF_KEIGO_REWRITES = (
     ("ありますね", "ありますよね"),
     ("いきませんか", "行きませんか"),
     ("いきましょう", "行きましょう"),
+    # T498: 「歩くのです！」のような「のです！」は、この距離感では「んです！」が自然。
+    ("のです！", "んです！"),
+    ("のですね！", "んですね！"),
     ("してみましょうか", "しませんか"),
     ("してみますか", "しませんか"),
     ("してみようか", "しませんか"),
