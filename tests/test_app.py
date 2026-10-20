@@ -17603,6 +17603,42 @@ def test_t495_job_conflict_goes_to_needs_review():
     assert any("デスクワーク" in item["text"] for item in needs_review)
 
 
+def test_t495_legacy_name_is_replaced_in_outputs():
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parent.parent / "scripts" / "legacy_extract.py"
+    spec = importlib.util.spec_from_file_location("legacy_extract", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    profile = {"name": "実名太郎", "occupation": "大学院生"}
+    knowledge = [{"question": "q", "answer": "実名太郎について"}]
+    messages = [{"id": 1, "content": "実名太郎は休日に散歩をします"}]
+    replaced_profile = module._replace_name(profile, "実名太郎", "S")
+    assert replaced_profile["name"] == "S"
+    assert "実名太郎" not in json.dumps(module._replace_name(knowledge, "実名太郎", "S"), ensure_ascii=False)
+    assert all("実名太郎" not in item["content"] for item in module._replace_name(messages, "実名太郎", "S"))
+
+
+def test_t495_survey_answers_are_loaded_only_when_explicit(client, tmp_path):
+    _, backend = client
+    path = tmp_path / "survey.json"
+    path.write_text(
+        json.dumps({"answers": [{"question": "甘いものとしょっぱいものどっち派？", "answer": "甘いもの派"}]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    assert backend.load_survey_answers(None) == []
+    assert backend.load_survey_answers(str(tmp_path / "missing.json")) == []
+    loaded = backend.load_survey_answers(str(path))
+    assert loaded == [{"question": "甘いものとしょっぱいものどっち派？", "answer": "甘いもの派"}]
+    assert backend._merged_survey_answers([]) == []
+    monkey_patch = {
+        "question": "甘いものとしょっぱいものどっち派？",
+        "answer": "しょっぱいもの派",
+    }
+    assert backend._merged_survey_answers([monkey_patch]) == [monkey_patch]
+
+
 def test_t495_switch_question_is_the_same_intent(client):
     _, backend = client
     assert backend._question_shares_object_and_intent(

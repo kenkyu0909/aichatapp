@@ -4089,6 +4089,45 @@ def _merge_legacy_facts(profile: dict, legacy_path: str | None) -> dict:
     return base
 
 
+SURVEY_ANSWERS_ENV = "MRA_SURVEY_ANSWERS_PATH"
+
+
+def load_survey_answers(path: str | None) -> list[dict[str, str]]:
+    """選択式アンケートの回答を読み込む（既定では読み込まない）(T495).
+
+    ファイルは {"answers": [{"question": ..., "answer": ...}]} の形を想定し、
+    好み・苦手・どっち派を本人の確認済み回答として扱う。パスは環境変数で明示的に
+    指定するのみで、個人情報はリポジトリに置かない。
+    """
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    answers = data.get("answers") if isinstance(data, dict) else None
+    if not isinstance(answers, list):
+        return []
+    result: list[dict[str, str]] = []
+    for item in answers:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        if question and answer:
+            result.append({"question": question, "answer": answer})
+    return result
+
+
+def _merged_survey_answers(existing: list[dict[str, str]]) -> list[dict[str, str]]:
+    """環境変数が指定されたときだけ、アンケートの回答を確認済み回答に足す (T495)."""
+    loaded = load_survey_answers(os.environ.get(SURVEY_ANSWERS_ENV))
+    if not loaded:
+        return existing
+    return [*existing, *loaded]
+
+
 def _shared_personal_claim_is_grounded(claim: str, trusted_clauses: list[str]) -> bool:
     normalized_claim = re.sub(r"[\s、。！!？?]", "", claim)
     normalized_claim = re.sub(r"(?:でした|ました|ています|てます|です|ます|だ)$", "", normalized_claim)
@@ -6154,6 +6193,8 @@ def build_context(data: GenerateInput) -> dict:
     session_answers = load_session_answers(data.match_id, data.clarification_session_id)
     # T494: 明示的に指定されたときだけ、旧アプリから抽出した本人事実を確定事実へ足す。
     profile = _merge_legacy_facts(profile, os.environ.get(LEGACY_FACTS_ENV))
+    # T495: 選択式アンケートの回答も、明示的に指定されたときだけ確定回答に足す。
+    session_answers = _merged_survey_answers(session_answers)
     return {
         "mode": data.mode,
         "my_profile": profile,

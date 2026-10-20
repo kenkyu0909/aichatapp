@@ -52,6 +52,22 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", str(text)).strip()
 
 
+def _replace_name(value: object, real_name: str, display_name: str) -> object:
+    """出力に含まれる本名を置き換える (T495).
+
+    リポジトリは PUBLIC のため、出力（JSON/MD/HTML）には実名を残さない。
+    """
+    if not real_name:
+        return value
+    if isinstance(value, str):
+        return value.replace(real_name, display_name)
+    if isinstance(value, list):
+        return [_replace_name(item, real_name, display_name) for item in value]
+    if isinstance(value, dict):
+        return {key: _replace_name(item, real_name, display_name) for key, item in value.items()}
+    return value
+
+
 def _read_legacy(db_path: str) -> tuple[dict, list[dict], list[dict]]:
     uri = Path(db_path).resolve().as_uri() + "?mode=ro"
     con = sqlite3.connect(uri, uri=True)
@@ -238,9 +254,20 @@ def main() -> int:
     parser.add_argument("--out-md", required=True, help="output Markdown path")
     parser.add_argument("--out-html", default="", help="output HTML review path")
     parser.add_argument("--max-per-category", type=int, default=12)
+    parser.add_argument(
+        "--replace-name",
+        default="",
+        help="本名を出力に残さないための置き換え名（例: S）。指定すると user_profile の名前を実名として置換する",
+    )
     args = parser.parse_args()
 
     profile_row, knowledge, messages = _read_legacy(args.db)
+    real_name = str((profile_row.get("name") or "")).strip()
+    if args.replace_name and real_name:
+        # T495: 実名を出力に残さない。読み込み直後に置換してから抽出する。
+        profile_row = _replace_name(profile_row, real_name, args.replace_name)
+        knowledge = _replace_name(knowledge, real_name, args.replace_name)
+        messages = _replace_name(messages, real_name, args.replace_name)
     profile = _profile_facts(profile_row)
     facts, needs_review = _extract_message_facts(messages, args.max_per_category, profile.get("occupation", ""))
 
