@@ -9034,7 +9034,10 @@ def _repeats_partner_fresh_statement(text: str, context: dict) -> bool:
             statement = line.strip()
             if not statement or re.search(r"[?？]", statement):
                 continue
-            if re.search(r"よく|満遍なく|たまに|時々|好き|嫌い|苦手|毎日|ほとんど|多い|頻繁", statement):
+            if re.search(
+                r"よく|満遍なく|たまに|時々|好き|嫌い|苦手|毎日|ほとんど|多い|頻繁|週末|平日|普段|いつも|日課",
+                statement,
+            ):
                 statements.append(statement)
     if not statements:
         return False

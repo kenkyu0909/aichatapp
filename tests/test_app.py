@@ -18214,6 +18214,29 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     assert backend._candidate_is_verified_answer_relay(relay.text, context) is True
 
 
+def test_t506_partner_routine_topic_is_not_asked_again(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'them', 'body': '週末は近所の公園を散歩しています。体を動かすのは気持ちいいですね'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    repeated = backend.Candidate(
+        label='再質問', text='公園の散歩気持ちいいですよね✨\n近くでよく行くお気に入りの公園とかあるんですか？'
+    )
+    assert '相手が直前に答えた内容を聞き返す' in backend._candidate_rejection_reasons(repeated, context)
+    fresh = backend.Candidate(
+        label='別角度', text='公園の散歩気持ちいいですよね✨\nどんなコースを歩くことが多いんですか？'
+    )
+    assert backend._candidate_rejection_reasons(fresh, context) == []
+
+
 def test_t504_partner_declared_activity_is_not_asked_again(client):
     _, backend = client
     context = {
