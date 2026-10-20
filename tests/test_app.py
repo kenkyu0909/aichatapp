@@ -1,6 +1,7 @@
 """Offline behavior and privacy checks; never contact Gemini."""
 import importlib.util
 import json
+import os
 import struct
 import sys
 import zlib
@@ -17690,6 +17691,59 @@ def test_t495_topic_change_fallback_adds_a_connector(client):
     assert candidate is not None
     assert "ちなみに" in candidate.text
     assert "映画" in candidate.text
+
+
+def test_t496_answer_type_matches_the_question_shape(client):
+    _, backend = client
+    assert not backend._answer_type_matches_question("住んでいる地域はどんなところですか？", "はい好きです")
+    assert not backend._answer_type_matches_question("住んでいる地域はどんなところですか？", "大好き")
+    assert backend._answer_type_matches_question("住んでいる地域はどんなところですか？", "札幌に住んでます")
+    assert backend._answer_type_matches_question("甘いものは好きですか？", "はい")
+
+
+def test_t496_field_name_in_candidate_is_rejected(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "甘いものは好きですか？"}],
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend.Candidate(label="生データ", text="profile: 甘いものが好きです")
+    assert "項目名がそのまま出ている" in backend._candidate_rejection_reasons(candidate, context)
+
+
+def test_t496_survey_rating_becomes_a_natural_sentence(client, tmp_path):
+    _, backend = client
+    path = tmp_path / "survey.json"
+    path.write_text(
+        json.dumps({"ratings": {"食べ物": {"甘いもの": "大好き"}}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkey_patch = {"question": "甘いもの", "answer": "大好き"}
+    os.environ["MRA_SURVEY_ANSWERS_PATH"] = str(path)
+    try:
+        merged = backend._merged_survey_answers([monkey_patch])
+    finally:
+        os.environ.pop("MRA_SURVEY_ANSWERS_PATH", None)
+    assert {"question": "甘いもの", "answer": "甘いものが大好きです"} in merged
+
+
+def test_t496_partner_job_is_not_guessed_from_hobby(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "カフェ巡りが好きなんです。そちらのお仕事は何をされていますか？"}],
+        "other": {"name": "黒川いつき", "description": "カフェ巡りが好きです"},
+        "my_profile": {"facts": {"name": "水野そよか", "occupation": "大学院生"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    candidate = backend._build_verified_profile_fact_fallback_candidate(context)
+    assert candidate is not None
+    assert "カフェのお仕事" not in candidate.text
 
 
 

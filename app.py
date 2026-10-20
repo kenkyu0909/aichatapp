@@ -4139,10 +4139,32 @@ def load_survey_answers(path: str | None) -> list[dict[str, str]]:
     return result
 
 
+def _natural_survey_answer(question: str, answer: str) -> str:
+    """アンケートの評価語を自然な一文に変換する (T496).
+
+    「大好き」「好き」「苦手」などの評価語や「猫」のような一語を、そのまま
+    答えにしない。「甘いものが大好きです」のような文にしてから使う。
+    """
+    if not question:
+        return answer
+    if answer in ("大好き", "好き"):
+        return f"{question}が大好きです" if answer == "大好き" else f"{question}が好きです"
+    if answer == "苦手":
+        return f"{question}は苦手です"
+    if answer == "経験なし":
+        return f"{question}は未経験です"
+    if "派" in answer or "型" in answer or "ほう" in answer:
+        return f"{question}は{answer}のほうです"
+    return f"{question}は{answer}です"
+
+
 def _merged_survey_answers(existing: list[dict[str, str]]) -> list[dict[str, str]]:
     """環境変数が指定されたときだけ、アンケートの回答を確認済み回答に足す (T495)."""
     loaded = [
-        item
+        {
+            "question": item.get("question", ""),
+            "answer": _natural_survey_answer(item.get("question", ""), item.get("answer", "")),
+        }
         for item in load_survey_answers(os.environ.get(SURVEY_ANSWERS_ENV))
         if item.get("question")
     ]
@@ -7091,6 +7113,27 @@ def _build_schedule_confirmation_fallback_candidate(context: dict) -> Candidate 
     return candidate
 
 
+_BARE_RATING_ANSWER = re.compile(r"^(?:はい|いいえ|うん|大好き|好き|苦手|普通)[^一-龯ぁ-ん]{0,3}$")
+
+
+def _answer_type_matches_question(question: str, answer: str) -> bool:
+    """質問の型（WH／はい・いいえ）と答えの中身が合うか (T496).
+
+    「どんな」「何」「どちら」「どこ」「いつ」には中身で答える必要があり、
+    「はい好きです」のような極性の返しや評価語だけでは答えにならない。
+    """
+    answer = re.sub(r"[\s　。！!]", "", str(answer))
+    if not answer:
+        return False
+    if not re.search(r"どんな|何|なに|どちら|どっち|どこ|いつ|だれ|誰|どういう", question):
+        return True
+    if _BARE_RATING_ANSWER.match(answer):
+        return False
+    if re.match(r"^(?:はい|いいえ|うん)", answer) and len(answer) <= 8:
+        return False
+    return len(answer) >= 4
+
+
 def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
     """話題転換の指示に沿う短い候補を合成する (T493).
 
@@ -9246,6 +9289,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
         reasons.append("未完成プレースホルダー")
+    # T496: 「profile: 甘いもの…」のように項目名がそのまま出た候補は棄却する。
+    if re.search(r"\b(?:profile|memo|occupation|hobbies|my_info|speaking_style|gender|age)\s*[:：]", text):
+        reasons.append("項目名がそのまま出ている")
     if _candidate_refers_to_self_with_honorific(text, context):
         reasons.append("本人の名前を三人称呼称")
     if context.get("mode") == "first":
@@ -9840,6 +9886,10 @@ def _compose_answer_relay_candidate(
     clean_answer = "\n".join(_answer_lines_for_candidate(raw_answer))
     if not clean_answer:
         return None
+    # T496: 「どんな」「何」「どちら」の質問に「はい好きです」のような極性や
+    # 評価語だけで答える型の不一致は、リレーを作らず本人確認へ回す。
+    if not _answer_type_matches_question(question, clean_answer):
+        return None
     compound_parts = _compound_direct_personal_question_parts(question)
     if len(compound_parts) == 1:
         question = compound_parts[0][1]
@@ -10052,9 +10102,19 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
             norm_job = _normalize_occupation_label(known_occupations[0])
             line1 = f"{norm_job}をしています"
             work_label = "お仕事"
+            # T496: 相手の職業は、職業欄や勤務を示す表現からだけ決める。趣味の
+            # ながら見（「カフェ巡りが好き」）を職業と決めつけない。
+            occupation_context = other_job
+            if not occupation_context:
+                occupation_context_match = re.search(
+                    r"[一-龯]{0,8}(?:書店|本屋|カフェ|喫茶店|パン屋|花屋)(?:で働いて|で勤務|の店員|店員|でアルバイト|スタッフ)",
+                    other_desc,
+                )
+                if occupation_context_match:
+                    occupation_context = occupation_context_match.group(0)
             work_match = re.search(
-                r"(?:中野で|都内で|街で)?(書店|本屋|カフェ|保育士|看護師|エンジニア|事務|営業|教員|パン屋|花屋)",
-                other_desc + " " + other_job,
+                r"(書店|本屋|カフェ|喫茶店|保育士|看護師|エンジニア|事務|営業|教員|パン屋|花屋)",
+                occupation_context,
             )
             if work_match:
                 matched_kw = work_match.group(1)
