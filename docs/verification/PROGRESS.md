@@ -2384,3 +2384,10 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T507（`ea504c9`）**: 相手が「普段は昼休みに友達とご飯に行きます。そちらはお弁当ですか？」と外食を述べた直後に、相手へ「普段はどんなお弁当を作ってるんですか？」と振る候補を「相手の外食の話と食い違うお弁当の質問」で棄却（`_asks_partner_bento_after_eating_out`）。相槌と本文の区切りなし連結の検出に「分かります」を追加。回帰2件。全pytest（Firefox UI除く）2048 passed。
 - **引き継ぎ**: 別PCで継続するため `docs/verification/HANDOFF_DS4.md` を作成（ブランチ/到達点/テスト手順/20通ハーネスの場所/リポジトリへ入れない個人情報/制約/T508候補）。実会話HTML/JSONと `会話テスト\data\`、APIキーはPUBLICリポジトリへ入れず、別PCへは私的にコピーする。
 - **次の作業（T508候補）**: 相手の状況と食い違う質問の一般化、相槌連結の残り、未確認の具体名を前提にした質問の点検、t505以降の20通再走行と代表更新。
+
+### 2026-10-21 T508（相手の状況と食い違う質問の一般化）
+
+- **T508（`5bfc4f0`）**: T507 のお弁当×外食の1パターンを一般化し、`PARTNER_PREMISE_CONFLICT_RULES`（相手の状況・両立しない質問の語・棄却理由の表）と `_partner_premise_conflict_reasons` を追加した。相手が直前に述べた状況と両立しない前提を置く**質問行だけ**を棄却理由へ追加する。表は3件：(1) お弁当×外食（T507 の理由文「相手の外食の話と食い違うお弁当の質問」をそのまま維持し、`_asks_partner_bento_after_eating_out` は同関数を見る薄いラッパーへ変更）、(2) 通勤・満員電車・出社×在宅勤務/テレワーク/リモートワーク/家で作業、(3) 家族・両親との同居・実家から通う×一人暮らし。質問文の判定には既存の `_is_ask_sentence` を使うため、本人の回答や相槌の行（相手の「そちらはお弁当ですか？」への「お弁当のことが多いです」等）は対象外で、回答の自然さを損なわない。
+- **回帰**: `test_t508_remote_worker_is_not_asked_about_commute`・`test_t508_partner_living_alone_is_not_asked_about_family` を追加。修正前は両方FAIL（`-k t508` で `2 failed`）、修正後は `-k "t508 or t507 or t506 or t504"` で 7 passed。T506/T507 の既存回帰も同時にPASS。
+- **テスト**: 全pytest（Firefox UI を除く）**2050 passed / 0 failed** in 108.68s（2048＋新規2件）。`python -m py_compile app.py`・`node --check app.js`・`git diff --check` すべてPASS。Firefox UI は `tests/test_ui_firefox.py` を T508 変更後に単独実行して **29 passed** in 461.89s（変更前の実行も 29 passed）。GitHub Actions は `5bfc4f0` の Push（`39515072249`）と Pull request（`39515076202`）がいずれも success。
+- **次の作業（T509候補）**: 相槌と本文の連結の残り（「分かります」以外の相槌語）、未確認の具体名（サービス名・店名）を質問の前提に置く候補の点検、t505以降（T506/T507/T508 を含む）の20通再走行と代表HTML更新。実Geminiの接続が 503/504 で不安定なため、再走行は接続回復後に実施する。
