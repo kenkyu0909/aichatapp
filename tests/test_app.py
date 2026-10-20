@@ -18143,6 +18143,70 @@ def test_t500_question_is_not_misread_as_partner_information(client):
     )
 
 
+def test_t501_partner_answered_topic_is_not_asked_again(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {
+                'role': 'them',
+                'body': 'はじめまして。北海道の大学に通っています。休みは家で映画を観ることが多いです',
+            },
+            {'role': 'me', 'body': '映画が好きなんですね！\n最近観た作品はありますか？'},
+            {
+                'role': 'them',
+                'body': '週末は近所の公園を散歩しています。体を動かすのは気持ちいいですね',
+            },
+        ],
+        'other': {'name': '架空あき', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'ephemeral_user_answers': [],
+    }
+    repeat = backend.Candidate(
+        label='既出', text='お家では映画を観ることが多いんですか？'
+    )
+    assert '相手が直前に答えた内容を聞き返す' in backend._candidate_rejection_reasons(
+        repeat, context
+    )
+    new_angle = backend.Candidate(
+        label='別の観点', text='どんな映画を観ることが多いんですか？'
+    )
+    assert '相手が直前に答えた内容を聞き返す' not in backend._candidate_rejection_reasons(
+        new_angle, context
+    )
+
+
+def test_t501_pet_ownership_implication_is_rejected(client):
+    _, backend = client
+
+    def context(facts):
+        return {
+            'mode': 'reply',
+            'history': [
+                {'role': 'them', 'body': '犬派・猫派で言うと、そちらはどっちですか？'},
+                {'role': 'them', 'body': '私は猫を飼っています。名前はモモです'},
+            ],
+            'other': {'name': '架空あき', 'description': '21歳北海道'},
+            'my_profile': {'facts': facts, 'avoid': []},
+            'reply_preferences': {'tone': '敬語'},
+            'ephemeral_user_answers': [],
+        }
+
+    implied = backend.Candidate(
+        label='含み', text='猫派ですー🐈\n実家でも癒やされてます笑'
+    )
+    assert '未確認の本人事実' in backend._candidate_rejection_reasons(
+        implied, context({'name': 'S', 'memo': '実家も札幌でよく帰る。猫派だけど犬も好き。'})
+    )
+    grounded = backend.Candidate(
+        label='根拠あり', text='猫派ですー🐈\n実家の猫に癒やされてます'
+    )
+    assert '未確認の本人事実' not in backend._candidate_rejection_reasons(
+        grounded, context({'name': 'S', 'pet': '実家で猫を飼っています'})
+    )
+
+
 def test_t500_prior_answer_is_not_repeated(client):
     _, backend = client
 

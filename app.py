@@ -5614,6 +5614,16 @@ def _latest_pet_claim_signatures(
 
 
 def _has_unverified_pet_claim(text: str, context: dict) -> bool:
+    # T501: 動物名を出さずに「実家でも癒やされてます」と書く候補は、
+    # 実家でペットを飼っている前提を足している。根拠が無ければ棄却する。
+    implication = re.compile(
+        r"(?:実家|うち)[^。\n]{0,10}(?:猫|犬|ペット|癒や|もふもふ)|"
+        r"(?:実家|うち|家)の(?:猫|犬|ペット)"
+    )
+    if implication.search(text) and not any(
+        implication.search(clause) for clause in _trusted_fact_clauses(context)
+    ):
+        return True
     claims = _pet_claim_signatures(text, context)
     if not claims:
         return False
@@ -8899,7 +8909,12 @@ def _opening_line_echoes_partner(text: str, context: dict) -> bool:
 
 
 def _repeats_partner_fresh_statement(text: str, context: dict) -> bool:
-    """相手が直前に宣言した好み・頻度を、質問して聞き返しているか (T498)."""
+    """相手が既に宣言した好み・頻度を、質問して聞き返しているか (T498/T501).
+
+    直近1通だけでなく会話中の相手の宣言文を対象にする（T501: 前半で答えた
+    「休みは家で映画を観ることが多い」を後半で聞き返すケース）。
+    新しい観点（どんな・何・どこ等）を足す質問は対象外にする。
+    """
     partner_messages = [
         str(message.get("body", ""))
         for message in context.get("history", [])
@@ -8907,18 +8922,30 @@ def _repeats_partner_fresh_statement(text: str, context: dict) -> bool:
     ]
     if not partner_messages:
         return False
-    latest = partner_messages[-1].strip()
-    if not latest or re.search(r"[?？]", latest):
+    statements: list[str] = []
+    for body in partner_messages:
+        for line in body.splitlines():
+            statement = line.strip()
+            if not statement or re.search(r"[?？]", statement):
+                continue
+            if re.search(r"よく|満遍なく|たまに|時々|好き|嫌い|苦手|毎日|ほとんど|多い|頻繁", statement):
+                statements.append(statement)
+    if not statements:
         return False
-    if not re.search(r"よく|満遍なく|たまに|時々|好き|嫌い|苦手|毎日|ほとんど", latest):
-        return False
-    latest_nouns = {noun for noun in re.findall(r"[一-龯ァ-ヶー]{2,}", latest)}
-    for line in text.splitlines():
+    for line in str(text).splitlines():
         if not _is_ask_sentence(line):
             continue
+        if re.search(r"どんな|何|どこ|いつ|なぜ|どう|どれ|どの", line):
+            continue
         line_nouns = set(re.findall(r"[一-龯ァ-ヶー]{2,}", line))
-        if line_nouns & latest_nouns and re.search(r"よく|どのくらい|どれくらい|たまに|好き", line):
-            return True
+        if not line_nouns:
+            continue
+        for statement in statements:
+            statement_nouns = set(re.findall(r"[一-龯ァ-ヶー]{2,}", statement))
+            if not line_nouns & statement_nouns:
+                continue
+            if re.search(r"よく|どのくらい|どれくらい|たまに|好き|多い", line):
+                return True
     return False
 
 
