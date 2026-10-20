@@ -18139,6 +18139,12 @@ def test_t500_respectful_past_tense_is_softened(client):
     _, backend = client
     softened = backend._soften_stiff_keigo('テニスをされていたんですね')
     assert softened == 'テニスをしてたんですね'
+    assert (
+        backend._soften_stiff_keigo('ちなみにテニスをされていた頃はどんな大会に出ていたんですか？')
+        == 'ちなみにテニスをしてた頃はどんな大会に出ていたんですか？'
+    )
+    assert backend.candidate_has_high_confidence_japanese_error('こさんは方はよくするんですか？')
+    assert not backend.candidate_has_high_confidence_japanese_error('こさんはスポーツはよくするんですか？')
 
 
 def test_t500_blocked_nameless_question_asks_the_user(client, monkeypatch):
