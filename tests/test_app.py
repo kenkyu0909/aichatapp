@@ -18207,8 +18207,103 @@ def test_t501_invitation_refusal_relay_is_kept(client):
     relay = backend._build_answered_question_fallback_candidate(context)
     assert relay is not None
     assert 'やめておきます' in relay.text
-    assert 'ぜひ' not in relay.text
+    assert 'また札幌で何かあればぜひ行きたいです' in relay.text
+    assert '行きましょう' not in relay.text
     assert backend._candidate_rejection_reasons(relay, context) == []
+
+
+def test_t502_direct_question_to_user_must_be_answered(client):
+    _, backend = client
+    profile = {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []}
+
+    def context(them: str, answer: str | None = None, ask: str | None = None):
+        item = {
+            'mode': 'reply',
+            'history': [
+                {'role': 'me', 'body': '前のメッセージです'},
+                {'role': 'them', 'body': them},
+            ],
+            'other': {'name': 'こ', 'description': '21歳北海道'},
+            'my_profile': profile,
+            'reply_preferences': {'tone': '敬語'},
+            'session_answers': [],
+            'ephemeral_user_answers': [],
+        }
+        if answer:
+            item['ephemeral_user_answers'].append(
+                {'question': ask or f'相手の「{them}」にどう答えたいか教えてください', 'answer': answer}
+            )
+        return item
+
+    # (1) 本人の話のあとに続くはい/いいえの直接質問（朝は苦手ですか？）。
+    morning = context('朝は苦手ですか？私は休みの日は昼まで寝てしまいます')
+    assert backend.missing_personal_fact_question(morning) is not None
+    evasive = backend.Candidate(
+        label='相槌のみ',
+        text='休日は昼までゆっくりするのも気持ちがいいですよね！\n映画以外におうち時間はどんなことをして過ごしてるんですか？',
+    )
+    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive, morning)
+    answered_morning = context(
+        '朝は苦手ですか？私は休みの日は昼まで寝てしまいます',
+        '朝は苦手です。休みの日はゆっくり起きます。',
+    )
+    assert backend.missing_personal_fact_question(answered_morning) is None
+
+    # (2) 選択肢を前の文に置く二択（犬派・猫派 → そちらはどっちですか？）。
+    pet = context('犬派・猫派で言うと、そちらはどっちですか？', '猫が好きです。犬も好きです。')
+    evasive_pet = backend.Candidate(label='共感のみ', text='猫も可愛いですよね✨\n動物は他にも好きなものってありますか？')
+    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive_pet, pet)
+    relay_pet = backend.Candidate(label='回答', text='猫が好きです\n犬も好きです')
+    assert backend._candidate_rejection_reasons(relay_pet, pet) == []
+
+    # (3) 本人の勧めを尋ねる質問（おすすめのお店は？）。
+    shop = context('札幌ならおすすめのお店とかありますか？')
+    assert backend.missing_personal_fact_question(shop) is not None
+    evasive_shop = backend.Candidate(
+        label='聞き返しのみ',
+        text='札幌だと美味しいお店がたくさんありますよね✨\nこさんは普段どんなジャンルを食べに行くことが多いんですか？',
+    )
+    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive_shop, shop)
+    answered_shop = context('札幌ならおすすめのお店とかありますか？', 'すすきののお寿司屋さんがおすすめです。')
+    relay_shop = backend.Candidate(label='回答', text='すすきののお寿司屋さんがおすすめです')
+    assert backend._candidate_rejection_reasons(relay_shop, answered_shop) == []
+
+
+def test_t502_local_plan_willingness_is_confirmed(client):
+    _, backend = client
+    context = {
+        'mode': 'reply',
+        'history': [
+            {'role': 'me', 'body': '東京はさすがに遠いので今回はやめておきます'},
+            {'role': 'them', 'body': 'もし札幌でイベントがあったら、そのときは一緒に行きたいです'},
+        ],
+        'other': {'name': 'こ', 'description': '21歳北海道'},
+        'my_profile': {'facts': {'name': 'S', 'area': '北海道札幌市'}, 'avoid': []},
+        'reply_preferences': {'tone': '敬語'},
+        'session_answers': [],
+        'ephemeral_user_answers': [],
+    }
+    question = backend.missing_personal_fact_question(context)
+    assert question is not None
+    assert '札幌' in question.question
+    confirmed = {
+        **context,
+        'ephemeral_user_answers': [
+            {
+                'question': f'相手の「もし札幌でイベントがあったら、そのときは一緒に行きたいです」にどう返したいか教えてください',
+                'answer': '札幌ならぜひ行きたいです！',
+            }
+        ],
+    }
+    relay = backend._build_answered_question_fallback_candidate(confirmed)
+    assert relay is not None
+    assert relay.text.splitlines()[0] == '札幌ならぜひ行きたいです'
+
+
+def test_t502_stiff_humble_keigo_is_rewritten(client):
+    _, backend = client
+    assert backend._soften_stiff_keigo('そう言っていただけて安心しました😊') == 'そう言ってもらえて安心しました😊'
+    assert backend._soften_stiff_keigo('教えていただきありがとうございます') == '教えてくれてありがとうございます'
 
 
 def test_t501_partner_answered_topic_is_not_asked_again(client):

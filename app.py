@@ -2462,6 +2462,24 @@ def _user_name_tokens(context: dict) -> list[str]:
     return sorted(token for token in tokens if len(token) >= 2)
 
 
+def _local_plan_willingness_sentence(context: dict) -> str:
+    """近場での再提案（「札幌でイベントがあったら一緒に行きたいです」）を返す (T502)."""
+    latest = next(
+        (
+            str(message.get("body", ""))
+            for message in reversed(context.get("history", []))
+            if message.get("role") == "them"
+        ),
+        "",
+    )
+    if not latest or not re.search(r"一緒に行きたい|いっしょに行きたい", latest):
+        return ""
+    label = _user_city_label(context)
+    if not label or label not in latest:
+        return ""
+    return latest.strip()[:180]
+
+
 def _partner_trailing_direct_question(context: dict) -> str:
     """Return the partner's last question when it asks the user about themselves.
 
@@ -2474,6 +2492,11 @@ def _partner_trailing_direct_question(context: dict) -> str:
     ]
     if not messages:
         return ""
+    # T502: 近場での再提案（「もし札幌でイベントがあったら一緒に行きたいです」）は
+    # 質問形でなくても、前向きな返事を確認する対象にする。
+    willingness = _local_plan_willingness_sentence(context)
+    if willingness:
+        return willingness
     focus = _last_question_sentence(messages[-1]) or messages[-1]
     if not _is_ask_sentence(focus):
         return ""
@@ -2608,6 +2631,13 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
             question=far_question,
             purpose="相手の誘いが本人の居住地域から遠いため、承諾する前に本人へ確認します",
         )
+    # T502: 近場での再提案には前向きな返事を本人へ確認する。
+    local_willingness = _local_plan_willingness_sentence(context)
+    if local_willingness and not _answers_for_partner_question(context):
+        return UserQuestion(
+            question=f"相手の「{local_willingness}」にどう返したいか教えてください",
+            purpose="近くでの誘いへの本人の意思を確認します",
+        )
     if _is_concrete_date_or_place_proposal(last_partner_msg):
         quoted_proposal = last_partner_msg.strip().replace("\n", " ")[:180]
         norm_quoted_proposal = re.sub(r"[\s　、。，．！!？?「」『』]", "", quoted_proposal)
@@ -2631,9 +2661,41 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     if question_parts:
         return None
     question_text = last_partner_msg
+    focus_text = _last_question_sentence(last_partner_msg)
     topic = _topic_for_personal_question(question_text)
     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
         return _negative_binary_question_clarification(partner_messages[-1])
+    # T502: 「札幌ならおすすめのお店とかありますか？」のような勧めの質問は、話題が
+    # 確認済みでも具体的な回答が必要なので本人へ確認する。
+    if (
+        _is_unanswered_sensitive_question(focus_text)
+        and _unclassified_personal_question_user_answer(context, focus_text) is None
+        and _memo_answer_sentence(focus_text, context) is None
+    ):
+        quoted_question = focus_text.strip().replace("\n", " ")[:180]
+        return UserQuestion(
+            question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
+            purpose="直接質問への本人の回答が未確認のため確認します",
+        )
+    # T502: 本人の話のあとに直接質問が続く文（「朝は苦手ですか？私は…」）でも、
+    # 末尾の質問を取り出して本人へ確認する。
+    if (
+        not topic
+        and _is_unclassified_direct_question(focus_text)
+        and _is_unclassified_question_about_user(focus_text)
+        and _unclassified_personal_question_user_answer(context, focus_text) is None
+        and _memo_answer_sentence(focus_text, context) is None
+    ):
+        quoted_question = focus_text.strip().replace("\n", " ")[:180]
+        if INVITATION_PATTERN.search(focus_text):
+            return UserQuestion(
+                question=f"相手の「{quoted_question}」にどう返したいか教えてください",
+                purpose="相手からの誘いへの本人の意思を確認します",
+            )
+        return UserQuestion(
+            question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
+            purpose="直接質問への本人の回答が未確認のため確認します",
+        )
     if not topic and _is_unclassified_direct_question(question_text) and _is_unclassified_question_about_user(question_text):
         if (
             _unclassified_personal_question_user_answer(context) is not None
@@ -7542,6 +7604,19 @@ def _candidate_asserts_viewing_of_title(candidate_text: str, title: str) -> bool
     return False
 
 
+def _is_unanswered_sensitive_question(text: str) -> bool:
+    """T502: 回答が必須の直接質問（本人の選択・勧め）かどうか。
+
+    既存のトピック別検査に任せる質問は対象にしない。二択の選択（「そちらは
+    どっちですか？」）と勧め（「おすすめのお店は？」）だけを狭く扱う。
+    """
+    if re.search(r"おすすめ|お勧め", text) and re.search(
+        r"店|お店|場所|スポット|エリア|ところ|所|グルメ", text
+    ):
+        return True
+    return bool(re.search(r"^(?:そちら|そっち|あなた|君|きみ)[^?？\n]{0,14}(?:どっち|どちら|どれ)", text))
+
+
 def _answers_verified_single_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
@@ -7557,12 +7632,29 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
     question = partner_messages[-1]
     if _negative_binary_question_has_ambiguous_answer(context, question):
         return False
+    whole_topic = _topic_for_personal_question(question)
     focus = _last_question_sentence(question)
-    if focus != question.strip() and _answers_verified_single_partner_question(
-        candidate, _replace_last_partner_body(context, focus)
-    ):
-        return True
-    topic = _topic_for_personal_question(question)
+    if focus != question.strip():
+        if _answers_verified_single_partner_question(
+            candidate, _replace_last_partner_body(context, focus)
+        ):
+            return True
+        # T502: 本文全体にトピック別検査が無く、末尾の一文だけが本人の選択・勧め
+        # や未知の直接質問なら、その答えを最初の1〜2行に含める。共感や聞き返し
+        # だけで済ませない。
+        if whole_topic is None and (
+            _is_unanswered_sensitive_question(focus)
+            or (
+                _is_unclassified_direct_question(focus)
+                and _is_unclassified_question_about_user(focus)
+            )
+        ):
+            return _confirmed_answer_reflected_in_candidate(focus, candidate, context)
+    if _is_unanswered_sensitive_question(question):
+        # T502: 相手が本人の選択や勧めを尋ねているときは、確認済みの回答を伝える
+        # か本人確認へ回す。話題の言い換えや聞き返しだけで済ませない。
+        return _confirmed_answer_reflected_in_candidate(question, candidate, context)
+    topic = whole_topic
     if not topic:
         if _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):
             # Unknown WH questions need an explicit answer: the confirmed dialog
@@ -8291,6 +8383,10 @@ def _is_unclassified_question_about_user(text: str) -> bool:
     ):
         return True
     if re.search(r"(?:なら|だったら|では)(?:どっち|どちら|どれ)", question):
+        return True
+    # T502: 「犬派・猫派で言うと、そちらはどっちですか？」のように選択肢を前の
+    # 文に置く二択も、相手の話ではなく本人への直接質問として扱う。
+    if re.search(r"^(?:そちら|そっち|あなた|君|きみ)[^?？\n]{0,14}(?:どっち|どちら|どれ)", question):
         return True
     # T499: 「朝は苦手ですか？」のような、主題＋好み/得手不得手の単純な
     # はい/いいえ質問も本人への直接質問として確認する。
@@ -9341,7 +9437,8 @@ def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
 
 _ANSWER_RELAY_TEMPLATE_LINE = re.compile(
     r"^(?:いいですね|ぜひ行きましょ|ぜひ行きましょう|そうなんですね|そうなんだ|うれしいです|うれしいな|"
-    r"ありがとうございます|ありがとう|そちらは|そっちは|.{1,8}さんはどう)"
+    r"ありがとうございます|ありがとう|そちらは|そっちは|.{1,8}さんはどう|"
+    r"また.{0,8}で何かあればぜひ行きたいです|また機会があればぜひ行きたいです)"
 )
 
 
@@ -9695,6 +9792,25 @@ def _user_area_label(context: dict) -> str:
         value = facts.get(key)
         if value:
             return str(value).strip()[:40]
+    return ""
+
+
+def _user_city_label(context: dict) -> str:
+    """本人の居住地から市名ラベル（例：札幌）を取り出す (T502)."""
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    residence = ""
+    for key in ("residence", "area", "居住地", "region", "location", "address", "住所"):
+        value = facts.get(key)
+        if value:
+            residence = str(value).strip()
+            break
+    if not residence:
+        return ""
+    for region, aliases in _REGION_ALIASES.items():
+        matches = [alias for alias in aliases if alias in residence]
+        if matches:
+            cities = [alias for alias in matches if alias != region]
+            return (cities or matches)[-1]
     return ""
 
 
@@ -10536,7 +10652,16 @@ def _compose_answer_relay_candidate(
             re.search(r"やめておき|遠いので|行けません|行けな|難しいです|またの機会|別の機会|今度にします|控えます|見送り", clean_answer)
         )
         if declines_invite:
-            candidate_text = "\n".join(part for part in (clean_answer, followup) if part)
+            # T502: 断りで終わらせず、前向きな一言を添える。
+            goodwill = ""
+            if not re.search(r"また|別の機会|今度|機会があれば|行きたい", clean_answer):
+                place = _user_city_label(context)
+                goodwill = (
+                    f"また{place}で何かあればぜひ行きたいです！"
+                    if place
+                    else "また機会があればぜひ行きたいです！"
+                )
+            candidate_text = "\n".join(part for part in (clean_answer, goodwill, followup) if part)
         else:
             accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
             candidate_text = "\n".join(part for part in ("いいですね！", accept_line, clean_answer, followup) if part)
@@ -10941,6 +11066,12 @@ _STIFF_KEIGO_REWRITES = (
     # T499: 謙譲語の残り（「教えていただき」→「教えてくれて」）。
     ("教えていただきありがとうございます", "教えてくれてありがとうございます"),
     ("教えていただき、ありがとうございます", "教えてくれてありがとうございます"),
+    # T502: 「そう言っていただけて」のような していただく を普通の形へ戻す。
+    ("言っていただけて", "言ってもらえて"),
+    ("言っていただき", "言ってもらって"),
+    ("言っていただける", "言ってもらえる"),
+    ("していただけて", "してもらえて"),
+    ("していただける", "してもらえる"),
     # T480: 相手を立てる尊敬語・謙譲語を普通の動詞へ戻す（です・ますは保つ）。
     # 安全な語だけを対象にし、意味が変わる広い置換（〜される→〜する 等）は入れない。
     ("させていただきます", "します"),
