@@ -534,9 +534,14 @@ class RequestDeadlineExceededError(RuntimeError):
 
 INVITATION_PATTERN = re.compile(
     r"(?:一緒に?|ご一緒に?).{0,16}(?:行きません|行ってみません|行けたら|どうですか|しませんか|しません)|"
-    r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか|しません))|"
+    r"(?:今度|よかったら).{0,24}(?:会いません|行きません|行けたら|行きたいです|会いたいです|ご飯.{0,8}どうですか|ごはん.{0,8}どうですか|食事.{0,8}どうですか|カフェ.{0,8}どうですか|お茶.{0,8}(?:どうですか|しませんか|しません))|"
     r"(?:近いうちに|近々|そのうち|近日|いずれ).{0,20}(?:(?:お)?(?:会い|行き|来|食べ)し?ません(?:か|？|\?)|(?:お)?(?:会い|行き)(?:ましょう|ましょうか)|(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}どう(?:ですか|でしょう|？|\?))|"
-    r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)"
+    r"(?:ご飯|ごはん|食事|カフェ|お茶).{0,10}(?:行きませんか|行けたら)|"
+    # T519: タメ口の誘い（「今度カフェに行かない？」「今度会おう！」）も誘いとして
+    # 扱う。行こう〜と思う（意図の報告）は誘いではない。
+    r"(?:会おう|会わない)(?!と)(?:か|ね|よ)?(?:[!！]|[?？])?|"
+    r"(?:今度|週末|今週|来週|近いうち|そのうち|よかったら|良かったら|時間があれば|時間があるとき)"
+    r".{0,16}(?:行こう|会おう|飲もう|遊ぼう|行かない|会わない)(?!と)(?:か|ね|よ)?(?:[!！]|[?？])?"
 )
 REFUSAL_REINVITATION_PATTERN = re.compile(
     r"(?:また|いつか|落ち着いたら|タイミングがあれば|タイミングが合ったら|都合がよければ).{0,20}(?:会え|会い|会おう|会いた|誘|一緒に.{0,8}(?:行|出かけ)|(?:カフェ|ご飯|ごはん|食事|お茶).{0,10}(?:行|行け))|"
@@ -9589,7 +9594,7 @@ def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
 
 
 _ANSWER_RELAY_TEMPLATE_LINE = re.compile(
-    r"^(?:いいですね|ぜひ行きましょ|ぜひ行きましょう|そうなんですね|そうなんだ|うれしいです|うれしいな|"
+    r"^(?:いいですね|いいね|ぜひ行きましょ|ぜひ行きましょう|そうなんですね|そうなんだ|うれしいです|うれしいな|"
     r"ありがとうございます|ありがとう|そちらは|そっちは|.{1,8}さんはどう|"
     r"また.{0,8}で何かあればぜひ行きたいです|また機会があればぜひ行きたいです)"
 )
@@ -10947,7 +10952,9 @@ def _compose_answer_relay_candidate(
             candidate_text = "\n".join(part for part in (clean_answer, goodwill, followup) if part)
         else:
             accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
-            candidate_text = "\n".join(part for part in ("いいですね！", accept_line, clean_answer, followup) if part)
+            # T519: 相手がタメ口なら受け止めも合わせる（「いいね！」）。
+            accept_ack = "いいね！" if casual else "いいですね！"
+            candidate_text = "\n".join(part for part in (accept_ack, accept_line, clean_answer, followup) if part)
     elif is_schedule_or_accept:
         # T484: use the acknowledgment only right after the partner invited us,
         # and skip the "when are you free?" ask-back when the partner already

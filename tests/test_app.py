@@ -2702,6 +2702,41 @@ def _t516_first_context(description: str) -> dict:
     }
 
 
+def test_t519_casual_invitation_is_recognized_and_relayed(client):
+    """T519: タメ口の誘い（「今度カフェに行かない？」）も誘いとして扱う。
+
+    再現では INVITATION_PATTERN が丁寧語の形しか認めず、タメ口の誘いへの回答リレーが
+    承諾の受け止めなしになり、回答が「未確認の本人事実」で棄却されて
+    最後は回答だけに縮んでいた。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "今度カフェに行かない？ぜひ！"}],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "ephemeral_user_answers": [{"question": "今度カフェに行かない？", "answer": "土曜なら空いてるよ！"}],
+    }
+    assert backend.partner_latest_message_has_invitation(context) is True
+    relay = backend._compose_answer_relay_candidate(
+        context, "今度カフェに行かない？", "土曜なら空いてるよ！"
+    )
+    assert relay is not None
+    assert "いいね！" in relay.text, relay.text
+    assert "ぜひ行きましょー" in relay.text, relay.text
+    assert "土曜なら空いてるよ" in relay.text, relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
+def test_t519_casual_invite_pattern_variants(client):
+    """T519: タメ口の誘いの諸形を INVITATION_PATTERN が拾い、意図の報告は拾わない。"""
+    _, backend = client
+    for text in ("今度会おう！", "週末カフェに行こうか", "今度ご飯でも行かない？", "今度会いたいです"):
+        assert backend.INVITATION_PATTERN.search(text), text
+    assert not backend.INVITATION_PATTERN.search("休みの日はどこかに行こうと思ってます")
+    assert not backend.INVITATION_PATTERN.search("今度行こうと思ってます")
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
