@@ -8803,6 +8803,15 @@ _ACTIVITY_FOLLOWUP_VERB = {
     "映画": "観る", "本": "読む", "音楽": "聴く", "写真": "撮る", "カフェ": "行く", "温泉": "行く",
 }
 
+# T513: 「〜はよく行くんですか？」は場所にしか合わない。アニメ・作品名のような
+# 物・題材の名詞に「よく行く」を付けると「アニメはよく行くんですか？」のような
+# 壊れた日本語になるため、場所らしい名詞のときだけこの型を使う。
+_PLACE_LIKE_NOUN_PATTERN = re.compile(
+    r"カフェ|喫茶|店|食堂|レストラン|居酒屋|バー|公園|駅|街|町|村|市|区|県|"
+    r"館|温泉|施設|スポット|エリア|神社|寺|スーパー|モール|空港|港|"
+    r"山|川|海|湖|島|美術館|水族館|動物園|サウナ|銭湯|図書館|パン屋"
+)
+
 
 _REPETITION_INTERROGATIVES = (
     "どんな", "どの", "どちら", "どっち", "どこ", "なに", "いつ", "いくつ", "お気に入り", "好きな",
@@ -10859,10 +10868,14 @@ def _compose_answer_relay_candidate(
                 f"{partner_label}はどんな{topic_noun}が好きなんですか？"
                 if not casual
                 else f"{partner_label}はどんな{topic_noun}が好き？",
-                f"{partner_label}は{topic_noun}はよく行くんですか？"
-                if not casual
-                else f"{partner_label}は{topic_noun}はよく行く？",
             ]
+            # T513: 場所らしい名詞のときだけ「よく行く」を候補にする。
+            if _PLACE_LIKE_NOUN_PATTERN.search(topic_noun):
+                options.append(
+                    f"{partner_label}は{topic_noun}はよく行くんですか？"
+                    if not casual
+                    else f"{partner_label}は{topic_noun}はよく行く？"
+                )
         unused = [form for form in options if form not in recent]
         if unused:
             followup = unused[0]
@@ -11912,7 +11925,8 @@ def _generate_impl(data: GenerateInput):
     system_instruction = read_prompt(data.mode) + (
         f"\n【今回の出力指定】候補は必ず合計{data.count}案にしてください。"
         f"recommendedが1案、alternativesが{data.count-1}案です。"
-        "理由 reason は短く日本語で記述してください。"
+        "理由 reason は短く日本語で記述し、実際に候補本文へ入れた要素だけを書いてください。"
+        "候補に質問を入れていないのに「答えやすい質問を添えて」と書く、誘いを入れていないのに「誘った」と書くなど、本文に無い要素を reason に書かないでください。"
         + ("response_version=2では不足情報がある場合 needs_user_info=true と質問だけを返し、recommendedはnull、alternativesは空配列、optional_user_questionsは空配列にしてください。候補を返せるときは optional_user_questions を最大1件まで返せますが、これはreplyモードだけの任意の本人向け質問です。optional_user_questions があっても候補を必ず返し、needs_user_infoはfalseにしてください。回答はプロフィールに保存せず、今回の文脈だけで利用してください。skipped_user_info=trueなら同じ質問を繰り返さず、その情報なしでも安全な代替候補を作れる場合だけneeds_user_info=falseで候補を返してください。代替候補を安全に作れない場合はneeds_user_info=trueで返し、サーバーが質問を終了状態へ変換します。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
            "stageはStage 1からStage 6、invite_decisionはdo_not_invite/continue_conversation/consider_invite/invite_gently/wait/respect_no/ask_user_info/do_not_repeat_invite/schedule_after_acceptance/continue_or_closeのいずれかです。"
            if data.response_version == 2 else "strategyは無理のない提案を1文で記述してください。")

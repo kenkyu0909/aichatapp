@@ -2630,12 +2630,124 @@ def test_like_prompt_requires_name_greeting_empathy_and_desire_to_talk(client):
     assert "はじめまして" in prompt
 
 
+def test_t512_reason_spec_forbids_claiming_elements_absent_from_candidates(client, monkeypatch):
+    """T512: reason には実際に候補本文へ入れた要素だけを書かせる。
+
+    ops1 のマッチ前いいねでは、2案とも質問を含んでいないのに reason が
+    「答えやすい質問を添えて」と述べ、説明と本文が食い違っていた。
+    """
+    from google import genai
+
+    c, _ = client
+    like_reply = {
+        "needs_user_info": False,
+        "user_questions": [],
+        "user_info_reason": "",
+        "recommended": {
+            "label": "大学の話題",
+            "text": "札幌での学生生活お疲れ様です！\n勉強とバイトの両立って大変ですよね✨",
+            "reply_move": "react",
+        },
+        "alternatives": [
+            {
+                "label": "気軽な挨拶",
+                "text": "プロフィールを読んでメッセージを送らせてもらいました！\nゆっくりお話しできたら嬉しいです😊",
+                "reply_move": "react",
+            },
+            {
+                "label": "作品の話題",
+                "text": "これから観る作品を探すのも楽しそうですね！\nおすすめがあったら教えてください😊",
+                "reply_move": "expand",
+            },
+        ],
+        "reason": "学生生活に触れて自然に会話のきっかけを作りました",
+        "strategy": "名前の呼びかけと挨拶から始める",
+        "conversation_stage": "Stage 1",
+        "invite_decision": "do_not_invite",
+        "decision_reason": "マッチ前のメッセージのため挨拶と話題の共有を優先します",
+        "next_action": "相手からの返信を待つ",
+    }
+    captured_prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured_prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(like_reply, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={
+            "mode": "like",
+            "count": 3,
+            "description": "札幌の大学生です。Netflixを始めました。",
+            "response_version": 2,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert captured_prompts, response.text
+    instruction = captured_prompts[0]
+    assert "実際に候補本文へ入れた要素だけ" in instruction
+    assert "本文に無い要素を reason に書かないでください" in instruction
+
+
+def test_t513_thing_topic_is_not_asked_with_go_frequently(client):
+    """T513: 物・題材の名詞に「〜はよく行くんですか？」を使わない。
+
+    再現では topic_noun='アニメ' のとき「楓さんはアニメはよく行くんですか？」という
+    壊れた日本語の候補が棄却理由ゼロで通り、送信可能な候補として表示され得た。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "アニメも好きです！アニメ映画だと何が好きですか？"},
+            {"role": "me", "body": "いいですね！\n楓さんはどんなアニメが好きなんですか？"},
+        ],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "ephemeral_user_answers": [
+            {"question": "アニメ映画だと何が好きですか？", "answer": "ミステリーやアクションをよく観ます"}
+        ],
+    }
+    relay = backend._compose_answer_relay_candidate(
+        context, "アニメ映画だと何が好きですか？", "ミステリーやアクションをよく観ます"
+    )
+    assert relay is not None
+    assert "よく行く" not in relay.text
+    assert "ミステリーやアクションをよく観ます" in relay.text
+
+
+def test_t513_place_topic_may_be_asked_with_go_frequently(client):
+    """T513: 場所らしい名詞では従来どおり「〜はよく行くんですか？」を使える。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "公園をよく散歩します。公園だとどこが好きですか？"},
+            {"role": "me", "body": "いいですね！\n楓さんはどんな公園が好きなんですか？"},
+        ],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "ephemeral_user_answers": [
+            {"question": "公園だとどこが好きですか？", "answer": "家の近くの公園です"}
+        ],
+    }
+    relay = backend._compose_answer_relay_candidate(
+        context, "公園だとどこが好きですか？", "家の近くの公園です"
+    )
+    assert relay is not None
+    assert "楓さんは公園はよく行くんですか？" in relay.text
+
+
 def test_t509_supplied_answer_stops_repeating_the_same_question(client):
     """T509: 今回受け取った回答は同じリクエスト内でも「回答済み」として扱う。
 
     実走行では、本人情報の確認に答えた /api/generate が同じ質問をもう一度返し、
-    余分な1往復が発生した。build_context は session_answers をDBから読むため、
-    今回受け取った回答が入らず、session_answers だけを見る抑止が効かなかった。
+    余分な1往復が発生した。原因は保存順ではなく、`_topic_is_verified` の映画
+    「最近」分岐が相手の前置きの「最近」だけで早期に False を返し、共通の
+    「確認済みの質問に回答済みか」判定へ到達していなかったこと。
     """
     c, backend = client
     mid = add_match(c, "架空みなみ")
