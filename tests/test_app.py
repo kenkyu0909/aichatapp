@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import re
 import struct
 import sys
 import zlib
@@ -2690,6 +2691,23 @@ def test_t512_reason_spec_forbids_claiming_elements_absent_from_candidates(clien
     instruction = captured_prompts[0]
     assert "実際に候補本文へ入れた要素だけ" in instruction
     assert "本文に無い要素を reason に書かないでください" in instruction
+
+
+def test_t515_like_demo_texts_satisfy_like_requirements(client):
+    """T515: APIキーなしのいいね例文も3要素（挨拶／プロフィール／お話ししたい気持ち）を満たす。
+
+    demo_suggestions の固定例文は実際にコピーされる文面のため、T510 と同じ要件を
+    満たす必要がある（名前は固定例文では分からないため省く）。
+    """
+    _, backend = client
+    result = backend.demo_suggestions("like", 5)
+    texts = [result["recommended"]["text"], *[a["text"] for a in result["alternatives"]]]
+    assert len(texts) == 5
+    for text in texts:
+        assert re.search(r"はじめまして|初めまして", text), text
+        assert "プロフィール" in text or "紹介文" in text, text
+        assert re.search(r"話し|お話", text), text
+        assert "、" not in text and "。" not in text, text
 
 
 def _t514_topic_change_context(requested: str) -> dict:
