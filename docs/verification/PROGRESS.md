@@ -2426,3 +2426,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **テスト**: 全pytest（Firefox UI を除く）**2059 passed / 0 failed** in 114.22s、Firefox UI **29 passed** in 526.71s、`python -m py_compile app.py tests/test_app.py`・`node --check app.js`・`git diff --check` すべてPASS。
 - **点検して保留にした項目**: (1) 相槌連結の残り（「分かります」以外）: モデル出力では「！」付きの相槌が大半で既存の終端記号検査が捕捉する。一方「なるほどそうなんですね」のような自然な連接を誤検出するリスクが高く、ops1 にも証拠がないため追加しない。(2) 未確認の具体名（サービス名・店名）を質問の前提に置く候補: ops1 に該当なし。`[ァ-ヶー]{3,}` の一般則では「カフェ」等の普通名詞まで拾って誤検出するため、辞書なしでは安全に絞れない。
 - **次の作業**: 新しい証拠が出た場合の T514 起票（未確認の具体名を質問の前提に置く候補など）、既存 P0 検査の再点検。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T514 修正（話題転換フォールバックの既定動詞「する」）
+
+- **発見（T513 と同じ型の点検）**: T513 の修正後、同じ「名詞に合わない動詞を付ける」型が他にもないか決定的フォールバックを点検した。`_build_topic_change_fallback_candidate`（app.py 7422）が `_ACTIVITY_FOLLOWUP_VERB.get(requested, "する")` を使っており、ユーザーが「仕事の話にして」「大学の話にして」「ペットの話にして」「北海道の話にして」と指示したとき、モデルが指定話題の候補を作れないと受け皿として「ちなみに楓さんは仕事はよくするんですか？」「大学はよくするんですか？」「ペットはよくするんですか？」「北海道はよくするんですか？」という不自然な日本語を合成し、いずれも `_candidate_rejection_reasons` が **棄却理由ゼロ** で通ることをオフライン再現で確認した（`dbg_t514_probe.py`）。
+- **T514 修正**: 動詞の決め方を3段階にした。行為語（`_ACTIVITY_FOLLOWUP_VERB`）→ その動詞（映画→観る、旅行→する等、従来どおり）。場所らしい名詞（`_PLACE_LIKE_NOUN_PATTERN`＝T513 で追加）→「行く」。どちらでもない話題（仕事・大学・ペット・資格勉強など）→ 動詞を使わない「ちなみに{相手}は{話題}って好きですか？」。
+- **再現（修正後）**: 北海道→「北海道はよく行くんですか？」、仕事／大学／ペット／資格勉強→「〜って好きですか？」、映画→「映画はよく観るんですか？」、カフェ→「カフェはよく行くんですか？」（いずれも棄却理由ゼロ＝送信可能な候補として成立）。北海道は `_PLACE_LIKE_NOUN_PATTERN` の「海」に一致して場所扱いになる。
+- **T514 回帰**: `_t514_topic_change_context` ヘルパ＋`test_t514_topic_change_does_not_use_a_default_verb_for_things`（仕事／大学／ペットで「よくする」が出ないこと・「〜って好きですか？」になること）・`test_t514_topic_change_keeps_activity_and_place_verbs`（映画→観る、北海道→行くの維持）。T495 の既存テスト（映画の話）も緑のまま。
+- **テスト**: 全pytest（Firefox UI を除く）**2061 passed / 0 failed** in 124.97s、Firefox UI **29 passed** in 412.36s、`python -m py_compile app.py tests/test_app.py`・`node --check app.js`・`git diff --check` すべてPASS。
+- **次の作業**: 決定的フォールバック（`_build_schedule_conflict_fallback_candidate`・`_build_schedule_reask_fallback_candidate`・`_build_schedule_confirmation_fallback_candidate`・`_build_invitation_acceptance_fallback_candidate`・`_build_unclassified_question_fallback_candidate`・`_build_answered_question_fallback_candidate`・`_build_verified_profile_fact_fallback_candidate`・`_build_first_message_fallback_candidate`）の残りを同じ観点（名詞と動詞の不整合・既定値の当てはめ）で点検し、証拠が出たものを T515 以降として起票する。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。

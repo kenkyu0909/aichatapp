@@ -2692,6 +2692,43 @@ def test_t512_reason_spec_forbids_claiming_elements_absent_from_candidates(clien
     assert "本文に無い要素を reason に書かないでください" in instruction
 
 
+def _t514_topic_change_context(requested: str) -> dict:
+    return {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "休日は家でゆっくりしてました！"}],
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "my_profile": {"facts": {}},
+        "reply_preferences": {"direction": f"{requested}の話にして", "extra": ""},
+    }
+
+
+def test_t514_topic_change_does_not_use_a_default_verb_for_things(client):
+    """T514: 行為語でも場所でもない話題に「よくする」を付けない。
+
+    再現では「仕事の話にして」で「ちなみに楓さんは仕事はよくするんですか？」という
+    不自然な質問が棄却理由ゼロで通り得た。
+    """
+    _, backend = client
+    for noun in ("仕事", "大学", "ペット"):
+        candidate = backend._build_topic_change_fallback_candidate(
+            _t514_topic_change_context(noun)
+        )
+        assert candidate is not None, noun
+        assert "よくする" not in candidate.text, candidate.text
+        assert f"{noun}って好きですか？" in candidate.text, candidate.text
+
+
+def test_t514_topic_change_keeps_activity_and_place_verbs(client):
+    """T514: 行為語（映画＝観る）と場所（北海道＝行く）は従来どおり動詞を使う。"""
+    _, backend = client
+    movie = backend._build_topic_change_fallback_candidate(_t514_topic_change_context("映画"))
+    assert movie is not None
+    assert "映画はよく観るんですか？" in movie.text
+    place = backend._build_topic_change_fallback_candidate(_t514_topic_change_context("北海道"))
+    assert place is not None
+    assert "北海道はよく行くんですか？" in place.text
+
+
 def test_t513_thing_topic_is_not_asked_with_go_frequently(client):
     """T513: 物・題材の名詞に「〜はよく行くんですか？」を使わない。
 

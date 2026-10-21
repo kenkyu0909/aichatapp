@@ -7436,13 +7436,25 @@ def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
     ]
     question = partner_messages[-1] if partner_messages else ""
     casual = _fallback_should_use_casual_tone(context, question, "")
-    verb = _ACTIVITY_FOLLOWUP_VERB.get(requested, "する")
+    verb = _ACTIVITY_FOLLOWUP_VERB.get(requested)
+    if verb is None and _PLACE_LIKE_NOUN_PATTERN.search(requested):
+        verb = "行く"
     subject = f"{partner_label}は" if partner_label else ""
-    line2 = (
-        f"ちなみに{subject}{requested}はよく{verb}？"
-        if casual
-        else f"ちなみに{subject}{requested}はよく{verb}んですか？"
-    )
+    if verb is None:
+        # T514: 行為語でも場所でもない話題（仕事・大学・ペット等）に既定の「する」を
+        # 付けると「仕事はよくするんですか？」のような不自然な質問になるため、
+        # 動詞を使わない聞き方にする。
+        line2 = (
+            f"ちなみに{subject}{requested}って好き？"
+            if casual
+            else f"ちなみに{subject}{requested}って好きですか？"
+        )
+    else:
+        line2 = (
+            f"ちなみに{subject}{requested}はよく{verb}？"
+            if casual
+            else f"ちなみに{subject}{requested}はよく{verb}んですか？"
+        )
     ack = "そうなんですね！" if not casual else "そうなんだ！"
     candidate = Candidate(label="話題の転換", text=f"{ack}\n{line2}", reply_move="expand")
     if _candidate_rejection_reasons(candidate, context):
