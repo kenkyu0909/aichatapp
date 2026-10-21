@@ -1905,6 +1905,24 @@ def _is_generic_occupation_label(value: str) -> bool:
     return normalized in generic_labels
 
 
+def _verified_fact_answer_line(value: str, question: str) -> str:
+    """T517: 確定事実の種類に合った直答文を作る。
+
+    学校名は「〜に通っています」、専攻は「〜を学んでいます」、職業は「〜をしています」。
+    `_verified_job_or_school_values` と同じ条件で種類を判定する。
+    """
+    if _is_current_student_status_question(question):
+        return f"{value}をしています"
+    asks_study_subject = bool(re.search(r"何を学|何を勉強|何を専攻|専攻", question))
+    asks_school = bool(re.search(r"学校|大学|学生|学んで|専攻", question))
+    asks_work = bool(re.search(r"仕事|職業|働いて|勤務|職種|業務|業界", question))
+    if asks_study_subject:
+        return f"{value}を学んでいます"
+    if asks_school and not asks_work:
+        return f"{value}に通っています"
+    return f"{value}をしています"
+
+
 def _verified_job_or_school_values(facts: dict, question: str) -> list[str]:
     if _is_current_student_status_question(question):
         return _current_student_status_values(facts)
@@ -8039,6 +8057,14 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                                 f"{normalized_value}のお仕事をしています",
                                 f"{normalized_value}の仕事です",
                                 f"{normalized_value}のお仕事です",
+                                # T517: 学校名・専攻の確定事実に合った答え方も許す
+                                # （「北海道大学に通っています」等）。
+                                f"{normalized_value}に通っています",
+                                f"{normalized_value}に通ってます",
+                                f"{normalized_value}通っています",
+                                f"{normalized_value}通ってます",
+                                f"{normalized_value}を学んでいます",
+                                f"{normalized_value}を勉強しています",
                             }
                         if without_subject in allowed_answers:
                             matched_fact = True
@@ -11047,7 +11073,9 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
         known_occupations = _verified_job_or_school_values(facts, question)
         if known_occupations:
             norm_job = _normalize_occupation_label(known_occupations[0])
-            line1 = f"{norm_job}をしています"
+            # T517: 学校名・専攻には「をしています」ではなく合った答え方を使う
+            # （「北海道大学をしています」のような壊れた日本語を防ぐ）。
+            line1 = _verified_fact_answer_line(norm_job, question)
             work_label = "お仕事"
             # T496: 相手の職業は、職業欄や勤務を示す表現からだけ決める。趣味の
             # ながら見（「カフェ巡りが好き」）を職業と決めつけない。
@@ -11093,9 +11121,10 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
                 )
             if _partner_shares_info_with_question(question):
                 ack = "そうなんだ！" if casual else "そうなんですね！"
-                candidate_text = f"{ack}\n{line1}\n{followup}"
+                # T517: 聞き返しを付けないときに末尾へ空行を残さない。
+                candidate_text = "\n".join([line for line in (ack, line1, followup) if line])
             else:
-                candidate_text = f"{line1}\n{followup}"
+                candidate_text = "\n".join([line for line in (line1, followup) if line])
 
     if not candidate_text:
         return None

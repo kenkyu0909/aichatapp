@@ -2702,6 +2702,47 @@ def _t516_first_context(description: str) -> dict:
     }
 
 
+def test_t517_school_fact_answers_with_the_right_verb(client):
+    """T517: 学校名の確定事実に「をしています」を使わない。
+
+    再現では「大学はどこですか？」に対して「北海道大学をしています」という
+    壊れた日本語（末尾に空行付き）が棄却理由ゼロで通っていた。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "よろしくお願いします！"},
+            {"role": "them", "body": "大学はどこですか？"},
+        ],
+        "my_profile": {"facts": {"school": "北海道大学"}},
+        "other": {"name": "楓", "description": "札幌の大学生です", "occupation": ""},
+    }
+    candidate = backend._build_verified_profile_fact_fallback_candidate(context)
+    assert candidate is not None
+    assert candidate.text == "北海道大学に通っています", candidate.text
+    assert not candidate.text.endswith("\n"), candidate.text
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
+def test_t517_study_subject_fact_answers_with_the_right_verb(client):
+    """T517: 専攻の確定事実には「を学んでいます」で答える。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "よろしくお願いします！"},
+            {"role": "them", "body": "大学では何を学んでるんですか？"},
+        ],
+        "my_profile": {"facts": {"major": "経営学"}},
+        "other": {"name": "楓", "description": "札幌の大学生です", "occupation": ""},
+    }
+    candidate = backend._build_verified_profile_fact_fallback_candidate(context)
+    assert candidate is not None
+    assert candidate.text == "経営学を学んでいます", candidate.text
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
 def test_t516_first_fallback_does_not_mangle_or_invent_likes(client):
     """T516: 初回フォールバックが分割断片を話題にせず、好みの宣言がない名詞を好きと断定しない。
 
