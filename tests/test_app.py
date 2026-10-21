@@ -2693,6 +2693,50 @@ def test_t512_reason_spec_forbids_claiming_elements_absent_from_candidates(clien
     assert "本文に無い要素を reason に書かないでください" in instruction
 
 
+def _t516_first_context(description: str) -> dict:
+    return {
+        "mode": "first",
+        "my_profile": {"facts": {"name": "水野そよか"}},
+        "other": {"name": "黒川いつき", "occupation": "", "description": description},
+        "history": [],
+    }
+
+
+def test_t516_first_fallback_does_not_mangle_or_invent_likes(client):
+    """T516: 初回フォールバックが分割断片を話題にせず、好みの宣言がない名詞を好きと断定しない。
+
+    再現では「実家で猫と犬を飼っています。休日は家でのんびりしています」から
+    「んびりしてがお好きなんですね！\nんびりしてで特におすすめはありますか？」という
+    壊れた日本語が棄却理由ゼロで通り、「佐世保から来ました。今は一人暮らしです」からは
+    「一人暮らしがお好きなんですね！」という未確認の好み断定が出ていた。
+    """
+    _, backend = client
+    pets_description = "実家で猫と犬を飼っています。休日は家でのんびりしています"
+    pets = backend._build_first_message_fallback_candidate(_t516_first_context(pets_description))
+    assert pets is not None
+    assert "お好き" not in pets.text, pets.text
+    assert "んびり" not in pets.text, pets.text
+    assert "実家について教えてもらえますか？" in pets.text, pets.text
+    assert backend._candidate_rejection_reasons(pets, _t516_first_context(pets_description)) == []
+
+    alone_description = "佐世保から来ました。今は一人暮らしです"
+    alone = backend._build_first_message_fallback_candidate(_t516_first_context(alone_description))
+    assert alone is not None
+    assert "お好き" not in alone.text, alone.text
+    assert backend._candidate_rejection_reasons(alone, _t516_first_context(alone_description)) == []
+
+
+def test_t516_first_fallback_keeps_liked_topic_assertion(client):
+    """T516: 好みの宣言（趣味・好きなど）がある名詞は従来どおり「お好きなんですね」を使う。"""
+    _, backend = client
+    description = "ランニングが趣味です。休日は公園を走ります"
+    running = backend._build_first_message_fallback_candidate(_t516_first_context(description))
+    assert running is not None
+    assert "ランニングがお好きなんですね！" in running.text, running.text
+    assert "公園" not in running.text, running.text
+    assert backend._candidate_rejection_reasons(running, _t516_first_context(description)) == []
+
+
 def test_t515_like_demo_texts_satisfy_like_requirements(client):
     """T515: APIキーなしのいいね例文も3要素（挨拶／プロフィール／お話ししたい気持ち）を満たす。
 

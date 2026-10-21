@@ -11123,20 +11123,32 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
         for value in other.get("temporary_user_supplied_profile_facts", [])
     )
     profile_terms: set[str] = set()
+    liked_terms: set[str] = set()
     generic_terms = {
         "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
         "です", "ます", "多い", "います", "あります", "プロフィール",
     }
     for source in profile_sources:
-        chunks = re.split(
-            r"[、。！!？?\s]+|(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
-            source,
-        )
-        for term in chunks:
-            term = term.strip()
-            term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
-            if len(term) >= 2 and term not in generic_terms:
+        for segment in re.split(r"[、。！!？?\s]+", source):
+            # T516: 節の中に好みの宣言（好き・趣味など）があるときだけ、その節の
+            # 名詞を「お好きなんですね」の対象にできる。宣言なしの名詞（実家・
+            # 地名・一人暮らしなど）を好きと断定しない。
+            marked = bool(re.search(r"好き|お気に入り|趣味|楽しい|はまって|愛用", segment))
+            chunks = re.split(
+                r"(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
+                segment,
+            )
+            for term in chunks:
+                term = term.strip()
+                term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
+                # T516: 分割の断片（「んびりして」「飼って」など）を話題にしない。
+                if not term or len(term) < 2 or term in generic_terms:
+                    continue
+                if re.match(r"^ん", term) or re.search(r"(?:して|って|みて|くて|なくて)$", term):
+                    continue
                 profile_terms.add(term)
+                if marked:
+                    liked_terms.add(term)
     if not profile_terms:
         return None
 
@@ -11166,9 +11178,16 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
             topic_line = "映画が好きなんだね！"
             question_line = "最近観てよかった作品ってある？"
         else:
-            best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
-            topic_line = f"{best_term}が好きなんだね！"
-            question_line = f"{best_term}で特におすすめってある？"
+            # T516: 好みの宣言がある名詞だけを「好き」と言う。無いときは断定せず、
+            # プロフィールに触れた上で教えてもらう形にする（候補は同点時も辞書順で決定）。
+            pool = liked_terms or profile_terms
+            best_term = sorted(pool, key=lambda t: (-len(t), t))[0]
+            if best_term in liked_terms:
+                topic_line = f"{best_term}が好きなんだね！"
+                question_line = f"{best_term}で特におすすめってある？"
+            else:
+                topic_line = f"プロフィールの{best_term}のところが気になってた！"
+                question_line = f"よかったら{best_term}について教えてくれる？"
 
         candidate = Candidate(
             label="初回メッセージ",
@@ -11197,9 +11216,15 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
             topic_line = "映画がお好きなんですね！"
             question_line = "最近観てよかった作品はありますか？"
         else:
-            best_term = next(iter(sorted(profile_terms, key=len, reverse=True)))
-            topic_line = f"{best_term}がお好きなんですね！"
-            question_line = f"{best_term}で特におすすめはありますか？"
+            # T516: 好みの宣言がある名詞だけを「お好き」と言う（casual 側と同じ分岐）。
+            pool = liked_terms or profile_terms
+            best_term = sorted(pool, key=lambda t: (-len(t), t))[0]
+            if best_term in liked_terms:
+                topic_line = f"{best_term}がお好きなんですね！"
+                question_line = f"{best_term}で特におすすめはありますか？"
+            else:
+                topic_line = f"プロフィールの{best_term}のところが気になっていました！"
+                question_line = f"よかったら{best_term}について教えてもらえますか？"
 
         candidate = Candidate(
             label="初回メッセージ",
