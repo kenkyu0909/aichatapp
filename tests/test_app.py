@@ -31,10 +31,20 @@ def client(tmp_path, monkeypatch):
         yield test_client, module
 
 
-def add_match(client, name):
-    response = client.post("/api/matches", json={"name": name, "description": name + "の趣味は読書"})
+def add_match(client, name, description=None):
+    if description is None:
+        description = name + "の趣味は読書"
+    response = client.post("/api/matches", json={"name": name, "description": description})
     assert response.status_code == 201
     return response.json()["id"]
+
+
+# T511: 相手プロフィールが「すぐに会いたい」希望を示す場合は誘いの下限の例外になる。
+EAGER_MEETING_PROFILE = "すぐに会いたいです"
+
+
+def add_eager_match(client, name):
+    return add_match(client, name, description=name + "の趣味は読書。" + EAGER_MEETING_PROFILE)
 
 
 def test_trusted_host_allows_default_and_loopback_hosts(client):
@@ -1644,7 +1654,7 @@ def test_invite_repair_keeps_safe_candidates_from_both_attempts(client, monkeypa
     from google import genai
 
     c, _ = client
-    mid = add_match(c, "架空みな")
+    mid = add_eager_match(c, "架空みな")
     c.put("/api/profile", json={
         "content": json.dumps({"facts": {
             "hobbies": ["カフェ巡り"], "cafe_preferences": "落ち着いたお店が好き",
@@ -2479,7 +2489,7 @@ def test_invite_gently_without_safe_invite_downgrades_to_contextual_policy(
     from google import genai
 
     c, backend = client
-    mid = add_match(c, "架空りお")
+    mid = add_eager_match(c, "架空りお")
     for role, message in turns:
         c.post(f"/api/matches/{mid}/messages", json={"role": role, "body": message})
 
@@ -2529,7 +2539,7 @@ def test_invite_gently_policy_requires_at_least_one_invitation_candidate(client,
     from google import genai
 
     c, _ = client
-    mid = add_match(c, "架空りお")
+    mid = add_eager_match(c, "架空りお")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "中野のカフェに行ってみたいです！"})
     def response(candidates):
         return {
@@ -2570,7 +2580,7 @@ def test_positive_consider_invite_reason_requires_invitation_option(client, monk
     from google import genai
 
     c, _ = client
-    mid = add_match(c, "架空かな")
+    mid = add_eager_match(c, "架空かな")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ巡りに興味ありますか？私は落ち着いたお店が好きです！"})
     c.post(f"/api/matches/{mid}/messages", json={"role": "me", "body": "カフェの話をもう少し聞いてみたいです！"})
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "中野のカフェが気になります！カフェっていいところですよね？"})
@@ -2605,6 +2615,155 @@ def test_positive_consider_invite_reason_requires_invitation_option(client, monk
     assert "一緒に行きませんか" in response.json()["recommended"]["text"]
     assert len(captured_prompts) == 2
     assert "安全で自然な候補を保持しつつ" in captured_prompts[1]
+
+
+def test_like_prompt_requires_name_greeting_empathy_and_desire_to_talk(client):
+    _, backend = client
+    prompt = backend.read_prompt("like")
+    assert "名前の呼びかけ＋挨拶" in prompt
+    assert "共感したところ" in prompt
+    assert "ここがいいなと思ったところ" in prompt
+    assert "お話ししてみたいという気持ち" in prompt
+    assert "この3要素はすべて入れます" in prompt
+    # 3〜4文まで許可しつつ、冒頭の呼びかけ＋挨拶を必須にしていること。
+    assert "3〜4文まで" in prompt
+    assert "はじめまして" in prompt
+
+
+def test_invite_floor_requires_minimum_own_messages(client, monkeypatch):
+    _, backend = client
+
+    def context(own_messages, description="カフェ巡りが好きです"):
+        return {
+            "history": [{"role": "me", "body": f"こんにちは{index}"} for index in range(own_messages)],
+            "other": {"name": "架空そら", "description": description},
+        }
+
+    assert backend.invite_allowed_by_conversation_length(context(0)) is False
+    assert backend.invite_allowed_by_conversation_length(context(5)) is False
+    assert backend.invite_allowed_by_conversation_length(context(13)) is False
+    # 14通送信済みなら今回の候補が15通目になり下限を満たす。
+    assert backend.invite_allowed_by_conversation_length(context(14)) is True
+    assert backend.invite_allowed_by_conversation_length(context(30)) is True
+    # 相手プロフィールが「すぐ会いたい」希望を示す場合だけ下限の例外になる。
+    assert backend.invite_allowed_by_conversation_length(
+        context(0, description="趣味はカフェ巡りです。出会うまでの希望：すぐに会いたいです")
+    ) is True
+    assert backend.invite_allowed_by_conversation_length(
+        context(0, description="すぐに会いたいです")
+    ) is True
+    assert backend.invite_allowed_by_conversation_length(
+        context(0, description="のんびり会えたらうれしいです")
+    ) is False
+
+    block = backend.conversation_length_block(context(13))
+    assert block["invite_allowed_now"] is False
+    assert block["my_messages"] == 13
+    assert block["my_message_number_including_candidate"] == 14
+    assert block["invite_min_my_messages"] == 15
+    assert block["partner_wants_to_meet_soon"] is False
+    eager_block = backend.conversation_length_block(context(0, description="すぐに会いたいです"))
+    assert eager_block["invite_allowed_now"] is True
+    assert eager_block["partner_wants_to_meet_soon"] is True
+
+    monkeypatch.setenv("MRA_MIN_SELF_MESSAGES_BEFORE_INVITE", "3")
+    assert backend.invite_allowed_by_conversation_length(context(1)) is False
+    assert backend.invite_allowed_by_conversation_length(context(2)) is True
+
+
+def test_early_invite_is_downgraded_before_minimum_own_messages(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "架空そら")
+    for role, body in [
+        ("them", "カフェ好きですか？"),
+        ("me", "カフェ巡りが好きです！"),
+        ("them", "中野のカフェに行ってみたいです！"),
+    ]:
+        c.post(f"/api/matches/{mid}/messages", json={"role": role, "body": body})
+    # 自分の送信は1通だけなので、下限（15通目）にはまだ届いていない。
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid, response_version=2))
+    assert context["conversation_length"]["invite_allowed_now"] is False
+    assert context["conversation_length"]["my_messages"] == 1
+
+    def response(candidates):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": candidates[0], "alternatives": candidates[1:],
+            "reason": "安全な候補を作成", "strategy": "自然にカフェの話を続けます",
+            "conversation_stage": "Stage 4", "invite_decision": "invite_gently",
+            "decision_reason": "話題が出て相手が前向きです", "next_action": "軽く誘う",
+        }
+
+    invite_candidates = [
+        {"label": "誘い", "text": "中野のカフェいいですね！\nよかったら今度一緒に行きませんか？", "reply_move": "invite"},
+        {"label": "相槌", "text": "カフェ探し楽しそうですね！\nどんなお店ですか？"},
+        {"label": "短め", "text": "素敵なお店なんですね！"},
+    ]
+    responses = [response(invite_candidates), response(invite_candidates)]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    result = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert result.status_code == 200, result.text
+    body = result.json()
+    candidates = [body["recommended"], *body["alternatives"]]
+    assert body["invite_decision"] == "continue_conversation"
+    assert body["conversation_stage"] == "Stage 2"
+    assert not any(backend.INVITATION_PATTERN.search(item["text"]) for item in candidates)
+    assert candidates[0]["text"] == "カフェ探し楽しそうですね！\nどんなお店ですか？"
+    assert "誘いの候補を外して" in body["candidate_notice"]
+    assert "不足分を不適切な候補で補っていません" in body["candidate_notice"]
+    assert len(prompts) == body["api_attempt_count"] == 2
+    assert "誘うには早い段階" in prompts[1]
+    assert not responses
+
+
+def test_invite_floor_does_not_block_eager_partner(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_eager_match(c, "架空ゆめ")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "中野のカフェに行ってみたいです！"})
+
+    def response(candidates):
+        return {
+            "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+            "recommended": candidates[0], "alternatives": candidates[1:],
+            "reason": "理由", "strategy": "自然にカフェへ誘います", "conversation_stage": "Stage 4",
+            "invite_decision": "invite_gently", "decision_reason": "話題が出て相手が前向きです", "next_action": "軽く誘う",
+        }
+
+    responses = [response([
+        {"label": "自然な誘い", "text": "中野のカフェいいですね！\nよかったら今度一緒に行きませんか？"},
+        {"label": "別案", "text": "落ち着いたお店いいですね！\n一緒に行けたら楽しそうです"},
+        {"label": "短め", "text": "気になります！\n今度一緒に行きませんか？"},
+    ])]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    result = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert result.status_code == 200, result.text
+    body = result.json()
+    assert body["invite_decision"] == "invite_gently", body
+    assert "一緒に行きませんか" in body["recommended"]["text"]
+    assert len(prompts) == body["api_attempt_count"] == 1
 
 
 def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
@@ -2735,7 +2894,12 @@ def test_v2_invite_decision_from_mock_is_returned_with_actual_backend_metadata(c
     from google import genai
 
     c, _ = client
-    mid = add_match(c, "架空あかり")
+    # T511: 誘いの下限を満たす必要があるため、誘い系の判断だけ「すぐ会いたい」希望の相手にする。
+    mid = (
+        add_eager_match(c, "架空あかり")
+        if decision in {"consider_invite", "invite_gently"}
+        else add_match(c, "架空あかり")
+    )
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": scenario})
 
     class FakeModels:
@@ -9387,7 +9551,8 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
         "avoid": "未確認の経験を作らない",
     })
     match_response = c.post("/api/matches", json={
-        "name": "架空の相手", "description": "カフェ巡りと旅行が好きです。落ち着いた店が好きです。",
+        "name": "架空の相手",
+        "description": "カフェ巡りと旅行が好きです。落ち着いた店が好きです。" + EAGER_MEETING_PROFILE,
     })
     match_id = match_response.json()["id"]
     for role, message in [
