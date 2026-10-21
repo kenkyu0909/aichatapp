@@ -2499,3 +2499,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T521 回帰**: `test_t521_schedule_confirmation_requires_an_agreed_time`・`test_t521_schedule_confirmation_still_fires_on_agreement`。
 - **テスト**: 全pytest（Firefox UI を除く）**2074 passed / 0 failed** in 103.79s、Firefox UI **29 passed** in 405.08s、`python -m py_compile app.py tests/test_app.py` PASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T522 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T524 修正（丁寧な誘い「お会いしませんか／お会いしましょう／一緒に行きましょう」の認識漏れ）
+
+- **発見の経緯**: T522/T523 のプローブ（日程の食い違い再質問、複合質問のリレー）は棄却理由ゼロの自然な出力で不具合なしだった。続けてフォールバック群を広く点検するため `_build_topic_change_fallback_candidate`・`_build_invitation_acceptance_fallback_candidate` をタメ口／丁寧語・名詞を変えて一括プローブしたところ、**丁寧な誘いの一部で承諾の受け皿が None** になった。原因を `INVITATION_PATTERN` 単体で切り分け（`dbg_t524_regex.py`）、`御会いしませんか`系が False になることを確認した。
+- **T524 発見**: `INVITATION_PATTERN` は丁寧な誘いのうち「会いません」「行きません」「お会いましょう（`近いうちに` 等の語が付くときのみ）」「（一緒／ご一緒）＋行きません／しません」しか認めておらず、活用「会い＋し＋ません／しましょう」を取りこぼしていた。このため「よかったら今度お会いしませんか？」「今度お会いしましょう」「近いうちにまたお会いしましょう」「よかったら一緒に行きましょう！」「一緒に行きましょう！」「よかったら飲みに行きましょう😊」が**誘いとして認識されず**、送信前検査の「相手からの誘いに未回答」（`_candidate_rejection_reasons` / app.py 10364）が働かないため、**相手の誘いを無視した質問だけの候補が棄却理由ゼロで通って**いた。承諾だけの受け皿（`_build_invitation_acceptance_fallback_candidate`）も出なかった。誘いの言い換えとしては最も普通の形が抜けていた。
+- **T524 修正**: `INVITATION_PATTERN` を4点拡張した。(a) 1本目（一緒に／ご一緒に）の動詞に「行きましょう／会いましょう／行こう／会おう」を追加（「一緒に行きましょう！」）。(b) 2本目（今度・よかったら）の動詞に「お会いしません／行きましょう／会いましょう／お会いしましょう」を追加（「よかったら今度お会いしませんか？」「よかったら飲みに行きましょう😊」）。(c) 3本目（近いうちに・近々・そのうち等）の勧誘形を `(?:お)?(?:会い|行き)(?:ましょう|ましょうか)` から `(?:お)?(?:会い|行き)し?ましょう(?:か)?` へ変え、「お会いしましょう」の「し」を許容（「近いうちにまたお会いしましょう」）。(d) 4本目（スコープ語＋タメ口の勧誘）の動詞に「行きましょう／会いましょう」を追加。加えて 近い将来の語を伴わない丁寧な問いかけ・提案「(?:お)?会いし?(?:ません|ましょう)か（ね|よ）」を独立ブランチで拾うようにした。
+- **誤検出を避けた点**: 断定的な「ぜひ行きましょう😊」（承諾の受け皿の文面）は今回の追加形に一致しないため、引き続き候補側の再勧誘としては数えない（承諾候補が方針ガードで誤棄却されない）。誘いでない報告・否定（「来週は仕事で行けないと思います」「最近は外に出かけていません」）も一致しないことを回帰で固定。
+- **再現（修正前）**: `dbg_t524_probe.py` で polite な誘い「よかったら今度お会いしませんか？」「よかったら一緒に行きましょう！」が `partner_latest_message_has_invitation=False` → 承諾の受け皿 None。`dbg_t524_regex.py` でも同6例が False（うち「よかったら今度ご飯でもどうですか？」「今度カフェ行こうか！」は True＝部分的な非対称）。
+- **再現（修正後）**: 6例すべて True。誘いを無視した候補「最近は何をされてるんですか？」に「相手からの誘いに未回答」が付き棄却。丁寧な誘いでも `_build_invitation_acceptance_fallback_candidate` が承諾の受け皿を返し、`candidate_answers_partner_invitation` が True。
+- **T524 回帰**: `test_t524_polite_invitations_are_recognized`・`test_t524_candidate_ignoring_polite_invitation_is_rejected`・`test_t524_polite_invitation_gets_an_acceptance_fallback`（3件とも修正前は failure を再現確認 → 修正後 PASS）。
+- **テスト**: 焦点 `-k "invitation or invite or t518 or t519 or t520 or t521 or near_future"` **101 passed**。全pytest（Firefox UI を除く）**2077 passed / 0 failed** in 101.97s、Firefox UI **29 passed** in 399.78s。`python -m py_compile app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS（`git diff --check` 全体は `tests/test_app.py` の既存LF→CRLF警告のみで空白エラーではない）。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T525 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。

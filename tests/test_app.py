@@ -2850,6 +2850,57 @@ def test_t519_casual_invite_pattern_variants(client):
     assert not backend.INVITATION_PATTERN.search("今度行こうと思ってます")
 
 
+def test_t524_polite_invitations_are_recognized(client):
+    """T524: 「お会いしませんか」「お会いしましょう」「一緒に行きましょう」を誘いとして扱う。
+
+    再現では INVITATION_PATTERN が「会いしません」「会いしましょう」の活用を
+    取りこぼし、丁寧な誘いを無視した候補が「相手からの誘いに未回答」を
+    付けずに通っていた（承諾の受け皿も出なかった）。
+    """
+    _, backend = client
+    for text in (
+        "よかったら今度お会いしませんか？",
+        "今度お会いしましょう",
+        "近いうちにまたお会いしましょう",
+        "よかったら一緒に行きましょう！",
+        "一緒に行きましょう！",
+        "よかったら飲みに行きましょう😊",
+    ):
+        assert backend.INVITATION_PATTERN.search(text), text
+    # 誘いでない報告・否定は拾わない
+    assert not backend.INVITATION_PATTERN.search("来週は仕事で行けないと思います")
+    assert not backend.INVITATION_PATTERN.search("最近は外に出かけていません")
+
+
+def test_t524_candidate_ignoring_polite_invitation_is_rejected(client):
+    """T524: 丁寧な誘いを無視した候補は「相手からの誘いに未回答」で棄却する。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "よかったら今度お会いしませんか？"}],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+    }
+    assert backend.partner_latest_message_has_invitation(context) is True
+    candidate = backend.Candidate(label="話題", text="最近は何をされてるんですか？", reply_move="expand")
+    reasons = backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの誘いに未回答" in reasons, reasons
+
+
+def test_t524_polite_invitation_gets_an_acceptance_fallback(client):
+    """T524: 丁寧な誘いにも承諾だけの受け皿を合成できる。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "よかったら今度お会いしませんか？"}],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+    }
+    candidate = backend._build_invitation_acceptance_fallback_candidate(context)
+    assert candidate is not None
+    assert backend.candidate_answers_partner_invitation(candidate.text)
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
