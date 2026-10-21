@@ -2464,3 +2464,11 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T517 回帰**: `test_t517_school_fact_answers_with_the_right_verb`・`test_t517_study_subject_fact_answers_with_the_right_verb`。既存の職業系テスト（`経理をしています`・`大学院生をしています` 等）は全て変更なしで通過。
 - **テスト**: 全pytest（Firefox UI を除く）**2066 passed / 0 failed** in 106.07s、Firefox UI **29 passed** in 419.25s、`python -m py_compile app.py tests/test_app.py` PASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T518 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T518 修正（誘いリレーの時を表す語の話題化）
+
+- **T518 発見**: `_compose_answer_relay_candidate` の誘い承諾系をプローブしたところ、「よかったら今度カフェに行きませんか？」× 回答「土曜の午後なら空いています」→「いいですね！\nぜひ行きましょう😊\n土曜の午後なら空いています\n**楓さんはどんな今度が好きなんですか？**」——文頭の時を表す語「今度」が `_latest_topic_noun` の最初の内容語になり、「どんな今度が好き」という壊れた日本語の聞き返しが `_candidate_rejection_reasons` **棄却理由ゼロ**で付いていた（送信可能）。なお回答の「はい、ぜひ会いましょう」→「はいぜひ会いましょう」（読点を削る既存仕様）は不自然さが軽く、`_answer_lines_for_candidate` の文書化された挙動のため今回は変更しない。
+- **T518 修正**: `_REPETITION_NOUN_STOPWORDS` に時を表す語（今度・今後・来月・今月・先月・今週末・来週末・午前・午後）を追加。「今度」が除外されると同じ質問では「カフェ」が話題名詞になり、「楓さんはカフェはよく行くんですか？」という自然な聞き返しに変わる（棄却ゼロ）。`_content_nouns`（話題比較）も同じ語彙を使うため、比較がわずかに緩くなる副作用は受容。
+- **T518 回帰**: `test_t518_invitation_relay_does_not_ask_about_time_words`（「どんな今度」「今度が好き」を含まず、回答を含み、棄却ゼロ）。
+- **テスト**: 全pytest（Firefox UI を除く）**2067 passed / 0 failed** in 106.94s、Firefox UI **29 passed** in 387.24s、`python -m py_compile app.py tests/test_app.py` PASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T519 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。

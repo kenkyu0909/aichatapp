@@ -2702,6 +2702,37 @@ def _t516_first_context(description: str) -> dict:
     }
 
 
+def test_t518_invitation_relay_does_not_ask_about_time_words(client):
+    """T518: 「今度」などの時を表す語を話題名詞にしない。
+
+    再現では「今度カフェに行きませんか？」への回答リレーが
+    「楓さんはどんな今度が好きなんですか？」という壊れた日本語を
+    棄却理由ゼロで付けていた。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "よろしくお願いします！"},
+            {"role": "them", "body": "よかったら今度カフェに行きませんか？"},
+        ],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "ephemeral_user_answers": [
+            {"question": "今度カフェに行きませんか？", "answer": "土曜の午後なら空いています"}
+        ],
+        "invite_decision": "schedule_after_acceptance",
+    }
+    relay = backend._compose_answer_relay_candidate(
+        context, "今度カフェに行きませんか？", "土曜の午後なら空いています"
+    )
+    assert relay is not None
+    assert "どんな今度" not in relay.text, relay.text
+    assert "今度が好き" not in relay.text, relay.text
+    assert "土曜の午後なら空いています" in relay.text, relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
 def test_t517_school_fact_answers_with_the_right_verb(client):
     """T517: 学校名の確定事実に「をしています」を使わない。
 
