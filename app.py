@@ -7408,6 +7408,28 @@ def _build_schedule_confirmation_fallback_candidate(context: dict) -> Candidate 
     hours = sorted(_extract_schedule_elements(latest).get("hours") or set())
     if not hours:
         return None
+    # T521: 時刻を含む発言すべてが約束ではない。「19時までバイト」「19時に帰って
+    # きます」のような都合・報告に「当日を楽しみにしています」と約束を作らない。
+    # 同意の受け止め（大丈夫・わかりました等）が自分の提案への返事としてあるか、
+    # 相手自身が待ち合わせを宣言しているときだけ受け止める。
+    if re.search(r"まで|帰っ|終わ|戻っ|出発|退勤", latest):
+        return None
+    prior_me = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "me"
+    ]
+    my_time = bool(prior_me and re.search(r"\d{1,2}時", prior_me[-1]))
+    affirmed = bool(
+        re.search(
+            r"大丈夫|いいです|いいね|わかりました|了解|ぜひ|楽しみ|行きましょう|"
+            r"平気|問題ない|いける|オーケー|ですね",
+            latest,
+        )
+    )
+    joint_plan = bool(re.search(r"待ち合わせ|会いましょう|行きましょう|集合", latest))
+    if not ((affirmed and my_time) or joint_plan):
+        return None
     casual = _fallback_should_use_casual_tone(context, latest, "")
     time_label = hours[0]
     text = (

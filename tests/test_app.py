@@ -2702,6 +2702,61 @@ def _t516_first_context(description: str) -> dict:
     }
 
 
+def test_t521_schedule_confirmation_requires_an_agreed_time(client):
+    """T521: 時刻を含む報告に「当日を楽しみにしています」と約束を作らない。
+
+    再現では「明日は19時までバイトです」（都合の報告）や、誘いの文脈がない
+    「今日は19時に帰ってきます」にも打ち合わせ確定として応えていた。
+    """
+    _, backend = client
+    cases = [
+        (
+            [
+                {"role": "me", "body": "よかったら明日19時ごろに会いませんか？"},
+                {"role": "them", "body": "明日は19時までバイトです"},
+            ],
+            "boundary",
+        ),
+        ([{"role": "them", "body": "今日は19時に帰ってきます"}], "info-only"),
+    ]
+    for history, label in cases:
+        context = {
+            "mode": "reply",
+            "history": history,
+            "my_profile": {"facts": {}},
+            "other": {"name": "楓", "description": "札幌の大学生です"},
+        }
+        assert backend._build_schedule_confirmation_fallback_candidate(context) is None, label
+
+
+def test_t521_schedule_confirmation_still_fires_on_agreement(client):
+    """T521: 打ち合わせの同意と待ち合わせ宣言には従来どおり受け止める。"""
+    _, backend = client
+    agreed = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "よかったら明日19時ごろに会いませんか？"},
+            {"role": "them", "body": "19時で大丈夫です！"},
+        ],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+    }
+    candidate = backend._build_schedule_confirmation_fallback_candidate(agreed)
+    assert candidate is not None
+    assert "19時ですね！" in candidate.text
+    joint = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "じゃあ日曜の12時に駅の東口で待ち合わせにしましょう"}],
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "schedule_after_acceptance",
+    }
+    candidate = backend._build_schedule_confirmation_fallback_candidate(joint)
+    assert candidate is not None
+    assert "12時" in candidate.text
+
+
 def test_t520_declined_invite_gets_no_acceptance_and_no_reask(client):
     """T520: 断り回答に承諾の受け止めを重ねず、断った話題の質問も付けない。
 

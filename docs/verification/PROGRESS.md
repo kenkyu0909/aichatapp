@@ -2490,3 +2490,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T520 回帰**: `test_t520_declined_invite_gets_no_acceptance_and_no_reask`・`test_t520_greeting_comma_becomes_a_line_break`・`test_t520_acceptance_fallback_is_skipped_when_answer_declines`。T501/T502 の既存テストも全て通過。
 - **テスト**: 全pytest（Firefox UI を除く）**2072 passed / 0 failed** in 105.02s、Firefox UI **29 passed** in 414.04s、`python -m py_compile app.py tests/test_app.py` PASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T521 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T521 修正（時刻の報告に約束を作らない）
+
+- **T521 発見**: `_build_schedule_confirmation_fallback_candidate`（日時の受け止めフォールバック）は「相手の発言に時刻が含まれ、質問でない」だけで発火するため、(1) 誘いへの返事ではなく都合の報告「明日は19時までバイトです」、(2) 誘いの文脈が無い「今日は19時に帰ってきます」のどちらにも「19時ですね！\n当日を楽しみにしています😊」と応えていた——**打ち合わせが確定していないのに約束を作る**（未確認の日程の創作）。いずれも `_candidate_rejection_reasons` 棄却理由ゼロ。
+- **T521 修正**: 発火条件を (a) 自分の直前の発言が時間提案（\d{1,2}時）で、相手の返事に同意の受け止め（大丈夫・いいです・わかりました・了解・ぜひ・楽しみ・行きましょう・平気・問題ない・いける・オーケー・ですね）がある、または (b) 相手自身が待ち合わせを宣言（待ち合わせ・会いましょう・行きましょう・集合）——のどちらかに限定。時刻が境界・報告の語（まで・帰っ・終わ・戻っ・出発・退勤）を伴うときは常に発火しない。
+- **再現（修正後）**: 同意「19時で大丈夫です！」→「19時ですね！\n当日を楽しみにしています😊」（従来どおり）、待ち合わせ宣言「12時に待ち合わせにしましょう」→ 同様（T491 既存テスト通過）、「19時までバイトです」→ None、「19時に帰ってきます」→ None。
+- **T521 回帰**: `test_t521_schedule_confirmation_requires_an_agreed_time`・`test_t521_schedule_confirmation_still_fires_on_agreement`。
+- **テスト**: 全pytest（Firefox UI を除く）**2074 passed / 0 failed** in 103.79s、Firefox UI **29 passed** in 405.08s、`python -m py_compile app.py tests/test_app.py` PASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T522 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
