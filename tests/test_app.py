@@ -2630,6 +2630,103 @@ def test_like_prompt_requires_name_greeting_empathy_and_desire_to_talk(client):
     assert "はじめまして" in prompt
 
 
+def test_t509_supplied_answer_stops_repeating_the_same_question(client):
+    """T509: 今回受け取った回答は同じリクエスト内でも「回答済み」として扱う。
+
+    実走行では、本人情報の確認に答えた /api/generate が同じ質問をもう一度返し、
+    余分な1往復が発生した。build_context は session_answers をDBから読むため、
+    今回受け取った回答が入らず、session_answers だけを見る抑止が効かなかった。
+    """
+    c, backend = client
+    mid = add_match(c, "架空みなみ")
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={
+            "role": "them",
+            "body": "アニメも好きです！最近は流行ってる作品を少しずつ観てます😊 アニメ映画だと何が好きですか？",
+        },
+    )
+    answer = "ミステリーやアクションをよく観ます。先の展開を予想しながら観るのが好きです。"
+
+    asked_context = backend.build_context(
+        backend.GenerateInput(mode="reply", match_id=mid, response_version=2)
+    )
+    first = backend.missing_personal_fact_question(asked_context)
+    assert first is not None
+    assert first.question == "映画のどんなところが好きか教えてください"
+
+    answered_context = backend.build_context(
+        backend.GenerateInput(
+            mode="reply",
+            match_id=mid,
+            response_version=2,
+            user_answers=[{"question": first.question, "answer": answer}],
+        )
+    )
+    assert backend.missing_personal_fact_question(answered_context) is None
+
+
+def test_t509_answered_question_resumes_generation_without_extra_round_trip(client, monkeypatch):
+    """T509: 同じ質問を返し直さず、回答を受けて候補生成を1回で進める。"""
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空みなみ")
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={
+            "role": "them",
+            "body": "アニメも好きです！最近は流行ってる作品を少しずつ観てます😊 アニメ映画だと何が好きですか？",
+        },
+    )
+
+    first = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert first_body["needs_user_info"] is True
+    assert first_body["api_attempt_count"] == 0
+    question = first_body["user_questions"][0]["question"]
+    assert question == "映画のどんなところが好きか教えてください"
+
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "好みの共有", "text": "ミステリーやアクションがお好きなんですね！\n先の展開を予想しながら観るの、わかります😊", "reply_move": "react"},
+        "alternatives": [
+            {"label": "話題を広げる", "text": "アニメ映画だとバトル系も観るんですか？", "reply_move": "expand"},
+            {"label": "短め", "text": "アニメ映画も観ると幅が広がりますね！", "reply_move": "grounded_share"},
+        ],
+        "reason": "本人が確認した回答を使っています", "strategy": "回答を踏まえて話題を続けます",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話を深める段階です", "next_action": "映画の話題を続ける",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    second = c.post("/api/generate", json={
+        "mode": "reply",
+        "match_id": mid,
+        "response_version": 2,
+        "user_answers": [{"question": question, "answer": "ミステリーやアクションをよく観ます。先の展開を予想しながら観るのが好きです。"}],
+    })
+
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["needs_user_info"] is False, second_body
+    assert second_body["user_questions"] == []
+    # 回答がそのまま使われ、同じ質問の再確認なしに生成へ進む（余分な往復が無い）。
+    assert second_body["api_attempt_count"] >= 1
+    assert second_body["recommended"] is not None
+    assert calls and "映画のどんなところが好きか教えてください" not in json.dumps(
+        second_body, ensure_ascii=False
+    )
+
+
 def test_invite_floor_requires_minimum_own_messages(client, monkeypatch):
     _, backend = client
 

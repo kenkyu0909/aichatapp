@@ -1653,6 +1653,31 @@ def _ephemeral_answer_addresses_question(topic: str, question_text: str, answer_
     return _normalize_clarification_question_key(answer_question) == owned
 
 
+def _ephemeral_answer_matches_owned_question(topic: str, question_text: str, context: dict) -> bool:
+    """T509: アプリ自身が確認した質問に、今回受け取った回答が対応しているか。
+
+    実走行では「映画のどんなところが好きか教えてください」と確認した直後の回答を
+    使わず、同じ質問をもう一度返して余分な1往復が発生していた。スコープ判定が
+    相手の前置きの一言（「最近は…」）で別スコープへ振れても、確認した質問そのものに
+    回答が返っていれば回答済みとして扱う。
+    """
+    if not question_text:
+        return False
+    try:
+        owned = _normalize_clarification_question_key(
+            personal_fact_question(topic, question_text).question
+        )
+    except Exception:
+        return False
+    if not owned:
+        return False
+    return any(
+        str(answer.get("answer", "")).strip()
+        and _normalize_clarification_question_key(str(answer.get("question", ""))) == owned
+        for answer in context.get("ephemeral_user_answers", [])
+    )
+
+
 def _cafe_atmosphere_style_polarities(text: str) -> dict[str, bool]:
     """Extract explicit cafe styles and whether each is affirmed or negated."""
     patterns = {
@@ -2291,12 +2316,17 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
         )
     if topic == "映画" and re.search(r"最近|何を観|何を見|観た映画|見た映画", question_text):
         keys = ("recent_movies", "recent_films", "最近観た映画")
+        # T509: 相手の前置きの「最近」だけで最近観た映画のスコープと判定した場合でも、
+        # アプリ自身が確認した質問（例:「映画のどんなところが好きか教えてください」）に
+        # 本人が回答済みなら同じ確認を繰り返さない。ここで False を返すと共通判定の
+        # 「確認済みの質問に回答済みか」へ届かず、実走行で同じ質問を2回連続表示していた。
+        # なお最近観た映画のスコープは、趣味の話題に映画と書いてあるだけでは満たさない。
         return any(facts.get(key) for key in keys) or any(
             answer.get("answer", "").strip()
             and re.search(r"最近|この前|昨日|先週|観た|見た|作品|[『「].+[』」]", answer.get("answer", ""))
             for answer in context.get("ephemeral_user_answers", [])
             if "映画" in answer.get("question", "")
-        )
+        ) or _ephemeral_answer_matches_owned_question(topic, question_text, context)
     if topic == "映画" and re.search(r"ジャンル|何系|どんな.*好き|好きな.*映画", question_text):
         return any(facts.get(key) for key in ("favorite_movie_genres", "movie_genres", "favorite_films")) or any(
             answer.get("answer", "").strip()
