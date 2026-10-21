@@ -2481,3 +2481,12 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T519 回帰**: `test_t519_casual_invitation_is_recognized_and_relayed`・`test_t519_casual_invite_pattern_variants`。
 - **テスト**: 全pytest（Firefox UI を除く）**2069 passed / 0 failed** in 105.83s、Firefox UI **29 passed** in 404.74s、`python -m py_compile app.py tests/test_app.py` PASS。なお `GEMINI_MODEL` を設定しない focused 実行では既知の環境依存失敗（model 名一致10件）が出るが、本修正とは無関係（環境変数付きでは全件PASS）。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T520 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T520 修正（断り回答への承諾併存と再勧誘質問）
+
+- **T520 発見**: 誘いへの断り回答のリレーをプローブしたところ、(1) タメ口の断り「ごめん、今はちょっと落ち着いていたいからやめておくね」→「いいね！\nぜひ行きましょー\nごめん…やめておくね\n…」——**承諾と断りが同じ候補に矛盾して併存**（断り語彙が「やめておき」だけで「やめておく」を拾わない）。(2) 丁寧語の断り「ごめんなさい、今は少し落ち着いていたいのでやめておきます」→「…やめておきます\nまた機会があればぜひ行きたいです！\n**楓さんはカフェはよく行くんですか？**」——断った直後に**断った話題の質問**（再勧誘に当たる）。どちらも棄却理由ゼロで送信可能。指令の「相手が断った後は再勧誘や説得を排除」に直接反する。(3) 併せて「ごめんなさい、今は…」の読点が削除され「ごめんなさい今は…」と連結する問題も確認。
+- **T520 修正**: (a) `PARTNER_INVITATION_REFUSAL_PATTERN` にタメ口の断り（やめてお／落ち着いていたい／今回はパス／遠慮しておく等）を追加し、リレー内の重複していた断り判定をこの共有パターンへ統一。(b) 断りのときは聞き返し（followup）を付けず、回答＋前向きな一言のみに。(c) `_build_invitation_acceptance_fallback_candidate` は本人の確認済み回答が断りなら None（承諾だけの受け皿を出さない）。(d) `_answer_lines_for_candidate` と `_normalized_answer_sentence_units` は「ごめんなさい、」「ごめん、」「すみません、」「ありがとう、」の読点を行区切りにして分割後の行と回答単位を対応させた。
+- **再現（修正後）**: 丁寧語 →「ごめんなさい\n今は少し落ち着いていたいのでやめておきます\nまた機会があればぜひ行きたいです！」、タメ口 →「ごめん\n今はちょっと落ち着いていたいからやめておくね\nまた機会があればぜひ行きたいです！」、遠方 →「遠いので今回は見送ります\nまた機会があればぜひ行きたいです！」（いずれも棄却ゼロ・承諾なし・質問なし）。
+- **T520 回帰**: `test_t520_declined_invite_gets_no_acceptance_and_no_reask`・`test_t520_greeting_comma_becomes_a_line_break`・`test_t520_acceptance_fallback_is_skipped_when_answer_declines`。T501/T502 の既存テストも全て通過。
+- **テスト**: 全pytest（Firefox UI を除く）**2072 passed / 0 failed** in 105.02s、Firefox UI **29 passed** in 414.04s、`python -m py_compile app.py tests/test_app.py` PASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T521 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。

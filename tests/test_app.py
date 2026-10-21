@@ -2702,6 +2702,64 @@ def _t516_first_context(description: str) -> dict:
     }
 
 
+def test_t520_declined_invite_gets_no_acceptance_and_no_reask(client):
+    """T520: 断り回答に承諾の受け止めを重ねず、断った話題の質問も付けない。
+
+    再現ではタメ口の断り「ごめん、今はちょっと落ち着いていたいからやめておくね」に
+    「いいね！\nぜひ行きましょー」（承諾）が重なり、丁寧語の断りには
+    「楓さんはカフェはよく行くんですか？」という断った話題の質問が付いていた。
+    """
+    _, backend = client
+    cases = [
+        (
+            "今度カフェに行きませんか？",
+            "ごめんなさい、今は少し落ち着いていたいのでやめておきます",
+            ("いいですね！", "ぜひ行きましょう", "カフェはよく行く"),
+        ),
+        (
+            "今度カフェに行かない？",
+            "ごめん、今はちょっと落ち着いていたいからやめておくね",
+            ("いいね！", "ぜひ行きましょー", "カフェはよく行く"),
+        ),
+    ]
+    for partner_msg, answer, forbid in cases:
+        context = {
+            "mode": "reply",
+            "history": [{"role": "them", "body": partner_msg}],
+            "my_profile": {"facts": {}},
+            "other": {"name": "楓", "description": "札幌の大学生です"},
+            "ephemeral_user_answers": [{"question": partner_msg, "answer": answer}],
+        }
+        relay = backend._compose_answer_relay_candidate(context, partner_msg, answer)
+        assert relay is not None, answer
+        for word in forbid:
+            assert word not in relay.text, (answer, relay.text)
+        assert "また機会があればぜひ行きたいです！" in relay.text, relay.text
+        assert backend._candidate_rejection_reasons(relay, context) == []
+
+
+def test_t520_greeting_comma_becomes_a_line_break(client):
+    """T520: 「ごめんなさい、」の読点は行分割になる（「ごめんなさい今は」を作らない）。"""
+    _, backend = client
+    lines = backend._answer_lines_for_candidate("ごめんなさい、今日は少し忙しいです")
+    assert lines == ["ごめんなさい", "今日は少し忙しいです"], lines
+
+
+def test_t520_acceptance_fallback_is_skipped_when_answer_declines(client):
+    """T520: 本人が断りを確認済みのとき、承諾だけのフォールバックは出さない。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "今度カフェに行きませんか？"}],
+        "my_profile": {"facts": {}},
+        "other": {"name": "楓", "description": "札幌の大学生です"},
+        "ephemeral_user_answers": [
+            {"question": "今度カフェに行きませんか？", "answer": "今回はやめておきます"}
+        ],
+    }
+    assert backend._build_invitation_acceptance_fallback_candidate(context) is None
+
+
 def test_t519_casual_invitation_is_recognized_and_relayed(client):
     """T519: タメ口の誘い（「今度カフェに行かない？」）も誘いとして扱う。
 

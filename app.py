@@ -7490,6 +7490,10 @@ def _build_invitation_acceptance_fallback_candidate(context: dict) -> Candidate 
     """
     if not partner_latest_message_has_invitation(context):
         return None
+    # T520: 本人が確認した回答が断りなら、承諾だけの受け皿は出さない。
+    for answer in context.get("ephemeral_user_answers") or []:
+        if PARTNER_INVITATION_REFUSAL_PATTERN.search(str(answer.get("answer", ""))):
+            return None
     partner_messages = [
         str(message.get("body", ""))
         for message in context.get("history") or []
@@ -9586,6 +9590,14 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
 def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
     """Sentence-level units of a confirmed answer, normalized for comparison."""
     normalized = unicodedata.normalize("NFKC", str(answer_text))
+    # T520: お詫び・挨拶の語に続く読点は _answer_lines_for_candidate と同じ規則で
+    # 文の区切りにする（分割後の行と回答の単位を対応させる）。
+    normalized = re.sub(
+        r"^(ごめんなさい|ごめんね|ごめん|すみません|ありがとう)(?:、|，|,)",
+        r"\1\n",
+        normalized,
+        flags=re.MULTILINE,
+    )
     units = [
         re.sub(r"[\s　、。，．！!？?]", "", part)
         for part in re.split(r"[。．.!！?？]+|\n+", normalized)
@@ -9960,9 +9972,11 @@ def candidate_answers_partner_invitation(candidate_text: str) -> bool:
 
 # T501: 誘いへの丁寧な断りも、誘いに答えた返信として成立する（承諾だけを返事と
 # みなすと、本人が確認した断りが「未回答」として棄却され続ける）。
+# T520: タメ口の断り（やめておく・落ち着いていたい・遠慮しておく等）も断りとして数える。
 PARTNER_INVITATION_REFUSAL_PATTERN = re.compile(
-    r"やめておき|遠いので|行けません|行けな|難しいです|またの機会|別の機会|"
-    r"今度にします|控えます|見送り|今回はやめ|行くのは難し"
+    r"やめてお|遠いので|行けません|行けな|難しいです|またの機会|別の機会|"
+    r"今度にします|控えます|見送り|今回はやめ|行くのは難し|"
+    r"落ち着いていたい|今回はパス|遠慮し(?:てお|とく)"
 )
 
 
@@ -10733,9 +10747,15 @@ def _answer_lines_for_candidate(raw_answer: str) -> list[str]:
     normalized = unicodedata.normalize("NFKC", raw_answer)
     lines: list[str] = []
     for part in re.split(r"[。．.!！?？]+|\n+", normalized):
-        cleaned = re.sub(r"[\s、，,]+", "", part)
-        if cleaned:
-            lines.append(cleaned)
+        # T520: お詫び・挨拶の語に続く読点は文の区切りとして改行にする
+        # （「ごめんなさい、今は…」→「ごめんなさい」＋「今は…」）。
+        part = re.sub(
+            r"^(ごめんなさい|ごめんね|ごめん|すみません|ありがとう)(?:、|，|,)", r"\1\n", part
+        )
+        for piece in part.split("\n"):
+            cleaned = re.sub(r"[\s、，,]+", "", piece)
+            if cleaned:
+                lines.append(cleaned)
     # T492: 「好きです」「します」のような一語の答えの後ろに言い直しが続くときは、
     # 一語の方を落として言い直しだけを使う（「好きです／冬の空を見るのが好きです」
     # →「冬の空を見るのが好きです」）。
@@ -10936,11 +10956,12 @@ def _compose_answer_relay_candidate(
         # 重ねない。空行が残らないよう空の行は詰める。
         # T501: 回答が丁寧な断りなら、承諾の相槌を添えず回答そのものを先頭にする。
         already_accepts = bool(re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい", clean_answer))
-        declines_invite = bool(
-            re.search(r"やめておき|遠いので|行けません|行けな|難しいです|またの機会|別の機会|今度にします|控えます|見送り", clean_answer)
-        )
+        # T520: 共有の断り判定（丁寧語・タメ口の両方）を使う。「やめておくね」のような
+        # タメ口の断りを承諾として扱い、承諾＋断りの矛盾文を作らない。
+        declines_invite = bool(PARTNER_INVITATION_REFUSAL_PATTERN.search(clean_answer))
         if declines_invite:
             # T502: 断りで終わらせず、前向きな一言を添える。
+            # T520: 断った直後に同じ話題の質問を付けない（再勧誘・説得に当たる）。
             goodwill = ""
             if not re.search(r"また|別の機会|今度|機会があれば|行きたい", clean_answer):
                 place = _user_city_label(context)
@@ -10949,7 +10970,7 @@ def _compose_answer_relay_candidate(
                     if place
                     else "また機会があればぜひ行きたいです！"
                 )
-            candidate_text = "\n".join(part for part in (clean_answer, goodwill, followup) if part)
+            candidate_text = "\n".join(part for part in (clean_answer, goodwill) if part)
         else:
             accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
             # T519: 相手がタメ口なら受け止めも合わせる（「いいね！」）。
