@@ -2901,6 +2901,56 @@ def test_t524_polite_invitation_gets_an_acceptance_fallback(client):
     assert backend.candidate_answers_partner_invitation(candidate.text)
 
 
+def test_t525_state_nouns_do_not_become_like_topics(client):
+    """T525: 状態・確認の語を「どんな〜が好き」の話題にしない。
+
+    再現では「明日の14時で大丈夫ですか？」への回答リレーが
+    「黒川さんはどんな大丈夫が好きなんですか？」という意味の通らない聞き返しを
+    棄却理由ゼロで付けていた（可能・無理・方法・方向も同様）。
+    """
+    _, backend = client
+    cases = [
+        ("明日の14時で大丈夫ですか？", "はい、大丈夫です", "大丈夫"),
+        ("その日は可能ですか？", "可能です", "可能"),
+        ("来週は無理ですか？", "無理ではありません", "無理"),
+        ("この方法でいいですか？", "はい、それでいいです", "方法"),
+        ("この方向で合っていますか？", "合っています", "方向"),
+    ]
+    for question, answer, noun in cases:
+        context = {
+            "mode": "reply",
+            "history": [{"role": "them", "body": question}],
+            "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+            "other": {"name": "黒川いつき", "description": "書店員"},
+            "reply_preferences": {"tone": "自動"},
+            "invite_decision": "do_not_invite",
+        }
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        assert backend._latest_topic_noun(context) != noun, question
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert f"どんな{noun}が好き" not in relay.text, relay.text
+
+
+def test_t525_likeable_topic_still_gets_the_preference_followup(client):
+    """T525: 好みの対象になる話題（カメラ等）の聞き返しは残す。"""
+    _, backend = client
+    question = "なぜカメラを始めたんですか？"
+    answer = "旅先の記録を残したかったからです"
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "do_not_invite",
+        "ephemeral_user_answers": [{"question": question, "answer": answer}],
+    }
+    relay = backend._compose_answer_relay_candidate(context, question, answer)
+    assert relay is not None
+    assert "どんなカメラが好き" in relay.text, relay.text
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

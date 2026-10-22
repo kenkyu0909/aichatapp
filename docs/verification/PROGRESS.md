@@ -2511,3 +2511,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T524 回帰**: `test_t524_polite_invitations_are_recognized`・`test_t524_candidate_ignoring_polite_invitation_is_rejected`・`test_t524_polite_invitation_gets_an_acceptance_fallback`（3件とも修正前は failure を再現確認 → 修正後 PASS）。
 - **テスト**: 焦点 `-k "invitation or invite or t518 or t519 or t520 or t521 or near_future"` **101 passed**。全pytest（Firefox UI を除く）**2077 passed / 0 failed** in 101.97s、Firefox UI **29 passed** in 399.78s。`python -m py_compile app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS（`git diff --check` 全体は `tests/test_app.py` の既存LF→CRLF警告のみで空白エラーではない）。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T525 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T525 修正（状態・確認の語を「どんな〜が好き」の話題にしない）
+
+- **発見の経緯**: 日程質問のリレーを `_compose_answer_relay_candidate` で一括プローブしていたところ、相手の時間確定の質問「14時で大丈夫ですか？」への回答「はい、大丈夫です」で、**「黒川さんはどんな大丈夫が好きなんですか？」**という意味の通らない聞き返しが出た（棄却理由ゼロ＝送信可能）。さらに確認・状態の語（可能・無理・方法・方向・連絡・対応）でも同型の壊れた日本語を確認した（`dbg_t525_probe.py`・`dbg_t525b_probe.py`・`dbg_t525c_probe.py`）。
+- **T525 発見**: 回答リレーの聞き返しは `_latest_topic_noun` が選ぶ内容語に「どんな{N}が好きなんですか？」を付ける。相手の発言が状態・確認を尋ねる文だと、状態語・やりとりの語をそのまま話題名詞にし、「どんな大丈夫が好き」「どんな可能が好き」「どんな無理が好き」「どんな方法が好き」「どんな方向が好き」「どんな連絡が好き」という**普通の利用では出ない不自然な聞き返し**を付けていた。T513（場所以外に「よく行く」を付けない）・T518（「今度」等の時を表す語を話題にしない）と同種の生成元バグ。
+- **T525 修正**: `_REPETITION_NOUN_STOPWORDS` に状態・確認・やりとりの語（大丈夫・可能・無理・都合・方法・方向・確認・了解・承知・対応・連絡・返事）を追加。`_latest_topic_noun` がこれらを話題にせず、聞き返しが付かない（回答そのものは従来どおり届く）。`_content_nouns`（話題比較）も同じ語彙を使うため比較がわずかに緩くなる副作用は受容。
+- **再現（修正後）**: 「14時で大丈夫ですか？」→「はい大丈夫です」、「その日は可能ですか？」→「可能です」、「来週は無理ですか？」→「無理ではありません」、「この方法でいいですか？」→「はいそれでいいです」、「この方向で合っていますか？」→「合っています」、「あとで連絡もらえますか？」→「連絡します」。いずれも壊れた聞き返しなし。
+- **誤って狭めていないこと**: 好みの対象になる話題の聞き返しは残す —「なぜカメラを始めたんですか？」×「旅先の記録を残したかったからです」→「旅先の記録を残したかったからです\n黒川さんはどんなカメラが好きなんですか？」（従来どおり）。回帰で固定。
+- **T525 回帰**: `test_t525_state_nouns_do_not_become_like_topics`（修正前 failure を再現確認 → 修正後PASS）・`test_t525_likeable_topic_still_gets_the_preference_followup`。
+- **テスト**: 全pytest（Firefox UI を除く）**2079 passed / 0 failed** in 102.00s、Firefox UI **29 passed** in 406.24s。`python -m py_compile app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T526 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
