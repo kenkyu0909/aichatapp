@@ -1,0 +1,801 @@
+{
+  "schema_version": 1,
+  "experiment_id": "quality_checks_005",
+  "run_at": "2026-10-14T14:24:33+00:00",
+  "environment": {
+    "os": "Windows",
+    "python": "3.12.10",
+    "browser": "Firefox (separate UI regression)",
+    "database": "new isolated temporary SQLite"
+  },
+  "credential_source": "user-authorized private API directory; values excluded",
+  "configured_pairs": [
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.1-flash-lite"
+    }
+  ],
+  "profile": {
+    "name": "架空の水野けい",
+    "age": 29,
+    "region": "東京都練馬区",
+    "occupation": "建築会社の事務",
+    "hobbies": [
+      "読書",
+      "カフェ巡り"
+    ],
+    "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+    "avoid": "未確認の好みや経験、共通点、予定の創作"
+  },
+  "logical_request_limit": 8,
+  "per_request_provider_attempt_limit": 4,
+  "total_provider_attempt_limit": 32,
+  "tests": [
+    {
+      "id": "reading_genre_answered_preflight",
+      "phase": "local_preflight",
+      "result": "PASS",
+      "input_question": "普段どんなジャンルの本を読みますか？",
+      "user_questions": [
+        {
+          "question": "普段読む本はどんなジャンルが多いですか？",
+          "purpose": "本人が確認していない読書の好みや経験を相手に伝えないため"
+        }
+      ],
+      "api_attempt_count": 0
+    },
+    {
+      "id": "recent_movie_answered_preflight",
+      "phase": "local_preflight",
+      "result": "PASS",
+      "input_question": "最近どんな映画を観ましたか？",
+      "user_questions": [
+        {
+          "question": "最近観た映画があれば作品名を教えてください",
+          "purpose": "本人が確認していない映画の好みや経験を相手に伝えないため"
+        }
+      ],
+      "api_attempt_count": 0
+    },
+    {
+      "id": "reading_genre_answered",
+      "description": "読書ジャンルの確認回答後",
+      "input": {
+        "partner_latest_message": "普段どんなジャンルの本を読みますか？",
+        "user_answer": [
+          {
+            "question": "普段読む本はどんなジャンルが多いですか？",
+            "answer": "ミステリー小説を読むことが多いです"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "おすすめ",
+            "text": "ミステリー小説を読むことが多いです\n〜さんは最近どんな本を読みましたか？"
+          },
+          {
+            "label": "別の話題",
+            "text": "ミステリー小説が好きでよく読んでいます\n映画やカレーも好きなんですね"
+          },
+          {
+            "label": "短めの返答",
+            "text": "ミステリー小説を読むことが多いです"
+          }
+        ],
+        "candidate_character_counts": [
+          36,
+          34,
+          17
+        ],
+        "candidate_sentence_estimates": [
+          2,
+          2,
+          1
+        ],
+        "candidate_line_counts": [
+          2,
+          2,
+          1
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手からの読書のジャンルに関する直接の質問に対し、一時回答に裏付けられた事実を基にして簡潔に返信しました。",
+        "strategy": "相手の質問に真っ直ぐ答えつつ、別の話題へ広げるか短く返すかで選択肢を持たせました。句読点を含めず、自然な会話の口調に整えています。",
+        "conversation_stage": "Stage 2: 会話を広げる段階",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりで読書の話題を深めている段階のため、誘いは行わず会話を続けます。",
+        "next_action": "相手の読書の好みや返答を受け止め、共通の話題である読書や映画について自然に会話を続けます。",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "recent_movie_answered",
+      "description": "最近の視聴経験の確認回答後",
+      "input": {
+        "partner_latest_message": "最近どんな映画を観ましたか？",
+        "user_answer": [
+          {
+            "question": "最近観た映画があれば作品名を教えてください",
+            "answer": "最近は架空作品の『青い灯台』を観ました"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "素直で自然な返答",
+            "text": "最近は青い灯台という作品を観ましたよ"
+          },
+          {
+            "label": "話題を広げる案",
+            "text": "青い灯台を観ましたが映像がきれいでした"
+          },
+          {
+            "label": "少し親しみを加えた案",
+            "text": "最近は青い灯台という映画を観てすごく良かったです"
+          }
+        ],
+        "candidate_character_counts": [
+          18,
+          19,
+          24
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "candidate_line_counts": [
+          1,
+          1,
+          1
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手の映画の質問に対し一時回答にある事実をそのまま返しています。",
+        "strategy": "一時回答で確認できた作品名を使ってシンプルに返答します。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ映画の感想を共有し合う段階のため会話を続けます。",
+        "next_action": "相手からの返信を待ちます",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "purchase_habit_answered",
+      "description": "確認済みの買い方と矛盾しない返信",
+      "input": {
+        "partner_latest_message": "気になる新作を見つけたらすぐ買うタイプですか？",
+        "user_answer": [
+          {
+            "question": "気になる新作を見つけたらすぐ買うタイプですか？",
+            "answer": "気になった新作は少し調べてから買うことが多いです"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "素直な返答",
+            "text": "気になった新作は少し調べてから買うことが多いです"
+          },
+          {
+            "label": "別の話題",
+            "text": "調べる時間も含めて買い物は楽しく感じます"
+          },
+          {
+            "label": "親しみのある案",
+            "text": "後からじっくり検討することが多いです"
+          }
+        ],
+        "candidate_character_counts": [
+          24,
+          20,
+          18
+        ],
+        "candidate_sentence_estimates": [
+          1,
+          1,
+          1
+        ],
+        "candidate_line_counts": [
+          1,
+          1,
+          1
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手の質問に対して本人確認済みの回答を直接伝えつつ自然に返信しています",
+        "strategy": "本人確認回答の事実だけを使って相手の質問に答え、句読点を省いて短く返します",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話の序盤でありお互いの好みの傾向を話している段階のため継続します",
+        "next_action": "相手からの返信を受け取りさらに会話を広げます",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "respect_decline_and_no_reask",
+      "description": "誘いへの慎重な反応を尊重し既知のカフェ頻度を再質問しない",
+      "input": {
+        "partner_latest_message": "ごめんなさい！まだ会うのはちょっと不安です",
+        "user_answer": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": null,
+        "generation_blocked": null,
+        "candidates": [],
+        "candidate_character_counts": [],
+        "candidate_sentence_estimates": [],
+        "candidate_line_counts": [],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 0,
+        "unsupported_personal_claim_topics": [],
+        "reason": "",
+        "strategy": "",
+        "conversation_stage": "",
+        "invite_decision": "",
+        "decision_reason": "",
+        "next_action": "",
+        "user_questions": [],
+        "error_code": "invalid_response",
+        "safe_error": "AIの応答形式が不正でした。再生成してください。",
+        "api_alias": null,
+        "model": null,
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 502,
+        "result": "FAIL"
+      }
+    },
+    {
+      "id": "placeholder_free",
+      "description": "候補に名前などの未完成プレースホルダーを含めない",
+      "input": {
+        "partner_latest_message": "本の話をしていると楽しいですね！",
+        "user_answer": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "読書の話題に共感して返す",
+            "text": "本のお話ができるのすごく嬉しいです\n最近はどんなジャンルの本を読まれるんですか？"
+          },
+          {
+            "label": "自分の好きなジャンルに触れつつ返す",
+            "text": "私も本を読む時間がとても好きです\nお気に入りの作家さんとかいらっしゃいますか？"
+          },
+          {
+            "label": "短めに同意して話題を広げる",
+            "text": "本当にそうですよね\n最近読んで面白かった本とかってありますか？"
+          }
+        ],
+        "candidate_character_counts": [
+          40,
+          39,
+          31
+        ],
+        "candidate_sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "candidate_line_counts": [
+          2,
+          2,
+          2
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手の読書の話題に対して自然に共感を示しつつ、相手の好きなものについて質問して会話を広げました。",
+        "strategy": "相手のメッセージが短めであるため、同程度の文量で負担のない形で返信します。句読点を一切使わず、相手の話題に沿った質問を1つだけ添えています。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりの段階であるため、まずは読書の話題を続けてお互いの趣味を深めるのが適切です。",
+        "next_action": "相手からの返信を受け取り、おすすめの本や読書の傾向についてさらに会話を続けます。",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "invite_opportunity",
+      "description": "相互質問とカフェの話題がある誘い機会",
+      "input": {
+        "partner_latest_message": "中野で落ち着いたカフェを見つけました！ケーキもおいしそうで気になってます",
+        "user_answer": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "おすすめ",
+            "text": "中野のカフェ気になりますね\nケーキもおいしそうです！"
+          },
+          {
+            "label": "会話を広げる",
+            "text": "中野のお店気になります\nどんなケーキがあるんですか？"
+          },
+          {
+            "label": "親しみを加える",
+            "text": "中野の落ち着いたお店行ってみたいですね！"
+          }
+        ],
+        "candidate_character_counts": [
+          26,
+          26,
+          20
+        ],
+        "candidate_sentence_estimates": [
+          2,
+          2,
+          1
+        ],
+        "candidate_line_counts": [
+          2,
+          2,
+          1
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手の中野のカフェに関する話題に自然に反応し、未確認の自分の予定や体験を作らずに返信を作成しました。",
+        "strategy": "相手のメッセージにある中野のカフェの話題へ共感と興味を示し、句読点なしの自然な口語で短く返します。",
+        "conversation_stage": "Stage 3",
+        "invite_decision": "consider_invite",
+        "decision_reason": "カフェの話題が出ており相手も興味を持っているため、次の段階として誘いにつながる話題を検討できる状態です。",
+        "next_action": "相手の反応を見ながら、落ち着いたカフェやケーキの話題をもう少し深掘りします。",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "newline_per_sentence",
+      "description": "各候補を1文ごとに改行し短文相手への分量を合わせる",
+      "input": {
+        "partner_latest_message": "休日は友達とカフェに行くことが多いです！最近は新しいお店も探してます笑",
+        "user_answer": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": false,
+        "generation_blocked": false,
+        "candidates": [
+          {
+            "label": "カフェの話題に共感して返信する",
+            "text": "休日に友達と新しいお店を探すの楽しそうですね！\nどんな雰囲気のカフェが好きなんですか？"
+          },
+          {
+            "label": "自分のカフェ巡りの話題を軽く触れる",
+            "text": "新しいお店を開拓するのワクワクしますよね！\n私も休日にカフェを巡るのが好きなんです"
+          },
+          {
+            "label": "最近のエリアについて聞いてみる",
+            "text": "素敵なお休みの過ごし方ですね！\n最近はどのあたりのエリアに行くことが多いですか？"
+          }
+        ],
+        "candidate_character_counts": [
+          43,
+          41,
+          40
+        ],
+        "candidate_sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "candidate_line_counts": [
+          2,
+          2,
+          2
+        ],
+        "recent_self_acknowledgment_counts": {
+          "共感": 0,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 3,
+        "unsupported_personal_claim_topics": [],
+        "reason": "相手が休日のカフェ巡りと新しい店探しについて話しているため、その話題に共感しつつ自然に質問を返しています。",
+        "strategy": "相手の会話に合わせてカフェや新しい店探しの話題を広げ、自然なコミュニケーションを図ります。",
+        "conversation_stage": "Stage 2: 会話を広げる段階",
+        "invite_decision": "continue_conversation",
+        "decision_reason": "まだ会話が始まったばかりのため、まずは趣味の話題を続けてお互いのことを知る段階です。",
+        "next_action": "相手の返信に合わせてカフェや休日の過ごし方の話題を掘り下げます。",
+        "user_questions": [],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 1,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "empathy_variety",
+      "description": "同じ共感の言い換えを続けず話題を前へ進める",
+      "input": {
+        "partner_latest_message": "映画館の大きなスクリーンって迫力がありますよね！",
+        "user_answer": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        }
+      },
+      "evaluation": {
+        "needs_user_info": true,
+        "generation_blocked": false,
+        "candidates": [],
+        "candidate_character_counts": [],
+        "candidate_sentence_estimates": [],
+        "candidate_line_counts": [],
+        "recent_self_acknowledgment_counts": {
+          "共感": 2,
+          "納得": 0,
+          "前向き": 0,
+          "興味": 0
+        },
+        "repeated_acknowledgment_candidates": [],
+        "punctuation_violation": false,
+        "missing_sentence_break_violation": false,
+        "placeholder_violation": false,
+        "repeated_partner_fact_topics": [],
+        "candidate_distinct_count": 0,
+        "unsupported_personal_claim_topics": [],
+        "reason": "本人の映画の好みや経験に関する確認済み情報がないため、不足情報の質問を優先します。",
+        "strategy": "未確認の好みや経験の創作を避けるため、映画の話題に対する適切な返信に必要な情報を確認します。",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "ask_user_info",
+        "decision_reason": "相手の映画の話題に対して本人の経験や好みの根拠が不足しているため",
+        "next_action": "本人へ映画に関する好みを質問する",
+        "user_questions": [
+          {
+            "question": "映画はよく観に行かれますか？または好きなジャンルがあれば教えてください。",
+            "purpose": "映画の話題について本人の事実に基づいた自然な返信や質問を作るため"
+          }
+        ],
+        "error_code": null,
+        "safe_error": null,
+        "api_alias": "API1",
+        "model": "gemini-3.5-flash-lite",
+        "api_attempt_count": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "http_status": 200,
+        "result": "FAIL"
+      }
+    }
+  ],
+  "logical_requests": 8,
+  "provider_attempts": 13,
+  "status": "FAIL",
+  "limitations": [
+    "model output is a sample and does not guarantee future quality",
+    "personal-claim scanner covers known Japanese patterns and is not complete semantic verification",
+    "API billing and remaining quota are not exposed by this test"
+  ],
+  "finished_at": "2026-10-14T14:25:41+00:00",
+  "post_run_review": {
+    "review_status": "FAIL",
+    "review_scope": "保存済みの実API候補を人手で再確認。元のevaluation/resultは変更していない。",
+    "findings": [
+      {
+        "case_id": "reading_genre_answered",
+        "severity": "FAIL",
+        "finding": "候補に「〜さん」という未解決の名前プレースホルダーが残った。既存の検出規則では見つからなかった。"
+      },
+      {
+        "case_id": "recent_movie_answered",
+        "severity": "FAIL",
+        "finding": "作品名だけを答えたのに、映像への評価や「良かった」という未確認の感想を追加した。"
+      },
+      {
+        "case_id": "invite_opportunity",
+        "severity": "FAIL",
+        "finding": "誘いを検討する会話方針だったが、候補に明確な誘いがなかった。品質評価器は最新の相手発言だけを見ており、直前の相互質問を見落とした。"
+      },
+      {
+        "case_id": "empathy_variety",
+        "severity": "FAIL",
+        "finding": "相手から本人への直接質問がない場面で、映画館へ行く頻度を本人に尋ねる不要な確認質問を返した。"
+      },
+      {
+        "case_id": "respect_decline_and_no_reask",
+        "severity": "FAIL",
+        "finding": "モデル応答がスキーマ不正となり、修復後も候補が得られなかった。"
+      }
+    ],
+    "run_accounting": {
+      "logical_requests": 8,
+      "provider_attempts": 13,
+      "successfully_evaluated_cases": 6,
+      "failed_cases": 2,
+      "api_alias_model_observed": "API1 / gemini-3.5-flash-lite",
+      "rate_limit_fallback_observed": false
+    },
+    "conversation_004_gate": "NOT_STARTED: 品質FAILがあり、会話実験の開始条件を満たさない。",
+    "credential_values_included": false
+  }
+}
