@@ -3778,10 +3778,51 @@ def test_require_question_flag_repairs_questionless_candidates(client, monkeypat
     assert body["generation_blocked"] is not True, body
     texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
     assert texts
-    assert all(("？" in text) or ("ますか" in text) for text in texts)
+    # T547: 質問あり候補が作れない場合は質問なし候補へ緩めるので、どちらかで合格。
+    notice = body.get("candidate_notice") or ""
+    assert all(("？" in text) or ("ますか" in text) for text in texts) or (
+        "質問のない候補を表示しています" in notice
+    )
     assert len(prompts) == 2
     assert "【質問必須】" in prompts[0]
     assert "【質問必須】" in prompts[1]
+
+
+def test_t547_require_question_falls_back_with_notice_instead_of_blocking(client):
+    """T547: 質問必須でも質問あり候補が0案なら、質問なし候補を通知付きで返す。
+
+    実走行 t533i では、相手の「コーヒー派ですか？紅茶派ですか？」への返答で
+    質問必須の棄却が重なり3回とも候補ゼロで停止した。旗を最優先するより
+    会話が止まらない方を優先し、全候補が質問なしのときだけ緩める。
+    """
+    _, backend = client
+    value = backend.Suggestions(
+        recommended=backend.Candidate(label="相槌のみ", text="ドラマいいですね！"),
+        alternatives=[backend.Candidate(label="共有", text="僕も家でよく観ます")],
+        reason="相槌で返す", strategy="続きを気にする",
+    )
+    required = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近はドラマを続けて観ることが多いです"}],
+        "reply_preferences": {"tone": "敬語", "require_question": True},
+    }
+    result = backend.filter_safe_candidates(value, 2, required)
+    assert result["generation_blocked"] is not True
+    assert result["recommended"]["text"] == "ドラマいいですね！"
+    assert "質問のない候補を表示しています" in result["candidate_notice"]
+
+    # 質問あり候補が1案でもあるときは、質問なし候補は棄却されたまま。
+    mixed = backend.Suggestions(
+        recommended=backend.Candidate(
+            label="質問あり", text="ドラマいいですね！\nどんなジャンルをよく観るんですか？"
+        ),
+        alternatives=[backend.Candidate(label="相槌のみ", text="ドラマいいですね！")],
+        reason="質問を入れる", strategy="ジャンルを尋ねる",
+    )
+    mixed_result = backend.filter_safe_candidates(mixed, 2, required)
+    assert mixed_result["generation_blocked"] is not True
+    assert "どんなジャンルをよく観るんですか？" in mixed_result["recommended"]["text"]
+    assert mixed_result["alternatives"] == []
 
 
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):

@@ -12066,6 +12066,25 @@ def filter_safe_candidates(
         ]
         deterministic_fallback_used = True
     if not accepted:
+        # T547: 質問必須を指定しても質問あり候補を1案も作れなかったときは、
+        # 会話が止まらないよう質問なし候補を通知付きで返す（旗はなるべく守る）。
+        if (
+            (context.get("reply_preferences") or {}).get("require_question")
+            and any("質問必須が指定されているのに質問がない" in item["reasons"] for item in rejected)
+        ):
+            relaxed_preferences = {
+                **(context.get("reply_preferences") or {}),
+                "require_question": False,
+            }
+            relaxed_result = filter_safe_candidates(
+                value, requested_count, {**context, "reply_preferences": relaxed_preferences}
+            )
+            if relaxed_result.get("recommended"):
+                relaxed_result["candidate_notice"] = " ".join(filter(None, [
+                    relaxed_result.get("candidate_notice", ""),
+                    "質問必須が指定されましたが、質問を含む安全な候補を作れなかったため、質問のない候補を表示しています。",
+                ]))
+                return relaxed_result
         fallback_candidate = _build_schedule_confirmation_fallback_candidate(candidate_context)
         if fallback_candidate is None:
             fallback_candidate = _build_unclassified_question_fallback_candidate(candidate_context)
@@ -12541,7 +12560,9 @@ def _generate_impl(data: GenerateInput):
             "\n【質問必須】利用者が「質問必須」をチェックしています。"
             "返す候補のすべてに、相手が答えやすい質問を1つ入れてください。"
             "相槌や自分の話だけで終わる候補は作りません。"
-            "質問は相手の直前の話題か確認済みの話題から選び、本人の未確認情報を新しく作る必要はありません。"
+            "質問は相手自身の好み・経験・近況から選び、本人に聞かれた内容（コーヒー派かどうかなど）をそのまま相手に聞き返しません。"
+            "相手から本人への質問があるときは、その答えを確認済みの事実だけで短く入れてから質問へ進みます。"
+            "本人の未確認情報を新しく作る必要はありません。"
             "相手が誘いを述べていて承諾だけが求められている場合を除き、質問のない候補は棄却されます。"
         )
     tone_setting = str(data.tone or "自動").strip()
