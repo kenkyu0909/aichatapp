@@ -10858,6 +10858,11 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
         if question_sentences:
             focus_question = question_sentences[-1]
     question_terms = _memo_terms(focus_question)
+    # T556: 「そちらはコーヒー派ですか？それとも紅茶派ですか？」のように選択肢が
+    # 2文に分かれる質問では、末尾の1文だけだと memo と1字しか共有できず、答えの
+    # 文を選べない。質問文どうしの語も共有判定に使う（前置きの宣言文は使わない）。
+    for extra_question in question_sentences[:-1] if len(sentences) > 1 else []:
+        question_terms |= _memo_terms(extra_question)
     if not question_terms:
         return None
     # T555: 「動物は好きですか？」は memo の「猫派だけど犬も好き」が答えになる。
@@ -10911,15 +10916,40 @@ def _memo_answer_terms(question: str, sentence: str) -> set[str]:
     return _memo_terms(sentence) - _memo_terms(question)
 
 
-def _memo_answer_contradicted(candidate_text: str, answer_terms: set[str]) -> bool:
+def _memo_negated_terms(sentence: str, answer_terms: set[str]) -> set[str]:
+    """T556: memo 文のうち否定形（飲めない等）として使われている語を返す。
+
+    「コーヒーと紅茶は飲めない」という memo の「飲」を、候補の「ない」との
+    隣接で矛盾と誤判定しないために除外する。
+    """
+    negated: set[str] = set()
+    for term in answer_terms:
+        if re.search(
+            re.escape(term) + r"[^。！？\n]{0,4}?(?:ない|ません)|(?:ない|ません)[^。！？\n]{0,4}?"
+            + re.escape(term),
+            sentence,
+        ):
+            negated.add(term)
+    return negated
+
+
+def _memo_answer_contradicted(
+    candidate_text: str, answer_terms: set[str], memo_sentence: str = ""
+) -> bool:
     """True when the candidate negates or denies the memo's answer value."""
     normalized = re.sub(r"[\s　、。，．!！?？]", "", str(candidate_text))
-    prefix = re.split(r"[?？]", normalized, maxsplit=1)[0]
-    for term in answer_terms:
+    scan = re.split(r"[?？]", normalized, maxsplit=1)[0]
+    if memo_sentence:
+        # T556: memo の否定形そのもの（例: 「コーヒーと紅茶は飲めない」）は事実なので、
+        # 候補が同じ句を繰り返しているだけなら矛盾と見なさない。
+        for negation_clause in re.findall(r"[^、。！？\n]*?(?:ない|ません)", memo_sentence):
+            if len(negation_clause) >= 4:
+                scan = scan.replace(negation_clause, "")
+    for term in answer_terms - _memo_negated_terms(memo_sentence, answer_terms):
         for cue in MEMO_CONTRADICTION_CUES:
-            if re.search(re.escape(term) + r".{0,12}?" + re.escape(cue), prefix):
+            if re.search(re.escape(term) + r".{0,12}?" + re.escape(cue), scan):
                 return True
-            if re.search(re.escape(cue) + r".{0,12}?" + re.escape(term), prefix):
+            if re.search(re.escape(cue) + r".{0,12}?" + re.escape(term), scan):
                 return True
     return False
 
@@ -10941,7 +10971,7 @@ def _memo_answer_reflected_in_candidate(question: str, candidate, context: dict)
     normalized_prefix = re.sub(r"[\s　]+", "", prefix)
     if not any(term in normalized_prefix for term in answer_terms):
         return False
-    return not _memo_answer_contradicted(text, answer_terms)
+    return not _memo_answer_contradicted(text, answer_terms, sentence)
 
 
 def _confirmed_answer_reflected_in_candidate(question: str, candidate, context: dict) -> bool:

@@ -4017,6 +4017,39 @@ def test_t553_chinamini_is_not_repeated(client):
     )
 
 
+def test_t556_choice_questions_use_both_options_for_memo_matching(client):
+    """T556: 選択肢の2文質問は両方の選択肢の語で memo の答え文を選ぶ。
+
+    実走行 t534c では「そちらはコーヒー派ですか？それとも紅茶派ですか？」の
+    末尾1文（紅茶のみ）で memo を照合したため、「コーヒーと紅茶は飲めない」の
+    文が答えとして選ばれず、回答候補が全棄却された。
+    """
+    _, backend = client
+    question = "落ち着いた雰囲気のカフェが好きです。そちらはコーヒー派ですか？それとも紅茶派ですか？"
+    context = {
+        "my_profile": {
+            "facts": {"memo": "飲み物は緑茶・ほうじ茶・ココア・スムージーが好きで、コーヒーと紅茶は飲めない。"}
+        },
+        "reply_preferences": {"tone": "敬語"},
+    }
+    sentence = backend._memo_answer_sentence(question, context)
+    assert sentence is not None and "コーヒーと紅茶は飲めない" in sentence
+    candidate = backend.Candidate(
+        label="回答",
+        text="コーヒーと紅茶は飲めないんですよね😂\n緑茶とかココアが好きです！",
+    )
+    assert backend._memo_answer_reflected_in_candidate(question, candidate, context) is True
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(
+        candidate,
+        {
+            "mode": "reply",
+            "history": [{"role": "them", "body": question}],
+            "my_profile": context["my_profile"],
+            "reply_preferences": {"tone": "敬語"},
+        },
+    )
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
