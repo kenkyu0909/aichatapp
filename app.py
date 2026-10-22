@@ -7521,11 +7521,21 @@ def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
         # T514: 行為語でも場所でもない話題（仕事・大学・ペット等）に既定の「する」を
         # 付けると「仕事はよくするんですか？」のような不自然な質問になるため、
         # 動詞を使わない聞き方にする。
-        line2 = (
-            f"ちなみに{subject}{requested}って好き？"
-            if casual
-            else f"ちなみに{subject}{requested}って好きですか？"
-        )
+        # T528: 状態語（体調・気分・具合・調子…）に「〜って好きですか？」を付けると
+        # 「体調って好きですか？」のように意味が通らなくなるため「〜はどうですか？」にする。
+        if _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(requested):
+            state_subject = f"{partner_label}の" if partner_label else ""
+            line2 = (
+                f"ちなみに{state_subject}{requested}はどう？"
+                if casual
+                else f"ちなみに{state_subject}{requested}はどうですか？"
+            )
+        else:
+            line2 = (
+                f"ちなみに{subject}{requested}って好き？"
+                if casual
+                else f"ちなみに{subject}{requested}って好きですか？"
+            )
     else:
         line2 = (
             f"ちなみに{subject}{requested}はよく{verb}？"

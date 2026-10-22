@@ -3271,6 +3271,33 @@ def test_t514_topic_change_keeps_activity_and_place_verbs(client):
     assert "北海道はよく行くんですか？" in place.text
 
 
+def test_t528_state_topic_does_not_ask_whether_the_partner_likes_it(client):
+    """T528: 状態語の話題に「〜って好きですか？」を付けない。
+
+    再現では「体調の話にして」で「ちなみに楓さんは体調って好きですか？」という
+    意味の通らない質問が棄却理由ゼロで通り得た（気分・具合・調子も同様）。
+    """
+    _, backend = client
+    for noun in ("体調", "気分", "具合", "調子"):
+        candidate = backend._build_topic_change_fallback_candidate(
+            _t514_topic_change_context(noun)
+        )
+        assert candidate is not None, noun
+        assert f"{noun}って好き" not in candidate.text, candidate.text
+        assert f"{noun}はどうですか？" in candidate.text, candidate.text
+
+
+def test_t528_likeable_topic_still_asks_whether_the_partner_likes_it(client):
+    """T528: 状態語でない話題（仕事・映画）の聞き方は従来どおり。"""
+    _, backend = client
+    work = backend._build_topic_change_fallback_candidate(_t514_topic_change_context("仕事"))
+    assert work is not None
+    assert "仕事って好きですか？" in work.text
+    movie = backend._build_topic_change_fallback_candidate(_t514_topic_change_context("映画"))
+    assert movie is not None
+    assert "映画はよく観るんですか？" in movie.text
+
+
 def test_t513_thing_topic_is_not_asked_with_go_frequently(client):
     """T513: 物・題材の名詞に「〜はよく行くんですか？」を使わない。
 

@@ -2546,3 +2546,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T527 回帰**: `test_t527_schedule_reask_is_not_sent_after_the_partner_declines`・`test_t527_schedule_reask_still_fires_when_no_decline`・`test_t527_declined_plan_does_not_get_a_preference_followup`・`test_t527_decline_detection_classifies_plan_cancellations`・`test_t527_non_decline_question_keeps_the_preference_followup`（焦点 `-k t526` 2 passed・`-k t527` 5 passed）。
 - **テスト**: 全pytest（Firefox UI を除く）**2086 passed / 0 failed** in 105.71s、Firefox UI **29 passed** in 406.01s。`python -m py_compile app.py tests/test_app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T528 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-22 T528 修正（状態語の話題転換に「〜って好きですか？」を付けない）
+
+- **発見の経緯**: T527 の後、話題転換フォールバック（`_build_topic_change_fallback_candidate`）を状態語・抽象語でプローブしたところ（`dbg_t528_probe.py`）、「体調の話にして」→「そうなんですね！\nちなみに楓さんは**体調って好きですか？**」という**意味の通らない質問**が `_candidate_rejection_reasons` **棄却理由ゼロ**で通り得た。
+- **T528 発見**: 話題転換の指示で行為語でも場所でもない話題には動詞を使わない聞き方（T514）を採るが、その受け皿は「{話題}って好きですか？」固定。好みの対象になる話題（仕事・大学・ペット）には自然だが、**状態語**（体調・気分・具合・調子…）に付けると意味が通らない。T525/T526 と同種の「状態語を好みの対象として扱う」欠陥。
+- **T528 修正**: T526 で導入した状態・確認の目印 `_STATE_OR_CONFIRMATION_QUESTION_PATTERN` を話題の判定にも使い、状態語の話題は「ちなみに{相手}の{話題}はどうですか？」に切り替える（体調→「ちなみに楓さんの体調はどうですか？」、タメ口なら「〜はどう？」）。状態語でない話題は従来どおり（仕事・大学・ペット＝「{話題}って好きですか？」、映画・北海道＝動詞「よく観る／よく行く」）。
+- **誤って狭めていないこと**: (a) 仕事・大学・ペットは「〜って好きですか？」のまま（T514 回帰で固定）。(b) 映画＝「映画はよく観るんですか？」、北海道＝「北海道はよく行くんですか？」のまま。(c) 状態語でも行為語・場所の動詞がある場合は動詞側が優先される（`verb is None` の分岐内でのみ切り替える）。
+- **再現（修正前）**: `git stash push -- app.py` で修正を退避し `pytest -k t528` を実行 → `test_t528_state_topic_does_not_ask_whether_the_partner_likes_it` **FAILED**（「ちなみに楓さんは体調って好きですか？」に「体調って好き」を含む）／`test_t528_likeable_topic_still_asks_whether_the_partner_likes_it` passed（1 failed, 1 passed）。`git stash pop` で復元。
+- **再現（修正後）**: 体調・気分・具合・調子 →「ちなみに楓さんの{話題}はどうですか？」（棄却ゼロ）。仕事 →「仕事って好きですか？」、映画 →「映画はよく観るんですか？」を維持。`dbg_t528_probe.py` で確認。
+- **T528 回帰**: `test_t528_state_topic_does_not_ask_whether_the_partner_likes_it`・`test_t528_likeable_topic_still_asks_whether_the_partner_likes_it`（焦点 `-k t528` 2 passed）。T514 回帰 `test_t514_topic_change_does_not_use_a_default_verb_for_things`・`test_t514_topic_change_keeps_activity_and_place_verbs` も維持（`-k t514` 2 passed）。
+- **テスト**: 全pytest（Firefox UI を除く）**2088 passed / 0 failed** in 101.87s、Firefox UI **29 passed** in 414.04s。`python -m py_compile app.py tests/test_app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py tests/test_app.py` すべてPASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T529 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
