@@ -3786,6 +3786,9 @@ def test_require_question_flag_repairs_questionless_candidates(client, monkeypat
     assert len(prompts) == 2
     assert "【質問必須】" in prompts[0]
     assert "【質問必須】" in prompts[1]
+    # T548: 質問されたターンの型（1行目で答え→2行目で質問）と聞き返し禁止を明記。
+    assert "1行目で確認済みの事実だけですぐに答え" in prompts[0]
+    assert "言い換えではなく" in prompts[0]
 
 
 def test_t547_require_question_falls_back_with_notice_instead_of_blocking(client):
