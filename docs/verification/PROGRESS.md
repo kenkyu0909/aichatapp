@@ -2619,3 +2619,14 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T533/T534 回帰**: `test_t533_first_message_fallback_uses_the_profile_word_for_hobbies`・`test_t534_polite_question_is_not_a_first_person_habit`（焦点 2 passed）、既存の初回必須要素テスト27件＋買い物テスト1件も PASS。
 - **テスト**: 全pytest（Firefox UI を除く）**2103 passed / 0 failed** in 111.93s、Firefox UI **29 passed** in 409.55s。`python -m py_compile app.py tests/test_app.py` PASS。
 - **次の作業**: ユーザー指示による実走行2件（いいね→マッチ→やり取り→誘い、20通）。結果はこの下に追記する。
+
+### 2026-10-22 実走行 ops2（メッセージ付きいいね→マッチ承諾→やり取り→誘い）
+
+- **目的**: T510（いいね3要素）と T511（自分の15通下限）を入れた後の一連フローを、実Gemini・Firefoxで再検証する（ユーザー明示指示）。出力はリポジトリ外の `会話テスト/conversation_test_ops2.html` と `会話テスト/json/conversation_test_ops2.json` のみ。
+- **相手役**: 旧アプリDBから seed=21 で無作為抽出（架空プロフィール、読み取り専用）。21歳・札幌市・事務。
+- **いいね文（2案）**: どちらも名前呼び＋挨拶／プロフィール共感／お話ししたい気持ちの3要素を満たした（例：「ベジタブルさんはじめまして！／プロフィールに露天風呂付き客室に泊まりたいと書いてあるのを見てすごく共感しました！／よかったらお話ししてみたいです😊」）。2案目を選んで承諾（match成立）。
+- **マッチ後**: アプリ18通・相手17通。**アプリ送信#1〜#15 では一度も誘いが出ず**（Stage 1〜2、`invite_decision=continue_conversation`）、Stage 4 でも #15〜#17 は `continue_conversation`。相手が「一緒に行けたら嬉しいです」と好意を示した直後の**アプリ送信#18**で `Stage 5`／`invite_gently` となり、候補「定山渓一緒に行けたらうれしいです😊／今度のお休みはどうですか？」を送信して終了。T511 の15通下限と段階進行が実走行でも機能した。
+- **指標（HTML表示）**: 相槌率 100.0%（16/16ターン、全体33/33）。質問含有率 70.6%（17ターン中12、全体55.9%）。
+- **API**: `/api/generate` 20回、provider試行 37回（`api_alias=API1`、`gemini-3.5-flash-lite`）、候補停止0回、接続エラー等で候補が消えたターン0回。provider側の一時失敗（ValueError・ValidationError）が2回あったが同一ターン内の再試行で復旧。
+- **Firefox確認**: ヘッドレスFirefoxで `conversation_test_ops2.html` を開き、日本語表示・話者の左右・段階バッジ・誘いバッジ・API一覧を確認（画像はローカルのみ、リポジトリには入れない）。
+- **見つけた品質課題（未修正・次タスク候補）**: (T535) 「どんな曲を聴くときに行くのが好きなんですか？」という不自然な質問が候補に出た（モデル生成文。棄却理由ゼロで送信可能だった）。(T536) 誘いターンで3案中2案が棄却されたが、`candidate_rejection_summary` は停止時しか返らないため理由が記録できない（観測性の改善余地）。
