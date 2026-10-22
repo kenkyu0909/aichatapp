@@ -8911,6 +8911,9 @@ _REPETITION_NOUN_STOPWORDS = {
     # T525: 状態・確認・やりとりの語も「どんな〜が好き」の話題にならない
     # （「14時で大丈夫ですか？」→「どんな大丈夫が好きなんですか？」を防ぐ）。
     "大丈夫", "可能", "無理", "都合", "方法", "方向", "確認", "了解", "承知", "対応", "連絡", "返事",
+    # T529: 親族関係の語も「どんな〜が好き」の話題にならない
+    # （「ご兄弟はいますか？」→「どんな兄弟が好きなんですか？」を防ぐ）。
+    "兄弟", "姉妹",
 }
 
 _ACTIVITY_FOLLOWUP_VERB = {
@@ -8949,6 +8952,14 @@ _STATE_OR_CONFIRMATION_QUESTION_PATTERN = re.compile(
 _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN = re.compile(
     r"どんな|どの|どちら|どっち|どこ|なに|何が|何を|いくつ|お気に入り|"
     r"好き|好み|趣味|興味|気に入っ"
+)
+
+# T529: 出身・居住地や過ごし方を尋ねる質問は好みの質問ではない。ここから拾った名詞に
+# 「どんな〜が好き」を付けると「どんな出身が好きなんですか？」のように意味が通らなく
+# なるため、聞き返しを付けない（「どこが好きですか？」のような好みの質問は対象外）。
+_NON_PREFERENCE_QUESTION_PATTERN = re.compile(
+    r"出身|住ま|住ん|生まれ|地元|在住|"
+    r"何をして過ご|何して過ご|どのように過ご|どう過ご|一日の流れ|ルーティン|暇なとき|暇な時間"
 )
 
 _TOGETHER_CLOSING_THEME = re.compile(r"当日|お会いできる|会えるの|楽しみ")
@@ -11019,6 +11030,13 @@ def _compose_answer_relay_candidate(
             # どうですか？」）から拾った名詞に「どんな〜が好き」を付けると意味が
             # 通らない。好み・カテゴリを尋ねる質問（どんな・何・好き・趣味…）には
             # 従来どおり付ける。
+            # T529: 出身・居住地や過ごし方を尋ねる質問から拾った名詞に「どんな〜が
+            # 好き」を付けると「どんな出身が好きなんですか？」のように意味が通らない。
+            # 好みの質問ではないため聞き返しを付けない。
+            non_preference_question = bool(
+                _NON_PREFERENCE_QUESTION_PATTERN.search(latest_partner_body or "")
+                or _NON_PREFERENCE_QUESTION_PATTERN.search(question or "")
+            )
             generic_allowed = (
                 bool(
                     _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(latest_partner_body or "")
@@ -11028,7 +11046,7 @@ def _compose_answer_relay_candidate(
                     _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(latest_partner_body or "")
                     or _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(question or "")
                 )
-            ) and not _partner_latest_declines_plan(context)
+            ) and not _partner_latest_declines_plan(context) and not non_preference_question
             if generic_allowed:
                 options.append(
                     f"{partner_label}はどんな{topic_noun}が好きなんですか？"

@@ -3110,6 +3110,62 @@ def test_t527_non_decline_question_keeps_the_preference_followup(client):
         assert expected in relay.text, relay.text
 
 
+def test_t529_fact_questions_do_not_get_a_preference_followup(client):
+    """T529: 出身・居住地や過ごし方を尋ねる質問に「どんな〜が好き」を付けない。
+
+    再現では「ご出身はどちらですか？」への回答リレーが「札幌です\\n黒川さんは
+    どんな出身が好きなんですか？」、「休日は何をして過ごしていますか？」が
+    「どんな休日が好きなんですか？」という意味の通らない聞き返しを
+    棄却理由ゼロで付けていた。好みの質問ではないため付けない。
+    """
+    _, backend = client
+    cases = [
+        ("ご出身はどちらですか？", "札幌です"),
+        ("休日は何をして過ごしていますか？", "カフェに行ったり本を読んだりしています"),
+    ]
+    for question, answer in cases:
+        context = _t527_history_context([{"role": "them", "body": question}])
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert "どんな" not in relay.text, relay.text
+        assert answer in relay.text, relay.text
+
+
+def test_t529_siblings_question_does_not_get_a_preference_followup(client):
+    """T529: 親族関係の語を「どんな〜が好き」の話題にしない。
+
+    再現では「ご兄弟はいますか？」への回答リレーが
+    「どんな兄弟が好きなんですか？」を棄却理由ゼロで付けていた。
+    """
+    _, backend = client
+    question, answer = "ご兄弟はいますか？", "弟が一人います"
+    context = _t527_history_context([{"role": "them", "body": question}])
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    relay = backend._compose_answer_relay_candidate(context, question, answer)
+    assert relay is not None
+    assert "どんな" not in relay.text, relay.text
+    assert answer in relay.text, relay.text
+
+
+def test_t529_preference_questions_keep_the_followup(client):
+    """T529: 好み・カテゴリの質問は従来どおり聞き返しを残す（過剰抑制しない）。"""
+    _, backend = client
+    cases = [
+        ("趣味はなんですか？", "映画を観ることです", "どんな趣味が好き"),
+        ("お仕事は何をされていますか？", "書店で働いています", "どんな仕事が好き"),
+        ("ペットは飼っていますか？", "猫を飼っています", "どんなペットが好き"),
+        ("今日はいい天気ですね", "そうですね", "どんな天気が好き"),
+        ("なぜカメラを始めたんですか？", "友達に勧められて始めました", "どんなカメラが好き"),
+    ]
+    for question, answer, expected in cases:
+        context = _t527_history_context([{"role": "them", "body": question}])
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert expected in relay.text, relay.text
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

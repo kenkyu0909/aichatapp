@@ -2558,3 +2558,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T528 回帰**: `test_t528_state_topic_does_not_ask_whether_the_partner_likes_it`・`test_t528_likeable_topic_still_asks_whether_the_partner_likes_it`（焦点 `-k t528` 2 passed）。T514 回帰 `test_t514_topic_change_does_not_use_a_default_verb_for_things`・`test_t514_topic_change_keeps_activity_and_place_verbs` も維持（`-k t514` 2 passed）。
 - **テスト**: 全pytest（Firefox UI を除く）**2088 passed / 0 failed** in 101.87s、Firefox UI **29 passed** in 414.04s。`python -m py_compile app.py tests/test_app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py tests/test_app.py` すべてPASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T529 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-22 T529 修正（出身・居住地・過ごし方の質問に「どんな〜が好き」を付けない）
+
+- **発見の経緯**: T527 の後、回答リレー（`_compose_answer_relay_candidate`）を実際の質問・回答ペア18組で一括プローブしたところ（`dbg_t529_probe.py`）、「ご出身はどちらですか？」→「札幌です／黒川さんは**どんな出身が好き**なんですか？」、「休日は何をして過ごしていますか？」→「どんな休日が好き」、「ご兄弟はいますか？」→「どんな兄弟が好き」という**意味の通らない聞き返し**が `_candidate_rejection_reasons` **棄却理由ゼロ**で通り得た。
+- **T529 発見**: T526 の聞き返しの型は「状態・確認の質問」だけを抑止する設計だったため、状態語ですらない**事実質問**（出身・居住地・過ごし方）や**親族関係の語**から拾った名詞には「どんな{N}が好き」を付けてしまう。出身・住まいは初回の会話で頻出する質問で、実際に送信され得る壊れた日本語。T513/T518/T525/T526 と同種の「好みの対象にならない名詞を好みの話題として扱う」欠陥。
+- **T529 修正**: 出身・居住地（出身・住ま・住ん・生まれ・地元・在住）や過ごし方（何をして過ご・何して過ご・どのように過ご・どう過ご・一日の流れ・ルーティン・暇なとき・暇な時間）は好みの質問ではないため、`_NON_PREFERENCE_QUESTION_PATTERN` を追加し、回答リレーの「どんな{N}が好き」の型（T526）に「好みの質問でない」ことを条件として加えた。親族関係の語（兄弟・姉妹）は `_REPETITION_NOUN_STOPWORDS` に追加。
+- **誤って狭めていないこと**: (a) 好みの質問の聞き返しは従来どおり —「趣味はなんですか？」→「どんな趣味が好き」、「お仕事は何をされていますか？」→「どんな仕事が好き」、「ペットは飼っていますか？」→「どんなペットが好き」、「今日はいい天気ですね」→「どんな天気が好き」、「なぜカメラを始めたんですか？」→「どんなカメラが好き」。(b) 場所の好みの質問（「どこが好きですか？」）は どこ を目印に含めていないため対象外のまま。(c) 行為語・場所の動詞（映画＝よく観る、旅行＝よくする、写真＝よく撮る）は従来どおり。いずれも回帰で固定。
+- **再現（修正前）**: `git stash push -- app.py` で修正を退避し `pytest -k t529` を実行 → `test_t529_fact_questions_do_not_get_a_preference_followup` **FAILED**（「札幌です／黒川さんはどんな出身が好きなんですか？」に「どんな」を含む）／`test_t529_siblings_question_does_not_get_a_preference_followup` **FAILED**（「どんな兄弟が好き」）の2 failed、1 passed。`git stash pop` で復元。
+- **再現（修正後）**: 出身→「札幌です」、休日は何をして過ごす→回答のみ、兄弟→回答のみ（棄却ゼロ、聞き返しなし）。好みの質問（趣味・仕事・ペット・天気・カメラ）と動詞型（音楽・映画・旅行・写真）は聞き返しを維持。`dbg_t529_probe.py` で確認。
+- **T529 回帰**: `test_t529_fact_questions_do_not_get_a_preference_followup`・`test_t529_siblings_question_does_not_get_a_preference_followup`・`test_t529_preference_questions_keep_the_followup`（焦点 `-k t529` 3 passed）。T526（2 passed）・T527（5 passed）・T518（1 passed）の回帰も維持。
+- **テスト**: 全pytest（Firefox UI を除く）**2091 passed / 0 failed** in 105.33s、Firefox UI **29 passed** in 407.38s。`python -m py_compile app.py tests/test_app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py tests/test_app.py` すべてPASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T530 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
