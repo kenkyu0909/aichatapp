@@ -3697,7 +3697,9 @@ def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
         question_tail = re.compile(
             r"(?:[ぁ-んー\s]{0,16})(?:(?:以上|以下|未満|超|前後|ほど|くらい|ぐらい|程度|ちょっと|強|弱))?(?:か|ですか|ますか|ませんか|でしたか|ましたか|ありますか|いますか|ありましたか|いましたか|でしょうか|の|かな|好き|観た|見た|行った|読んだ|ある|いる|く|る|た|だ|い|ない|てる|ていた|てない)"
         )
-        return bool(question_tail.fullmatch(suffix))
+        if question_tail.fullmatch(suffix):
+            return True
+        return False
     return bool(re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ありましたか|いましたか|でしょうか)[ \t]*$", remainder))
 
 
@@ -5645,6 +5647,17 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
             right_boundaries = [text.find(mark, match.end()) for mark in ("!", "！", "?", "？", "\n")]
             right = min((position for position in right_boundaries if position >= 0), default=len(text))
             clause = text[left + 1:right].strip()
+            # T534: 相手に向けた質問（「普段はどんなお店に行かれることが多いですか？」）
+            # は本人の習慣の断定ではない。頻度の副詞を含む候補でも、疑問語＋丁寧な
+            # 質問の形（〜ですか）なら本人の事実として扱わない。一人称の断定
+            # （「普段はよくカフェに行きます」）は従来どおり棄却対象に残す。
+            if (
+                re.search(r"どんな|どちら|どれ|どの|どこ|何|なに|いつ|誰|どう", claim)
+                and re.search(
+                    r"(?:ですか|ますか|ませんか|でしたか|ましたか|でしょうか)$", clause
+                )
+            ):
+                continue
             attribution = re.search(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね)$", clause)
             if attribution:
                 attributed = re.sub(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね)$", "", clause)
@@ -11475,6 +11488,28 @@ def _profile_topic_terms(profile_sources: list[str]) -> tuple[set[str], set[str]
     return profile_terms, liked_terms
 
 
+def _fallback_profile_topic(profile_terms: set[str], pattern: str, default: str) -> str:
+    """キーワード分岐の話題語を、プロフィールに実在する語から選ぶ (T533).
+
+    固定語（喫茶店・散歩・映画・読書）を使うと、プロフィールの「カフェ巡り」
+    「旅行」「音楽」と食い違い、必須要素の検証で話題不足として棄却されたり、
+    プロフィールに無い話題を断定したりしていた。
+    """
+    matches = [term for term in profile_terms if re.search(pattern, term)]
+    if not matches:
+        return default
+    return sorted(matches, key=lambda term: (-len(term), term))[0]
+
+
+def _fallback_topic_line(term: str, liked_terms: set[str], *, casual: bool) -> str:
+    """好みの宣言がある話題語だけ「好き」と断定する (T516/T533)."""
+    if term in liked_terms:
+        return f"{term}が好きなんだね！" if casual else f"{term}がお好きなんですね！"
+    if casual:
+        return f"プロフィールの{term}のところが気になってた！"
+    return f"プロフィールの{term}のところが気になっていました！"
+
+
 def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
     """Synthesize 1 safe fallback candidate when all model candidates fail on initial first message."""
     if context.get("mode") != "first":
@@ -11505,17 +11540,41 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
             else:
                 question_line = "お仕事で特に楽しいのはどんなとき？"
         elif re.search(r"本|読書|小説|古本", other_desc):
-            topic_line = "読書が好きなんだね！"
+            topic_line = _fallback_topic_line(
+                _fallback_profile_topic(profile_terms, r"読書|小説|古本|本", "読書"),
+                liked_terms,
+                casual=True,
+            )
             question_line = "最近おすすめの本ってある？"
         elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
-            topic_line = "喫茶店が好きなんだね！"
+            topic_line = _fallback_topic_line(
+                _fallback_profile_topic(
+                    profile_terms, r"カフェ|喫茶|珈琲|コーヒー|カレー", "喫茶店"
+                ),
+                liked_terms,
+                casual=True,
+            )
             question_line = "普段はどんなお店によく行くの？"
         elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
-            topic_line = "散歩が好きなんだね！"
-            question_line = "休日はどんな場所を歩くことが多いの？"
+            topic = _fallback_profile_topic(
+                profile_terms, r"散歩|街歩き|旅行|ドライブ", "散歩"
+            )
+            topic_line = _fallback_topic_line(topic, liked_terms, casual=True)
+            if re.search(r"旅行|旅", topic):
+                question_line = "旅行ってどこによく行くの？"
+            elif "ドライブ" in topic:
+                question_line = "ドライブってどこによく行くの？"
+            else:
+                question_line = "休日はどんな場所を歩くことが多いの？"
         elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
-            topic_line = "映画が好きなんだね！"
-            question_line = "最近観てよかった作品ってある？"
+            topic = _fallback_profile_topic(
+                profile_terms, r"映画|アニメ|ドラマ|音楽", "映画"
+            )
+            topic_line = _fallback_topic_line(topic, liked_terms, casual=True)
+            if re.search(r"音楽|バンド|ライブ", topic):
+                question_line = "最近よく聴くアーティストっている？"
+            else:
+                question_line = "最近観てよかった作品ってある？"
         else:
             # T516: 好みの宣言がある名詞だけを「好き」と言う。無いときは断定せず、
             # プロフィールに触れた上で教えてもらう形にする（候補は同点時も辞書順で決定）。
@@ -11543,17 +11602,41 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
             else:
                 question_line = "お仕事で特に楽しいのはどんなときですか？"
         elif re.search(r"本|読書|小説|古本", other_desc):
-            topic_line = "読書がお好きなんですね！"
+            topic_line = _fallback_topic_line(
+                _fallback_profile_topic(profile_terms, r"読書|小説|古本|本", "読書"),
+                liked_terms,
+                casual=False,
+            )
             question_line = "最近おすすめの本はありますか？"
         elif re.search(r"カフェ|喫茶|珈琲|コーヒー|カレー", other_desc):
-            topic_line = "喫茶店がお好きなんですね！"
+            topic_line = _fallback_topic_line(
+                _fallback_profile_topic(
+                    profile_terms, r"カフェ|喫茶|珈琲|コーヒー|カレー", "喫茶店"
+                ),
+                liked_terms,
+                casual=False,
+            )
             question_line = "普段はどんなお店に行かれることが多いですか？"
         elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
-            topic_line = "散歩がお好きなんですね！"
-            question_line = "休日はどんな場所を歩かれることが多いですか？"
+            topic = _fallback_profile_topic(
+                profile_terms, r"散歩|街歩き|旅行|ドライブ", "散歩"
+            )
+            topic_line = _fallback_topic_line(topic, liked_terms, casual=False)
+            if re.search(r"旅行|旅", topic):
+                question_line = "旅行先はどこが多いですか？"
+            elif "ドライブ" in topic:
+                question_line = "ドライブはどこによく行かれますか？"
+            else:
+                question_line = "休日はどんな場所を歩かれることが多いですか？"
         elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
-            topic_line = "映画がお好きなんですね！"
-            question_line = "最近観てよかった作品はありますか？"
+            topic = _fallback_profile_topic(
+                profile_terms, r"映画|アニメ|ドラマ|音楽", "映画"
+            )
+            topic_line = _fallback_topic_line(topic, liked_terms, casual=False)
+            if re.search(r"音楽|バンド|ライブ", topic):
+                question_line = "最近よく聴くアーティストはいますか？"
+            else:
+                question_line = "最近観てよかった作品はありますか？"
         else:
             # T516: 好みの宣言がある名詞だけを「お好き」と言う（casual 側と同じ分岐）。
             pool = liked_terms or profile_terms

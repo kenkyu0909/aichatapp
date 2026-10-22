@@ -1083,9 +1083,19 @@ def test_first_mode_withholds_candidates_missing_required_opening_content(
         context=context,
     )
 
-    assert filtered["available_candidate_count"] == 0
-    assert filtered["generation_blocked"] is True
-    assert required_reason in filtered["candidate_rejections"][0]["reasons"]
+    # T533: カフェ巡りのプロフィールでは決定的フォールバックが成立するように
+    # なったため、候補0件で停止するのではなく「不正なモデル候補は出さず、
+    # 検証済みのフォールバックに差し替える」ことを確認する。
+    rejected_reasons = [
+        reason for item in filtered["candidate_rejections"] for reason in item["reasons"]
+    ]
+    assert required_reason in rejected_reasons
+    assert (filtered["recommended"] or {}).get("text") != text
+    assert all(
+        (candidate.get("text") or "") != text
+        for candidate in [filtered["recommended"], *filtered["alternatives"]]
+        if candidate
+    )
 
 
 def test_first_mode_keeps_complete_candidate_and_reports_shortage(client):
@@ -3336,6 +3346,55 @@ def test_t532_declared_partner_preference_is_not_treated_as_my_fact(client):
         assert candidate is not None, description
         assert expected in candidate.text, candidate.text
         assert backend._candidate_rejection_reasons(candidate, context) == [], candidate.text
+
+
+def test_t533_first_message_fallback_uses_the_profile_word_for_hobbies(client):
+    """T533: 初回フォールバックの話題語を固定語ではなくプロフィールの語にする。
+
+    再現では「休日はカフェ巡りをしています」に「喫茶店がお好きなんですね！」、
+    「旅行が好きで、よく写真を撮ります」に「散歩がお好きなんですね！」、
+    「音楽が好きです」に「映画がお好きなんですね！」と、プロフィールに無い
+    話題語を出し、必須要素の検証で話題不足として棄却されていた。
+    """
+    _, backend = client
+    cases = (
+        (
+            "休日はカフェ巡りをしています",
+            "プロフィールのカフェ巡りのところが気になっていました！",
+            "普段はどんなお店に行かれることが多いですか？",
+        ),
+        (
+            "旅行が好きで、よく写真を撮ります",
+            "旅行がお好きなんですね！",
+            "旅行先はどこが多いですか？",
+        ),
+        ("音楽が好きです", "音楽がお好きなんですね！", "最近よく聴くアーティストはいますか？"),
+        ("喫茶店が好きです", "喫茶店がお好きなんですね！", "普段はどんなお店に行かれることが多いですか？"),
+    )
+    for description, expected_topic, expected_question in cases:
+        context = _t516_first_context(description)
+        candidate = backend._build_first_message_fallback_candidate(context)
+        assert candidate is not None, description
+        assert expected_topic in candidate.text, candidate.text
+        assert expected_question in candidate.text, candidate.text
+        assert backend._candidate_rejection_reasons(candidate, context) == [], candidate.text
+
+
+def test_t534_polite_question_is_not_a_first_person_habit(client):
+    """T534: 漢字を含む丁寧な質問を本人の頻度習慣の断定として扱わない。
+
+    再現では「普段はどんなお店に行かれることが多いですか？」が
+    `_has_unverified_general_personal_claim` の頻度習慣パターン（普段は…行…る）
+    に本人の事実として掛かり、カフェ系の初回候補が棄却されていた。
+    """
+    _, backend = client
+    context = _t516_first_context("休日はカフェ巡りをしています")
+    assert backend._has_unverified_general_personal_claim(
+        "普段はどんなお店に行かれることが多いですか？", context
+    ) is False
+    assert backend._has_unverified_general_personal_claim(
+        "普段はよくカフェに行きます", context
+    ) is True
 
 
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
