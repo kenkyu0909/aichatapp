@@ -3701,6 +3701,48 @@ def _candidate_claim_is_interrogative(text: str, match: re.Match[str]) -> bool:
     return bool(re.search(r"(?:ですか|ますか|ませんか|でしたか|ましたか|ありましたか|いましたか|でしょうか)[ \t]*$", remainder))
 
 
+def _declared_partner_preference_clauses(context: dict) -> list[str]:
+    """相手が自分の好みとして宣言した節を、プロフィールと履歴から集める (T532)."""
+    sources: list[str] = [str((context.get("other") or {}).get("description", "") or "")]
+    sources.extend(
+        str(message.get("body", "") or "")
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    )
+    clauses: list[str] = []
+    for source in sources:
+        for fragment in re.split(r"(?<=[。！？!?])|\n", source):
+            for clause in _contrastive_evidence_clauses(fragment):
+                if not re.search(r"好き|お気に入り|趣味|楽しい|はまって|愛用", clause):
+                    continue
+                if _is_interrogative_evidence_clause(clause):
+                    continue
+                if _is_effectively_negative_personal_fact(clause):
+                    continue
+                clauses.append(clause)
+    return clauses
+
+
+def _preference_attribution_clauses(text: str, context: dict) -> list[str]:
+    """候補のうち、相手が宣言した好みを相手のものとして受け止めている節 (T532).
+
+    「{話題}がお好きなんですね！」は相手の発言の受け止めであり、本人の事実では
+    ない。話題語が相手のプロフィール／履歴の好みの宣言に実在するときだけ返す。
+    """
+    declared = _declared_partner_preference_clauses(context)
+    if not declared:
+        return []
+    clauses: list[str] = []
+    for fragment in re.split(r"(?<=[。！？!?])|\n", text):
+        clause = fragment.strip()
+        if not re.search(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね)[！!]?$", clause):
+            continue
+        topics = re.findall(r"[\u4e00-\u9faf\u30a1-\u30f6\u30fc]{2,}", clause)
+        if any(topic in declared_clause for topic in topics for declared_clause in declared):
+            clauses.append(clause)
+    return clauses
+
+
 def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Match[str], context: dict) -> bool:
     """Do not reinterpret an explicitly attributed acknowledgment as the user's fact."""
     remainder = text[match.end():]
@@ -3710,6 +3752,12 @@ def _candidate_claim_is_partner_attribution(topic: str, text: str, match: re.Mat
     tail = remainder[:delimiter.start()].strip()
     if not re.search(r"(?:なんですね|んですね|なんだね|のですね|んだね|なんだ|んだ|るんですね|るんだね|るんだ)$", tail):
         return False
+    # T532: 相手がプロフィールや履歴で宣言した好みを「〜がお好きなんですね」と
+    # 受け止める候補は本人の事実ではない。以前は履歴だけを見ていたため、履歴が
+    # 空の初回メッセージでは常にFalseとなり、「読書が好きです」「映画が好きです」
+    # の相手に「読書がお好きなんですね！」を出せず候補がゼロになっていた。
+    if any(match.group(0) in clause for clause in _preference_attribution_clauses(text, context)):
+        return True
     partner_clauses: list[str] = []
     for message in context.get("history", []):
         if message.get("role") != "them":
@@ -5546,7 +5594,15 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
             or not _claim_supported_by_trusted_fact("映画", text, context)
         ):
             found.append("映画")
-        if _movie_assertion_segments(text) and not _claim_supported_by_trusted_fact("映画", text, context):
+        # T532: 相手が宣言した好みの受け止め（「映画がお好きなんですね！」）は
+        # 本人の映画の意見ではない。
+        attribution_clauses = _preference_attribution_clauses(text, context)
+        movie_assertions = [
+            segment
+            for segment in _movie_assertion_segments(text)
+            if not any(segment in clause for clause in attribution_clauses)
+        ]
+        if movie_assertions and not _claim_supported_by_trusted_fact("映画", text, context):
             found.append("映画")
     return list(dict.fromkeys(found))
 

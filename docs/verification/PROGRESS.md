@@ -2595,3 +2595,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T531 回帰**: `-k t531` 4 passed、`-k "t531 or t516"` 6 passed。
 - **テスト**: 全pytest（Firefox UI を除く）**2099 passed / 0 failed** in 108.58s、Firefox UI **29 passed**。`python -m py_compile app.py` PASS。
 - **次の作業（T531 の調査中に見つけた別欠陥・未修正）**: (T532) 初回フォールバックの「{話題}がお好きなんですね！」が `_candidate_claim_is_partner_attribution` に相手の発言として認識されず、「読書が好きです」「映画と音楽が好きです」のプロフィールで**未確認の本人事実**として棄却され候補ゼロ（`dbg_t531e_probe.py`：topics=["読書"]/["映画"]）。「お好き」の「お」で照合が外れている。(T533) キーワード分岐がプロフィールの話題語ではなく固定語（喫茶店・散歩・映画・読書）を使うため、「休日はカフェ巡りをしています」で**話題不足**になり候補ゼロ（「喫茶店」≠「カフェ巡り」）。「旅行が好きで、よく写真を撮ります」も「散歩がお好き…」と誤った話題語になる。また (T534候補) 「普段はどんなお店に行かれることが多いですか？」が `_has_unverified_general_personal_claim` の頻度習慣パターン（普段は…行…る）に**本人の事実**として誤検知され、カフェ系の候補が棄却される。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-22 T532 修正（相手が宣言した好みの受け止めを「本人の事実」として棄却しない）
+
+- **発見の経緯**: T531 の後、初回フォールバックの棄却理由を記録するプローブ（`dbg_t531d_probe.py`）で、「読書が好きです」の相手への候補「読書がお好きなんですね！／最近おすすめの本はありますか？」が **`未確認の本人事実`** で棄却され、候補が null になることを確認。`dbg_t532_probe.py` で `_candidate_claim_is_partner_attribution("読書", …)` が **false** を返すことを特定。
+- **T532 発見**: `_candidate_claim_is_partner_attribution` は相手の**履歴**だけを証拠にしていた。初回メッセージでは履歴が空なので、相手の**プロフィール**で宣言された好みを「〜がお好きなんですね！」と受け止めても常にFalseとなり、話題別の未確認事実パターン（読書＝「読書…好き」）で棄却される。映画は `_movie_assertion_segments` が「映画がお好きなんですね！」を**本人の映画の意見**として拾う別経路でも棄却されていた。T516 以来の「安全な候補がゼロになる」欠陥。
+- **T532 修正**: 相手のプロフィールも相手自身の申告として扱う `_declared_partner_preference_clauses`（プロフィール＋相手の履歴から、好みの宣言があり・疑問文でなく・否定でない節）と、`_preference_attribution_clauses`（候補の「〜なんですね／んですね／なんだね／んだね／のですね／ですよね」節の話題語が相手の宣言に実在する節）を追加。`_candidate_claim_is_partner_attribution` の共通免除と `_movie_assertion_segments` の除外に使った。
+- **誤って広げていないこと**: (a) 相手が宣言していない話題は免除しない（散歩が趣味の相手への「映画がお好きなんですね！」は従来どおり棄却）。(b) 否定の宣言（「映画は好きじゃないです」）は免除しない。(c) 本人の一人称の主張（「私も映画が好きです」）は「〜なんですね」の受け止めではないため対象外。いずれも回帰で固定。
+- **再現（修正前）**: `git stash push -- app.py`（T531 済みの状態）で修正を退避し `pytest -k t532` → `test_t532_preference_attribution_clauses_require_a_declared_preference` **FAILED**（`_preference_attribution_clauses` 不在）／`test_t532_declared_partner_preference_is_not_treated_as_my_fact` **FAILED**（読書・映画が null）の 2 failed。`git stash pop` で復元。
+- **再現（修正後）**: 読書・映画の初回候補が生成され、`_candidate_rejection_reasons` は空。散歩・料理・ピアノ・一人暮らし・ランニングも従来どおり棄却ゼロ（`dbg_t531d_probe.py`）。
+- **T532 回帰**: `test_t532_preference_attribution_clauses_require_a_declared_preference`・`test_t532_declared_partner_preference_is_not_treated_as_my_fact`（焦点 `-k t532` 2 passed）。T531（4 passed）・T516（2 passed）も維持。
+- **テスト**: 全pytest（Firefox UI を除く）**2101 passed / 0 failed** in 111.41s、Firefox UI **29 passed**。`python -m py_compile app.py tests/test_app.py` PASS。
+- **次の作業（未修正・証拠あり）**: (T533) キーワード分岐がプロフィールの話題語ではなく固定語（喫茶店・散歩・映画・読書）を使うため、「休日はカフェ巡りをしています」で**話題不足**になり候補ゼロ（「喫茶店」≠「カフェ巡り」）。「旅行が好きで、よく写真を撮ります」も「散歩がお好き…」と誤った話題語になる。(T534候補) 「普段はどんなお店に行かれることが多いですか？」が `_has_unverified_general_personal_claim` の頻度習慣パターン（普段は…行…る）に本人の事実として誤検知される。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。

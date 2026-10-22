@@ -3303,6 +3303,41 @@ def test_t531_first_message_fallback_does_not_assert_unknown_preferences(client)
     assert backend._candidate_rejection_reasons(candidate, context) == []
 
 
+def test_t532_preference_attribution_clauses_require_a_declared_preference(client):
+    """T532: 「〜がお好きなんですね！」の免除は相手の宣言があるときだけ。"""
+    _, backend = client
+    text = "映画がお好きなんですね！"
+    assert backend._preference_attribution_clauses(
+        text, _t516_first_context("映画と音楽が好きです")
+    ) == [text]
+    assert backend._preference_attribution_clauses(
+        text, _t516_first_context("犬と散歩するのが好きです")
+    ) == []
+    assert backend._preference_attribution_clauses(
+        text, _t516_first_context("映画は好きじゃないです")
+    ) == []
+
+
+def test_t532_declared_partner_preference_is_not_treated_as_my_fact(client):
+    """T532: 相手が宣言した好みの受け止めを「未確認の本人事実」で棄却しない。
+
+    再現では「読書が好きです」の相手に「読書がお好きなんですね！」を出すと、
+    相手の履歴が空の初回メッセージでは相手の発言として認識されず、棄却理由
+    ゼロの安全な候補がゼロになっていた（映画も同様）。
+    """
+    _, backend = client
+    cases = (
+        ("読書が好きです", "読書がお好きなんですね！"),
+        ("映画と音楽が好きです", "映画がお好きなんですね！"),
+    )
+    for description, expected in cases:
+        context = _t516_first_context(description)
+        candidate = backend._build_first_message_fallback_candidate(context)
+        assert candidate is not None, description
+        assert expected in candidate.text, candidate.text
+        assert backend._candidate_rejection_reasons(candidate, context) == [], candidate.text
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
