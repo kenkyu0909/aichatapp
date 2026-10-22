@@ -3624,6 +3624,40 @@ def test_t541_agreed_meeting_hour_is_not_asked_again(client):
     assert reason not in backend._candidate_rejection_reasons(reask, undecided)
 
 
+def test_t544_candidate_lines_are_tidy(client):
+    """T544: 候補の行頭・行末の空白（全角スペース含む）と空行を落とす。
+
+    実走行で「　よく聴きます！」のような行頭の全角スペース付きの断片が
+    そのまま送信候補になった。最終結果の各候補に行単位の整理を通す。
+    """
+    _, backend = client
+    text = "　よく聴きます！\n\n猫はですが \n犬も好きなんです！"
+    assert backend._tidy_candidate_text(text) == (
+        "よく聴きます！\n猫はですが\n犬も好きなんです！"
+    )
+
+
+def test_t543_prompt_prescribes_natural_question_and_no_fragments(client):
+    """T543: プロンプトに自然な質問・依頼・断片禁止の指針を文章で入れる。
+
+    実走行で「行きましたか？」「多いですか？」「教えてもらえますか？」のような
+    報告調・事務的な質問、「猫はですが」のような提題の途中で切れた文が候補に
+    出ていた。指摘の箇条書きをそのまま貼るのではなく、既存のスタイル規則と
+    競合しない文章として common.txt に追加する。
+    """
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+    assert "行ったんですか？" in prompt
+    assert "多いんですか？" in prompt
+    assert "教えてください😊" in prompt
+    assert "行頭に全角スペースや空白が付いた断片" in prompt
+    assert "猫も好きなんですけど犬も好きなんです！" in prompt
+    assert "わかりますー！" in prompt
+    assert "ココアがいいかもです！" in prompt
+    # 本人への確認質問（user_questions）には適用しないことを明記している。
+    assert "本人への確認質問（user_questions）の文面には適用しません" in prompt
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

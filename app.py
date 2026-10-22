@@ -12392,6 +12392,12 @@ def generate(data: GenerateInput):
     return _apply_acknowledgment_supplement_to_result(result, data)
 
 
+def _tidy_candidate_text(text: str) -> str:
+    """T544: 行頭・行末の空白（全角スペース含む）を落とし、空行を畳む。"""
+    lines = [re.sub(r"^[\s\u3000]+|[\s\u3000]+$", "", line) for line in str(text).splitlines()]
+    return "\n".join(line for line in lines if line)
+
+
 def _apply_acknowledgment_supplement_to_result(result, data: GenerateInput):
     """Final deterministic pass: add a short acknowledgment line to candidates lacking one.
 
@@ -12414,7 +12420,7 @@ def _apply_acknowledgment_supplement_to_result(result, data: GenerateInput):
     except Exception:
         return result
     for entry, new_candidate in zip(entries, updated):
-        entry["text"] = new_candidate.text
+        entry["text"] = _tidy_candidate_text(new_candidate.text)
     return result
 
 
