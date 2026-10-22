@@ -2951,6 +2951,57 @@ def test_t525_likeable_topic_still_gets_the_preference_followup(client):
     assert "どんなカメラが好き" in relay.text, relay.text
 
 
+def _t526_relay_context(question, answer):
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "do_not_invite",
+    }
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    return context
+
+
+def test_t526_state_questions_do_not_get_a_preference_followup(client):
+    """T526: 状態・確認の質問に「どんな〜が好き」の聞き返しを付けない。
+
+    再現では「最近体調はどうですか？」への回答リレーが
+    「黒川さんはどんな最近体調が好きなんですか？」という意味の通らない聞き返しを
+    棄却理由ゼロで付けていた（気分・具合・印象・結果・不安も同様）。
+    """
+    _, backend = client
+    cases = [
+        ("今日は気分はどうですか？", "元気です"),
+        ("最近体調はどうですか？", "元気です"),
+        ("具合はどうですか？", "大丈夫です"),
+        ("私の印象はどうですか？", "とても良い印象です"),
+        ("結果はどうですか？", "うまくいきました"),
+        ("今の不安はどうですか？", "少しあります"),
+    ]
+    for question, answer in cases:
+        context = _t526_relay_context(question, answer)
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert "どんな" not in relay.text, relay.text
+        assert answer in relay.text, relay.text
+
+
+def test_t526_preference_questions_keep_the_preference_followup(client):
+    """T526: 好み・カテゴリを尋ねる質問には従来どおり「どんな〜が好き」を残す。"""
+    _, backend = client
+    cases = [
+        ("趣味はありますか？", "映画鑑賞が趣味です", "どんな趣味が好き"),
+        ("どんなお仕事をされていますか？", "本屋で働いています", "どんな仕事が好き"),
+    ]
+    for question, answer, expected in cases:
+        context = _t526_relay_context(question, answer)
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert expected in relay.text, relay.text
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

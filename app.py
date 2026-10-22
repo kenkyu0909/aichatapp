@@ -8895,6 +8895,23 @@ _REPETITION_INTERROGATIVES = (
     "どんな", "どの", "どちら", "どっち", "どこ", "なに", "いつ", "いくつ", "お気に入り", "好きな",
 )
 
+# T526: 「どんな〜が好き」の聞き返しは、相手が好みやカテゴリを尋ねた質問に付けるから
+# 意味が通る。状態・確認を尋ねる質問に付けると「どんな大丈夫が好きなんですか？」
+# 「どんな最近体調が好きなんですか？」のように意味が通らなくなる。
+# 状態・確認質問の目印（どうですか／大丈夫ですか／可能性・抽象状態の語など）。
+_STATE_OR_CONFIRMATION_QUESTION_PATTERN = re.compile(
+    r"どう(?:です|ですか|かな|でした)|いかが|大丈夫|可能|無理|平気|"
+    r"(?:で)?(?:いい|良い)ですか|合って(?:い)?ますか|正しいですか|間違いないですか|"
+    r"気分|体調|具合|様子|調子|印象|感想|理由|結果|意味|不安|心配|進捗|状況|課題|悩み|事情"
+)
+
+# 好み・カテゴリを尋ねる質問の目印。これがあるときは状態・確認質問でも聞き返しを残す
+# （「何がいいですか？」→「どんな〜が好き？」は自然）。
+_CATEGORY_OR_PREFERENCE_QUESTION_PATTERN = re.compile(
+    r"どんな|どの|どちら|どっち|どこ|なに|何が|何を|いくつ|お気に入り|"
+    r"好き|好み|趣味|興味|気に入っ"
+)
+
 _TOGETHER_CLOSING_THEME = re.compile(r"当日|お会いできる|会えるの|楽しみ")
 
 
@@ -10958,11 +10975,24 @@ def _compose_answer_relay_candidate(
                 else f"{partner_label}は{topic_noun}はよく{verb}？"
             ]
         else:
-            options = [
-                f"{partner_label}はどんな{topic_noun}が好きなんですか？"
-                if not casual
-                else f"{partner_label}はどんな{topic_noun}が好き？",
-            ]
+            options = []
+            # T526: 状態・確認を尋ねる質問（「14時で大丈夫ですか？」「最近体調は
+            # どうですか？」）から拾った名詞に「どんな〜が好き」を付けると意味が
+            # 通らない。好み・カテゴリを尋ねる質問（どんな・何・好き・趣味…）には
+            # 従来どおり付ける。
+            generic_allowed = bool(
+                _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(latest_partner_body or "")
+                or _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(question or "")
+            ) or not bool(
+                _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(latest_partner_body or "")
+                or _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(question or "")
+            )
+            if generic_allowed:
+                options.append(
+                    f"{partner_label}はどんな{topic_noun}が好きなんですか？"
+                    if not casual
+                    else f"{partner_label}はどんな{topic_noun}が好き？"
+                )
             # T513: 場所らしい名詞のときだけ「よく行く」を候補にする。
             if _PLACE_LIKE_NOUN_PATTERN.search(topic_noun):
                 options.append(
@@ -10975,8 +11005,10 @@ def _compose_answer_relay_candidate(
             followup = unused[0]
         elif re.search(r"どんな|よく行く|よくやる|よくする|よく書く", recent):
             followup = ""
-        else:
+        elif options:
             followup = options[len(prior_me) % len(options)]
+        else:
+            followup = ""
     else:
         followup = ""
     if partner_invites:

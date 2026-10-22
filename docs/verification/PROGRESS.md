@@ -2522,3 +2522,15 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **T525 回帰**: `test_t525_state_nouns_do_not_become_like_topics`（修正前 failure を再現確認 → 修正後PASS）・`test_t525_likeable_topic_still_gets_the_preference_followup`。
 - **テスト**: 全pytest（Firefox UI を除く）**2079 passed / 0 failed** in 102.00s、Firefox UI **29 passed** in 406.24s。`python -m py_compile app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS。
 - **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T526 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
+
+### 2026-10-21 T526 修正（状態・確認の質問に「どんな〜が好き」の聞き返しを付けない）
+
+- **発見の経緯**: T525 のストップワード追加後も、`_compose_answer_relay_candidate` の聞き返し経路を抽象語・漢字連続で一括プローブしたところ（`dbg_t526_probe.py`）、「最近体調はどうですか？」→「元気です\n黒川さんは**どんな最近体調が好き**なんですか？」、「今日は気分はどうですか？」→「どんな気分が好き」、「具合はどうですか？」→「どんな具合が好き」、「私の印象はどうですか？」→「どんな印象が好き」など、**意味の通らない聞き返し**が棄却理由ゼロで付いていた。
+- **T526 発見**: T525 のストップワード方式は語単位のため、(a)「最近体調」のように漢字が連続して1トークンになる語（`_latest_topic_noun` の正規表現が `[\u4e00-\u9faf]{2,}` で最大連続を取る）や、(b) 未登録の抽象語（気分・具合・様子・調子・印象・感想・理由・結果・意味・進捗・状況・課題・悩み・不安・心配…）を取りこぼす。語彙は事実上無限で、ストップワードの追加では追いつかない。T513（場所以外に「よく行く」を付けない）・T518（時を表す語）・T525（状態・確認語）と同種だが、生成元の型そのものを直す必要がある。
+- **T526 修正**: 回答リレーの聞き返しの型そのものを絞った。「どんな{N}が好き」は相手が**好み・カテゴリを尋ねた質問**のときだけ付ける。状態・確認質問の目印 `_STATE_OR_CONFIRMATION_QUESTION_PATTERN`（どうですか／いかが／大丈夫／可能／無理／平気／いいですか／合っていますか／正しいですか／気分・体調・具合・様子・調子・印象・感想・理由・結果・意味・不安・心配・進捗・状況・課題・悩み・事情）があり、かつ好み・カテゴリの目印 `_CATEGORY_OR_PREFERENCE_QUESTION_PATTERN`（どんな・どの・どちら・どっち・どこ・なに・何が／何を・いくつ・お気に入り・好き・好み・趣味・興味・気に入っ）が無いときは付けない。活動（映画＝観る等）・場所（よく行く）の型は従来どおり。聞き返しの候補が空になった場合に備え、`options` が空でも `ZeroDivisionError` にならないよう分岐を追加。
+- **誤って狭めていないこと**: (a) 好み質問「趣味はありますか？」→「映画鑑賞が趣味です\n黒川さんは**どんな趣味が好き**なんですか？」（趣味は好みの目印）、「どんなお仕事をされていますか？」→「どんな仕事が好き」。(b) 状態語の無い質問「お酒は飲みますか？」は（酒＝1漢字で話題名詞にならないため結果的に付かないが）状態質問ではないので抑制しない。(c) T525 の回帰「なぜカメラを始めたんですか？」→「どんなカメラが好きなんですか？」は**状態質問ではない**ため従来どおり残る。いずれも回帰で固定。
+- **再現（修正前）**: `git stash push -- app.py` で修正を退避し `pytest -k t526` を実行 → `test_t526_state_questions_do_not_get_a_preference_followup` **FAILED**（「元気です\n黒川さんはどんな気分が好きなんですか？」）／`test_t526_preference_questions_keep_the_preference_followup` passed（1 failed, 1 passed）。`git stash pop` で復元。
+- **再現（修正後）**: 気分・体調・具合・印象・結果・不安 →「元気です」等の回答のみ（聞き返しなし、棄却ゼロ）。趣味・仕事 → 好みの聞き返しを維持。`dbg_t526_probe.py`・`dbg_t526b_probe.py`・`dbg_t526c_probe.py`・`dbg_t526d_probe.py` で確認。
+- **T526 回帰**: `test_t526_state_questions_do_not_get_a_preference_followup`・`test_t526_preference_questions_keep_the_preference_followup`（焦点 `-k t525 or t526` 4 passed）。
+- **テスト**: 全pytest（Firefox UI を除く）**2081 passed / 0 failed** in 105.43s、Firefox UI **29 passed** in 403.03s。`python -m py_compile app.py`・`node --check app.js`（リポジトリ直下）・`git diff --check -- app.py` すべてPASS。
+- **次の作業**: 未確認。新しい証拠（実走行・再現）が出た場合に T527 以降で起票。会話004・新会話HTML・20通再走行はユーザーの別途明示指示待ち（今回は実行しない）。
