@@ -3828,6 +3828,69 @@ def test_t547_require_question_falls_back_with_notice_instead_of_blocking(client
     assert mixed_result["alternatives"] == []
 
 
+def test_t549_configured_model_is_respected_in_priority():
+    """T549: GEMINI_MODEL=gemini-3.1-flash-lite 指定時は 3.1 を優先する。
+
+    実走行 t533k では 3.1-flash-lite を指定してもコードが既知2モデルの
+    優先順位を固定していたため、指定が無視され 3.5-flash-lite が使われた。
+    利用者が明示的に選んだモデルを先頭にする（サブプロセスで優先順位を確認）。
+    """
+    import json
+    import subprocess
+    import sys
+
+    repo = r"C:\Users\proje\Desktop\aichatapp2\verification-repo"
+    code = (
+        "import os, sys, json;"
+        f"os.environ['GEMINI_MODEL']='gemini-3.1-flash-lite';"
+        f"sys.path.insert(0, r'{repo}');"
+        "import app; print(json.dumps(list(app.GEMINI_MODEL_PRIORITY)))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True, timeout=120
+    )
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == [
+        "gemini-3.1-flash-lite", "gemini-3.5-flash-lite",
+    ]
+
+
+def test_t542_blocked_response_records_rejected_candidate_texts(client, monkeypatch):
+    """T542: 全棄却で停止するとき、棄却候補の本文（先頭120文字）を返す。
+
+    実走行 t533j/t533k では棄却理由の要約しか残らず、モデル出力のどこが
+    規則に触れたか後から分からなかった。原因特定のため本文を抜粋して返す。
+    """
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    blocked_payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。", "reply_move": "react"},
+        "alternatives": [],
+        "reason": "相槌で返す", "strategy": "続きを気にする", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(blocked_payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is True
+    details = body.get("candidate_rejection_details") or []
+    assert details, body
+    assert any("ドラマ、いいですね。" in item.get("text", "") for item in details)
+    assert all(len(item.get("text", "")) <= 120 for item in details)
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

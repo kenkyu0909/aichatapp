@@ -34,6 +34,9 @@ PROMPTS = BASE / "prompts"
 _configured_model = os.getenv("GEMINI_MODEL", "").strip()
 if _configured_model and _configured_model not in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
     GEMINI_MODEL_PRIORITY = (_configured_model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+elif _configured_model == "gemini-3.1-flash-lite":
+    # T549: 明示的に 3.1-flash-lite が指定されたときはそのモデルを優先する。
+    GEMINI_MODEL_PRIORITY = ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite")
 else:
     GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
 GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
@@ -12050,7 +12053,12 @@ def filter_safe_candidates(
         if normalized in seen:
             reasons.append("重複候補")
         if reasons:
-            rejected.append({"label": candidate.label, "reasons": reasons})
+            # T542: 原因特定のため、棄却候補の本文（先頭120文字）も記録する。
+            rejected.append({
+                "label": candidate.label,
+                "reasons": reasons,
+                "text": candidate.text[:120],
+            })
             continue
         seen.add(normalized)
         accepted.append(candidate)
@@ -12994,6 +13002,11 @@ def _generate_impl(data: GenerateInput):
                                     for item in filtered_result.get("candidate_rejections", [])
                                     for reason in item.get("reasons", [])
                                 }),
+                                # T542: 原因特定のため、棄却候補の本文（先頭120文字）を返す。
+                                "candidate_rejection_details": [
+                                    {"label": item.get("label", ""), "text": item.get("text", "")}
+                                    for item in filtered_result.get("candidate_rejections", [])
+                                ],
                             })
                             return blocked_result
                         filtered_candidate_notice = filtered_result.get("candidate_notice", "")
