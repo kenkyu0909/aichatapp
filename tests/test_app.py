@@ -3237,6 +3237,72 @@ def test_t530_acceptance_answer_with_the_ack_gets_no_extra_ack(client):
     assert backend._candidate_rejection_reasons(relay, context) == []
 
 
+def test_t531_profile_topic_terms_reject_verb_and_greeting_fragments(client):
+    """T531: 動詞・形容詞・挨拶の断片を話題の名詞にしない。
+
+    再現では「体を動かすことが好きです」から「動かす」、「甘いものに目がない
+    です」から「ない」、「よろしくお願いします」から「よろしくお願いし」を
+    拾い、「動かすがお好きなんですね！」「プロフィールのないのところ…」の
+    ような壊れた候補を作っていた。
+    """
+    _, backend = client
+    assert backend._profile_topic_terms(["体を動かすことが好きです"]) == (set(), set())
+    assert backend._profile_topic_terms(["甘いものに目がないです"]) == (set(), set())
+    assert backend._profile_topic_terms(["よろしくお願いします"]) == (set(), set())
+    assert backend._profile_topic_terms(["犬と散歩するのが好きです"]) == ({"散歩"}, {"散歩"})
+    terms, liked = backend._profile_topic_terms(["実家は札幌です。一人暮らしをしています"])
+    assert terms == {"実家", "札幌", "一人暮らし"}, terms
+    assert liked == set(), liked
+
+
+def test_t531_first_message_fallback_never_uses_broken_fragments(client):
+    """T531: 初回フォールバックが動詞・否定・挨拶の断片を話題にしない。"""
+    _, backend = client
+    descriptions = [
+        "体を動かすことが好きです",
+        "甘いものに目がないです",
+        "よろしくお願いします",
+    ]
+    broken = ("動かすが", "動かすで", "のないのところ", "ないについて", "よろしくお願いし")
+    for description in descriptions:
+        candidate = backend._build_first_message_fallback_candidate(
+            _t516_first_context(description)
+        )
+        text = candidate.text if candidate else ""
+        for fragment in broken:
+            assert fragment not in text, (description, text)
+        if candidate is not None:
+            assert backend._candidate_rejection_reasons(
+                candidate, _t516_first_context(description)
+            ) == []
+
+
+def test_t531_first_message_fallback_uses_the_profile_topic_for_walking(client):
+    """T531: 「犬と散歩するのが好きです」を「散歩」として話題にする。
+
+    検証側だけ古い抽出のままだと「散歩する」という塊を要求し、生成側の
+    「散歩がお好きなんですね！」を話題不足として棄却して候補がゼロになった。
+    """
+    _, backend = client
+    context = _t516_first_context("犬と散歩するのが好きです")
+    candidate = backend._build_first_message_fallback_candidate(context)
+    assert candidate is not None
+    assert "散歩がお好きなんですね！" in candidate.text, candidate.text
+    assert "散歩する" not in candidate.text, candidate.text
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
+def test_t531_first_message_fallback_does_not_assert_unknown_preferences(client):
+    """T531: 好みの宣言が無い話題語を「お好き」と断定しない（T516維持）。"""
+    _, backend = client
+    context = _t516_first_context("実家は札幌です。一人暮らしをしています")
+    candidate = backend._build_first_message_fallback_candidate(context)
+    assert candidate is not None
+    assert "プロフィールの一人暮らしのところ" in candidate.text, candidate.text
+    assert "一人暮らしがお好き" not in candidate.text, candidate.text
+    assert backend._candidate_rejection_reasons(candidate, context) == []
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

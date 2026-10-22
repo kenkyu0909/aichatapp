@@ -9850,21 +9850,11 @@ def _first_message_required_content_reasons(text: str, context: dict) -> list[st
         str(value)
         for value in other.get("temporary_user_supplied_profile_facts", [])
     )
-    profile_terms: set[str] = set()
-    generic_terms = {
-        "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
-        "です", "ます", "多い", "います", "あります", "プロフィール",
-    }
-    for source in profile_sources:
-        chunks = re.split(
-            r"[、。！!？?\s]+|(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
-            source,
-        )
-        for term in chunks:
-            term = term.strip()
-            term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
-            if len(term) >= 2 and term not in generic_terms:
-                profile_terms.add(term)
+    # T531: 話題語の抽出は生成側（_profile_topic_terms）と共有する。以前はここだけ
+    # 古い抽出のままで、「犬と散歩するのが好きです」から「散歩する」という塊を
+    # 要求し、生成側の「散歩がお好きなんですね！」を話題不足として棄却していた
+    # （安全な候補がゼロになる）。
+    profile_terms, _ = _profile_topic_terms(profile_sources)
     if not profile_terms or not any(term in normalized for term in profile_terms):
         reasons.append("初回メッセージのプロフィール話題不足")
 
@@ -11327,6 +11317,108 @@ def _build_verified_profile_fact_fallback_candidate(context: dict) -> Candidate 
     return candidate
 
 
+# T531: プロフィール文から話題語を拾うとき、動詞・形容詞・助動詞の活用断片や
+# 挨拶の決まり文句を名詞と誤認しない。再現では「体を動かすことが好きです」→
+# 「動かすがお好きなんですね！」、「甘いものに目がないです」→「プロフィールの
+# ないのところが気になっていました！」、「よろしくお願いします」→「よろしく
+# お願いしについて教えて…」という壊れた日本語が棄却理由ゼロで通り得た。
+_TOPIC_LEADING_MODIFIER_PATTERN = re.compile(
+    r"^(?:よく|いつも|たまに|ときどき|時々|すごく|とても|かなり|めっちゃ|ちょっと|"
+    r"なんとなく|普段|毎日|週に|月に|最近|また|今も|だいたい)"
+)
+_TOPIC_SURU_VERB_PATTERN = re.compile(
+    r"(?:を)?(?:しています|していた|していて|している|します|しました|しません|"
+    r"する|した|したい|しよう)$"
+)
+_TOPIC_NON_NOUN_TRAILING_PATTERN = re.compile(
+    r"(?:ます|ました|ません|ませんでした|"
+    r"ない|なかっ|なかった|"
+    r"ています|ていた|ていて|ており|ている|てる|てた|てい|"
+    r"られる|れた|れる|させる|せる|"
+    r"すぎる|やすい|にくい|たい|だっ|だ|たり)$"
+)
+_TOPIC_GREETING_HEAD_PATTERN = re.compile(
+    r"^(?:よろしく|よろし|お願い|はじめまして|こんにちは|ありがとう)"
+)
+_TOPIC_KANJI_OR_KATAKANA_PATTERN = re.compile(r"[\u4e00-\u9faf\u30a1-\u30f6]")
+_TOPIC_VERB_HIRAGANA_TAIL_PATTERN = re.compile(r"[うくすつぬぶむるぐ]$")
+
+
+def _topic_term_is_usable_noun(term: str) -> bool:
+    """プロフィールから拾った語を話題の名詞として使えるか (T531).
+
+    動詞・形容詞・助動詞の活用断片（「動かす」「弾く」「甘い」「してい」
+    「撮ります」）や挨拶の決まり文句（「よろしくお願いします」）を名詞と
+    誤認しない。ひらがなの動詞・形容詞語尾（う・く・す・つ・ぬ・ぶ・む・る・
+    ぐ）で終わる語は、漢字・カタカナを含むときだけ活用断片とみなす。
+    「一人暮らし」「カフェ巡り」は「し・り」で終わるため名詞として残す。
+    """
+    if len(term) < 2:
+        return False
+    if _TOPIC_GREETING_HEAD_PATTERN.search(term):
+        return False
+    if "たり" in term:
+        return False
+    if _TOPIC_NON_NOUN_TRAILING_PATTERN.search(term):
+        return False
+    # 「甘い」「うれしい」「ない」のような形容詞・否定の断片を落とす。
+    if term[-1] == "い":
+        return False
+    if (
+        _TOPIC_KANJI_OR_KATAKANA_PATTERN.search(term)
+        and _TOPIC_VERB_HIRAGANA_TAIL_PATTERN.search(term)
+    ):
+        return False
+    return True
+
+
+_PROFILE_TOPIC_GENERIC_TERMS = {
+    "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
+    "です", "ます", "多い", "います", "あります", "プロフィール",
+}
+_PROFILE_TOPIC_PREFERENCE_MARKER_PATTERN = re.compile(
+    r"好き|お気に入り|趣味|楽しい|はまって|愛用"
+)
+_PROFILE_TOPIC_SEGMENT_SPLIT_PATTERN = re.compile(r"[、。！!？?\s]+")
+_PROFILE_TOPIC_CHUNK_SPLIT_PATTERN = re.compile(
+    r"(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)"
+)
+
+
+def _profile_topic_terms(profile_sources: list[str]) -> tuple[set[str], set[str]]:
+    """プロフィール文から話題語と、好みが宣言された話題語を取り出す (T516/T531).
+
+    「お好きなんですね」と断定してよいのは、同じ節に好みの宣言（好き・趣味
+    など）がある話題語だけ。宣言の無い名詞（実家・地名・一人暮らしなど）は
+    断定せず、教えてもらう形に使う。話題語の抽出は初回メッセージの生成と
+    必須要素の検証で共有し、片方だけ古い抽出のまま残らないようにする。
+    """
+    profile_terms: set[str] = set()
+    liked_terms: set[str] = set()
+    for source in profile_sources:
+        for segment in _PROFILE_TOPIC_SEGMENT_SPLIT_PATTERN.split(source):
+            marked = bool(_PROFILE_TOPIC_PREFERENCE_MARKER_PATTERN.search(segment))
+            for term in _PROFILE_TOPIC_CHUNK_SPLIT_PATTERN.split(segment):
+                term = term.strip()
+                # T531: 先頭の副詞を落とし（「よく写真」→「写真」）、サ変動詞の
+                # 語幹だけを残す（「散歩します」→「散歩」）。
+                term = _TOPIC_LEADING_MODIFIER_PATTERN.sub("", term)
+                term = _TOPIC_SURU_VERB_PATTERN.sub("", term)
+                term = re.sub(r"(?:好き|好きです|です|多い)$", "", term)
+                # T516: 分割の断片（「んびりして」「飼って」など）を話題にしない。
+                if not term or len(term) < 2 or term in _PROFILE_TOPIC_GENERIC_TERMS:
+                    continue
+                if re.match(r"^ん", term) or re.search(r"(?:して|って|みて|くて|なくて)$", term):
+                    continue
+                # T531: 動詞・形容詞・助動詞の断片と挨拶語を名詞と誤認しない。
+                if not _topic_term_is_usable_noun(term):
+                    continue
+                profile_terms.add(term)
+                if marked:
+                    liked_terms.add(term)
+    return profile_terms, liked_terms
+
+
 def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
     """Synthesize 1 safe fallback candidate when all model candidates fail on initial first message."""
     if context.get("mode") != "first":
@@ -11339,33 +11431,7 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
         str(value)
         for value in other.get("temporary_user_supplied_profile_facts", [])
     )
-    profile_terms: set[str] = set()
-    liked_terms: set[str] = set()
-    generic_terms = {
-        "休日", "友達", "友人", "好き", "好きです", "趣味", "こと", "もの",
-        "です", "ます", "多い", "います", "あります", "プロフィール",
-    }
-    for source in profile_sources:
-        for segment in re.split(r"[、。！!？?\s]+", source):
-            # T516: 節の中に好みの宣言（好き・趣味など）があるときだけ、その節の
-            # 名詞を「お好きなんですね」の対象にできる。宣言なしの名詞（実家・
-            # 地名・一人暮らしなど）を好きと断定しない。
-            marked = bool(re.search(r"好き|お気に入り|趣味|楽しい|はまって|愛用", segment))
-            chunks = re.split(
-                r"(?:ことが|ことは|など|とか|って|から|まで|より|と|や|は|が|を|に|で|の|も|へ)",
-                segment,
-            )
-            for term in chunks:
-                term = term.strip()
-                term = re.sub(r"(?:好き|好きです|です|ます|多い|います|あります)$", "", term)
-                # T516: 分割の断片（「んびりして」「飼って」など）を話題にしない。
-                if not term or len(term) < 2 or term in generic_terms:
-                    continue
-                if re.match(r"^ん", term) or re.search(r"(?:して|って|みて|くて|なくて)$", term):
-                    continue
-                profile_terms.add(term)
-                if marked:
-                    liked_terms.add(term)
+    profile_terms, liked_terms = _profile_topic_terms(profile_sources)
     if not profile_terms:
         return None
 
