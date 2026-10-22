@@ -3475,6 +3475,114 @@ def test_t535_stacked_relative_question_is_rejected(client):
         assert reason not in backend._candidate_rejection_reasons(candidate, context), natural
 
 
+def test_t538_life_schedule_words_are_not_a_meeting_conflict(client):
+    """T538: 生活の「週末」「平日」を待ち合わせの食い違いとして扱わない。
+
+    再現（実走行 t533d の app#11）では、相手の「甘いものに目がなくて、週末は
+    ケーキを買ってしまいます」と「平日は仕事が終わるとまっすぐ家に帰ります」を
+    日時の食い違いと誤認し、**「あれ週末じゃなかったでしたっけ？／もしかして
+    時間が変わったんですか？」**を送っていた。待ち合わせの文脈が一度も無い
+    会話では日時の確認を出さない。
+    """
+    _, backend = client
+    context = _t527_history_context(
+        [
+            {
+                "role": "them",
+                "body": "甘いものに目がなくて、週末はケーキを買ってしまいます。甘いものはお好きですか？",
+            },
+            {"role": "me", "body": "ケーキいいですね✨\n甘いもの大好きなので気になります！"},
+            {
+                "role": "them",
+                "body": "平日は仕事が終わるとまっすぐ家に帰ります。夜はゆっくり過ごされますか？",
+            },
+        ]
+    )
+    assert backend._partner_schedule_conflict(context) is None
+    assert backend._build_schedule_conflict_fallback_candidate(context) is None
+
+
+def test_t539_topic_change_ignores_suffix_only_topic(client):
+    """T539: 「過ごし方の話を広げたい」から「方」だけを取り出して質問しない。
+
+    再現（実走行 t533e の app#11、指示 extra「休日の過ごし方の話を広げたい」）で
+    **「ちなみに相合傘さんは方って好きですか？」**が生成された。話題語として
+    成立しない1文字の語尾（方・頃・度…）は採用せず、転換の意思だけを残す。
+    """
+    _, backend = client
+    history = [
+        {
+            "role": "them",
+            "body": "平日は仕事が終わるとまっすぐ家に帰ります。夜はゆっくり過ごされますか？",
+        }
+    ]
+    suffix_only = _t527_history_context(
+        history, reply_preferences={"tone": "自動", "extra": "休日の過ごし方の話を広げたい"}
+    )
+    assert backend._topic_change_requested(suffix_only) == "別の話題"
+    assert backend._build_topic_change_fallback_candidate(suffix_only) is None
+
+    explicit = _t527_history_context(
+        history, reply_preferences={"tone": "自動", "extra": "映画の話にしたい"}
+    )
+    assert backend._topic_change_requested(explicit) == "映画"
+    candidate = backend._build_topic_change_fallback_candidate(explicit)
+    assert candidate is not None
+    assert "映画" in candidate.text
+    assert "方って" not in candidate.text
+
+    # 「本」のような1文字でも話題として成立する語は通す（語尾だけを弾く）。
+    book = _t527_history_context(
+        history, reply_preferences={"tone": "自動", "extra": "本の話にしたい"}
+    )
+    assert backend._topic_change_requested(book) == "本"
+
+
+def test_t540_paraphrased_repeated_self_disclosure_is_rejected(client):
+    """T540: 語尾だけ変えた自己開示の繰り返しを棄却する。
+
+    再現（実走行 t533e の app#3→app#4）では「コーヒーと紅茶は飲めないので
+    緑茶かココアを頼みます」の直後に「自分もコーヒーと紅茶は飲めないです…！」と
+    同じ自己開示を繰り返し、そのうえで別の質問を足していた。文字列の一致率
+    だけでは拾えないため、長い共通部分（10文字以上・短い方の半分以上）で判定する。
+    """
+    _, backend = client
+    context = _t527_history_context(
+        [
+            {
+                "role": "them",
+                "body": "落ち着いた雰囲気のカフェが好きです。そちらはコーヒー派ですか？",
+            },
+            {
+                "role": "me",
+                "body": "いいですね！\nコーヒーと紅茶は飲めないので緑茶かココアを頼みます",
+            },
+            {
+                "role": "them",
+                "body": "最近は全粒粉のパンを焼くのにハマっています。料理はされますか？",
+            },
+        ]
+    )
+    repeated = backend.Candidate(
+        label="繰り返し",
+        text=(
+            "全粒粉のパン美味しそうですね✨\n"
+            "自分もコーヒーと紅茶は飲めないです…！\n"
+            "休日はよくパン屋さん巡りもしたりしますか？"
+        ),
+    )
+    assert "自分の以前の回答を繰り返している" in backend._candidate_rejection_reasons(
+        repeated, context
+    )
+    fresh = backend.Candidate(
+        label="新しい話題",
+        text="全粒粉のパン美味しそうですね✨\nパン屋さん巡りはよくされるんですか？",
+    )
+    assert "自分の以前の回答を繰り返している" not in backend._candidate_rejection_reasons(
+        fresh, context
+    )
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

@@ -7370,6 +7370,11 @@ def _partner_schedule_conflict(context: dict) -> dict[str, str] | None:
     午前・午後・夕方に限定する。すでに確認の返しを送っていれば対象外にする。
     """
     history = context.get("history") or []
+    if not any(
+        _SCHEDULE_PLAN_CONTEXT.search(str(message.get("body", "")))
+        for message in history
+    ):
+        return None
     for message in history:
         if message.get("role") == "me" and _SCHEDULE_CONFLICT_RESOLVED.search(str(message.get("body", ""))):
             return None
@@ -7401,6 +7406,12 @@ _SCHEDULE_CONFLICT_ACK = re.compile(
 )
 _SCHEDULE_CONFLICT_RESOLVED = re.compile(r"じゃなかった|違って|ちがって|変わった|変更になった|で合って")
 _SCHEDULE_TIME_OF_DAY = {"午前", "午後", "夕方"}
+# T538: 待ち合わせの文脈が一度も無いのに、生活の「週末」「平日」を
+# 予定の食い違いとして扱わないための関門。
+_SCHEDULE_PLAN_CONTEXT = re.compile(
+    r"待ち合わせ|待ち合わ|集合|会いましょう|会いませんか|会おう|会いたい|一緒に行|ご一緒|"
+    r"デート|空いて(?:ます|る)|都合|何時に|日にち|予定(?:は|が|を)"
+)
 
 
 def _schedule_conflict_confirmation_line(casual: bool, agreed: str) -> str:
@@ -10097,6 +10108,18 @@ def _asks_pet_walk_about_cat(text: str, context: dict) -> bool:
     )
 
 
+def _shares_repeated_core(key: str, prior: str, min_len: int = 10, coverage: float = 0.5) -> bool:
+    """T540: 言い換えただけの自己開示（長い共通部分）を繰り返しとみなす。"""
+    if not key or not prior:
+        return False
+    match = SequenceMatcher(None, key, prior).find_longest_match(
+        0, len(key), 0, len(prior)
+    )
+    if match.size < min_len:
+        return False
+    return match.size / min(len(key), len(prior)) >= coverage
+
+
 def _candidate_reuses_prior_me_answer(text: str, context: dict) -> bool:
     """Return True when the candidate repeats an answer the app already sent (T500).
 
@@ -10127,6 +10150,10 @@ def _candidate_reuses_prior_me_answer(text: str, context: dict) -> bool:
             if key == prior:
                 return True
             if SequenceMatcher(None, key, prior).ratio() >= 0.85:
+                return True
+            # T540: 「コーヒーと紅茶は飲めないので…」→「自分もコーヒーと紅茶は
+            # 飲めないです」のように語尾だけ変えた再開示も拾う。
+            if _shares_repeated_core(key, prior):
                 return True
     return False
 
@@ -11033,6 +11060,12 @@ def _repeats_last_me_time_opening(text: str, context: dict) -> bool:
     return last_time.group(0) not in partner_messages[-1]
 
 
+_TOPIC_SUFFIX_ONLY = {
+    "方", "頃", "際", "度", "分", "感", "目", "中", "気", "向け",
+    "話", "事", "物", "所", "時", "前", "後",
+}
+
+
 def _topic_change_requested(context: dict) -> str:
     """ユーザーの話題転換の指示を返す（無ければ空文字）(T493).
 
@@ -11048,8 +11081,13 @@ def _topic_change_requested(context: dict) -> str:
     for text in (direction, extra):
         match = re.search(r"([\u4e00-\u9fafァ-ヶ]{1,6})の話", text)
         if match and match.group(1) != "別":
-            topic = match.group(1)
+            candidate_topic = match.group(1)
             requested = True
+            # T539: 「休日の過ごし方の話を広げたい」から「方」だけを抜き出すと
+            # 「方って好きですか？」になるため、語尾・汎用語は話題にしない
+            # （「本の話にしたい」の「本」のような1文字の話題語は通す）。
+            if candidate_topic not in _TOPIC_SUFFIX_ONLY:
+                topic = candidate_topic
         if re.search(r"話題を変え|話題を切り替え|別の話題|別の話|話題を移", text):
             requested = True
     if not requested:
