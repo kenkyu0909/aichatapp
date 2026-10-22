@@ -2552,6 +2552,27 @@ def _session_answer_remembers(context: dict, question: str) -> bool:
     )
 
 
+def _personal_question_was_answered(context: dict, question: str) -> bool:
+    """Return True when the same confirmation question already has an answer (T537).
+
+    The user can answer a question more than once (the UI re-sends earlier
+    answers with every request), so both the stored session answers and the
+    answers carried by this request count.
+    """
+    key = _normalize_clarification_question_key(question)
+    if not key:
+        return False
+    answers = [
+        *(context.get("session_answers") or []),
+        *(context.get("ephemeral_user_answers") or []),
+    ]
+    return any(
+        _normalize_clarification_question_key(str(answer.get("question", ""))) == key
+        and str(answer.get("answer", "")).strip()
+        for answer in answers
+    )
+
+
 def _suppress_remembered_question(
     context: dict, question: UserQuestion | None
 ) -> UserQuestion | None:
@@ -10385,6 +10406,22 @@ def _looks_like_survey_question_label(name: str) -> bool:
     )
 
 
+_STACKED_RELATIVE_QUESTION_PATTERN = re.compile(
+    r"どんな[^。！？\n]{3,24}ときに(?:行く|行きたい|会う|食べる|飲む|観る|見る|する)のが"
+    r"(?:好き|気になり|いい|楽しみ)"
+)
+
+
+def _candidate_has_stacked_relative_question(text: str) -> bool:
+    """「どんな曲を聴くときに行くのが好き」のような動詞の重なりを検出する (T535).
+
+    実走行で、動詞句（聴く）と移動（行く）を重ねた係り受けの壊れた質問が
+    棄却理由ゼロで送信可能だった。修飾語が入らず「どんなときに…」とだけ
+    続く自然な質問は対象外にする。
+    """
+    return bool(_STACKED_RELATIVE_QUESTION_PATTERN.search(text))
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -10401,6 +10438,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手が答えた活動を聞き返している")
     if _asks_pet_walk_about_cat(text, context):
         reasons.append("猫に外歩きを尋ねている")
+    if _candidate_has_stacked_relative_question(text):
+        reasons.append("質問のつくりが不自然（動詞の重なり）")
     # T508: 相手の直前の状況と食い違う前提の質問（T507のお弁当×外食を一般化）。
     reasons.extend(_partner_premise_conflict_reasons(text, context))
     if partner_requests_contact_stop(context):
@@ -12675,6 +12714,17 @@ def _generate_impl(data: GenerateInput):
                                         model=model,
                                     )
                                 question = personal_fact_question(direct_topic, direct_question)
+                                if _personal_question_was_answered(context, question.question):
+                                    # T537: 同じ確認質問にすでに回答があるのに再質問すると、
+                                    # 回答が検証条件に合わない場合に永久ループになる。
+                                    return blocked_user_info_response(
+                                        "回答済みの本人情報では候補の自己開示を裏づけられなかったため、同じ確認を繰り返さず生成を中断しました。プロフィールに追記してから再度お試しください。",
+                                        skipped=False,
+                                        attempted_models=attempted_models,
+                                        api_attempt_count=len(attempted_models),
+                                        api_alias=account,
+                                        model=model,
+                                    )
                                 return {
                                     **user_info_question_response(
                                         question.question,

@@ -3397,6 +3397,84 @@ def test_t534_polite_question_is_not_a_first_person_habit(client):
     ) is True
 
 
+def test_t537_answered_personal_question_is_not_asked_again(client):
+    """T537: 同じ確認質問に回答済みなら、もう一度は聞かない。
+
+    再現（実走行 t533b/t533c）では「最近行った旅行先やお出かけ先があれば
+    教えてください」に回答しても、回答の検証条件（去年は最近の旅行として
+    扱わない）に合わず、同じ質問が40回以上返り続けた。回答済みかどうかを
+    質問文の一致で判定し、再質問ではなく中断へ倒す。
+    """
+    _, backend = client
+    question = "最近行った旅行先やお出かけ先があれば教えてください"
+    answer = "去年は京都と沖縄に行きました。"
+    assert backend._personal_question_was_answered(
+        {"session_answers": [{"question": question, "answer": answer}]}, question
+    ) is True
+    assert backend._personal_question_was_answered(
+        {"ephemeral_user_answers": [{"question": question, "answer": answer}]}, question
+    ) is True
+    # 空の回答は「回答済み」にしない。
+    assert backend._personal_question_was_answered(
+        {"session_answers": [{"question": question, "answer": "   "}]}, question
+    ) is False
+    # 別の質問への回答は対象外。
+    assert backend._personal_question_was_answered(
+        {"session_answers": [{"question": "旅行はお好きですか？", "answer": "好きです"}]},
+        question,
+    ) is False
+    assert backend._personal_question_was_answered({}, question) is False
+
+
+def test_t537_recent_trip_question_stays_unverified_for_an_old_trip_answer(client):
+    """T537: 去年の旅行は「最近行った旅行」の確認を満たさない（再質問の引き金）。
+
+    この不一致自体は意図した検証（最近＝去年ではない）なので変えない。
+    だからこそ、回答済みの再質問を止める T537 の判定が必要になる。
+    """
+    _, backend = client
+    context = {
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [
+            {
+                "question": "最近行った旅行先やお出かけ先があれば教えてください",
+                "answer": "去年は京都と沖縄に行きました。",
+            }
+        ],
+    }
+    assert backend._topic_is_verified("旅行最近", context, "旅行はどこか行かれますか？") is False
+
+
+def test_t535_stacked_relative_question_is_rejected(client):
+    """T535: 動詞を重ねた係り受けの壊れた質問を棄却する。
+
+    実走行 ops2 で「どんな曲を聴くときに行くのが好きなんですか？」が
+    棄却理由ゼロで候補に出た（ライブの話題で「聴く」と「行く」が重なる）。
+    自然な「どんな音楽を聴くのが好きですか？」や「どんなときに食べるのが
+    好きですか？」は対象外。
+    """
+    _, backend = client
+    context = _t527_history_context(
+        [
+            {"role": "them", "body": "最近はライブにも行ってみたいと思っています"},
+            {"role": "me", "body": "ライブいいですね！"},
+        ]
+    )
+    reason = "質問のつくりが不自然（動詞の重なり）"
+    broken = backend.Candidate(
+        label="不自然",
+        text="ライブ行ってみたいですね✨\nどんな曲を聴くときに行くのが好きなんですか？",
+    )
+    assert reason in backend._candidate_rejection_reasons(broken, context)
+    for natural in (
+        "ライブ行ってみたいですね✨\nどんな音楽を聴くのが好きなんですか？",
+        "どんなときに食べるのが好きなんですか？",
+        "学生のときに行ったライブは楽しかったです",
+    ):
+        candidate = backend.Candidate(label="自然", text=natural)
+        assert reason not in backend._candidate_rejection_reasons(candidate, context), natural
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
