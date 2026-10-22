@@ -2668,3 +2668,6 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 - **テスト**: 全pytest（Firefox UI を除く）**2110 passed / 0 failed**、Firefox UI **29 passed**。
 - **Firefox表示確認**: `conversation_test_keigo20_ds4_t533e.html` をヘッドレスFirefoxで開き、指標パネル・段階バッジ・本人確認バッジ・停止カード（棄却理由「禁止句読点」）・話者の左右が正しく描画されることを確認（画像はローカルのみ）。
 - **本日の実API使用量（provider試行回数・最終）**: ops2 37 ＋ t533 25 ＋ t533b 135 ＋ t533c 56 ＋ 単発再現 2 ＋ 503即停止 6 ＋ t533d 64 ＋ t533e 62 ＋ t533f 64 ≒ **451試行**（成功リクエストは約276、HTTP 400は21でprovider呼び出しなし）。すべて `API1` / `gemini-3.5-flash-lite`。
+
+- **コミット**: `37dae42`（T535/T537）、`3b8c099`（T538〜T540）、`b3e84b1`（T541）。`37dae42` と `3b8c099` の Actions `Tests` は success、`b3e84b1` は確認時点で実行中。PR #4 は OPEN / Draft のまま（head `b3e84b1`）、マージはしていない。
+
