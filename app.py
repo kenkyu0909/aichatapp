@@ -9682,6 +9682,32 @@ def _candidate_is_verified_answer_relay(text: str, context: dict) -> bool:
     return True
 
 
+# T530: 読点の直前が文末（です・ます・ましょう等）で終わるとき、その読点を文の
+# 区切りとして改行する。「いいですね、行きましょう」「札幌です、生まれも育ちも
+# 札幌です」を1行に詰めると2文が繋がった読みにくい行になる。読点の前が文末で
+# ない列挙（「映画、音楽、読書が好きです」）や接続（「雨ですが、行きます」）は
+# 従来どおり詰める（リストを分断しない）。
+_SENTENCE_FINAL_BEFORE_COMMA_PATTERN = re.compile(
+    r"(?:です|ます|でした|ました|ません|ましょう|ください|"
+    r"ですね|ますね|ですよ|ますよ|だね|だよ|でしょう)$"
+)
+
+
+def _split_at_sentence_final_commas(text: str) -> list[str]:
+    """Split *text* at 読点 whose left side ends with a sentence-final form (T530)."""
+    segments: list[str] = []
+    current = ""
+    for chunk in re.split(r"([、，,])", text):
+        if chunk in ("、", "，", ","):
+            if _SENTENCE_FINAL_BEFORE_COMMA_PATTERN.search(current):
+                segments.append(current)
+                current = ""
+            continue
+        current += chunk
+    segments.append(current)
+    return segments
+
+
 def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
     """Sentence-level units of a confirmed answer, normalized for comparison."""
     normalized = unicodedata.normalize("NFKC", str(answer_text))
@@ -9693,9 +9719,12 @@ def _normalized_answer_sentence_units(answer_text: str) -> list[str]:
         normalized,
         flags=re.MULTILINE,
     )
+    # T530: 文末の読点も _answer_lines_for_candidate と同じ規則で文の区切りに
+    # する（分割後の行と回答の単位を対応させる）。
     units = [
-        re.sub(r"[\s　、。，．！!？?]", "", part)
+        re.sub(r"[\s　、。，．！!？?]", "", segment)
         for part in re.split(r"[。．.!！?？]+|\n+", normalized)
+        for segment in _split_at_sentence_final_commas(part)
     ]
     return [unit for unit in units if unit]
 
@@ -10848,9 +10877,13 @@ def _answer_lines_for_candidate(raw_answer: str) -> list[str]:
             r"^(ごめんなさい|ごめんね|ごめん|すみません|ありがとう)(?:、|，|,)", r"\1\n", part
         )
         for piece in part.split("\n"):
-            cleaned = re.sub(r"[\s、，,]+", "", piece)
-            if cleaned:
-                lines.append(cleaned)
+            # T530: 読点の直前が文末で終わるときも改行にして1文ずつにする
+            # （「いいですね、行きましょう」→「いいですね」＋「行きましょう」、
+            #   「札幌です、生まれも育ちも札幌です」→ 2行）。
+            for segment in _split_at_sentence_final_commas(piece):
+                cleaned = re.sub(r"[\s、，,]+", "", segment)
+                if cleaned:
+                    lines.append(cleaned)
     # T492: 「好きです」「します」のような一語の答えの後ろに言い直しが続くときは、
     # 一語の方を落として言い直しだけを使う（「好きです／冬の空を見るのが好きです」
     # →「冬の空を見るのが好きです」）。
@@ -11075,7 +11108,7 @@ def _compose_answer_relay_candidate(
         # T487: 回答自体が承諾（「ぜひ行きたいです」）を含むときは、承諾の相槌を
         # 重ねない。空行が残らないよう空の行は詰める。
         # T501: 回答が丁寧な断りなら、承諾の相槌を添えず回答そのものを先頭にする。
-        already_accepts = bool(re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい", clean_answer))
+        already_accepts = bool(re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい|お願いします", clean_answer))
         # T520: 共有の断り判定（丁寧語・タメ口の両方）を使う。「やめておくね」のような
         # タメ口の断りを承諾として扱い、承諾＋断りの矛盾文を作らない。
         declines_invite = bool(PARTNER_INVITATION_REFUSAL_PATTERN.search(clean_answer))
@@ -11095,6 +11128,10 @@ def _compose_answer_relay_candidate(
             accept_line = "" if already_accepts else ("ぜひ行きましょー" if casual else "ぜひ行きましょう😊")
             # T519: 相手がタメ口なら受け止めも合わせる（「いいね！」）。
             accept_ack = "いいね！" if casual else "いいですね！"
+            # T530: 回答そのものが「いいですね」で始まるときは同じ受け止めを重ねない
+            # （「いいですね！／いいですね／お願いします」の重複を防ぐ）。
+            if re.match(r"いいね|いいですね|いいです", clean_answer):
+                accept_ack = ""
             candidate_text = "\n".join(part for part in (accept_ack, accept_line, clean_answer, followup) if part)
     elif is_schedule_or_accept:
         # T484: use the acknowledgment only right after the partner invited us,

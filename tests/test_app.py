@@ -3166,6 +3166,77 @@ def test_t529_preference_questions_keep_the_followup(client):
         assert expected in relay.text, relay.text
 
 
+def test_t530_sentence_final_comma_becomes_a_line_break(client):
+    """T530: 文末で終わる読点は改行にし、2文を1行に詰め込まない。
+
+    再現では「いいですね、行きましょう」が「いいですね行きましょう」、
+    「札幌です、生まれも育ちも札幌です」が「札幌です生まれも育ちも札幌です」
+    という2文が繋がった読みにくい1行になっていた。読点の直前が文末
+    （です・ます・ましょう等）で終わるときはその読点を文の区切りにする。
+    """
+    _, backend = client
+    assert backend._answer_lines_for_candidate("いいですね、行きましょう") == [
+        "いいですね",
+        "行きましょう",
+    ]
+    assert backend._answer_lines_for_candidate("札幌です、生まれも育ちも札幌です") == [
+        "札幌です",
+        "生まれも育ちも札幌です",
+    ]
+    assert backend._answer_lines_for_candidate("わかりました、楽しみにしています") == [
+        "わかりました",
+        "楽しみにしています",
+    ]
+
+
+def test_t530_enumeration_and_continuative_comma_is_not_split(client):
+    """T530: 列挙や接続の読点は分断しない（過剰分割しない）。"""
+    _, backend = client
+    assert backend._answer_lines_for_candidate("映画、音楽、読書が好きです") == [
+        "映画音楽読書が好きです"
+    ]
+    assert backend._answer_lines_for_candidate("明日は雨ですが、行きます") == [
+        "明日は雨ですが行きます"
+    ]
+
+
+def test_t530_acceptance_relay_does_not_repeat_the_ack(client):
+    """T530: 回答が承諾で始まるとき、承諾の相槌や一文詰め込みを重ねない。
+
+    再現では誘いへの回答「いいですね、行きましょう」が
+    「いいですね！／いいですね行きましょう／黒川さんはカフェはよく行くんですか？」
+    となり、相槌が重複し、2文が1行に詰め込まれていた。
+    """
+    _, backend = client
+    question, answer = "よかったら今度カフェに行きませんか？", "いいですね、行きましょう"
+    context = _t527_history_context([{"role": "them", "body": question}])
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    relay = backend._compose_answer_relay_candidate(context, question, answer)
+    assert relay is not None, answer
+    assert "いいですね行きましょう" not in relay.text, relay.text
+    assert relay.text.splitlines()[0] == "いいですね", relay.text
+    assert relay.text.count("いいですね") == 1, relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
+def test_t530_acceptance_answer_with_the_ack_gets_no_extra_ack(client):
+    """T530: 「いいですね！」で始まる承諾回答に、同じ受け止めを重ねない。
+
+    再現では「いいですね！お願いします」が
+    「いいですね！／ぜひ行きましょう😊／いいですね／お願いします／…」と
+    承諾の言い回しを3つ重ねていた。
+    """
+    _, backend = client
+    question, answer = "よかったら今度カフェに行きませんか？", "いいですね！お願いします"
+    context = _t527_history_context([{"role": "them", "body": question}])
+    context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+    relay = backend._compose_answer_relay_candidate(context, question, answer)
+    assert relay is not None, answer
+    assert relay.text.count("いいですね") == 1, relay.text
+    assert "ぜひ行きましょう" not in relay.text, relay.text
+    assert backend._candidate_rejection_reasons(relay, context) == []
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
