@@ -3891,6 +3891,41 @@ def test_t542_blocked_response_records_rejected_candidate_texts(client, monkeypa
     assert all(len(item.get("text", "")) <= 120 for item in details)
 
 
+def test_t550_drink_fact_and_preference_are_separate_lines(client):
+    """T550: 「〜ので〜を頼みます」の説明調を「んです＋好きです」の2行に分ける。
+
+    利用者指摘：app の「コーヒーと紅茶は飲めないので緑茶かココアを頼みます」は
+    注文の説明のようで堅い。プロンプトに事実の行と好みの行を分ける規則を追加。
+    """
+    _, backend = client
+    prompt = backend.read_prompt("reply")
+    assert "理由＋行動を1文にまとめた説明調は避けます" in prompt
+    assert "コーヒーと紅茶は飲めないんですよね😂" in prompt
+    assert "緑茶とかココアが好きです！" in prompt
+
+
+def test_t552_direct_ask_is_not_repeated_after_the_user_answers(client):
+    """T552: 「どう答えたいか」の確認は、回答済みなら繰り返さない。
+
+    実走行 t534a（partner-AI走行）では、相手のコーヒー・紅茶の質問への
+    回答方法を確認したあと、同じ回答を渡しても同じ確認が返り続けた。
+    セッション回答が無い場合でも、今回の回答（ephemeral）で回答済み判定する。
+    """
+    _, backend = client
+    ask_question = "相手の「そちらはコーヒー派ですか？それとも紅茶派ですか？」にどう答えたいか教えてください"
+    context = {
+        "history": [{"role": "them", "body": "そちらはコーヒー派ですか？それとも紅茶派ですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [
+            {
+                "question": ask_question,
+                "answer": "コーヒーと紅茶は飲めないので、絶対緑茶かココアを頼みます。",
+            }
+        ],
+    }
+    assert backend._personal_question_was_answered(context, ask_question) is True
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

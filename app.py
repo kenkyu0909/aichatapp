@@ -12972,7 +12972,10 @@ def _generate_impl(data: GenerateInput):
                             ):
                                 quoted_ask = direct_ask.strip().replace("\n", " ")[:180]
                                 ask_question = f"相手の「{quoted_ask}」にどう答えたいか教えてください"
-                                if not _session_answer_remembers(context, ask_question):
+                                # T552: ユーザーが同じ質問にすでに回答済み（セッション回答 or
+                                # 今回の回答）なら再質問しない。t534a では session_id が無い
+                                # ハーネスで回答済みでも再質問が繰り返された。
+                                if not _personal_question_was_answered(context, ask_question):
                                     return {
                                         **user_info_question_response(
                                             ask_question,
