@@ -565,7 +565,8 @@ async function generate(mode){
   const opts={
     response_version:2,mode,match_id:c?.id,count,tone:state.tone,
     direction:$("direction").selectedOptions[0]?.textContent||"",
-    extra:$("extra").value,show_policy:$("policy").checked
+    extra:$("extra").value,show_policy:$("policy").checked,
+    require_question:$("require-question")?.checked||false
   };
   await requestGeneration(opts,c.id,[]);
 }

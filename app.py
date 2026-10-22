@@ -343,6 +343,7 @@ class GenerateInput(BaseModel):
     direction: str = Field(default="", max_length=120)
     extra: str = Field(default="", max_length=1000)
     show_policy: bool = False
+    require_question: bool = False
     response_version: Literal[1, 2] | None = None
     user_answers: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     clarification_session_id: str | None = Field(default=None, max_length=64)
@@ -3107,7 +3108,7 @@ def personal_fact_question(topic: str, source_question: str = "") -> UserQuestio
         recency = next((term for term in ("昨日", "先週", "この前", "先日", "最近") if term in source_question), "最近")
         question = f"{recency}の休日に何をしたか教えてください"
     elif topic == "休日" and re.search(r"友達|友人", source_question) and re.search(r"出かけ|会い|遊び", source_question):
-        question = "週末は友達と出かけることが多いですか？"
+        question = "週末は友達と出かけることが多いんですか？"
     elif topic == "買い物" and re.search(r"すぐ|即|衝動|タイプ", source_question):
         question = "気になる新作はすぐ買う方ですか？それとも少し考えてから買う方ですか？"
     elif topic in {"カレー", "カレー好み"} and re.search(r"何が|どんな|種類|具|辛さ|何系", source_question):
@@ -5668,7 +5669,7 @@ def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
             right_boundaries = [text.find(mark, match.end()) for mark in ("!", "！", "?", "？", "\n")]
             right = min((position for position in right_boundaries if position >= 0), default=len(text))
             clause = text[left + 1:right].strip()
-            # T534: 相手に向けた質問（「普段はどんなお店に行かれることが多いですか？」）
+            # T534: 相手に向けた質問（「普段はどんなお店に行かれることが多いんですか？」）
             # は本人の習慣の断定ではない。頻度の副詞を含む候補でも、疑問語＋丁寧な
             # 質問の形（〜ですか）なら本人の事実として扱わない。一人称の断定
             # （「普段はよくカフェに行きます」）は従来どおり棄却対象に残す。
@@ -6710,6 +6711,7 @@ def build_context(data: GenerateInput) -> dict:
             "extra": data.extra,
             "candidate_count": data.count,
             "show_policy": data.show_policy,
+            "require_question": bool(data.require_question),
         },
     }
 
@@ -7067,7 +7069,7 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
                 and not is_past_only_routine(clause, "weekend")
                 for clause in partner_clauses
             ),
-            re.compile(r"(?:休日|休みの日|週末).{0,14}(?:何して|何をして|どう過ご|どんなふうに過ご).{0,8}(?:ですか|ますか|？|\?)"),
+            re.compile(r"(?:休日|休みの日|週末).{0,14}(?:何して|何をして|どう過ご|どんなふうに過ご).{0,12}(?:ことが多い|ですか|ますか|んですか|？|\?)"),
         ),
         (
             "趣味の好み",
@@ -10482,6 +10484,12 @@ def _candidate_has_stacked_relative_question(text: str) -> bool:
     return bool(_STACKED_RELATIVE_QUESTION_PATTERN.search(text))
 
 
+def _candidate_has_question(text: str) -> bool:
+    """T546: 候補本文のどこかに相手への質問があるか。"""
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    return any(_is_ask_sentence(line) for line in lines)
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -10502,6 +10510,14 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("質問のつくりが不自然（動詞の重なり）")
     if _candidate_reasks_agreed_meeting_hour(text, context):
         reasons.append("確定済みの待ち合わせ時刻を聞き直している")
+    # T546: 「質問必須」チェック時は、承諾リレー（相手の誘いへの返事）以外で
+    # 質問を含まない候補を棄却する。
+    if (
+        (context.get("reply_preferences") or {}).get("require_question")
+        and not _candidate_has_question(text)
+        and not partner_latest_message_has_invitation(context)
+    ):
+        reasons.append("質問必須が指定されているのに質問がない")
     # T508: 相手の直前の状況と食い違う前提の質問（T507のお弁当×外食を一般化）。
     reasons.extend(_partner_premise_conflict_reasons(text, context))
     if partner_requests_contact_stop(context):
@@ -11710,7 +11726,7 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
             if re.search(r"本|書店|古本", combined_text):
                 question_line = "最近おすすめの本はありますか？"
             elif re.search(r"カフェ|喫茶|珈琲|飲食|料理|パン", combined_text):
-                question_line = "普段はどんなお店に行かれることが多いですか？"
+                question_line = "普段はどんなお店に行かれることが多いんですか？"
             else:
                 question_line = "お仕事で特に楽しいのはどんなときですか？"
         elif re.search(r"本|読書|小説|古本", other_desc):
@@ -11728,18 +11744,18 @@ def _build_first_message_fallback_candidate(context: dict) -> Candidate | None:
                 liked_terms,
                 casual=False,
             )
-            question_line = "普段はどんなお店に行かれることが多いですか？"
+            question_line = "普段はどんなお店に行かれることが多いんですか？"
         elif re.search(r"散歩|街歩き|旅行|ドライブ", other_desc):
             topic = _fallback_profile_topic(
                 profile_terms, r"散歩|街歩き|旅行|ドライブ", "散歩"
             )
             topic_line = _fallback_topic_line(topic, liked_terms, casual=False)
             if re.search(r"旅行|旅", topic):
-                question_line = "旅行先はどこが多いですか？"
+                question_line = "旅行先はどこが多いんですか？"
             elif "ドライブ" in topic:
                 question_line = "ドライブはどこによく行かれますか？"
             else:
-                question_line = "休日はどんな場所を歩かれることが多いですか？"
+                question_line = "休日はどんな場所を歩かれることが多いんですか？"
         elif re.search(r"映画|アニメ|ドラマ|音楽", other_desc):
             topic = _fallback_profile_topic(
                 profile_terms, r"映画|アニメ|ドラマ|音楽", "映画"
@@ -12175,7 +12191,7 @@ def demo_suggestions(mode: str, count: int) -> dict:
         texts = [
             ("プロフィールに触れる", "はじめまして！\nマッチありがとうございます😊\nプロフィールの雰囲気が好みだなと思っていたのでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ってよかったお店はありますか？"),
             ("短め", "はじめまして！\nマッチありがとうございます！\n旅行がお好きなところが素敵だなと思っていたのでマッチできてうれしいです☺️\n最近どこか行かれましたか？"),
-            ("自然体", "はじめまして！\n読書がお好きなところが気になっていたのでマッチできてうれしいです😊\nどんな本を読むことが多いですか？"),
+            ("自然体", "はじめまして！\n読書がお好きなところが気になっていたのでマッチできてうれしいです😊\nどんな本を読むことが多いんですか？"),
             ("丁寧", "マッチありがとうございます！\n美術館がお好きなところが素敵だなと思っていました\nマッチできてうれしいです☺️\n最近印象に残った展示はありますか？"),
             ("カジュアル", "はじめまして！\nプロフィールを見てタイプだなと思っていたのでマッチできてうれしいです！\nカフェ好きなんですね😊\nどんなお店によく行きますか？"),
         ]
@@ -12519,6 +12535,14 @@ def _generate_impl(data: GenerateInput):
             "会話方針がinvite_gentlyなら、3案のいずれかをinviteにして自然に誘います。"
             "本人事実が未確認ならgrounded_shareを強行せず、react等の安全な案に置き換えます。"
             "候補の文末だけを変えて多様性を装わず、役割を本文内容にも反映します。"
+        )
+    if data.require_question and data.mode != "like":
+        system_instruction += (
+            "\n【質問必須】利用者が「質問必須」をチェックしています。"
+            "返す候補のすべてに、相手が答えやすい質問を1つ入れてください。"
+            "相槌や自分の話だけで終わる候補は作りません。"
+            "質問は相手の直前の話題か確認済みの話題から選び、本人の未確認情報を新しく作る必要はありません。"
+            "相手が誘いを述べていて承諾だけが求められている場合を除き、質問のない候補は棄却されます。"
         )
     tone_setting = str(data.tone or "自動").strip()
     style_fact = str(context.get("my_profile", {}).get("facts", {}).get("style", "") or "")

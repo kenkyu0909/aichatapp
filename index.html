@@ -54,6 +54,7 @@
         <label class="policy-banner"><input id="policy" type="checkbox" checked><span><strong>会うまでの会話方針も表示</strong><small>記録済みの会話だけを根拠に、続ける・確認する・誘う・待つ・止めるを提案します。返信候補とは別表示です。</small></span></label>
         <div class="config-line"><label for="direction">返信の方向</label><select id="direction"><option value="auto">方向を指定しない</option><option value="casual">自然に会話を広げる</option><option value="question">質問を控えめに</option><option value="warm">親しみやすく返す</option><option value="invite">自然な誘いを検討</option><option value="topic_change">話題を変える</option></select><span class="helper">足りない指示は下の自由記述へ</span></div>
         <div class="config-line compact"><label for="count">返信候補の数</label><select id="count"><option value="1">1案</option><option value="3" selected>3案（標準）</option><option value="5">5案</option></select></div>
+        <div class="config-line compact"><label class="check-option"><input id="require-question" type="checkbox"><span><strong>質問必須</strong><small>チェックがあるときは、返す候補すべてに相手への質問を1つ入れます（誘いへの承諾を除く）。</small></span></label></div>
         <label class="small-label" for="extra">追加の自由記述（空欄でもOK）</label>
         <div class="action-line">
           <input id="extra" placeholder="例：映画の話に持っていきたい / 質問しないで / 少し短めに">

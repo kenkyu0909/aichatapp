@@ -319,6 +319,16 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 3
     assert driver.execute_script("return window.__generateResponses.at(-1).show_policy") is True
 
+    # T546: 質問必須チェックの有無が /api/generate の要求に反映される。
+    require_question = driver.find_element(By.ID, "require-question")
+    assert not require_question.is_selected()
+    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is False
+    require_question.click()
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
+    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is True
+    require_question.click()
+
     message_count = len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message"))
     driver.find_element(By.CSS_SELECTOR, ".candidate button").click()
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == message_count

@@ -1408,7 +1408,7 @@ def test_model_optional_info_question_gets_one_safe_candidate_retry(client, monk
         "recommended": {"label": "自然", "text": "新しいお店を探すのって楽しそうですね！", "reply_move": "react"},
         "alternatives": [
             {"label": "広げる", "text": "最近見つけたお店で印象に残ったところありますか？", "reply_move": "expand"},
-            {"label": "話題転換", "text": "友達と出かけるときはカフェ以外だと何をすることが多いですか？", "reply_move": "grounded_share"},
+            {"label": "話題転換", "text": "友達と出かけるときはカフェ以外だと何をすることが多いんですか？", "reply_move": "grounded_share"},
         ],
         "reason": "相手の話題に反応", "strategy": "相手のカフェの話を続ける", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
@@ -3361,15 +3361,15 @@ def test_t533_first_message_fallback_uses_the_profile_word_for_hobbies(client):
         (
             "休日はカフェ巡りをしています",
             "プロフィールのカフェ巡りのところが気になっていました！",
-            "普段はどんなお店に行かれることが多いですか？",
+            "普段はどんなお店に行かれることが多いんですか？",
         ),
         (
             "旅行が好きで、よく写真を撮ります",
             "旅行がお好きなんですね！",
-            "旅行先はどこが多いですか？",
+            "旅行先はどこが多いんですか？",
         ),
         ("音楽が好きです", "音楽がお好きなんですね！", "最近よく聴くアーティストはいますか？"),
-        ("喫茶店が好きです", "喫茶店がお好きなんですね！", "普段はどんなお店に行かれることが多いですか？"),
+        ("喫茶店が好きです", "喫茶店がお好きなんですね！", "普段はどんなお店に行かれることが多いんですか？"),
     )
     for description, expected_topic, expected_question in cases:
         context = _t516_first_context(description)
@@ -3383,14 +3383,14 @@ def test_t533_first_message_fallback_uses_the_profile_word_for_hobbies(client):
 def test_t534_polite_question_is_not_a_first_person_habit(client):
     """T534: 漢字を含む丁寧な質問を本人の頻度習慣の断定として扱わない。
 
-    再現では「普段はどんなお店に行かれることが多いですか？」が
+    再現では「普段はどんなお店に行かれることが多いんですか？」が
     `_has_unverified_general_personal_claim` の頻度習慣パターン（普段は…行…る）
     に本人の事実として掛かり、カフェ系の初回候補が棄却されていた。
     """
     _, backend = client
     context = _t516_first_context("休日はカフェ巡りをしています")
     assert backend._has_unverified_general_personal_claim(
-        "普段はどんなお店に行かれることが多いですか？", context
+        "普段はどんなお店に行かれることが多いんですか？", context
     ) is False
     assert backend._has_unverified_general_personal_claim(
         "普段はよくカフェに行きます", context
@@ -3656,6 +3656,132 @@ def test_t543_prompt_prescribes_natural_question_and_no_fragments(client):
     assert "ココアがいいかもです！" in prompt
     # 本人への確認質問（user_questions）には適用しないことを明記している。
     assert "本人への確認質問（user_questions）の文面には適用しません" in prompt
+
+
+def test_t545_template_questions_use_the_ndesu_form(client):
+    """T545: テンプレートの質問も「〜ことが多いですか？」を「んです」形にする。
+
+    実走行 t533h では「普段はどんな曲を聴くことが多いですか？」のように、
+    モデルもテンプレートも「〜ことが多いですか？」を多用した。指摘
+    （「多いですか？」→「多いんですか？」）に合わせ、本人確認の質問文、
+    初回フォールバックの質問行、デモ例文を「んです」形にそろえる。
+    """
+    _, backend = client
+    question = backend.personal_fact_question("休日", "週末は友達と出かけたりしてますか？")
+    assert question.question == "週末は友達と出かけることが多いんですか？"
+
+    context = _t516_first_context("休日はカフェ巡りをしています")
+    candidate = backend._build_first_message_fallback_candidate(context)
+    assert candidate is not None
+    assert "ことが多いんですか？" in candidate.text
+    assert "ことが多いですか？" not in candidate.text
+
+    demo_payload = backend.demo_suggestions("first", 5)
+    demo_texts = [
+        demo_payload["recommended"]["text"],
+        *(item["text"] for item in demo_payload["alternatives"]),
+    ]
+    assert any("ことが多いんですか？" in text for text in demo_texts)
+    assert all("ことが多いですか？" not in text for text in demo_texts)
+
+
+def test_t546_require_question_flag_rejects_questionless_candidates(client):
+    """T546: 「質問必須」チェック時は質問のない候補を棄却する（承諾リレーは免除）。
+
+    既定では質問は2〜3通に1回でよく、相槌だけで終わる候補も許される。
+    利用者が質問必須をチェックしたときだけ、相槌や自分の話だけで終わる
+    候補を棄却し、相手への質問を1つ含む候補だけを残す。
+    """
+    _, backend = client
+    plain = {
+        "history": [{"role": "them", "body": "最近はドラマを続けて観ることが多いです"}],
+        "reply_preferences": {"tone": "敬語"},
+    }
+    no_question = backend.Candidate(label="相槌のみ", text="ドラマいいですね！\n続きが気になりますね")
+    assert "質問必須が指定されているのに質問がない" not in backend._candidate_rejection_reasons(
+        no_question, plain
+    )
+
+    required = {
+        **plain,
+        "reply_preferences": {"tone": "敬語", "require_question": True},
+    }
+    assert "質問必須が指定されているのに質問がない" in backend._candidate_rejection_reasons(
+        no_question, required
+    )
+    with_question = backend.Candidate(
+        label="質問あり", text="ドラマいいですね！\nどんなジャンルをよく観るんですか？"
+    )
+    assert "質問必須が指定されているのに質問がない" not in backend._candidate_rejection_reasons(
+        with_question, required
+    )
+
+    # 相手の誘いへの承諾は質問なしでもよい。
+    invite = {
+        **required,
+        "history": [{"role": "them", "body": "よかったら今度一緒にカフェに行きませんか？"}],
+    }
+    acceptance = backend.Candidate(label="承諾", text="いいですね！\nぜひ行きましょう😊")
+    assert backend._candidate_rejection_reasons(acceptance, invite) == []
+
+
+def test_require_question_flag_repairs_questionless_candidates(client, monkeypatch):
+    """T546: require_question=true のとき、質問のない候補は再生成で置き換わる。
+
+    1回目のモデル出力がすべて質問なしでも、棄却→再生成の流れで
+    質問を含む候補だけが表示される。プロンプトには【質問必須】が載る。
+    """
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    questionless = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "相槌のみ", "text": "ドラマいいですね！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "広げる", "text": "続きが気になりますね", "reply_move": "expand"},
+            {"label": "共有", "text": "僕も家でよく観ます", "reply_move": "grounded_share"},
+        ],
+        "reason": "相槌で返す", "strategy": "続きを気にする", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+    with_questions = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {
+            "label": "質問あり", "text": "ドラマいいですね！\nどんなジャンルをよく観るんですか？",
+            "reply_move": "react",
+        },
+        "alternatives": [
+            {"label": "広げる", "text": "続きが気になりますね\n一気に観てしまうタイプなんですか？", "reply_move": "expand"},
+            {"label": "共有", "text": "僕も家でよく観ます\n最近観たものでおすすめはありますか？", "reply_move": "grounded_share"},
+        ],
+        "reason": "質問必須なので質問を入れる", "strategy": "ジャンルを尋ねる",
+        "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+    responses = [questionless, with_questions]
+    prompts = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "require_question": True,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is not True, body
+    texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
+    assert texts
+    assert all(("？" in text) or ("ますか" in text) for text in texts)
+    assert len(prompts) == 2
+    assert "【質問必須】" in prompts[0]
+    assert "【質問必須】" in prompts[1]
 
 
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
@@ -4587,7 +4713,7 @@ def test_repeat_question_about_known_friend_cafe_activity_is_detected(client):
     ),
     (
         "休みの日は友人と喫茶店によく行きます",
-        "誰と喫茶店に行くことが多いですか？",
+        "誰と喫茶店に行くことが多いんですか？",
     ),
 ])
 def test_known_friend_cafe_routine_is_not_reasked_with_synonyms_or_paraphrase(
@@ -4780,7 +4906,7 @@ def test_cafe_frequency_paraphrases_are_rejected_after_partner_already_shared_it
 
 
 @pytest.mark.parametrize(("partner_text", "candidate_text", "topic"), [
-    ("休日は家で映画を見ることが多いです", "休日は何して過ごすことが多いですか？", "休日の過ごし方"),
+    ("休日は家で映画を見ることが多いです", "休日は何して過ごすことが多いんですか？", "休日の過ごし方"),
     ("映画が好きでよく観ます", "映画好きなんですか？", "趣味の好み"),
     ("好きな食べ物はカレーです", "好きな食べ物は何ですか？", "好きな食べ物"),
     ("先週京都に行きました", "先週どこか行きましたか？", "最近行った場所"),
@@ -5395,7 +5521,7 @@ def test_reply_length_guard_does_not_exempt_negated_serious_wording(client, part
     _, backend = client
     candidate = backend.Candidate(
         label="長すぎる返信",
-        text="そうなんですね\n不安なことがないならよかったです\n最近は何をして過ごすことが多いですか？",
+        text="そうなんですね\n不安なことがないならよかったです\n最近は何をして過ごすことが多いんですか？",
     )
     context = {
         "mode": "reply",
@@ -9167,7 +9293,7 @@ def test_invite_opportunity_requires_recent_coherent_outing_exchange(client):
         "history": [
             {"role": "them", "body": "休日は友達とカフェに行くことが多いです！"},
             {"role": "me", "body": "落ち着いたお店もよさそうですね"},
-            {"role": "them", "body": "そうなんです！けいさんはカフェで何を頼むことが多いですか？"},
+            {"role": "them", "body": "そうなんです！けいさんはカフェで何を頼むことが多いんですか？"},
             {"role": "me", "body": "季節のタルトを選ぶことが多いです"},
             {"role": "them", "body": "中野に落ち着いたカフェがあるんですね！ケーキも気になります"},
         ]
@@ -9238,7 +9364,7 @@ def test_unrelated_unsupported_personal_claim_from_model_is_blocked_without_extr
         "recommended": {"label": "自然", "text": "映画はときどき観ますよ\n最近はどんな洋画を観たんですか？"},
         "alternatives": [
             {"label": "別案", "text": "映画の話気になります！\n最近何か観ましたか？"},
-            {"label": "質問", "text": "映画館と家ならどちらで観ることが多いですか？"},
+            {"label": "質問", "text": "映画館と家ならどちらで観ることが多いんですか？"},
         ],
         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
@@ -10659,7 +10785,7 @@ OVERNIGHT_DIRECT_QUESTION_CASES = [
     ("最近どこか旅行しましたか？", "最近行った旅行先やお出かけ先があれば教えてください"),
     ("どのくらい旅行に行きますか？", "旅行にはどのくらいの頻度で行きますか？"),
     ("休日は普段何をしていますか？", "休日は普段どんなふうに過ごすか教えてください"),
-    ("週末は友達と出かけますか？", "週末は友達と出かけることが多いですか？"),
+    ("週末は友達と出かけますか？", "週末は友達と出かけることが多いんですか？"),
     ("どのあたりに住んでいますか？", "相手に伝えてよい居住地域を教えてください"),
     ("今度会うならどの地域がいいですか？", "待ち合わせに使いたい地域や駅を教えてください"),
     ("いつ頃なら会えそうですか？", "相手に伝えてよい曜日や時間帯を教えてください"),
@@ -10701,13 +10827,13 @@ def test_overnight_thirty_direct_questions_are_blocked_or_asked_at_matching_gran
 @pytest.mark.parametrize("candidate_text", [
     "友達と行くことが多いんですか？",
     "友達とよく出かけるんですか？",
-    "誰とカフェに行くことが多いですか？",
+    "誰とカフェに行くことが多いんですか？",
     "誰と一緒にカフェに行くんですか？",
     "カフェは好きなんですか？",
     "カフェによく行くんですか？",
-    "休日は友達と出かけることが多いですか？",
+    "休日は友達と出かけることが多いんですか？",
     "休みの日は友達と会うんですか？",
-    "週末は何をして過ごすことが多いですか？",
+    "週末は何をして過ごすことが多いんですか？",
     "休日は普段何をしていますか？",
     "カフェに行く頻度ってどれくらいですか？",
     "友達とカフェに行くんですね？",
@@ -12551,10 +12677,10 @@ def test_partner_known_weekend_companion_is_not_reasked_but_cafe_details_are_all
     context = {
         "history": [{"role": "them", "body": "休日は友達とカフェに行くことが多いです！"}],
     }
-    repeated = backend.Candidate(label="既知情報の再質問", text="週末は誰と過ごすことが多いですか？")
-    paraphrased = backend.Candidate(label="言い換えた再質問", text="休みの日は誰と一緒にいることが多いですか？")
+    repeated = backend.Candidate(label="既知情報の再質問", text="週末は誰と過ごすことが多いんですか？")
+    paraphrased = backend.Candidate(label="言い換えた再質問", text="休みの日は誰と一緒にいることが多いんですか？")
     preference = backend.Candidate(label="異なる質問", text="週末は誰と過ごしたいですか？")
-    deeper = backend.Candidate(label="未回答の詳細", text="カフェではどんな飲み物を頼むことが多いですか？")
+    deeper = backend.Candidate(label="未回答の詳細", text="カフェではどんな飲み物を頼むことが多いんですか？")
 
     assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics([repeated], context)
     assert "休日の友人との過ごし方" in backend.repeated_partner_question_topics([paraphrased], context)
@@ -16335,7 +16461,7 @@ def test_partner_statement_with_suki_is_not_a_personal_question(client):
 
 def test_museum_question_after_partner_story_is_asked_and_enforced(client):
     _, backend = client
-    question = "水野さんは美術館では、どんな展示を見に行かれることが多いですか？"
+    question = "水野さんは美術館では、どんな展示を見に行かれることが多いんですか？"
     partner = (
         "「美術館の帰りに近くの古本屋をのぞく」という過ごし方、とてもいいですね。"
         "私も小さな美術館の帰りにふらっと本屋に寄るのが好きです。"
@@ -16354,7 +16480,7 @@ def test_museum_question_after_partner_story_is_asked_and_enforced(client):
     }
     preflight = backend.missing_personal_fact_question(context)
     assert preflight is not None
-    ask = "どんな展示を見に行かれることが多いですか？"
+    ask = "どんな展示を見に行かれることが多いんですか？"
     assert ask in preflight.question
 
     answer_question = f"相手の「{ask}」にどう答えたいか教えてください"
@@ -16384,7 +16510,7 @@ def test_museum_question_inside_statement_clause_is_still_asked(client):
     partner = (
         "「当時の街の匂いまで想像できる」と言っていただけると、うれしくなります。"
         "作家で言うと、岡本かの子や林芙美子の随筆をよく読み返しています。"
-        "古本屋の帰りに小さな美術館へ寄ることも多いのですが、水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+        "古本屋の帰りに小さな美術館へ寄ることも多いのですが、水野さんは美術館ではどんな展示を見に行かれることが多いんですか？"
     )
     context = {
         "mode": "reply",
@@ -16412,9 +16538,9 @@ def test_echoed_confirmation_before_the_ask_does_not_hide_the_question(client):
     partner = (
         "「心に残っている本」ですか、先月読んだ林芙美子の短編集がそれで、終わりの数行を何度も読み返しました。"
         "それから、古本屋の帰りに小さな美術館へ寄ることも多く、先週は日本画の展示を見てきました。"
-        "水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+        "水野さんは美術館ではどんな展示を見に行かれることが多いんですか？"
     )
-    ask = "水野さんは美術館ではどんな展示を見に行かれることが多いですか？"
+    ask = "水野さんは美術館ではどんな展示を見に行かれることが多いんですか？"
     assert backend._last_question_sentence(partner) == ask
     assert backend._topic_for_personal_question(partner) == "読書"
 
@@ -16721,7 +16847,7 @@ def test_holiday_question_unanswered_rejected_and_answered_accepted(client):
     context = {
         "mode": "reply",
         "history": [
-            {"role": "them", "body": "休日は普段どんなふうに過ごすことが多いですか？"},
+            {"role": "them", "body": "休日は普段どんなふうに過ごすことが多いんですか？"},
         ],
         "my_profile": {"facts": {"weekends": "カフェで読書をすることが多いです"}},
         "ephemeral_user_answers": [],
@@ -16803,7 +16929,7 @@ def test_repeats_recent_self_question_catches_bean_and_brewing_across_six_turns(
     context = {
         "mode": "reply",
         "history": [
-            {"role": "me", "body": "普段はどんな豆を買われることが多いですか？"},  # me turn -5
+            {"role": "me", "body": "普段はどんな豆を買われることが多いんですか？"},  # me turn -5
             {"role": "them", "body": "エチオピアが好きですね。"},
             {"role": "me", "body": "フルーティーで美味しいですよね！"},  # me turn -4
             {"role": "them", "body": "そうなんですよ。"},
@@ -16828,7 +16954,7 @@ def test_repeats_recent_self_question_catches_bean_and_brewing_across_six_turns(
 
 def test_cafe_preference_clarification_answer_verifies_general_cafe_question(client):
     _, backend = client
-    msg = "手書きの看板や、のんびりした空気感に惹かれますね。水野さんは、喫茶店ではどんなおやつを頼むことが多いですか？"
+    msg = "手書きの看板や、のんびりした空気感に惹かれますね。水野さんは、喫茶店ではどんなおやつを頼むことが多いんですか？"
     ans_q = backend.personal_fact_question("カフェ好み", msg).question
     context = {
         "mode": "reply",
@@ -17068,7 +17194,7 @@ def test_t472_relayed_answer_keeps_sentence_breaks(client):
 
     ask = (
         "喫茶店は長居したくなりますね。落ち着く席があると本当にほっとします。"
-        "窓ぎわの席だと外の景色も見られて好きです。そよかさんはどんな席を選ぶことが多いですか？"
+        "窓ぎわの席だと外の景色も見られて好きです。そよかさんはどんな席を選ぶことが多いんですか？"
     )
     answer = "窓ぎわの席を選ぶことが多いです。静かな席だと落ち着きます。"
     history = [{"role": "them", "body": ask}]
@@ -17139,7 +17265,7 @@ def test_t472_memo_sentence_answers_seat_question(client):
     _, backend = client
     ask = (
         "喫茶店は長居したくなりますね。落ち着く席があると本当にほっとします。"
-        "水野さんは喫茶店で過ごすとき、どんな席を選ぶことが多いですか？"
+        "水野さんは喫茶店で過ごすとき、どんな席を選ぶことが多いんですか？"
     )
     context = {
         "mode": "reply",
@@ -17172,7 +17298,7 @@ def test_t472_memo_answer_term_is_required_and_contradictions_are_rejected(clien
     _, backend = client
     ask = (
         "喫茶店は長居したくなりますね。落ち着く席があると本当にほっとします。"
-        "水野さんは喫茶店で過ごすとき、どんな席を選ぶことが多いですか？"
+        "水野さんは喫茶店で過ごすとき、どんな席を選ぶことが多いんですか？"
     )
     context = {
         "mode": "reply",
@@ -17916,7 +18042,7 @@ def test_t479_partner_address_stays_consistent(client):
         "mode": "reply",
         "history": [
             {"role": "them", "body": "こんにちは！こちらこそよろしくお願いします😊"},
-            {"role": "me", "body": "はじめまして！\n本の話ができるのうれしいです😊\n黒川さんは休日は何をされてることが多いですか？"},
+            {"role": "me", "body": "はじめまして！\n本の話ができるのうれしいです😊\n黒川さんは休日は何をされてることが多いんですか？"},
             {"role": "them", "body": "古本屋めぐりが多いです"},
         ],
         "other": {"name": "黒川いつき", "description": "書店員"},
@@ -17930,7 +18056,7 @@ def test_t479_partner_address_stays_consistent(client):
         label="統一", text="古本屋めぐりっていいですよね📚"
     )
     mixed = backend.Candidate(
-        label="揺れ", text="古本屋めぐりいいですよね📚\nいつきさんはどんな本を探すことが多いですか？"
+        label="揺れ", text="古本屋めぐりいいですよね📚\nいつきさんはどんな本を探すことが多いんですか？"
     )
     assert "相手の呼び方が揺れている" not in backend._recent_self_repetition_reasons(
         consistent.text, context
@@ -17972,7 +18098,7 @@ def test_t479_same_interrogative_and_verb_is_the_same_ask(client):
     place_context = dict(context)
     place_context["history"] = [
         {"role": "them", "body": "喫茶店は中野の北口が多いです"},
-        {"role": "me", "body": "喫茶店のプリン美味しそうですね🍮\nちなみにいつきさんはどんな喫茶店に行くことが多いですか？"},
+        {"role": "me", "body": "喫茶店のプリン美味しそうですね🍮\nちなみにいつきさんはどんな喫茶店に行くことが多いんですか？"},
         {"role": "them", "body": "北口は古いお店が多いんです"},
     ]
     place_repeat = backend.Candidate(
@@ -17998,7 +18124,7 @@ def test_t478_repeated_question_is_not_promoted_back_to_first(client):
         "mode": "reply",
         "history": [
             {"role": "them", "body": "フィルムを現像してもらってます"},
-            {"role": "me", "body": "フィルムの現像までお願いできるお店ってすてきですね！\nどんな写真を撮ることが多いですか？"},
+            {"role": "me", "body": "フィルムの現像までお願いできるお店ってすてきですね！\nどんな写真を撮ることが多いんですか？"},
             {"role": "them", "body": "土曜日は本の話も写真の話もできたらうれしいです"},
         ],
         "other": {"name": "黒川 いつき", "description": "書店員"},
@@ -18009,7 +18135,7 @@ def test_t478_repeated_question_is_not_promoted_back_to_first(client):
     }
     repeated = {
         "label": "同じ話題の質問",
-        "text": "写真のお話もできるのわくわくします📸\nどんな景色を撮ることが多いですか？",
+        "text": "写真のお話もできるのわくわくします📸\nどんな景色を撮ることが多いんですか？",
         "reply_move": "expand",
     }
     fresh = {
@@ -18579,7 +18705,7 @@ def test_t486_fallback_uses_the_established_partner_address(client):
         "mode": "reply",
         "history": [
             {"role": "them", "body": "水野さんは本は紙と電子ならどっちが多いですか？"},
-            {"role": "me", "body": "圧倒的に紙の本が多いです\nいつきさんはどんな本を見つけることが多いですか？"},
+            {"role": "me", "body": "圧倒的に紙の本が多いです\nいつきさんはどんな本を見つけることが多いんですか？"},
             {"role": "them", "body": "水野さんは写真は撮ったりしますか？"},
         ],
         "other": {"name": "黒川いつき", "description": "書店員"},
@@ -18601,9 +18727,9 @@ def test_t486_fallback_uses_the_established_partner_address(client):
 
 def test_t486_pivot_question_is_split_onto_its_own_line(client):
     _, backend = client
-    text = "ページをめくる感触が好きなんですがいつきさんはどんな本を見つけることが多いですか？"
+    text = "ページをめくる感触が好きなんですがいつきさんはどんな本を見つけることが多いんですか？"
     assert backend.split_pivot_run_on_line(text) == (
-        "ページをめくる感触が好きなんです！\nいつきさんはどんな本を見つけることが多いですか？"
+        "ページをめくる感触が好きなんです！\nいつきさんはどんな本を見つけることが多いんですか？"
     )
     assert backend.split_pivot_run_on_line("好きなんですがよろしくお願いします") == "好きなんですがよろしくお願いします"
     assert backend.split_pivot_run_on_line("天気がいいと公園は気持ちいいですよね✨") == "天気がいいと公園は気持ちいいですよね✨"
@@ -19494,7 +19620,7 @@ def test_t499_reasking_partner_question_only_is_rejected(client):
     assert "相手の質問の聞き返し" in backend._candidate_rejection_reasons(reasked_sushi, sushi)
 
     other_topic = {**base, "history": [{"role": "them", "body": "朝は苦手ですか？"}]}
-    fresh = backend.Candidate(label="別話題", text="休日は何をして過ごすことが多いですか？")
+    fresh = backend.Candidate(label="別話題", text="休日は何をして過ごすことが多いんですか？")
     assert "相手の質問の聞き返し" not in backend._candidate_rejection_reasons(fresh, other_topic)
 
 
