@@ -3002,6 +3002,114 @@ def test_t526_preference_questions_keep_the_preference_followup(client):
         assert expected in relay.text, relay.text
 
 
+def _t527_history_context(history, **extra):
+    context = {
+        "mode": "reply",
+        "history": history,
+        "my_profile": {"facts": {"name": "水野そよか"}, "avoid": []},
+        "other": {"name": "黒川いつき", "description": "書店員"},
+        "reply_preferences": {"tone": "自動"},
+        "invite_decision": "continue_conversation",
+    }
+    context.update(extra)
+    return context
+
+
+def test_t527_schedule_reask_is_not_sent_after_the_partner_declines(client):
+    """T527: 日時の食い違い確認のあと相手が断ったら、時刻を再確認しない。
+
+    再現では「あれ午後じゃなかったんでしたっけ？」まで進んだあと相手が
+    「やっぱり今回はやめておきます」と断っても、日時変更保留の判定が真のまま
+    残り、棄却理由ゼロで「何時になったんですか？」を送れてしまっていた。
+    断りのあとの日程の催促は行わない。
+    """
+    _, backend = client
+    context = _t527_history_context(
+        [
+            {"role": "them", "body": "今週末どうですか？"},
+            {"role": "me", "body": "いいですね！土曜の午後はどうですか？"},
+            {"role": "them", "body": "午後は予定があるので、土曜の午前はどうでしょう？"},
+            {"role": "me", "body": "あれ午後じゃなかったんでしたっけ？"},
+            {"role": "them", "body": "そうなんです。でもやっぱり今回はやめておきます"},
+        ]
+    )
+    assert backend._schedule_change_pending(context) is True
+    candidate = backend._build_schedule_reask_fallback_candidate(context)
+    assert candidate is None, candidate.text if candidate else None
+
+
+def test_t527_schedule_reask_still_fires_when_no_decline(client):
+    """T527: 断りが無ければ従来どおり、決まったら教えてください/時刻の再確認を残す。"""
+    _, backend = client
+    unsetted = _t527_history_context(
+        [
+            {"role": "them", "body": "今週末どうですか？"},
+            {"role": "me", "body": "いいですね！土曜の午後はどうですか？"},
+            {"role": "them", "body": "午後は予定があるので、別の日にしましょう"},
+            {"role": "me", "body": "あれ午後じゃなかったんでしたっけ？"},
+            {"role": "them", "body": "まだ確定ではないので、決まったら連絡します"},
+        ]
+    )
+    candidate = backend._build_schedule_reask_fallback_candidate(unsetted)
+    assert candidate is not None
+    assert "決まったら教えてください" in candidate.text
+
+
+def test_t527_declined_plan_does_not_get_a_preference_followup(client):
+    """T527: 断り・キャンセルの直後に「どんな〜が好き」の聞き返しを付けない。
+
+    再現では「その日は行けません。別の機会にしましょう」への回答リレーが
+    棄却理由ゼロで「黒川さんはどんな機会が好きなんですか？」を付けていた。
+    """
+    _, backend = client
+    cases = [
+        ("その日は行けません。別の機会にしましょう", "了解しました"),
+        ("ごめん、今週末はちょっと無理です。また今度お願いします", "わかりました"),
+        ("やっぱり今回はやめておきます", "承知しました"),
+    ]
+    for question, answer in cases:
+        context = _t527_history_context([{"role": "them", "body": question}])
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert "どんな" not in relay.text, relay.text
+        assert answer in relay.text, relay.text
+
+
+def test_t527_decline_detection_classifies_plan_cancellations(client):
+    """T527: 予定の断り・キャンセルを断りとして判定し、通常の質問は断りにしない。"""
+    _, backend = client
+    declines = [
+        "ごめん、今週末はちょっと無理です。また今度お願いします",
+        "その日は行けません。別の機会にしましょう",
+        "やっぱり今回はやめておきます",
+        "都合が合わないのでまたにします",
+    ]
+    for body in declines:
+        context = _t527_history_context([{"role": "them", "body": body}])
+        assert backend._partner_latest_declines_plan(context) is True, body
+    others = ["明日はどうですか？", "趣味はありますか？", "最近何してるんですか？", "映画は好きですか？"]
+    for body in others:
+        context = _t527_history_context([{"role": "them", "body": body}])
+        assert backend._partner_latest_declines_plan(context) is False, body
+
+
+def test_t527_non_decline_question_keeps_the_preference_followup(client):
+    """T527: 断りでない質問は従来どおり聞き返しを残す（過剰抑制しない）。"""
+    _, backend = client
+    cases = [
+        ("趣味はありますか？", "映画鑑賞が趣味です", "どんな趣味が好き"),
+        ("どんなお仕事をされていますか？", "本屋で働いています", "どんな仕事が好き"),
+        ("なぜカメラを始めたんですか？", "友達に勧められて始めました", "どんなカメラが好き"),
+    ]
+    for question, answer, expected in cases:
+        context = _t527_history_context([{"role": "them", "body": question}])
+        context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
+        relay = backend._compose_answer_relay_candidate(context, question, answer)
+        assert relay is not None, question
+        assert expected in relay.text, relay.text
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

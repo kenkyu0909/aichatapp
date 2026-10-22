@@ -7370,9 +7370,38 @@ def _partner_schedule_unsetted(context: dict) -> bool:
     )
 
 
+# T527: 相手が誘いや予定を断った・キャンセルした直後に、日程の再確認や話題の
+# 聞き返しを付けない（「何時になったんですか？」「どんな機会が好き」を防ぐ）。
+# T520 の PARTNER_INVITATION_REFUSAL_PATTERN に加えて、予定のキャンセル・延期の
+# 言い方（無理です・都合が合わない・また今度 等）も拾う。
+_PARTNER_PLAN_DECLINE_PATTERN = re.compile(
+    r"無理です|無理そう|都合が合わな|予定が合わな|また今度|次回に|またにする|またにしよ"
+)
+
+
+def _partner_latest_declines_plan(context: dict) -> bool:
+    """直前の相手発言が誘い・予定の断り／キャンセルかどうか (T527)."""
+    partner_messages = [
+        str(message.get("body", ""))
+        for message in context.get("history") or []
+        if message.get("role") == "them"
+    ]
+    if not partner_messages:
+        return False
+    latest = partner_messages[-1]
+    return bool(
+        PARTNER_INVITATION_REFUSAL_PATTERN.search(latest)
+        or _PARTNER_PLAN_DECLINE_PATTERN.search(latest)
+    )
+
+
 def _build_schedule_reask_fallback_candidate(context: dict) -> Candidate | None:
     """日時変更を確認した後、相手が時刻を明示するまで確定させない再確認 (T489/T498)."""
     if not _schedule_change_pending(context):
+        return None
+    # T527: 相手が予定を断った・キャンセルした直後に時刻を再確認しない
+    # （「やっぱり今回はやめておきます」→「何時になったんですか？」を防ぐ）。
+    if _partner_latest_declines_plan(context):
         return None
     partner_messages = [
         str(message.get("body", ""))
@@ -10980,13 +11009,16 @@ def _compose_answer_relay_candidate(
             # どうですか？」）から拾った名詞に「どんな〜が好き」を付けると意味が
             # 通らない。好み・カテゴリを尋ねる質問（どんな・何・好き・趣味…）には
             # 従来どおり付ける。
-            generic_allowed = bool(
-                _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(latest_partner_body or "")
-                or _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(question or "")
-            ) or not bool(
-                _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(latest_partner_body or "")
-                or _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(question or "")
-            )
+            generic_allowed = (
+                bool(
+                    _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(latest_partner_body or "")
+                    or _CATEGORY_OR_PREFERENCE_QUESTION_PATTERN.search(question or "")
+                )
+                or not bool(
+                    _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(latest_partner_body or "")
+                    or _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(question or "")
+                )
+            ) and not _partner_latest_declines_plan(context)
             if generic_allowed:
                 options.append(
                     f"{partner_label}はどんな{topic_noun}が好きなんですか？"
