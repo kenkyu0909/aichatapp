@@ -2018,6 +2018,38 @@ def _topic_is_verified(topic: str, context: dict, question_text: str = "") -> bo
             and re.search(r"仕事|職業|働いて|勤務|学校|大学", answer.get("question", ""))
             for answer in context.get("ephemeral_user_answers", [])
         )
+    if topic in {"動物", "ペット", "動物の好み"}:
+        # T555: 「動物は好きですか？」は「猫派だけど犬も好き」のような memo の記述で
+        # 答えられる。動物という語そのものが無くても、猫・犬・ペットの好みの記述が
+        # あれば確認済みとして扱う。
+        profile_texts: list[str] = []
+
+        def _walk_profile(value: Any) -> None:
+            if isinstance(value, str):
+                profile_texts.append(value)
+            elif isinstance(value, list):
+                for item in value:
+                    _walk_profile(item)
+            elif isinstance(value, dict):
+                for item in value.values():
+                    _walk_profile(item)
+
+        for value in facts.values():
+            _walk_profile(value)
+        if any(
+            re.search(r"(?:猫|犬|ペット)[^。！？\n]{0,10}(?:派|好き)", text)
+            for text in profile_texts
+        ):
+            return True
+        for answer in context.get("ephemeral_user_answers", []):
+            answer_text = str(answer.get("answer", "")).strip()
+            if (
+                answer_text
+                and re.search(r"猫|犬|ペット|動物", answer_text)
+                and re.search(r"好き|派|飼って", answer_text)
+            ):
+                return True
+        return False
     if topic == "旅行最近":
         if any(facts.get(key) for key in ("recent_trips", "recent_travel", "最近の旅行")):
             return True
@@ -5933,6 +5965,25 @@ def _has_unverified_pet_claim(text: str, context: dict) -> bool:
             else:
                 evidence.append(f"以前は{subject}を飼ったことがありません")
     grounded = _latest_pet_claim_signatures(evidence, include_uncertain=False)
+    if any(claim not in grounded for claim in claims):
+        # T555: memo 等の根拠に同じ動物の同じ向きの好み（派・好き）が書かれて
+        # いれば、「猫派ですが犬も好きです」のような言い換えを未確認扱いにしない。
+        evidence_text = "".join(evidence)
+        pet_words = set(re.findall(r"猫|犬|うさぎ|ハムスター|フェレット|亀|ペット", text))
+        if pet_words:
+            preference_shaped = all(
+                re.search(
+                    word + r"[^。！？\n]{0,12}(?:派|好き)|(?:派|好き)[^。！？\n]{0,6}" + word,
+                    text,
+                )
+                for word in pet_words
+            )
+            evidence_grounded = all(
+                re.search(word + r"[^。！？\n]{0,12}(?:派|好き)", evidence_text)
+                for word in pet_words
+            )
+            if preference_shaped and evidence_grounded:
+                return False
     # A partner's messages can establish what the partner said about a third
     # party, but must never be treated as facts about the app user.
     partner_evidence = [
@@ -9924,6 +9975,13 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
     ) and _candidate_is_acknowledgment_plus_question(candidate.text):
         # Allow the acknowledge-then-ask shape one extra line without reducing longer ceilings.
         maximum_sentences = max(maximum_sentences, min(maximum_sentences + 1, 4))
+    if (
+        (context.get("reply_preferences") or {}).get("require_question")
+        and _candidate_has_question(candidate.text)
+        and partner_sentences >= 2
+    ):
+        # T554: 質問必須時は「答え＋質問」で行が増えるため上限を1文緩める（上限4文）。
+        maximum_sentences = min(maximum_sentences + 1, 4)
     return _candidate_sentence_count(candidate.text) > maximum_sentences
 
 
@@ -10513,6 +10571,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("質問のつくりが不自然（動詞の重なり）")
     if _candidate_reasks_agreed_meeting_hour(text, context):
         reasons.append("確定済みの待ち合わせ時刻を聞き直している")
+    # T553: 「ちなみに」は近い自分の発言で繰り返さない（プロンプトは1会話1回まで）。
+    if "ちなみに" in text and any("ちなみに" in message for message in recent_me_messages[-3:]):
+        reasons.append("ちなみにを繰り返している")
     # T546: 「質問必須」チェック時は、承諾リレー（相手の誘いへの返事）以外で
     # 質問を含まない候補を棄却する。
     if (
@@ -10799,6 +10860,10 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
     question_terms = _memo_terms(focus_question)
     if not question_terms:
         return None
+    # T555: 「動物は好きですか？」は memo の「猫派だけど犬も好き」が答えになる。
+    # 動物・ペットという語が memo 側に無くても、猫・犬・ペットの好みの記述が
+    # あればその文を答えの文として扱う。
+    animal_question = bool(re.search(r"動物|ペット", focus_question))
     focus_positions = {term: focus_question.rfind(term) for term in question_terms}
     focus_term = max(focus_positions, key=lambda term: focus_positions[term])
     best: tuple[tuple, str] | None = None
@@ -10809,6 +10874,8 @@ def _memo_answer_sentence(question: str, context: dict) -> str | None:
         shared = question_terms & _memo_terms(sentence)
         # T503: 評価語だけの共有では文を選ばない（話題語の共有を必須にする）。
         shared = {term for term in shared if term not in MEMO_POLARITY_STOPWORDS}
+        if animal_question and re.search(r"猫|犬|ペット", sentence):
+            shared.add("動物")
         if not shared:
             continue
         # T488: 質問の「商店街」とメモの「喫茶店」の「店」のような、別の語の一部と

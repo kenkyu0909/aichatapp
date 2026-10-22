@@ -3926,6 +3926,97 @@ def test_t552_direct_ask_is_not_repeated_after_the_user_answers(client):
     assert backend._personal_question_was_answered(context, ask_question) is True
 
 
+def test_t555_animal_preference_from_memo_answers_the_question(client):
+    """T555: 「動物は好きですか？」は memo の「猫派だけど犬も好き」で答えられる。
+
+    実走行 t533l では、memo に動物の好みがあるのに「動物」という語が無いため
+    未回答扱いになり、答えを含む候補が全棄却された。
+    """
+    _, backend = client
+    question = "柴犬を飼っているんですが、朝の散歩が日課になっています。動物は好きですか？"
+    context = {
+        "history": [{"role": "them", "body": question}],
+        "my_profile": {"facts": {"memo": "猫派だけど犬も好き。"}},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    assert backend._topic_is_verified("動物", context, question) is True
+    candidate = backend.Candidate(
+        label="回答", text="そうなんですね！\n猫派ですが犬も好きです"
+    )
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(
+        candidate, context
+    )
+
+
+def test_t554_require_question_allows_answer_plus_question_length(client):
+    """T554: 質問必須時は「答え＋質問」の3行型が2文上限で落ちない。
+
+    実走行 t533l では、質問必須で答えと質問を両方入れた3行候補が
+    「長すぎる」で全棄却された。
+    """
+    _, backend = client
+    history = [
+        {"role": "them", "body": "最近はドラマを続けて観ることが多いです。おすすめはありますか？"},
+        {"role": "me", "body": "ドラマいいですね！"},
+        {"role": "them", "body": "通勤中はJ-POPをよく聴いています。最近のおすすめの曲はありますか？"},
+    ]
+    candidate = backend.Candidate(
+        label="答え＋質問",
+        text=(
+            "いいですね！\n"
+            "ボカロやJ-POPが好きです\n"
+            "通勤中はどんな曲を聴くことが多いんですか？"
+        ),
+    )
+    required = {
+        "mode": "reply",
+        "history": history,
+        "my_profile": {"facts": {"memo": "ボカロやJ-POPが好き"}},
+        "reply_preferences": {"tone": "敬語", "require_question": True},
+    }
+    plain = {
+        "mode": "reply",
+        "history": history,
+        "my_profile": {"facts": {"memo": "ボカロやJ-POPが好き"}},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    assert backend._candidate_exceeds_mirrored_length(candidate, required) is False
+    assert backend._candidate_exceeds_mirrored_length(candidate, plain) is False
+    # 注: 既存の「あいさつ＋質問」ボーナスで3行が許されるケースもあるため、
+    # ここでは質問必須時に3行の「答え＋質問」が落ちないことだけを固定する。
+
+
+def test_t553_chinamini_is_not_repeated(client):
+    """T553: 「ちなみに」は近い自分の発言で繰り返さない。
+
+    利用者指摘「ちなみにがおおいね」。直近3通の自分の発言に「ちなみに」が
+    あるときは、質問の頭の「ちなみに」を棄却する。
+    """
+    _, backend = client
+    prior = {
+        "history": [
+            {"role": "me", "body": "ちなみに最近気になっているカフェはありますか？"},
+            {"role": "them", "body": "おいしいパン屋さんを見つけたんです"},
+        ],
+        "my_profile": {"facts": {}},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    candidate = backend.Candidate(
+        label="ちなみに", text="パン屋さんいいですね！\nちなみにどんなパンを焼くんですか？"
+    )
+    assert "ちなみにを繰り返している" in backend._candidate_rejection_reasons(candidate, prior)
+    fresh = {
+        "history": [
+            {"role": "them", "body": "おいしいパン屋さんを見つけたんです"},
+        ],
+        "my_profile": {"facts": {}},
+        "reply_preferences": {"tone": "敬語"},
+    }
+    assert "ちなみにを繰り返している" not in backend._candidate_rejection_reasons(
+        candidate, fresh
+    )
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 
