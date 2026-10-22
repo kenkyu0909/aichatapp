@@ -3583,6 +3583,47 @@ def test_t540_paraphrased_repeated_self_disclosure_is_rejected(client):
     )
 
 
+def test_t541_agreed_meeting_hour_is_not_asked_again(client):
+    """T541: 待ち合わせ時刻が決まった後に「何時頃に集まりますか？」と聞き直さない。
+
+    再現（実走行 t533f の app#20）では、14時で確定した直後に相手が
+    「前日になったらまた連絡しますね」と言った返答で**「当日は何時頃に
+    集まりますか？」**を送った。16時など別の時刻を提案された場合の確認は
+    従来どおり妨げない。
+    """
+    _, backend = client
+    history = [
+        {"role": "them", "body": "土曜の午後なら空いていますか？"},
+        {"role": "me", "body": "14時なら空いてます！\n今から当日が楽しみですね😊"},
+        {"role": "them", "body": "14時くらいに大通公園で待ち合わせはいかがですか？"},
+        {"role": "me", "body": "14時で大丈夫です！\n当日は気をつけて来てくださいね✨"},
+        {"role": "them", "body": "わかりました。では当日は気をつけて来てくださいね"},
+        {"role": "me", "body": "了解です！\n当日はよろしくお願いします😊"},
+        {"role": "them", "body": "イベントのあとは、近くのお店でお茶でもできたら嬉しいです"},
+        {"role": "me", "body": "イベントのあとのお茶の楽しみもありがとうございます✨\n当日がすごく楽しみですね！"},
+        {"role": "them", "body": "楽しみにしています。前日になったらまた連絡しますね"},
+    ]
+    context = _t527_history_context(history, invite_decision="schedule_after_acceptance")
+    reason = "確定済みの待ち合わせ時刻を聞き直している"
+    reask = backend.Candidate(
+        label="再確認", text="前日になったら連絡しますね！\n当日は何時頃に集まりますか？"
+    )
+    assert reason in backend._candidate_rejection_reasons(reask, context)
+    ok = backend.Candidate(
+        label="相槌", text="前日になったら連絡しますね！\n当日が楽しみです😊"
+    )
+    assert reason not in backend._candidate_rejection_reasons(ok, context)
+
+    # 時刻がまだ決まっていない（午後のみ）なら「何時」を聞いてよい。
+    undecided = _t527_history_context(
+        [
+            {"role": "them", "body": "土曜の午後は空いていますか？"},
+            {"role": "me", "body": "大丈夫です！"},
+        ]
+    )
+    assert reason not in backend._candidate_rejection_reasons(reask, undecided)
+
+
 def test_t518_invitation_relay_does_not_ask_about_time_words(client):
     """T518: 「今度」などの時を表す語を話題名詞にしない。
 

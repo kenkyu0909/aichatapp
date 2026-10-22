@@ -7363,6 +7363,39 @@ def _schedule_elements_before_latest(context: dict) -> dict[str, set[str]]:
     return combined
 
 
+def _agreed_meeting_hour(context: dict) -> str | None:
+    """待ち合わせ時刻が双方の発言で一致しているとき、その時刻を返す (T541)."""
+    history = context.get("history") or []
+    window = history[-10:]
+    if not any(
+        _SCHEDULE_PLAN_CONTEXT.search(str(message.get("body", "")))
+        for message in window
+    ):
+        return None
+    partner_hours: set[str] = set()
+    me_hours: set[str] = set()
+    for message in window:
+        hours = set(re.findall(r"(\d{1,2})時", str(message.get("body", ""))))
+        if message.get("role") == "them":
+            partner_hours |= hours
+        elif message.get("role") == "me":
+            me_hours |= hours
+    common = partner_hours & me_hours
+    return sorted(common)[0] if common else None
+
+
+_REASK_AGREED_HOUR_PATTERN = re.compile(
+    r"何時[^。！？\n]{0,10}(?:集ま|待ち合わ|会い|会う|来|行|始ま|終わ|頃)"
+)
+
+
+def _candidate_reasks_agreed_meeting_hour(text: str, context: dict) -> bool:
+    """確定済みの待ち合わせ時刻を「何時？」と聞き直す候補を検出する (T541)."""
+    if not _agreed_meeting_hour(context):
+        return False
+    return bool(_REASK_AGREED_HOUR_PATTERN.search(str(text)))
+
+
 def _partner_schedule_conflict(context: dict) -> dict[str, str] | None:
     """最後の相手発言の日時が、それ以前に示された日時と食い違うときだけ返す (T486).
 
@@ -10467,6 +10500,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("猫に外歩きを尋ねている")
     if _candidate_has_stacked_relative_question(text):
         reasons.append("質問のつくりが不自然（動詞の重なり）")
+    if _candidate_reasks_agreed_meeting_hour(text, context):
+        reasons.append("確定済みの待ち合わせ時刻を聞き直している")
     # T508: 相手の直前の状況と食い違う前提の質問（T507のお弁当×外食を一般化）。
     reasons.extend(_partner_premise_conflict_reasons(text, context))
     if partner_requests_contact_stop(context):
