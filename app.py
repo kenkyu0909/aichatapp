@@ -11190,6 +11190,38 @@ def partner_latest_message_has_invitation(context: dict) -> bool:
     return bool(INVITATION_PATTERN.search(str(latest_partner.get("body", ""))))
 
 
+# T559: 「甘いものとしょっぱいものどっち派？」のような二択の好み質問。
+# 直前に答えた好みを短く言い直すことが自然な回答になるため、
+# 以前の回答の繰り返し棄却をここだけ例外にする（T500の無関係な繰り返しは除外しない）。
+EITHER_OR_PREFERENCE_QUESTION_PATTERN = re.compile(
+    r"(?:どっち|どちら)(?:派|が好き|タイプ|がいい|が良い|側)"
+    r"|(?:何派|なん派)"
+)
+
+
+def _latest_partner_asks_preference_choice(context: dict) -> bool:
+    """True when the latest partner message asks an either-or preference question."""
+    history = context.get("history", [])
+    latest_partner = next((m for m in reversed(history) if m.get("role") == "them"), None)
+    if not latest_partner:
+        return False
+    body = str(latest_partner.get("body", ""))
+    if "?" not in body and "？" not in body:
+        return False
+    return bool(EITHER_OR_PREFERENCE_QUESTION_PATTERN.search(body))
+
+
+def _repeats_only_latest_me_answer(text: str, context: dict) -> bool:
+    """T559: 言い直しが直前の自分の発言の言い換えだけか（古い回答の再利用は対象外）。"""
+    latest_me = next(
+        (m for m in reversed(context.get("history", [])) if m.get("role") == "me"),
+        None,
+    )
+    if not latest_me:
+        return False
+    return _candidate_reuses_prior_me_answer(text, {"history": [latest_me]})
+
+
 def _partner_states_own_availability(text: str) -> bool:
     """True when the partner already told us their own available day/time (T484).
 
@@ -11478,9 +11510,16 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         for m in context.get("history", [])
         if m.get("role") == "me"
     ]
-    if recent_me_messages and _is_duplicate_or_near_identical_to_prior_me(text, recent_me_messages[-1]):
+    preference_followup = _latest_partner_asks_preference_choice(context)
+    if (
+        recent_me_messages
+        and _is_duplicate_or_near_identical_to_prior_me(text, recent_me_messages[-1])
+        and not preference_followup
+    ):
         reasons.append("直前の自分の発言と重複")
-    if _candidate_reuses_prior_me_answer(text, context):
+    if _candidate_reuses_prior_me_answer(text, context) and not (
+        preference_followup and _repeats_only_latest_me_answer(text, context)
+    ):
         reasons.append("自分の以前の回答を繰り返している")
     if _repeats_partner_declared_activity(text, context):
         reasons.append("相手が答えた活動を聞き返している")
@@ -13699,6 +13738,7 @@ def _generate_impl(data: GenerateInput):
             "- どの候補も、この発言への反応か回答から始めてください。\n"
             "- 直前の発言と関係ない話題を先に置いたり、別の質問から始めたりしないでください。\n"
             "- 相手が質問・心配・相談をしているときは、「いいですね」「素敵ですね」「そうなんですね」のような中身のない相槌から始めず、1行目で答えか受け止めを書いてください。\n"
+            "- 相手のプロフィールにある好みを自分の好みとして言ったり、プロフィールにない自分の好みや経験を新しく作ったりしないでください。答えは確認済みの事実から選び、なければ好みが定まっていない旨を短く返してください。\n"
             f"- {intent_guidance}\n"
         )
         if state.get("my_last_message_ended_with_question"):

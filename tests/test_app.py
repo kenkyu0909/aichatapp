@@ -21328,7 +21328,63 @@ def test_reply_prompt_anchors_last_partner_message_and_does_not_force_roles(clie
     assert "相手の最新メッセージ:「休日は何をしてますか？」" in prompt
     assert "1行目でその質問に答えてください" in prompt
     assert "中身のない相槌から始めず" in prompt
+    assert "相手のプロフィールにある好みを自分の好みとして言ったり" in prompt
     assert "1案目はreact" not in prompt
     assert "少なくとも1〜2案には" not in prompt
     assert "3案すべてに質問を入れる必要はありません" in prompt
     assert "休日は何をしてますか？" in captured["contents"]
+
+
+def test_either_or_preference_followup_allows_restating_latest_answer(client):
+    """T559: 二択の好み質問への答え直しは、直前の自分の発言の言い換えでも棄却しない。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {
+                "role": "me",
+                "body": "カレーとパスタを食べることが多いです\nカフェではコーヒーを頼みます",
+            },
+            {"role": "them", "body": "甘いものとしょっぱいものどっち派ですか？"},
+        ],
+        "other": {"name": "架空さやか", "description": "カフェと映画が好きです"},
+        "my_profile": {"facts": {"food": ["カレー", "パスタ"]}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    restated = backend.Candidate(
+        label="答え直し",
+        text="カレーとパスタを食べることが多いです🍁",
+    )
+    reasons = backend._candidate_rejection_reasons(restated, context)
+    assert "自分の以前の回答を繰り返している" not in reasons
+    assert "直前の自分の発言と重複" not in reasons
+
+
+def test_either_or_question_does_not_allow_reusing_old_answers(client):
+    """T559: 二択の好み質問でも、古い回答の再利用は従来どおり棄却する（T500）。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {
+                "role": "me",
+                "body": "洋画も邦画も観ますがミステリーが多いです\nこさんは映画はよく観るんですか？",
+            },
+            {
+                "role": "me",
+                "body": "カレーとパスタを食べることが多いです\nカフェではコーヒーを頼みます",
+            },
+            {"role": "them", "body": "甘いものとしょっぱいものどっち派ですか？"},
+        ],
+        "other": {"name": "架空さやか", "description": "カフェと映画が好きです"},
+        "my_profile": {"facts": {"food": ["カレー", "パスタ"]}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "ephemeral_user_answers": [],
+    }
+    reused_old = backend.Candidate(
+        label="古い回答の再利用",
+        text="洋画も邦画も観ますがミステリーが多いですね😊",
+    )
+    reasons = backend._candidate_rejection_reasons(reused_old, context)
+    assert "自分の以前の回答を繰り返している" in reasons
