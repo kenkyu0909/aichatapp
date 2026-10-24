@@ -11232,9 +11232,8 @@ FOOD_PREFERENCE_NOUN_PATTERN = (
     r"チョコレート|チョコ|クッキー"
 )
 SELF_FOOD_PREFERENCE_CLAIM_PATTERN = re.compile(
-    rf"(?P<noun>{FOOD_PREFERENCE_NOUN_PATTERN})"
-    r"(?:とか|なんか|など|も|は|が|って|を)*"
-    r"(?:好き|大好き|好み|食べ(?:ます|たり|たい)|頼み(?:ます|たり)|注文(?:します|する)?)"
+    rf"(?P<noun>{FOOD_PREFERENCE_NOUN_PATTERN})[^!?！？\n]{{0,14}}?"
+    r"(?:好き|大好き|好み|食べ(?:ます|たり|たい|たく)|頼み|注文)"
 )
 
 
