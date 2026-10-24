@@ -11222,6 +11222,69 @@ def _repeats_only_latest_me_answer(text: str, context: dict) -> bool:
     return _candidate_reuses_prior_me_answer(text, {"history": [latest_me]})
 
 
+# T559: 甘いもの・しょっぱいものなど、確認済みでない食の好みの自己主張を落とす。
+# 実API会話（2026-10-24 conversation_002）で、相手の甘いものの話に合わせて
+# 「焼き菓子とかも好き」「僕も甘いものを食べたりします」と本人事実にない好みを
+# 作る候補が複数回出たため。
+FOOD_PREFERENCE_NOUN_PATTERN = (
+    r"甘いもの|甘いの|甘い系|甘党|しょっぱいもの|しょっぱいの|しょっぱい系|"
+    r"辛いもの|辛いの|スイーツ|デザート|ケーキ|焼き菓子|お菓子|アイス|プリン|"
+    r"チョコレート|チョコ|クッキー"
+)
+SELF_FOOD_PREFERENCE_CLAIM_PATTERN = re.compile(
+    rf"(?P<noun>{FOOD_PREFERENCE_NOUN_PATTERN})"
+    r"(?:とか|なんか|など|も|は|が|って|を)*"
+    r"(?:好き|大好き|好み|食べ(?:ます|たり|たい)|頼み(?:ます|たり)|注文(?:します|する)?)"
+)
+
+
+def _candidate_claim_clause(text: str, match: re.Match[str]) -> str:
+    """Return the sentence clause that contains the matched claim."""
+    left = max(text.rfind(mark, 0, match.start()) for mark in ("!", "！", "?", "？", "\n"))
+    right_bounds = [text.find(mark, match.end()) for mark in ("!", "！", "?", "？", "\n")]
+    right = min((position for position in right_bounds if position >= 0), default=len(text))
+    return text[left + 1:right].strip()
+
+
+def _candidate_food_nouns_supported(context: dict, nouns: list[str]) -> bool:
+    """主張した食の好みが、確認済みの本人事実にすべて根拠を持つときだけ True。"""
+    sources = [
+        re.sub(r"[\s、。！!？?]", "", str(source))
+        for source in _trusted_fact_clauses(context, include_negated=True)
+    ]
+    for noun in nouns:
+        grounded = False
+        for source in sources:
+            index = source.find(noun)
+            if index < 0:
+                continue
+            around = source[max(0, index - 14):index + len(noun) + 14]
+            if re.search(r"苦手|嫌い|抜き|控え|食べない|飲まない|好きじゃ|好きでは", around):
+                continue
+            grounded = True
+            break
+        if not grounded:
+            return False
+    return True
+
+
+def _claims_unverified_food_preference(text: str, context: dict) -> bool:
+    """確認済みでない甘いもの・しょっぱいものの自己好みの主張を拾う。"""
+    value = str(text)
+    claimed_nouns: list[str] = []
+    for match in SELF_FOOD_PREFERENCE_CLAIM_PATTERN.finditer(value):
+        if _candidate_claim_is_interrogative(value, match):
+            continue
+        clause = _candidate_claim_clause(value, match)
+        # 相手の発言を映す表現（「甘いものがお好きなんですね」）は本人の主張ではない。
+        if re.search(r"(?:なんですね|んですね|なんだね|んだね|のですね|ですよね|なんだ|んだ)$", clause):
+            continue
+        claimed_nouns.append(match.group("noun"))
+    if not claimed_nouns:
+        return False
+    return not _candidate_food_nouns_supported(context, claimed_nouns)
+
+
 def _partner_states_own_availability(text: str) -> bool:
     """True when the partner already told us their own available day/time (T484).
 
@@ -11521,6 +11584,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         preference_followup and _repeats_only_latest_me_answer(text, context)
     ):
         reasons.append("自分の以前の回答を繰り返している")
+    # T559: 確認済みでない甘いもの・しょっぱいものの自己好みは候補から落とす。
+    if _claims_unverified_food_preference(text, context):
+        reasons.append("未確認の食の好み")
     if _repeats_partner_declared_activity(text, context):
         reasons.append("相手が答えた活動を聞き返している")
     if _asks_pet_walk_about_cat(text, context):

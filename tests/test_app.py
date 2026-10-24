@@ -21388,3 +21388,46 @@ def test_either_or_question_does_not_allow_reusing_old_answers(client):
     )
     reasons = backend._candidate_rejection_reasons(reused_old, context)
     assert "自分の以前の回答を繰り返している" in reasons
+
+
+def test_unverified_food_preference_claim_is_rejected(client):
+    """T559: 相手の甘いものの話に合わせた、確認済みでない食の好みの自己主張を落とす。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "them", "body": "私もカフェに行くと甘いものを頼みがちです😄"},
+        ],
+        "other": {"name": "架空さやか", "description": "焼き菓子とオムライスが好きです"},
+        "my_profile": {"facts": {"food": ["カレー", "パスタ"]}, "avoid": []},
+        "ephemeral_user_answers": [],
+        "reply_preferences": {"tone": "敬語"},
+    }
+    claimed = backend.Candidate(label="寄せ", text="僕も甘いものを食べたりします😁")
+    assert "未確認の食の好み" in backend._candidate_rejection_reasons(claimed, context)
+    borrowed = backend.Candidate(
+        label="寄せ2",
+        text="焼き菓子とかも好きなのでつい食べたくなっちゃいます😊",
+    )
+    assert "未確認の食の好み" in backend._candidate_rejection_reasons(borrowed, context)
+    grounded = backend.Candidate(
+        label="事実",
+        text="カレーとパスタを食べることが多いです",
+    )
+    assert "未確認の食の好み" not in backend._candidate_rejection_reasons(grounded, context)
+    question = backend.Candidate(label="質問", text="焼き菓子とかも好きなんですか？？")
+    assert "未確認の食の好み" not in backend._candidate_rejection_reasons(question, context)
+
+
+def test_profile_confirmed_food_preference_still_passes(client):
+    """T559: プロフィールに確認済みの好みがある主張は従来どおり通す。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "甘いもの好きですか？"}],
+        "other": {"name": "架空さやか", "description": "スイーツ好きです"},
+        "my_profile": {"facts": {"memo": "オムライスと甘いものが好きです"}, "avoid": []},
+        "ephemeral_user_answers": [],
+    }
+    ok = backend.Candidate(label="事実", text="甘いものも好きです✨")
+    assert "未確認の食の好み" not in backend._candidate_rejection_reasons(ok, context)
