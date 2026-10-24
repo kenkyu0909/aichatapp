@@ -119,7 +119,7 @@ function renderContacts(){
     const info=node("span","contact-item-details");
     const head=node("span","contact-item-head");
     head.append(node("strong","",c.name));
-    head.append(node("span","count-pill",(c.message_count||0)+"通"));
+    head.append(node("span","count-pill","自分 "+(c.outgoing_count||0)+"通"));
     info.append(head,node("span","contact-preview",c.last_message||c.description||"会話はまだありません"));
     btn.append(info);
     btn.addEventListener("click",()=>safe(()=>selectContact(c.id)));
@@ -155,7 +155,7 @@ async function selectContact(id,relist=true){
   $("current-name").textContent=c?.name||"相手を選択";
   $("current-bio").textContent=c?.description||"プロフィール未登録";
   $("edit-contact").disabled=!c;
-  $("messages-count").textContent="▤ "+(c?.message_count||0)+"件の会話";
+  $("messages-count").textContent="▤ 自分から："+(c?.outgoing_count||0)+"通";
   $("incoming-count").textContent="💬 相手から："+(c?.incoming_count||0)+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   if(relist)renderContacts();
@@ -230,10 +230,11 @@ async function refreshConversation(){
   if(c){
     c.message_count=records.length;
     c.incoming_count=records.filter(m=>m.role==="them").length;
+    c.outgoing_count=records.filter(m=>m.role==="me").length;
     c.last_message=records.at(-1)?.body||"";
   }
   renderContacts();
-  $("messages-count").textContent="▤ "+records.length+"件の会話";
+  $("messages-count").textContent="▤ 自分から："+records.filter(m=>m.role==="me").length+"通";
   $("incoming-count").textContent="💬 相手から："+records.filter(m=>m.role==="them").length+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   renderMessages();

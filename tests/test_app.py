@@ -402,6 +402,7 @@ def test_counts_and_direction_settings_are_respected_in_context(client):
     match = c.get("/api/matches").json()[0]
     assert match["message_count"] == 2
     assert match["incoming_count"] == 1
+    assert match["outgoing_count"] == 1
     assert match["last_message"] == "私も気になります"
     settings = backend.GenerateInput(
         mode="followup", match_id=mid, count=5, tone="敬語",
@@ -21230,3 +21231,99 @@ def test_t500_blocked_nameless_question_asks_the_user(client, monkeypatch):
     assert body["generation_blocked"] is True
     assert body["user_questions"] == []
     assert body["recommended"] is None
+
+
+def test_partner_profile_cleaning_keeps_intro_and_drops_ui_noise(client):
+    _, backend = client
+    raw = (
+        "さがす\nいいね\n18\n"
+        "ゆか 26歳 北海道\n"
+        "カフェ巡りと映画が好きです\n"
+        "音楽55 %\n"
+        "8 個\n"
+        "コードギアスすき！\n"
+        "コードギアスすき！\n"
+        "ロイヤルVIPオプションを契約すると\nすべて閲覧できます\n"
+        "20:33\n"
+    )
+    cleaned = backend._clean_partner_profile(raw)
+    assert "カフェ巡りと映画が好きです" in cleaned
+    assert "ゆか 26歳 北海道" in cleaned
+    assert "さがす" not in cleaned
+    assert "音楽55" not in cleaned
+    assert "8 個" not in cleaned
+    assert "ロイヤルVIP" not in cleaned
+    assert cleaned.count("コードギアスすき！") == 1
+
+
+def test_context_cleans_profile_and_reports_conversation_state(client):
+    c, backend = client
+    mid = add_match(c, "ゆか")
+    c.put(
+        f"/api/matches/{mid}",
+        json={
+            "name": "ゆか",
+            "description": "さがす\nカフェ巡りが好きです\n音楽55 %\nロイヤルVIPオプションを契約すると",
+        },
+    )
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "休日は何をしてますか？"})
+    c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "me", "body": "カフェ巡りが多いです\nゆかさんはどこか行きましたか？"},
+    )
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近は公園を散歩してました"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert "カフェ巡りが好きです" in context["other"]["description"]
+    assert "さがす" not in context["other"]["description"]
+    assert "音楽55" not in context["other"]["description"]
+    state = context["conversation_state"]
+    assert state["last_partner_message"] == "最近は公園を散歩してました"
+    assert state["counterpart_intent"] == "report"
+    assert state["my_last_message_ended_with_question"] is True
+    assert any("どこか行きましたか" in question for question in state["already_asked_questions"])
+
+
+def test_reply_prompt_anchors_last_partner_message_and_does_not_force_roles(client, monkeypatch):
+    from google import genai
+
+    c, backend = client
+    mid = add_match(c, "ゆか")
+    c.put(f"/api/matches/{mid}", json={"name": "ゆか", "description": "カフェ巡りが好きです"})
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "休日は何をしてますか？"})
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "recommended": {"label": "答える", "text": "カフェ巡りが好きでよく行ってます！"},
+                "alternatives": [
+                    {"label": "家で過ごす", "text": "家でのんびり映画を見てます"},
+                    {"label": "散歩", "text": "近所の公園を散歩してます"},
+                ],
+                "reason": "相手の質問に答えるためです。",
+                "strategy": "まず質問に答え、同じ話題で軽く続けます。",
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [],
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "会話を続けます",
+                "next_action": "返信を選びます",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": mid, "response_version": 2, "count": 3},
+    )
+    assert response.status_code == 200, response.text
+    prompt = captured["config"].system_instruction
+    assert "相手の最新メッセージ:「休日は何をしてますか？」" in prompt
+    assert "1行目でその質問に答えてください" in prompt
+    assert "中身のない相槌から始めず" in prompt
+    assert "1案目はreact" not in prompt
+    assert "少なくとも1〜2案には" not in prompt
+    assert "3案すべてに質問を入れる必要はありません" in prompt
+    assert "休日は何をしてますか？" in captured["contents"]
