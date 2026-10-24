@@ -354,6 +354,44 @@ class MatchInput(BaseModel):
         return value.strip()
 
 
+_MESSAGE_CLOCK_PATTERN = (
+    r"(?:(?:午前|午後|AM|PM)\s*)?"
+    r"(?:"
+    r"(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:\s*[:：]\s*[0-5]\d)?"
+    r"|(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?"
+    r")"
+)
+_MESSAGE_DATE_PATTERN = r"(?:\d{4}[/\-年]\s*\d{1,2}[/\-月]\s*\d{1,2}日?|\d{1,2}/\d{1,2})"
+# 貼り付けた履歴の先頭に付く時刻（「20:33」「20:34 本文」「10/24 20:33 本文」など）。
+# 本文の一部（「20:33に着くね」）を消さないよう、時刻の直後が行末か空白のときだけ除去する。
+_MESSAGE_TIMESTAMP_PATTERN = re.compile(
+    rf"^(?:{_MESSAGE_DATE_PATTERN}\s*)?(?:{_MESSAGE_CLOCK_PATTERN})(?=\s|$)\s*"
+)
+
+
+def _strip_message_timestamps(body: str) -> str:
+    """貼り付け本文の行頭にある時刻・日付表記を取り除く (T5xx)."""
+    lines: list[str] = []
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        timestamp_only = False
+        for _ in range(2):
+            match = _MESSAGE_TIMESTAMP_PATTERN.match(line)
+            if not match:
+                break
+            rest = line[match.end():].strip()
+            if not rest:
+                timestamp_only = True
+                line = ""
+                break
+            line = rest
+        if timestamp_only:
+            continue
+        lines.append(line)
+    cleaned = "\n".join(lines).strip()
+    return cleaned or body.strip()
+
+
 class MessageInput(BaseModel):
     role: Literal["me", "them"]
     body: str = Field(min_length=1, max_length=12000)
@@ -361,9 +399,10 @@ class MessageInput(BaseModel):
     @field_validator("body")
     @classmethod
     def message_not_blank(cls, value: str) -> str:
-        if not value.strip():
+        value = value.strip()
+        if not value:
             raise ValueError("空のメッセージは保存できません")
-        return value.strip()
+        return _strip_message_timestamps(value)
 
 
 class GenerateInput(BaseModel):
@@ -7381,12 +7420,18 @@ def build_context(data: GenerateInput) -> dict:
                 "SELECT role,body FROM messages WHERE match_id=? ORDER BY id DESC LIMIT 60",
                 (data.match_id,),
             ).fetchall()
-            history = [dict(row) for row in reversed(records)]
+            history = [
+                {**dict(row), "body": _strip_message_timestamps(dict(row)["body"])}
+                for row in reversed(records)
+            ]
             policy_records = db.execute(
                 "SELECT role,body FROM messages WHERE match_id=? ORDER BY id DESC LIMIT ?",
                 (data.match_id, _policy_history_window()),
             ).fetchall()
-            history_policy = [dict(row) for row in reversed(policy_records)]
+            history_policy = [
+                {**dict(row), "body": _strip_message_timestamps(dict(row)["body"])}
+                for row in reversed(policy_records)
+            ]
             if data.mode == "first" and history:
                 raise HTTPException(400, "初回メッセージは会話履歴がない相手にだけ生成できます")
             if data.mode != "first" and not history:

@@ -201,6 +201,72 @@ def test_messages_edit_delete_and_latest_sender(client):
     assert c.get(f"/api/matches/{mid}/messages").json() == []
 
 
+def test_pasted_message_timestamps_are_ignored(client):
+    """T557: 貼り付けた履歴の行頭時刻は保存しない（時刻だけを無視する）。"""
+    c, _ = client
+    mid = add_match(c, "みゆき")
+    posted = c.post(
+        f"/api/matches/{mid}/messages",
+        json={
+            "role": "them",
+            "body": "20:33\nカナダですか！行ったことあるんですね！\nどんなところいったんですか？",
+        },
+    )
+    assert posted.status_code == 201
+    assert posted.json()["body"] == "カナダですか！行ったことあるんですね！\nどんなところいったんですか？"
+    inline = c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "me", "body": "20:34 こんな感じで送っても大丈夫です"},
+    )
+    assert inline.json()["body"] == "こんな感じで送っても大丈夫です"
+    assert c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "2026/10/24 20:35 いいですね"},
+    ).json()["body"] == "いいですね"
+    assert c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "午後8:36 また連絡します"},
+    ).json()["body"] == "また連絡します"
+
+
+def test_message_timestamp_stripping_keeps_legitimate_times_and_put(client):
+    """T557: 本文中の時刻や時刻だけの本文は消さず、編集時も同じ正規化をする。"""
+    c, _ = client
+    mid = add_match(c, "みゆき")
+    assert c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "20:36に着くね"},
+    ).json()["body"] == "20:36に着くね"
+    assert c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "them", "body": "20:36"},
+    ).json()["body"] == "20:36"
+    posted = c.post(
+        f"/api/matches/{mid}/messages",
+        json={"role": "me", "body": "こんにちは"},
+    ).json()
+    updated = c.put(
+        f"/api/matches/{mid}/messages/{posted['id']}",
+        json={"role": "me", "body": "20:40\nこんばんは"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["body"] == "こんばんは"
+
+
+def test_existing_timestamped_history_is_ignored_in_generation(client):
+    """T557: 修正前に保存された履歴も、生成時には時刻を無視する。"""
+    c, backend = client
+    mid = add_match(c, "みゆき")
+    with backend.database() as db:
+        db.execute(
+            "INSERT INTO messages(match_id, role, body) VALUES (?,?,?)",
+            (mid, "them", "20:33 カナダですか！"),
+        )
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=mid))
+    assert context["history"][-1]["body"] == "カナダですか！"
+    assert context["history_policy"][-1]["body"] == "カナダですか！"
+
+
 def test_three_candidates_and_like_mode(client):
     c, _ = client
     mid = add_match(c, "めい")
