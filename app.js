@@ -90,6 +90,8 @@ async function safe(fn) {
   catch(e){notice(e.message || "操作に失敗しました");}
 }
 function current(){return state.matches.find(c=>c.id===state.selectedId)||null;}
+// サーバーが古い（outgoing_count未対応）ときは合計から相手分を引いて自分の送信数を出す。
+function ownCount(c){return c?.outgoing_count??Math.max(0,(c?.message_count||0)-(c?.incoming_count||0));}
 function photoAvatar(c,large=false){
   const av=node("span","avatar"+(large?" big":""));
   if(c.photo){
@@ -119,7 +121,7 @@ function renderContacts(){
     const info=node("span","contact-item-details");
     const head=node("span","contact-item-head");
     head.append(node("strong","",c.name));
-    head.append(node("span","count-pill","自分 "+(c.outgoing_count||0)+"通"));
+    head.append(node("span","count-pill","自分 "+ownCount(c)+"通"));
     info.append(head,node("span","contact-preview",c.last_message||c.description||"会話はまだありません"));
     btn.append(info);
     btn.addEventListener("click",()=>safe(()=>selectContact(c.id)));
@@ -155,7 +157,7 @@ async function selectContact(id,relist=true){
   $("current-name").textContent=c?.name||"相手を選択";
   $("current-bio").textContent=c?.description||"プロフィール未登録";
   $("edit-contact").disabled=!c;
-  $("messages-count").textContent="▤ 自分から："+(c?.outgoing_count||0)+"通";
+  $("messages-count").textContent="▤ 自分から："+ownCount(c)+"通";
   $("incoming-count").textContent="💬 相手から："+(c?.incoming_count||0)+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   if(relist)renderContacts();
