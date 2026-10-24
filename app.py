@@ -398,9 +398,13 @@ _PARTNER_PROFILE_DROP_LINES = frozenset({
     "登録済みの好みカード", "好みカードベスト", "心理テスト", "トークの傾向",
     "あなたとの共通点", "文字量", "返信ペース", "主な", "返信時間",
     "ロイヤルVIPオプションを契約すると", "すべて閲覧できます",
+    "恋の本気サイン診断", "気持ちが自分を変える", "きらきらサイン",
+    "コミュニケーションのとり方", "恋愛スタイル", "デートの仕方", "メールの仕方",
+    "トークの弾みやすさ",
 })
 _PARTNER_PROFILE_DROP_PATTERN = re.compile(
-    r"(?:ロイヤルVIP|VIPオプション|契約すると|閲覧できます|"
+    r"(?:ロイヤルVIP|VIPオプション|契約すると|閲覧できます|さんの登録傾向|"
+    r"個の診断で相性ぴったり|"
     r"^\+?\d+$|^\d+\s*個$|^\D*\d+(?:\.\d+)?\s*[%％]$|"
     r"^\d{1,2}\s*[:：]\s*\d{2}$|"
     r"^(?:オンライン|\d+\s*分前|\d+\s*時間以内|最終ログイン.*)$)"
@@ -430,9 +434,9 @@ def _clean_partner_profile(text: str) -> str:
             continue
         seen.add(key)
         lines.append(line)
-    cleaned = "\n".join(lines[:60])
-    if len(cleaned) > 3000:
-        cleaned = cleaned[:3000].rstrip()
+    cleaned = "\n".join(lines[:90])
+    if len(cleaned) > 3600:
+        cleaned = cleaned[:3600].rstrip()
     return cleaned or text.strip()
 
 

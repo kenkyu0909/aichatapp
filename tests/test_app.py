@@ -21244,6 +21244,8 @@ def test_partner_profile_cleaning_keeps_intro_and_drops_ui_noise(client):
         "コードギアスすき！\n"
         "コードギアスすき！\n"
         "ロイヤルVIPオプションを契約すると\nすべて閲覧できます\n"
+        "ゆか さんの登録傾向\n恋の本気サイン診断\n"
+        "あなたと 3 個の診断で相性ぴったりのお相手です\n"
         "20:33\n"
     )
     cleaned = backend._clean_partner_profile(raw)
@@ -21253,6 +21255,9 @@ def test_partner_profile_cleaning_keeps_intro_and_drops_ui_noise(client):
     assert "音楽55" not in cleaned
     assert "8 個" not in cleaned
     assert "ロイヤルVIP" not in cleaned
+    assert "さんの登録傾向" not in cleaned
+    assert "恋の本気サイン診断" not in cleaned
+    assert "相性ぴったり" not in cleaned
     assert cleaned.count("コードギアスすき！") == 1
 
 
