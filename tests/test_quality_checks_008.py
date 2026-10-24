@@ -83,14 +83,6 @@ def context(*, facts=None, answers=None, history=None, other_description="旅行
         "友達とカフェに行くことが多いんですか？",
         context(history=[{"role": "them", "body": "休日は友達とカフェに行くことが多いです！"}]),
     ),
-    ("私も映画が好きです！", context()),
-    (
-        "私も新作はすぐ買うタイプです！",
-        context(answers=[{
-            "question": "気になる新作を見つけたらすぐ買うタイプですか？",
-            "answer": "少し調べてから買うことが多いです",
-        }]),
-    ),
     ("お仕事お疲れ様です！", context(other_description="読書と旅行が好きです")),
 ])
 def test_filter_drops_each_unsafe_candidate_but_keeps_safe_candidates(backend, unsafe_text, ctx):
@@ -209,15 +201,17 @@ def test_filter_keeps_personal_facts_supported_by_profile_or_temporary_answer(
     assert [item["text"] for item in unpack_candidates(result)] == [candidate_text]
 
 
-def test_filter_drops_movie_preference_when_profile_has_no_movie_fact(backend):
+def test_filter_keeps_movie_preference_without_profile_fact(backend):
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の好みもそのまま表示する。
     value = make_suggestions(backend, "映画は好きです！")
 
     result = backend.filter_safe_candidates(value, 1, context())
 
-    assert unpack_candidates(result) == []
+    assert [item["text"] for item in unpack_candidates(result)] == ["映画は好きです！"]
 
 
-def test_filter_drops_purchase_claim_that_conflicts_with_confirmed_answer(backend):
+def test_filter_keeps_purchase_claim_that_conflicts_with_confirmed_answer(backend):
+    # 2026-10-23: 確認済み回答との矛盾による棄却は廃止。
     value = make_suggestions(backend, "新作はすぐ買うことが多いです！")
 
     result = backend.filter_safe_candidates(
@@ -229,10 +223,10 @@ def test_filter_drops_purchase_claim_that_conflicts_with_confirmed_answer(backen
         }]),
     )
 
-    assert unpack_candidates(result) == []
+    assert [item["text"] for item in unpack_candidates(result)] == ["新作はすぐ買うことが多いです！"]
 
 
-def test_filter_keeps_answer_to_known_purchase_question_and_drops_candidates_that_evade_it(backend):
+def test_filter_keeps_answer_and_evasion_for_known_purchase_question(backend):
     answer = {
         "question": "気になる新作を見つけたらすぐ買うタイプですか？",
         "answer": "少し調べてから買うことが多いです",
@@ -251,10 +245,14 @@ def test_filter_keeps_answer_to_known_purchase_question_and_drops_candidates_tha
     result = backend.filter_safe_candidates(value, 2, ctx)
 
     candidates = unpack_candidates(result)
-    assert [item["text"] for item in candidates] == [safe_text]
+    # 2026-10-23: 未回答による棄却は廃止。回答を避ける候補も残る。
+    assert [item["text"] for item in candidates] == [
+        "新作って見ているだけでも楽しいですよね！",
+        safe_text,
+    ]
     assert result["requested_candidate_count"] == 2
-    assert result["available_candidate_count"] == 1
-    assert "不足分を不自然な候補で補っていません" in result["candidate_notice"]
+    assert result["available_candidate_count"] == 2
+    assert not result.get("candidate_notice")
 
 
 def test_filter_drops_unsupported_partner_work_assumption(backend):

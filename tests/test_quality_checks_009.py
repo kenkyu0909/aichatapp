@@ -34,14 +34,8 @@ def test_saved_quality009_live_candidates_replay_through_current_safety_filter(t
     cases = {item["id"]: item for item in saved["tests"]}
     expected_rejections = {
         "short_mirroring": {"話題の展開": "明らかな誤字"},
-        "recent_movie_answered": {
-            "代替案1": "相手からの直接質問に未回答",
-            "代替案2": "相手からの直接質問に未回答",
-        },
-        "answered_purchase_fact": {
-            "調べてから買う派として答える": "未確認の本人事実",
-        },
-        "known_partner_fact": {"代替2": "未確認の本人事実"},
+        # 2026-10-23: 事実確認・直接質問への未回答による棄却は廃止。
+        # 保存済み候補のうち、現在も残る形式・配慮の違反だけを確認する。
         "respect_decline_after_fix": {"距離を置いた共感": "相手の不安を軽く扱う表現"},
     }
 
@@ -95,6 +89,11 @@ def test_saved_quality009_live_candidates_replay_through_current_safety_filter(t
         for item in source_candidates:
             allowed_texts.add(item["text"])
             allowed_texts.add(backend._soften_stiff_keigo(item["text"]))
+            allowed_texts.add(
+                backend._normalize_first_person_to_boku(
+                    backend._soften_stiff_keigo(item["text"])
+                )
+            )
         assert retained_texts <= allowed_texts
 
 

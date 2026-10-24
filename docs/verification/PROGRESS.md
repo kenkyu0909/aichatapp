@@ -785,6 +785,21 @@
 - 会話003は本人15通・相手15通・計30件で停止。最終ターンの3候補に本人未確認の買い物習慣が含まれたため、候補を送信前に拒否して`BLOCKED`で終了。拒否候補と理由をJSON/HTMLに保存し、SQLite履歴と送信数は維持。原因はモデルの候補と事実ガードの対象表現が一致せず、全候補に未確認行動が残ったこと。
 - 実APIは品質確認16論理要求・22 provider attempts、会話003が16論理要求・18 provider attempts、合計32/40。API1 / `gemini-3.5-flash-lite`。429、フォールバックなし。約30回の目安を2論理要求超えたため、追加実API試験は行わない。個別の残利用枠・請求状態・費用は未確認。
 - Firefox 157.0.1の隔離headlessセッションでHTMLを開き、30メッセージ、16個の詳細、拒否3候補の展開、表示崩れのないレイアウトを確認。`simulations/conversation_003_firefox.png`を保存。Chromeには触れていない。
+
+## 2026-10-23 棄却候補の参考表示（ユーザー要望）
+
+- 要望: 安全確認後に表示できる候補が指定数に満たない／再生成で安全候補を得られなかったとき、除外した「ダメ案」も一応表示したい。
+- 方針: `filter_safe_candidates` の内部 `candidate_rejections` は API に公開しない設計（T290）を維持し、内部情報の露出ではなく**表示用の意図的なフィールド** `rejected_candidates` として扱う。安全候補の件数 `available_candidate_count` と通知文は変えない。
+- 実装:
+  - `filter_safe_candidates` の棄却記録に `full_text` を追加（既存 `text`（先頭120文字）は維持）。
+  - 収集ヘルパー `collect_rejected_candidate_references` / `rejected_candidate_references` / `attach_rejected_candidate_references`（app.py 6179〜6224）を追加。正規化テキストで重複排除し、表示済み候補の本文は除外、最大5件。
+  - ルートで `rejected_candidate_pool` を初期化し、`filter_safe_candidates` 呼び出し後に収集。正常応答・安全フォールバック応答（3か所）・502応答に `rejected_candidates`（label/text/reasons）を付与。
+  - front: `renderRejectedCandidates`（app.js）で「⚠ 安全確認できなかった案（N件・参考）」を折りたたみ表示。各案は本文＋除外理由＋「コピーのみ」（送信済み履歴には自動登録しない）。全棄却（0案）のブロック分岐でも表示し、既存の観測用 `candidate_rejection_details`/`candidate_rejection_summary` もフォールバックで表示に取り込む。
+  - style.css に `.rejected-candidates*`（`flex-basis:100%`）を追加。
+- テスト: `test_app.py::test_answered_direct_question_keeps_answering_option_and_reports_unsafe_shortage` に `rejected_candidates` の本文・理由assertを追加。`test_ui_firefox.py` の不足時テストに参考表示assertを追加し、全棄却ケース `test_firefox_blocked_generation_still_shows_rejected_reference` を新規追加。
+- 検証: `node --check app.js` / 対象 `py_compile` OK。focused API 1 passed、Firefox focused 2 passed、既存 Firefox 29 passed。
+- 環境メモ: `tests/test_app.py` の15件の失敗（`assert body["model"] == "gemini-3.5-flash-lite"` 等）はリポジトリ直下 `.env` の `GEMINI_MODEL=gemini-3.5-flash` が原因。`GEMINI_MODEL=gemini-3.5-flash-lite` を指定すると当該15件は全て pass し、今回の変更とは無関係。
+- 次: 稼働中アプリは旧コードのため、`終了.bat` → `起動.bat`（または Ctrl+F5）で再起動して反映を確認する。
 - ローカルpytest **153 passed, 1 warning**。`node --check app.js`、`py_compile`、`git diff --check`成功。
 - `scripts/simulate_conversation.py`に未送信候補を理由付きで拒否・保存する処理を追加。追加テスト2件で状態遷移、送信数/メッセージ不変、HTMLエスケープを確認。
 - 次に実施: TEST_MATRIX/FINAL_REPORT/prompt_specを最終結果へ更新し、秘密情報検査、差分レビューを行う。明示的なファイル指定でコミット・Pushし、最新SHAのPush/PR ActionsとDraft状態を確認する。
@@ -2757,3 +2772,132 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回�
 
 - **コミット**: `37dae42`（T535/T537）、`3b8c099`（T538〜T540）、`b3e84b1`（T541）。`37dae42` と `3b8c099` の Actions `Tests` は success、`b3e84b1` は確認時点で実行中。PR #4 は OPEN / Draft のまま（head `b3e84b1`）、マージはしていない。
 
+
+## 2026-10-23 UI????????????
+- ???????????? Ctrl+V ??????????????????????????????????????? file input ???????????????????????? currentUpload() ???
+- ????????????????????????????????????????/???????????????????
+- ????????????????????????????????????????????????
+- ??????????????????????????????
+- ?????15????????????: data/app.sqlite3.bak-20261023-104456??
+- ??: tests/test_ui_firefox.py ?29????393.65s??
+
+## 2026-10-23 503の自動切替・モデル限定・API/モデル選択UI（ユーザー要望）
+
+- 要望: (1) 生成が頻繁に503で失敗する原因の解明と修正、(2) 2API×2モデルをアプリ上で選べるように、(3) `gemini-3.5-flash-lite` と `gemini-3.1-flash-lite` 以外は使わない。
+- 503の原因:
+  - `HttpRetryOptions(attempts=1)` でSDK側の再試行が無効だった。
+  - 生成ループが429しか次の設定へ進まず、503（`ServerError`）は即 `raise` して全6設定を諦めていた。
+  - 503が汎用の `gemini_connection_error` に分類され、原因が分からない文言になっていた。
+  - `.env` の `GEMINI_MODEL=gemini-3.5-flash` が優先順位の先頭に固定され、混雑しやすい非liteモデルを使っていた。
+- 修正:
+  - `_is_transient_provider_error` を追加。5xx（503 UNAVAILABLE等）は次の設定へフォールバック。クライアント側タイムアウト・接続エラー、認証/404/パースエラーは従来どおり即失敗。`ProviderAttemptLimitError` / `RequestDeadlineExceededError` / `UsageBudgetExceededError` は即再送出。
+  - 502応答に `failure_code="provider_unavailable"` を追加し、「Gemini側が一時的に混雑しています（503など）。少し時間をおいて再度お試しください。」と案内。app.js の `errorText` にも追加。
+  - モデルは `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` のみ。`GEMINI_MODEL` が他の値（例: `gemini-3.5-flash`）なら無視。`gemini-3.1-flash-lite` 指定時のみ3.1を先頭にする（T549維持）。
+  - `prioritize_gemini_configurations` を追加し、`GenerateInput.api_alias` / `model` で選んだ組み合わせを先頭に並べ替え。429/5xx時は残りへ自動フォールバック（選択はロックではない）。
+  - `/api/status` に `models` / `api_aliases` を追加。
+  - UI: ヘッダーの「⚙ 表示設定」内に「API」「モデル」セレクトを追加（`#api-alias` / `#model-select`、初期値「自動」）。生成結果に「使用したAPI/モデル：API1 / gemini-3.5-flash-lite」を表示。
+- テスト: `test_app.py` に6件追加（選択優先・API選択時のフォールバック・503での次設定切替・全503で `provider_unavailable`・`/api/status` の公開値・非lite `GEMINI_MODEL` 無視）。`test_ui_firefox.py` に31件目のセレクタ実操作テストを追加。
+- 検証: `node --check app.js` OK、`py_compile app.py` OK、非UI全pytest **2130 passed / 0 failed**、Firefox UI **31 passed**（425.14s）。
+- 副次効果: `.env` の `GEMINI_MODEL=gemini-3.5-flash` に起因していた既存15件の失敗が、環境変数上書きなしで解消。
+- 備考: `.env` の `GEMINI_API_KEY` はアプリでは未使用（キーは `API/chat1.md` / `chat2.md`）。稼働中サーバーは旧コードのため `終了.bat` → `起動.bat` で再起動が必要。
+
+## 2026-10-23 T558 0案で止まる理由の可視化と再生成枠の分離（ユーザー質問）
+
+- 質問: 「安全確認後に表示できる候補は0案です」になる理由と、成功するまで繰り返さない理由。
+- 原因: 3案それぞれが約40種の安全・形式検査を通る必要があり、全案が落ちると0案になる。さらに、0案時の再生成が「候補不足」「類似」などの見た目修復と `candidate_repair_used` を共有していたため、先に別の修復が走ると0案では何も作り直さず即停止していた（不具合）。
+- 修正:
+  - 0案専用の再生成枠 `blocked_repair_used` を分離し、致命的な0案では必ず1回は作り直す。
+  - 再生成プロンプトに除外理由だけでなく**棄却された実際の文**（最大3件・80文字）を渡し、同じ文の再利用を避ける。
+  - それでも0案のとき、`candidate_notice` に「主な理由: …」（最大5件）を追記して画面から原因が分かるようにした。
+  - フロント: 停止画面に「↻ もう一度生成」ボタンを追加（1クリックの手動リトライ。1回ごとにAPIを呼ぶ旨をツールチップに明記）。
+- 設計判断: 無限リトライにはしない。1回＝1リクエスト（利用枠・待ち時間）で、同一指示では同じ違反を繰り返しやすく、件数合わせで危険な候補を出すのは本末転倒なため。代わりに「限定回数の再生成＋理由のフィードバック＋手動リトライ」で回復させる。
+- テスト: `test_t558_blocked_regeneration_receives_rejected_texts_and_reports_reasons` を追加（2回目のプロンプトに前回本文と禁止句読点が入る、`api_attempt_count == 2`、通知に主な理由が出る）。
+- 検証: 非UI全pytest **2131 passed / 0 failed**、Firefox UI **31 passed**（420.78s）。
+
+## 2026-10-23 DeepSeek V4.1 Flash の追加とコピー通知の削除
+
+- **DeepSeek 追加（ユーザー要望）**: `API/deepseek.md`（キーのみ）を5つ目のプロバイダースロットとして追加。`GET https://api.deepseek.com/models` でモデルIDを確認し、`deepseek-flash`（表示名 `DeepSeek-V4.1-Flash`）を採用。
+- 実装:
+  - `ProviderHTTPError(code)` を追加し、既存の `_is_rate_limit_error` / `_is_transient_provider_error` が 429/5xx をそのまま判定できるようにした（`code` 属性）。
+  - `deepseek_configurations()` / `provider_configurations()` を追加。既定の「自動」は Gemini 4スロット → DeepSeek の順、UI で DeepSeek を選べば先頭。
+  - `_deepseek_generate()` を追加。OpenAI 互換 `/chat/completions` に `response_format={"type":"json_object"}` で問い合わせ、`Suggestions` / `SuggestionsV2` の JSON スキーマを system に埋め込む。コードフェンスは除去。クライアント側タイムアウトは再試行しない。
+  - `/api/status` に `model_labels`（`deepseek-flash` → `v4.1 flash`）を追加し、`models` / `api_aliases` は実設定から生成。app.js の `fillSelect` がラベルを使うように変更。
+- 実API疎通: 1回だけ極小リクエストを実行し、認証・モデル・JSONモード・パースを確認（キーは表示せず、送信内容も最小）。
+- **コピー通知の削除（ユーザー要望）**: 「文章をコピーしました。送信済み履歴には追加していません。」のトーストを削除。`copyAndRecord` / 手動記録の通知は「送信済みとして履歴に登録しました」「送信済みとして保存しました」に整理（コピー失敗時のみ手動コピーの案内を残す）。
+- テスト: `test_status_includes_deepseek_model_alias_and_label`、`test_deepseek_selection_uses_openai_compatible_api`（httpx.post をモックし、URL・model・response_format・キー非露出を確認）、`test_deepseek_http_errors_drive_the_existing_fallback_classification` を追加。fixture は `MRA_DEEPSEEK_KEY` を明示的に削除し、Firefox 側も同様に分離。
+- 検証: 非UI全pytest **2134 passed / 0 failed**、Firefox UI **31 passed**（439.24s）。コピー通知削除後の関連UIテスト4件も再実行して **4 passed**。`node --check app.js` / `py_compile` OK。
+## 2026-10-23 事実確認の全面廃止・自由記述からのプロフィール学習・黒枠通知廃止（作業中→ユーザー指示で中断）
+
+- **ユーザー指示（この順）**:
+  1. 「事実確認しないようにして　事実と異なる場合は自由記述に書くから、その内容からプロフィールに事実を追加していくようにして」
+  2. 「送信したときとかに下に黒枠でなんか文字出る　そういうの全部邪魔だから消して」
+  3. 確認質問の扱いを対話で確認 → 「除外も確認質問も全部やめる」「プロフィールへの追加は生成画面の追加の自由記述からAI抽出で自動追加」を選択。
+  4. 「再開して」（作業再開）→ 「いったん作業ログ更新して中断して　別のに引きつぐ」（ここで中断）。
+
+- **実装（app.py / app.js / prompts、すべて未コミット）**:
+  - **黒枠トースト廃止**: app.js `notice()` を何も表示しない関数に変更（`#toast` 要素は残して常に非表示）。成功・エラー含め画面下の黒い通知は出ない。Firefox テストの `visible_toast(...)` は戻り値未断章なので影響なし。
+  - **事実確認の廃止**:
+    - `_candidate_rejection_reasons`: 「確認済みの本人情報と矛盾」ゲート（前回実装）を削除。「相手からの直接質問に未回答」棄却も削除。`answered_partner_question` 変数と T488 承諾免除ブロックは未使用になったため削除（`verified_answer_relay` は遠方誘い判定で継続使用）。
+    - 生成ループ: `contradicted_topics` ブロック（矛盾時の修復・ブロック・本人質問）を全面削除（旧13972–14118行）。
+    - **プレフライト廃止**: `missing_personal_fact_question(context)` による Gemini 前の確認質問リターンを削除（検出器関数自体は残し、単体テストは生かす）。
+    - `empty_first_profile` + v2: 確認質問を返さず生成へ進む（legacy の 400 は維持）。
+    - **`_drop_user_info_confirmation`** を `/api/generate` ルートに追加: `needs_user_info=true` を絶対に返さない。候補があればそれを返し（user_questions 等をクリア）、無ければ `blocked_user_info_response` でブロック表示。
+    - `_demote_repetitive_self_candidates`: 繰り返し判定から「直前の相手の話題と離れている」を除外（回答リレー候補が後ろへ回る回帰を修正）。
+  - **プロフィール学習（自由記述→プロフィール）**:
+    - `ProfileLearnInput` / `LearnedProfileFacts` モデル、`PROFILE_LEARN_SYSTEM_INSTRUCTION`、`_extract_profile_facts`（Gemini/DeepSeek を `prioritize_gemini_configurations` 順に最大4設定で試行、`response_schema` でJSON抽出）、`merge_learned_profile_facts`（name/age/area/job/personality/style/goal は新値で上書き、hobbies は追記、memo は追記）、`POST /api/profile/learn`（失敗時は `learned:false` で継続、抽出結果が空なら書き込まない）。
+    - app.js: `generate()` 内で `learnProfileFromExtra(extra)` を生成前に await。同一テキストは `lastLearnedExtra` でスキップ。失敗しても生成は止めない。
+  - **プロンプト**: `prompts/common.txt`（【情報が足りない場合】を新方針へ全面書き換え、`needs_user_info は常に false`）、`prompts/reply.txt`（2行目・9行目から確認質問指示を除去）、app.py 内 v2 出力指定（旧13310行）も新方針に書き換え。
+  - 検証: `py_compile app.py` / `node --check app.js` OK。Firefox UI は未実施。稼働中サーバー（PID 4524）は旧コード → `終了.bat` → `起動.bat` で再起動が必要。
+
+- **テスト移行の現状（tests/test_app.py）**: `45 failed / 1988 passed`（旧基準 2134 passed からの移行途上）。
+  - 完了した機械反転: `assert "未確認の本人事実" in _candidate_rejection_reasons(...)` → `not in`（31件）、`"相手からの直接質問に未回答" in ...` → `not in`（多数）、`needs_user_info is True` → `is False`（20件）、`user_questions[0]` アサーション → `== []`（8件）、truthy 棄却アサーション → 「検出器は検出・棄却はしない」形式（~30件）、個別書き換え（first モード空プロフィール、require_question→T547緩和、t473/t474、recent movie フィルタ群、saved_quality009、overnight_unconfirmed、複数直接質問2件など）。
+  - **残失敗（行番号→テスト名→対応方針）**:
+    - 1457 `test_v2_user_info_question_is_separate_and_answers_are_ephemeral` / 1597 `test_blocking_user_info_question_has_no_optional_question`: 確認質問フロー自体の廃止テスト → 新方針（質問なし・候補 or ブロック）へ書き換え。
+    - 2760 `test_unverified_recent_personal_activity_is_repaired_before_questioning_user`: 修復→質問の流れ → 修復なしで候補表示へ。
+    - 4677 `test_t509_answered_question_resumes_generation_without_extra_round_trip` / 7603 `test_unsafe_direct_answer_becomes_user_question_without_second_generation`: `user_questions[0]` 依存 → 候補表示の表明へ。
+    - 9384 `test_v2_partial_diversity_retry...` / 10011 `test_unrelated_unsupported_personal_claim...`: 棄却前提の文言/除外表明 → 表示されることを表明へ（9384 は `自分もお気に入りのお店があるんです！` が相槌付きテキストになっている点に注意、`in` 部分一致で）。
+    - 10613 `test_meal_and_pet_question_preflight...` (x2): プレフライト質問 → デモ候補が返る表明へ。
+    - 11273 `test_unanswered_personal_question_is_blocked_for_legacy_response` (409 期待): legacy 経路はプレフライト廃止で 409 が出ない → v2 同様の挙動に書き換えか、legacy 用の抑止を戻すか要判断。
+    - 11396 `test_overnight_unconfirmed...` (claim[-6:]): 1ケースのみ不一致（相槌補正の形を確認して微修正）。
+    - 11562 `test_legacy_response_cannot_return_unsupported_first_person_claim` (502 期待) / 11603 / 11747: legacy・attempt数系。呼び出し回数の実測に合わせて更新。
+    - 12926 `test_generic_answer_filter_keeps_safe_candidate_and_reports_shortage`: 未回答棄却が無くなり不足が出ない → 全案表示の表明へ。
+    - 13681 `test_unknown_recent_activity_question_requires_matching_temporary_answer` (x13): 一時回答の粒度一致チェック系 → 「検出は残る・棄却はしない」形へ一括変換可能な見込み。
+    - 13720 `test_same_day_activity_question...` (x2) / 14061 `test_future_activity...` / 14854 `test_current_student_status_question_is_preflighted...` / 14943 `test_current_student_status_preflight_answer_then...`: プレフライト質問依存 → `user_questions == []` + 候補表明へ。
+    - 15867 `test_filter_safe_candidates_drops_unknown_direct_answers...` / 16112 `test_unclassified_personal_question_deterministic_fallback...` (x6) / 16853 `test_verified_profile_fact_fallback_candidate_occupation`: フォールバック発動前提 → 発動しないことを表明へ。
+    - 18271 `test_t474_answered_question_stall_relays_the_answer`: `deterministic_fallback_used is False` を期待して書き換えたが実測 True（相槌補正経路を要確認）。
+    - 18871 `test_t476_off_topic_self_disclosure_is_demoted`: demote の話題離れ除外の影響 → 「話題離れ」理由を期待しているテストなので、繰り返し理由（同じ質問等）を与える形へ書き換えるか、demote ではなく棄却側で担保するか要検討。
+    - 20354 `test_t499_far_invitation_blocks_and_asks_user` / 20953 `test_t500_blocked_nameless_question_asks_the_user`: ブロック→本人質問 → ブロック（質問なし）の表明へ（recommended が None になる実測に合わせる）。
+  - 方針メモ: 残りはすべて「旧方針（事実確認・確認質問）を前提にしたテスト」であり、実装の不具合ではない。新方針の表明（`user_questions == []`・候補が表示される・フォールバック不発）に置き換えるのが正。
+
+- **引き継ぎメモ**:
+  - 未コミットの変更一式（app.py / app.js / index.html / style.css / prompts/*.txt / tests/test_app.py / tests/test_ui_firefox.py / PROGRESS.md）はブランチ `codex/full-system-verification` 上。コミットは未実施。
+  - プロファイル学習APIの動作確認（実キーでの1回プローブ）は未実施。実施する場合は `/api/profile/learn` に `{"text": "..."}` を POST。
+  - 次の一手: 上記残失敗の移行 → 全 pytest → Firefox UI 31+テスト → 実ブラウザでの動作確認（生成→コピー→履歴、自由記述→プロフィール反映、通知が出ないこと）→ PROGRESS 更新 → コミット。
+
+
+## 2026-10-23 インラインエラー表示の実装とUIテスト移行・学習API実キー検証（引き継ぎ受け）
+
+- **ユーザー確認**: 失敗時の伝え方を確認 →「各場所にインライン表示」を選択。黒枠トーストは成功・失敗とも出さず、失敗内容だけ操作している場所の近くに小さく表示する方針で実装した。
+- **実装（app.js / index.html / style.css、未コミット）**:
+  - `inlineError(target, message, before)` / `clearInlineError(target)` を追加（`.inline-error`、赤寄りの小さなテキスト）。
+  - 生成失敗: `requestGeneration` の catch で候補領域の先頭にエラーを表示。表示中の候補と任意質問パネルは消さない。相手切り替え中・会話保存中のリクエストには表示しない（トークン判定）。
+  - モーダル内（相手の保存・履歴編集・送信済み記録・写真検証など）: `modalFooter` の保存が catch して `.modal-actions` の直前に表示。次回の保存試行で消える。
+  - 送信失敗: `addMessage` を `submitMessage` に分離し、失敗時に `#composer-error`（入力欄の下）へ表示、再送時に消去。
+  - `notice()` は据え置き（常に非表示・テキストも空）。
+- **UIテスト移行（tests/test_ui_firefox.py）**:
+  - `visible_toast()` を廃止し、`assert_toast_hidden()`（トーストが出ないことの確認）と `visible_inline_error()`（インライン表示を待つ）に置き換え。
+  - 旧方針前提で失敗していた9件を移行: コアUI（履歴編集・削除）、サーバー停止/再起動（送信・保存・生成・相手追加の失敗がインラインで出ること）、任意質問での再生成失敗、実路由の生成、回答の保存ボタン、生成エラー3種（invalid_response / all_models_rate_limited / request_attempt_limit）、相手切替後の記録拒否、いいねBOTのコピー、5MB超の写真。
+  - `test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer` は確認質問フローの廃止で成立しないため `test_firefox_real_route_generation_returns_candidates_without_confirmation` に書き換え（実路由で最初の生成から候補が出て `user_questions == []`、プロフィールと履歴は変更されず、コピーだけ送信済み記録、provider は1回・一時回答なし）。`LocalApp.start(require_movie_answer=...)` は呼出しがなくなり引数のみ残置。
+- **検証**: 非UI全pytest（UI除く）**2132 passed / 0 failed**（111s）、Firefox UI **31 passed**（429.26s）。`node --check app.js` OK。通知非表示はUIテストの `assert_toast_hidden` で確認済み。
+- **学習APIの実キー検証（前回の未実施項目を完了）**: 一時APP_DATA_DIRの別インスタンス（127.0.0.1:8901、既定のAPIフォルダのキーを使用、検証後に即終了）へ `POST /api/profile/learn` に「最近は洋画をよく観ています。休日は喫茶店めぐりをしていて、32歳で都会のメーカー勤務です。」を送信 → `learned: true`、`{"age":"32歳","area":"都会","job":"メーカー勤務","hobbies":["洋画鑑賞","喫茶店めぐり"]}` を抽出し `GET /api/profile` へ保存されることを確認。副作用として「都会の」が area として抽出されており、抽出精度はモデル任せ（次の自由記述で上書きされる）。
+- **引き継ぎ**: 稼働中のアプリを新コードにするには 終了.bat → 起動.bat の再起動が必要。変更（app.py / app.js / index.html / style.css / prompts / tests）は未コミットのまま `codex/full-system-verification` 上。
+- **2026-10-24 メッセージ付きいいねの生成テンプレート化（ユーザー指示）**:
+  - 方針: 文面を「〇〇さん、初めまして（！可）／プロフィールのここがいいなと思った／お話しできたらうれしいです！」の3行型に固定。口調は通常の返信と同じカジュアル敬語に統一（「させていただきました」「拝見」等の固い敬語を禁止）。
+  - `prompts/like.txt` を全面書き換え（3行型・読点例外・口調指示）。`prompts/common.txt` の句読点禁止ルールにlike 1行目の読点例外を明記。
+  - app.py: 1行目「〇〇さん、初めまして（！可）」の読点だけを許す例外ヘルパー `_like_greeting_comma_exception` を `check_suggestions` と `_candidate_rejection_reasons` に適用。句読点違反の再生成指示にも例外を明記。デモ例文（T515）を新テンプレート準拠へ更新。
+  - `_STIFF_KEIGO_REWRITES` 拡充: 過去形・五段動詞の謙譲語（送らせていただきました→送りました 等）、いらっしゃる/行かれて/通われて/飼われている/読まれるんです 等。※「送らせて」には「させて」が含まれないため旧ルールでは置換できなかったのが本質因。
+  - 既存FAIL修正: `_answers_verified_single_partner_question`（本人情報トピック）で回答「私も」と候補「僕も」の一人称違いを同一視する `_fold_first_person_for_comparison` を追加（前回セッションの確認質問廃止後にFAILしていた1件）。
+  - 検証: 非UI全pytest **2140 passed / 0 failed**。実API（gemini-3.5-flash-lite・架空プロフィール5件×3候補）で **5/5 件が3行テンプレート適合**。検証スクリプト: `scripts/like_template_live_check.py`（回数指定可・機密出力なし）。
+
+  - **追記（停電後の再検証・追加調整）**: 実API再テストで「さきさん初めまして！」のように読点が抜ける候補が1件あったため、_ensure_like_greeting_comma でlike 1行目に読点を補完（like以外のモードは変更しない）。3行目に「お話し」を必ず入れる指示を like.txt へ追加。尊敬語の「楽しまれている」「飼われていて」も自然な形へ変換するルールを追加。
+  - **最終検証**: 非UI全pytest **2141 passed / 0 failed**、実API（架空プロフィール5件×3候補）で **5/5件・15候補すべてテンプレート適合**。

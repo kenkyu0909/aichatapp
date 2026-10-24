@@ -21,8 +21,33 @@ function node(tag,cls,txt) {
   return e;
 }
 function notice(t){
-  $("toast").textContent=t;$("toast").hidden=false;
-  clearTimeout(timer);timer=setTimeout(()=>{$("toast").hidden=true;},4000);
+  // 画面下に黒い枠で出る通知はユーザー要望で廃止（2026-10-23）。
+  // 要素自体は残し、常に非表示にする。
+  const toast=$("toast");
+  if(toast){toast.hidden=true;toast.textContent="";}
+}
+function inlineError(target,message,before){
+  // 失敗の内容は黒い通知ではなく、操作している場所の近くに小さく表示する。
+  if(!target)return;
+  if(target.classList.contains("inline-error")){
+    target.hidden=false;target.textContent=message;return;
+  }
+  target.hidden=false;
+  let box=target.querySelector(":scope > .inline-error");
+  if(!box){
+    box=node("p","inline-error");
+    const anchor=before||target.querySelector(":scope > .modal-actions");
+    if(target.classList.contains("suggestion-list"))target.prepend(box);
+    else if(anchor)target.insertBefore(box,anchor);
+    else target.append(box);
+  }
+  box.textContent=message;
+}
+function clearInlineError(target){
+  if(!target)return;
+  if(target.classList.contains("inline-error")){target.textContent="";target.hidden=true;return;}
+  const box=target.querySelector(":scope > .inline-error");
+  if(box)box.remove();
 }
 function beginContactMutation(contactId){
   const count=(contactMutationCounts.get(contactId)||0)+1;
@@ -40,6 +65,7 @@ function errorText(result){
     all_models_rate_limited:"Geminiの利用制限に達しました。時間をおいて再度お試しください。",
     api_permission_denied:"Geminiの認証または利用権限を確認してください。",
     model_unavailable:"指定モデルを利用できません。モデル設定を確認してください。",
+    provider_unavailable:"Gemini側が一時的に混雑しています（503など）。少し時間をおいて再度お試しください。",
     gemini_connection_error:"Geminiとの通信に失敗しました。接続状態を確認して再度お試しください。"
   };
   if(messages[result?.error_code])return messages[result.error_code];
@@ -214,6 +240,7 @@ async function refreshConversation(){
 }
 function showModal(title,build){
   $("modal-title").textContent=title;
+  $("modal").onpaste=null;
   const body=$("modal-body");body.replaceChildren();
   build(body);
   if(!$("modal").open)$("modal").showModal();
@@ -235,7 +262,9 @@ function modalFooter(body,label,onSave,includeCancel=true){
     if(save.disabled)return;
     save.disabled=true;
     if(cancel)cancel.disabled=true;
-    try{await safe(onSave);}
+    clearInlineError(body);
+    try{await onSave();}
+    catch(error){inlineError(body,error.message||"操作に失敗しました",bar);}
     finally{save.disabled=false;if(cancel)cancel.disabled=false;}
   };
   bar.append(save);body.append(bar);
@@ -260,6 +289,14 @@ function showMessageEditor(m){
   });
 }
 async function addMessage(role,override){
+  try{await submitMessage(role,override);}
+  catch(error){
+    inlineError($("composer-error"),error.message||"メッセージの送信に失敗しました");
+    throw error;
+  }
+}
+async function submitMessage(role,override){
+  clearInlineError($("composer-error"));
   const c=current();if(!c)throw Error("先に相手を登録してください");
   const contactId=c.id;
   if(pendingMessageSubmissions.has(contactId))throw Error("この相手の発言を保存しています。完了後にもう一度お試しください");
@@ -293,6 +330,33 @@ async function openContactForm(edit=false){
     const description=field(body,"相手のプロフィール・自由記述",old?.description||"",true);
     body.append(node("label","","識別用写真（任意・JPEG/PNG/WebP、5MB以下）"));
     const file=node("input");file.type="file";file.accept="image/jpeg,image/png,image/webp";body.append(file);
+    body.append(node("p","modal-description","画像ファイルを選ぶか、画像をコピーしてこの画面で Ctrl+V（貼り付け）でも登録できます。"));
+    const preview=node("div","photo-preview");preview.hidden=true;body.append(preview);
+    let pastedUpload=null;
+    const currentUpload=()=>file.files?.[0]||pastedUpload||null;
+    const renderPhotoPreview=()=>{
+      const chosen=currentUpload();
+      preview.replaceChildren();preview.hidden=!chosen;
+      if(!chosen)return;
+      const img=node("img","photo-preview-img");img.src=URL.createObjectURL(chosen);img.alt="登録する写真";
+      const meta=node("div","photo-preview-meta");
+      meta.append(node("strong","",chosen.name||"貼り付けた画像"));
+      meta.append(node("span","",Math.max(1,Math.round(chosen.size/1024))+"KB"));
+      const clear=node("button","modal-button","写真を外す");clear.type="button";
+      clear.onclick=()=>{pastedUpload=null;file.value="";renderPhotoPreview();};
+      meta.append(clear);
+      preview.append(img,meta);
+    };
+    file.onchange=renderPhotoPreview;
+    $("modal").onpaste=event=>{
+      const items=(event.clipboardData&&event.clipboardData.items)||[];
+      for(const item of items){
+        if(item.kind==="file"&&item.type.startsWith("image/")){
+          const blob=item.getAsFile();
+          if(blob){event.preventDefault();pastedUpload=blob;renderPhotoPreview();return;}
+        }
+      }
+    };
     if(old){
       const remove=node("button","modal-button","この相手と全会話を削除");
       remove.type="button";remove.style.color="#c24b68";remove.onclick=()=>safe(async()=>{
@@ -304,15 +368,15 @@ async function openContactForm(edit=false){
     }
     modalFooter(body,"保存",async()=>{
       if(!name.value.trim())throw Error("名前を入力してください");
-      const upload=file.files?.[0];
-      if(upload){
-        if(upload.size>5*1024*1024)throw Error("写真は5MB以下にしてください");
-        if(!["image/jpeg","image/png","image/webp"].includes(upload.type))throw Error("写真はJPEG/PNG/WebPにしてください");
+      const selected=currentUpload();
+      if(selected){
+        if(selected.size>5*1024*1024)throw Error("写真は5MB以下にしてください");
+        if(!["image/jpeg","image/png","image/webp"].includes(selected.type))throw Error("写真はJPEG/PNG/WebPにしてください");
       }
       const data=await api(createdId?"/matches/"+createdId:"/matches",json(createdId?"PUT":"POST",{name:name.value.trim(),description:description.value}));
       createdId=data.id;
-      if(upload){
-        const form=new FormData();form.append("file",upload);
+      if(selected){
+        const form=new FormData();form.append("file",selected);
         try{await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});}
         catch(err){await loadMatches(data.id);throw err;}
       }
@@ -320,40 +384,91 @@ async function openContactForm(edit=false){
     });
   });
 }
+async function copyToClipboard(text){
+  try{await navigator.clipboard.writeText(text);return true;}
+  catch{return false;}
+}
 async function copyText(text){
-  try{await navigator.clipboard.writeText(text);notice("文章をコピーしました。送信済み履歴には追加していません。");}
-  catch{
-    showModal("文章をコピー",body=>{
-      body.append(node("p","modal-description","以下を選択してコピーしてください。"));
-      const area=field(body,"本文",text,true);area.focus();area.select();
-    });
-  }
+  if(await copyToClipboard(text))return;
+  showModal("文章をコピー",body=>{
+    body.append(node("p","modal-description","以下を選択してコピーしてください。"));
+    const area=field(body,"本文",text,true);area.focus();area.select();
+  });
+}
+async function copyAndRecord(matchId,text){
+  if(matchId===null||matchId===undefined)throw Error("先に相手を登録してください");
+  if(state.selectedId!==matchId)throw Error("相手が変わっています。もう一度確認してください");
+  const copied=await copyToClipboard(text);
+  await addMessage("me",text);
+  notice(copied?"送信済みとして履歴に登録しました":"送信済みとして履歴に登録しました（コピーできませんでした。必要なら手動でコピーしてください）");
 }
 function renderCards(container,payload,allowSave,matchId){
   if(payload.demo)container.append(node("p","demo-warning","⚠ APIキー未設定：以下は会話を解析していない固定サンプルです。"));
   if(payload.candidate_notice)container.append(node("p","user-info-terminal",payload.candidate_notice));
   const candidates=[payload.recommended,...(payload.alternatives||[])];
+  const saveable=allowSave&&!payload.demo&&matchId!==null&&matchId!==undefined;
   candidates.forEach((item,i)=>{
     const card=node("article","candidate");
     card.append(node("div","candidate-title",(i===0?"✦ おすすめ · ":"")+item.label));
     card.append(node("div","candidate-text",item.text));
     const actions=node("div","candidate-actions");
-    const copy=node("button","","コピー");copy.type="button";copy.onclick=()=>copyText(item.text);actions.append(copy);
-    if(allowSave&&!payload.demo){
+    const copy=node("button","","コピー");copy.type="button";
+    copy.onclick=()=>safe(()=>saveable?copyAndRecord(matchId,item.text):copyText(item.text));
+    actions.append(copy);
+    if(saveable){
       const record=node("button","","実際に送った文章を記録");record.type="button";
       record.onclick=()=>showModal("実際に送信した文章を記録",body=>{
-        body.append(node("p","modal-description","コピーだけでは送信済みになりません。送信した場合のみ、必要に応じて編集してから保存してください。"));
+        body.append(node("p","modal-description","文章を編集できます。「送信済みとして保存」を押すと、送信済みとして記録し、同時にコピーします。"));
         const input=field(body,"本文",item.text,true);
         modalFooter(body,"送信済みとして保存",async()=>{
           if(state.selectedId!==matchId)throw Error("相手が変わっています。もう一度確認してください");
+          const copied=await copyToClipboard(input.value);
           await addMessage("me",input.value);$("modal").close();
+          notice(copied?"送信済みとして保存しました":"送信済みとして保存しました（コピーできませんでした。必要なら手動でコピーしてください）");
         });
       });actions.append(record);
     }
     card.append(actions);container.append(card);
   });
+  renderRejectedCandidates(container,payload);
   if(payload.reason)container.append(node("div","result-reason","判断の理由："+payload.reason));
   if($("policy").checked)renderStrategy(container,payload);
+  appendProviderUsage(container,payload);
+}
+function appendProviderUsage(container,payload){
+  const alias=typeof payload?.api_alias==="string"?payload.api_alias:"";
+  const model=typeof payload?.model==="string"?payload.model:"";
+  const label=[alias,model].filter(Boolean).join(" / ");
+  if(label)container.append(node("p","provider-usage","使用したAPI/モデル："+label));
+}
+function renderRejectedCandidates(container,payload){
+  let items=Array.isArray(payload.rejected_candidates)?payload.rejected_candidates.filter(item=>item&&item.text):[];
+  if(!items.length&&Array.isArray(payload.candidate_rejection_details)){
+    items=payload.candidate_rejection_details.filter(item=>item&&item.text).map(item=>({label:item.label,text:item.text,reasons:[]}));
+  }
+  if(!items.length)return;
+  const summaryReasons=Array.isArray(payload.candidate_rejection_summary)?payload.candidate_rejection_summary:[];
+  const panel=node("details","rejected-candidates");panel.open=true;
+  panel.append(node("summary","rejected-candidates-heading","⚠ 安全確認できなかった案（"+items.length+"件・参考）"));
+  panel.append(node("p","rejected-candidates-note","自動の安全確認で除外された案です。未確認の情報が含まれている可能性があります。内容をよく確認し、必要な場合だけコピーして使ってください（送信済み履歴には自動では登録しません）。"));
+  items.forEach(item=>{
+    const card=node("article","rejected-candidate");
+    card.append(node("div","rejected-candidate-title","参考 · "+(item.label||"候補")));
+    card.append(node("div","rejected-candidate-text",item.text||""));
+    if(Array.isArray(item.reasons)&&item.reasons.length){
+      card.append(node("div","rejected-candidate-reasons","除外理由："+item.reasons.join("、")));
+    }
+    const actions=node("div","rejected-candidate-actions");
+    const copy=node("button","","コピーのみ");copy.type="button";
+    copy.onclick=()=>safe(()=>copyText(item.text||""));
+    actions.append(copy);
+    card.append(actions);
+    panel.append(card);
+  });
+  if(summaryReasons.length&&!items.some(item=>Array.isArray(item.reasons)&&item.reasons.length)){
+    panel.append(node("p","rejected-candidate-reasons","除外理由："+summaryReasons.join("、")));
+  }
+  container.append(panel);
 }
 function renderStrategy(container,payload){
   if(!payload.strategy&&!payload.conversation_stage&&!payload.invite_decision&&!payload.decision_reason&&!payload.next_action)return;
@@ -510,6 +625,23 @@ function invalidateGenerationResults(){
   const area=$("suggestion-list");
   if(area){area.hidden=true;area.replaceChildren();}
 }
+function fillSelect(id,values,autoLabel,labels){
+  const select=$(id);if(!select)return;
+  const previous=select.value;
+  const auto=node("option","",autoLabel);auto.value="";
+  select.replaceChildren(auto);
+  values.forEach(value=>{const option=node("option","",(labels&&labels[value])||value);option.value=value;select.append(option);});
+  if(previous&&values.includes(previous))select.value=previous;
+}
+function populateProviderOptions(status){
+  const aliases=Array.isArray(status?.api_aliases)?status.api_aliases:[];
+  const models=Array.isArray(status?.models)?status.models:[];
+  fillSelect("api-alias",aliases,"自動");
+  fillSelect("model-select",models,"自動",status?.model_labels||null);
+}
+function providerSelection(){
+  return {api_alias:$("api-alias")?.value||"",model:$("model-select")?.value||""};
+}
 async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false,clarificationSession=null){
   const button=generationTarget.button||$(options.mode==="followup"?"follow-up":options.mode==="first"?"first-message":"generate");
   const area=generationTarget.container||$("suggestion-list");
@@ -524,7 +656,11 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
     }
     clarificationSession.answers=mergeUserInfoAnswers(clarificationSession.answers,userAnswers);
   }
-  if(matchId!==null&&mutatingContacts.has(matchId))throw Error("会話履歴を保存しています。完了後にもう一度お試しください");
+  if(matchId!==null&&mutatingContacts.has(matchId)){
+    const busyMessage="会話履歴を保存しています。完了後にもう一度お試しください";
+    inlineError(area,busyMessage);
+    throw Error(busyMessage);
+  }
   const requestToken=++generationRequestSequence;
   generationRequestTokens.set(button,requestToken);
   generationAreaTokens.set(area,requestToken);
@@ -544,17 +680,29 @@ async function requestGeneration(options,matchId,userAnswers=[],generationTarget
       area.append(node("div","suggestion-heading",blockedTitle));
       if(result.candidate_notice)area.append(node("p","user-info-terminal",result.candidate_notice));
       area.append(node("p","user-info-terminal",result.user_info_reason||result.blocking_reason||result.detail||"未確認の本人情報を使わずに返信を作れないため、ここで停止しました。プロフィールを確認してから再度お試しください。"));
+      renderRejectedCandidates(area,result);
+      const retry=node("button","retry-button","↻ もう一度生成");
+      retry.type="button";
+      retry.title="1回ごとにGeminiへ問い合わせます（利用枠を消費します）";
+      retry.onclick=()=>safe(()=>requestGeneration(options,matchId,[],generationTarget));
+      area.append(retry);
     }else if(result.needs_user_info){
       area.append(node("div","suggestion-heading","✦ 本人情報の確認"));
       renderUserInfoQuestions(area,result,options,matchId,generationTarget,clarificationSession);
     }else{
       const title=options.mode==="first"?"✦ 初回メッセージ候補":options.mode==="followup"?"✦ 追いメッセージの提案":options.mode==="like"?"✦ メッセージ付きいいね候補":"✦ 返信候補";
       area.append(node("div","suggestion-heading",title));
+      area.append(node("p","suggestion-note","まだ送信していません。ここに出るのは返信の候補だけです。「コピー」を押すとコピーして送信済みとして記録し、「実際に送った文章を記録」では文章を編集してから保存できます。"));
       renderCards(area,result,generationTarget.allowSave!==false,matchId);
       renderOptionalUserQuestion(area,result,options,matchId,generationTarget);
       clarificationSession.answers=[];
     }
     if(!generationTarget.container)$("chat-area").scrollTop=$("chat-area").scrollHeight;
+  }catch(error){
+    const stillCurrent=generationAreaTokens.get(area)===requestToken&&revision===conversationRevision
+      &&(matchId===null||(matchId===state.selectedId&&selectionEpoch===contactSelectionEpoch&&!state.loadingConversation&&!state.conversationLoadFailed&&!mutatingContacts.has(matchId)));
+    if(stillCurrent)inlineError(area,error.message||"入力または通信に失敗しました");
+    throw error;
   }finally{
     if(generationRequestTokens.get(button)===requestToken){button.disabled=false;button.textContent=before;}
   }
@@ -566,9 +714,22 @@ async function generate(mode){
     response_version:2,mode,match_id:c?.id,count,tone:state.tone,
     direction:$("direction").selectedOptions[0]?.textContent||"",
     extra:$("extra").value,show_policy:$("policy").checked,
-    require_question:$("require-question")?.checked||false
+    require_question:$("require-question")?.checked||false,
+    ...providerSelection()
   };
+  await learnProfileFromExtra(opts.extra);
   await requestGeneration(opts,c.id,[]);
+}
+let lastLearnedExtra="";
+async function learnProfileFromExtra(text){
+  const value=(text||"").trim();
+  if(!value||value===lastLearnedExtra)return;
+  try{
+    // 追加の自由記述に書かれた本人の事実をプロフィールへ取り込む。
+    // 失敗しても生成は止めない。
+    await api("/profile/learn",json("POST",{text:value,...providerSelection()}));
+    lastLearnedExtra=value;
+  }catch{}
 }
 function likeModal(){
   showModal("👍 メッセージ付きいいね",body=>{
@@ -584,7 +745,7 @@ function likeModal(){
       try{
         const options={
           response_version:2,mode:"like",name:name.value,description:profile.value,count:3,
-          tone:state.tone,show_policy:false
+          tone:state.tone,show_policy:false,...providerSelection()
         };
         await requestGeneration(options,null,[],{button:action,container:feedback,allowSave:false});
       }finally{action.disabled=false;action.textContent="3案を生成";}
@@ -678,8 +839,8 @@ function guideModal(){
       "「自分の情報」からプロフィールと話し方を登録します。",
       "左上の＋から相手の名前、プロフィール、識別用写真を登録します。",
       "相手と自分のメッセージを下部のボタンで会話履歴に追加します。",
-      "文体・候補数・方向性を設定して返信候補を生成します。",
-      "使いたい案をコピーし、実際に送った文章だけ「送信済み」に記録します。"
+      "「＋詳細設定」で会話方針・返信の方向・候補の数・質問必須を必要に応じて調整し、返信候補を生成します。",
+      "候補は自動では送信されません。「コピー」を押すとコピーして送信済みとして記録でき、「実際に送った文章を記録」では文章を編集してから保存できます。"
     ];
     steps.forEach((s,i)=>{const d=node("div","modal-result");d.append(node("strong","",String(i+1)+". "),node("span","",s));body.append(d);});
   });
@@ -713,6 +874,24 @@ function exportCurrent(){
   notice("会話をJSONとして書き出しました");
 }
 function attach(){
+  const settingsToggle=$("settings-toggle"),advancedSettings=$("advanced-settings");
+  if(settingsToggle&&advancedSettings){
+    settingsToggle.onclick=()=>{
+      const expanded=advancedSettings.hidden;
+      advancedSettings.hidden=!expanded;
+      settingsToggle.setAttribute("aria-expanded",String(expanded));
+      settingsToggle.textContent=expanded?"× 詳細設定を閉じる":"＋ 詳細設定";
+    };
+  }
+  const headerToggle=$("header-settings-toggle"),headerAdvanced=$("header-advanced");
+  if(headerToggle&&headerAdvanced){
+    headerToggle.onclick=()=>{
+      const expanded=headerAdvanced.hidden;
+      headerAdvanced.hidden=!expanded;
+      headerToggle.setAttribute("aria-expanded",String(expanded));
+      headerToggle.classList.toggle("on",expanded);
+    };
+  }
   $("search").addEventListener("input",renderContacts);
   $("message-input").addEventListener("input",()=>{
     if(state.selectedId===null)return;
@@ -748,7 +927,7 @@ async function start(){
   attach();
   await safe(async()=>{
     const [status,profile]=await Promise.all([api("/status"),api("/profile")]);
-    state.status=status;state.profile=profile;await loadMatches();
+    state.status=status;state.profile=profile;populateProviderOptions(status);await loadMatches();
     const pill=document.querySelector(".version");
     if(pill)pill.textContent=status.demo?"LOCAL · DEMO":"LOCAL · "+status.model;
     notice(status.demo?"ローカルアプリを起動しました。AI未接続のデモモードです。":"ローカルアプリを起動しました。Geminiが設定されています。");

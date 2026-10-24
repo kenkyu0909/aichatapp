@@ -22,6 +22,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MRA_PROVIDER_MIN_INTERVAL_SECONDS", "0")
     monkeypatch.delenv("MRA_API_1_KEY", raising=False)
     monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.delenv("MRA_DEEPSEEK_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     spec = importlib.util.spec_from_file_location("test_backend", Path(__file__).resolve().parents[1] / "app.py")
     module = importlib.util.module_from_spec(spec)
@@ -654,6 +655,284 @@ def test_all_four_rate_limited_slots_are_tried_once(client, monkeypatch, tmp_pat
     assert "private detail" not in response.json()["detail"]
 
 
+def _selectable_response_text():
+    return json.dumps({
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然体", "text": "どんな展示が好きですか？", "reply_move": "react"},
+        "alternatives": [
+            {"label": "短め", "text": "展示いいですね", "reply_move": "expand"},
+            {"label": "広げる", "text": "美術館のあとにカフェへ行くのも楽しそうですね", "reply_move": "grounded_share"},
+        ],
+        "reason": "相手の話題に沿っています。",
+        "strategy": "展示の話を続けます。",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "会話を続けます。", "next_action": "展示の話を広げる",
+    }, ensure_ascii=False)
+
+
+def test_provider_selection_tries_chosen_api_and_model_first(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空のAPI切替優先確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+    response_text = _selectable_response_text()
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            return SimpleNamespace(text=response_text)
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(
+        genai, "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])),
+    )
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+        "api_alias": "API2", "model": "gemini-3.1-flash-lite",
+    })
+
+    assert response.status_code == 200, response.text
+    assert calls == [("test-api2-secret", "gemini-3.1-flash-lite")]
+    body = response.json()
+    assert body["api_alias"] == "API2"
+    assert body["model"] == "gemini-3.1-flash-lite"
+    assert body["api_attempt_count"] == 1
+
+
+def test_provider_selection_falls_back_when_chosen_api_is_rate_limited(client, monkeypatch, tmp_path):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空のAPI切替フォールバック確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+    response_text = _selectable_response_text()
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            if self.key == "test-api2-secret":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED private detail")
+            return SimpleNamespace(text=response_text)
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(
+        genai, "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])),
+    )
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+        "api_alias": "API2",
+    })
+
+    assert response.status_code == 200, response.text
+    assert calls == [
+        ("test-api2-secret", "gemini-3.5-flash-lite"),
+        ("test-api2-secret", "gemini-3.1-flash-lite"),
+        ("test-api1-secret", "gemini-3.5-flash-lite"),
+    ]
+    body = response.json()
+    assert body["api_alias"] == "API1"
+    assert body["model"] == "gemini-3.5-flash-lite"
+    assert "private detail" not in response.text
+
+
+def test_transient_503_switches_to_the_next_configuration(client, monkeypatch, tmp_path):
+    from google import genai
+    from google.genai import errors
+
+    c, _ = client
+    mid = add_match(c, "架空の503切替確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+    response_text = _selectable_response_text()
+
+    class FakeModels:
+        def __init__(self, key):
+            self.key = key
+
+        def generate_content(self, **kwargs):
+            calls.append((self.key, kwargs["model"]))
+            if len(calls) == 1:
+                raise errors.ServerError(
+                    503,
+                    {"error": {"code": 503, "status": "UNAVAILABLE", "message": "model is overloaded"}},
+                )
+            return SimpleNamespace(text=response_text)
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(
+        genai, "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels(kwargs["api_key"])),
+    )
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+    })
+
+    assert response.status_code == 200, response.text
+    assert calls == [
+        ("test-api1-secret", "gemini-3.5-flash-lite"),
+        ("test-api2-secret", "gemini-3.5-flash-lite"),
+    ]
+    assert response.json()["api_attempt_count"] == 2
+    assert "overloaded" not in response.text
+
+
+def test_all_transient_503_failures_report_provider_unavailable(client, monkeypatch, tmp_path):
+    from google import genai
+    from google.genai import errors
+
+    c, _ = client
+    mid = add_match(c, "架空の503全滅確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "架空の会話です。"})
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs["model"])
+            raise errors.ServerError(
+                503,
+                {"error": {"code": 503, "status": "UNAVAILABLE", "message": "overloaded PRIVATE-CANARY"}},
+            )
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setenv("MRA_API_2_KEY", "")
+    monkeypatch.setattr(
+        genai, "Client",
+        lambda **kwargs: SimpleNamespace(models=FakeModels()),
+    )
+
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["error_code"] == "provider_unavailable"
+    assert "混雑" in body["detail"]
+    assert calls == ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    assert body["api_attempt_count"] == 2
+    assert "PRIVATE-CANARY" not in response.text
+    assert "test-api1-secret" not in response.text
+
+
+def test_status_exposes_selectable_models_and_api_aliases(client, monkeypatch, tmp_path):
+    c, _ = client
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_API_2_KEY", "test-api2-secret")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+
+    body = c.get("/api/status").json()
+
+    assert body["models"] == ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    assert body["api_aliases"] == ["API1", "API2"]
+
+
+def test_status_includes_deepseek_model_alias_and_label(client, monkeypatch, tmp_path):
+    c, _ = client
+    monkeypatch.setenv("MRA_API_1_KEY", "test-api1-secret")
+    monkeypatch.setenv("MRA_DEEPSEEK_KEY", "deepseek-placeholder-key")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+
+    body = c.get("/api/status").json()
+
+    assert body["api_aliases"] == ["API1", "DeepSeek"]
+    assert body["models"] == [
+        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "deepseek-flash",
+    ]
+    assert body["model_labels"]["deepseek-flash"] == "v4.1 flash"
+    assert body["demo"] is False
+
+
+def test_deepseek_selection_uses_openai_compatible_api(client, monkeypatch, tmp_path):
+    """DeepSeek を選ぶと OpenAI 互換APIへ同じJSONスキーマで問い合わせる。"""
+    import httpx
+
+    c, _ = client
+    mid = add_match(c, "架空のDS確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    content = _selectable_response_text()
+    calls = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": content}}]}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": dict(headers or {}), "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setenv("MRA_DEEPSEEK_KEY", "deepseek-placeholder-key")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2, "count": 3,
+        "api_alias": "DeepSeek", "model": "deepseek-flash",
+    })
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["api_alias"] == "DeepSeek"
+    assert body["model"] == "deepseek-flash"
+    assert len(calls) == 1
+    request = calls[0]
+    assert request["url"] == "https://api.deepseek.com/chat/completions"
+    assert request["json"]["model"] == "deepseek-flash"
+    assert request["json"]["response_format"] == {"type": "json_object"}
+    assert request["json"]["messages"][0]["role"] == "system"
+    assert "JSONスキーマ" in request["json"]["messages"][0]["content"]
+    assert request["json"]["messages"][1]["role"] == "user"
+    assert request["headers"]["Authorization"].startswith("Bearer ")
+    assert "deepseek-placeholder-key" not in response.text
+
+
+def test_deepseek_http_errors_drive_the_existing_fallback_classification(client):
+    _, backend = client
+    assert backend._is_rate_limit_error(backend.ProviderHTTPError(429, "DeepSeek HTTP 429"))
+    assert backend._is_transient_provider_error(backend.ProviderHTTPError(503, "DeepSeek HTTP 503"))
+    assert not backend._is_transient_provider_error(backend.ProviderHTTPError(400, "DeepSeek HTTP 400"))
+
+
+def test_t549_non_lite_configured_model_is_ignored():
+    """3.5/3.1 の flash-lite 以外は使わない（503 が出やすいモデルへ固定しない）。"""
+    import subprocess
+    import sys
+
+    repo = r"C:\Users\proje\Desktop\aichatapp2\verification-repo"
+    code = (
+        "import os, sys, json;"
+        "os.environ['GEMINI_MODEL']='gemini-3.5-flash';"
+        f"sys.path.insert(0, r'{repo}');"
+        "import app; print(json.dumps(list(app.GEMINI_MODEL_PRIORITY)))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True, timeout=120
+    )
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == [
+        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+    ]
+
+
 def test_api_files_are_loaded_without_disclosing_values(client, monkeypatch, tmp_path):
     from google import genai
 
@@ -1173,10 +1452,12 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     })
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert body["user_questions"][0]["question"] == "映画はお好きですか？"
+    assert body["needs_user_info"] is False
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
+    # 候補が無い needs_user_info 応答は、質問ではなくブロック表示に変換される。
+    assert body["generation_blocked"] is True
     assert body["recommended"] is None and body["alternatives"] == []
-    assert "候補" not in body["user_questions"][0]
+    assert "確認質問は行わない設定" in body["blocking_reason"]
     messages_before = c.get(f"/api/matches/{mid}/messages").json()
     c.post("/api/generate", json={
         "mode": "reply", "match_id": mid, "response_version": 2,
@@ -1314,9 +1595,12 @@ def test_blocking_user_info_question_has_no_optional_question(client, monkeypatc
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["needs_user_info"] is True
+    assert body["needs_user_info"] is False
+    # 候補が無い needs_user_info 応答は、質問ではなくブロック表示に変換される。
+    assert body["generation_blocked"] is True
     assert body["recommended"] is None and body["alternatives"] == []
     assert body["optional_user_questions"] == []
+    assert body["user_questions"] == []
 
 
 def test_optional_user_question_is_limited_to_one_and_reply_mode(client):
@@ -1538,7 +1822,7 @@ def test_model_user_info_question_must_match_missing_fact_and_cannot_add_unrelat
     )
 
 
-def test_info_retry_and_candidate_fact_repair_have_separate_single_limits(client, monkeypatch):
+def test_info_retry_has_single_limit_and_candidates_are_not_fact_repaired(client, monkeypatch):
     from google import genai
 
     c, _ = client
@@ -1577,9 +1861,11 @@ def test_info_retry_and_candidate_fact_repair_have_separate_single_limits(client
         "user_answers": [{"question": "映画はお好きですか？", "answer": "映画は好きです"}],
     })
     assert response.status_code == 200, response.text
-    assert response.json()["recommended"]["text"] == "映画は好きです！"
-    assert response.json()["api_attempt_count"] == 3
-    assert len(prompts) == 3
+    # 2026-10-23: 本人への確認質問は1回だけ差し替えられ、その後の候補は
+    # 事実確認なしでそのまま表示される（候補ごとの事実修復は廃止）。
+    assert response.json()["recommended"]["text"] == "洋画をよく観ます！"
+    assert response.json()["api_attempt_count"] == 2
+    assert len(prompts) == 2
 
 
 def test_weekend_direct_question_gets_user_info_question(client):
@@ -2476,10 +2762,12 @@ def test_unverified_recent_personal_activity_is_repaired_before_questioning_user
     assert body["needs_user_info"] is False
     assert body["generation_blocked"] is False, body
     assert len(candidates) == 3
-    assert all(item["label"] != "不適切" for item in candidates)
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の行動を含む候補も
+    # そのまま返し、修復のための追加生成は行わない。
+    assert any("おうち時間" in item["text"] for item in candidates)
     assert body["available_candidate_count"] == 3
-    assert body["candidate_notice"]
-    assert len(prompts) == body["api_attempt_count"] == 2
+    assert not body.get("candidate_notice")
+    assert len(prompts) == body["api_attempt_count"] == 1
 
 
 @pytest.mark.parametrize(("turns", "expected_decision", "expected_stage"), [
@@ -2639,6 +2927,103 @@ def test_like_prompt_requires_name_greeting_empathy_and_desire_to_talk(client):
     # 3〜4文まで許可しつつ、冒頭の呼びかけ＋挨拶を必須にしていること。
     assert "3〜4文まで" in prompt
     assert "はじめまして" in prompt
+
+
+def test_like_prompt_defines_three_line_template_with_greeting_comma_exception(client):
+    """プロンプトが「〇〇さん、初めまして」型と読点例外・口調の統一を明示すること。"""
+    _, backend = client
+    prompt = backend.read_prompt("like")
+    assert "「〇〇さん、初めまして」の形にします" in prompt
+    assert "句読点禁止の例外として使用を許可します" in prompt
+    # 通常の返信と同じカジュアル敬語へ寄せ、固い敬語を禁止すること。
+    assert "通常のメッセージ返信と同じ親しみやすいカジュアル敬語" in prompt
+    assert "させていただきました" in prompt
+
+
+def test_like_greeting_comma_is_allowed_only_in_like_first_line(client):
+    """メッセージ付きいいね1行目「〇〇さん、初めまして」の読点は例外的に許可する。
+
+    prompts/like.txt のテンプレートに沿う候補が句読点チェックで棄却されない
+    ようにする。2行目以降の読点やlike以外のモードの同一文面は従来どおり棄却する。
+    """
+    _, backend = client
+    allowed = backend.Candidate(
+        label="自然",
+        text=(
+            "ゆいさん、初めまして\n"
+            "プロフィールの水族館が好きなところがいいなと思いました\n"
+            "お話しできたらうれしいです！"
+        ),
+    )
+    assert backend._candidate_rejection_reasons(allowed, {"mode": "like"}) == []
+
+    allowed_with_bang = backend.Candidate(
+        label="自然",
+        text=(
+            "ゆいさん、初めまして！\n"
+            "プロフィールの水族館が好きなところがいいなと思いました\n"
+            "お話しできたらうれしいです！"
+        ),
+    )
+    assert backend._candidate_rejection_reasons(allowed_with_bang, {"mode": "like"}) == []
+
+    second_line_comma = backend.Candidate(
+        label="自然",
+        text=(
+            "ゆいさん、初めまして\n"
+            "プロフィールの雰囲気が、いいなと思いました\n"
+            "お話しできたらうれしいです！"
+        ),
+    )
+    assert "禁止句読点" in backend._candidate_rejection_reasons(second_line_comma, {"mode": "like"})
+    assert "禁止句読点" in backend._candidate_rejection_reasons(allowed, {"mode": "reply", "history": []})
+
+
+def test_like_greeting_comma_is_inserted_when_model_omits_it(client):
+    """モデルが読点を省いた「〇〇さん初めまして！」もテンプレートへ揃える。"""
+    _, backend = client
+    text = (
+        "さきさん初めまして！\n"
+        "プロフィールのカフェでゆっくりするのが好きなところに惹かれました\n"
+        "お話しできたらうれしいです✨"
+    )
+    assert backend._ensure_like_greeting_comma(text, {"mode": "like"}).startswith("さきさん、初めまして！")
+    already = "さきさん、初めまして！\nプロフィールが気になりました\nお話しできたらうれしいです！"
+    assert backend._ensure_like_greeting_comma(already, {"mode": "like"}) == already
+    assert backend._ensure_like_greeting_comma(text, {"mode": "reply"}) == text
+
+
+def test_like_greeting_candidate_passes_check_suggestions(client):
+    _, backend = client
+    value = backend.SuggestionsV2.model_validate({
+        "needs_user_info": False,
+        "user_questions": [],
+        "user_info_reason": "",
+        "recommended": {
+            "label": "自然",
+            "text": (
+                "ゆいさん、初めまして\n"
+                "プロフィールの水族館が好きなところがいいなと思いました\n"
+                "お話しできたらうれしいです！"
+            ),
+            "reply_move": "react",
+        },
+        "alternatives": [
+            {"label": "短め", "text": "初めまして！\n水族館が好きなんですね！\nお話しできたらうれしいです😊", "reply_move": "expand"},
+        ],
+    })
+    result = backend.check_suggestions(value, 2, {"mode": "like"}, enforce_similarity=False)
+    assert result["recommended"]["text"].startswith("ゆいさん、初めまして")
+
+
+def test_stiff_past_humble_keigo_is_softened(client):
+    """「送らせていただきました」などの五段動詞の謙譲語も普通の形へ戻す。"""
+    _, backend = client
+    assert backend._soften_stiff_keigo(
+        "プロフィールを見てメッセージを送らせていただきました"
+    ) == "プロフィールを見てメッセージを送りました"
+    assert backend._soften_stiff_keigo("プロフィールを拝見しました") == "プロフィールを見ました"
+    assert backend._soften_stiff_keigo("お話しさせていただきました") == "お話ししました"
 
 
 def test_t512_reason_spec_forbids_claiming_elements_absent_from_candidates(client, monkeypatch):
@@ -3725,12 +4110,12 @@ def test_t546_require_question_flag_rejects_questionless_candidates(client):
     assert backend._candidate_rejection_reasons(acceptance, invite) == []
 
 
-def test_require_question_flag_repairs_questionless_candidates(client, monkeypatch):
-    """T546: require_question=true のとき、質問のない候補は再生成で置き換わる。
+def test_require_question_flag_falls_back_to_questionless_candidates_with_notice(client, monkeypatch):
+    """T547: require_question=true でも質問あり候補を1案も作れないときは、
+    質問なし候補を通知付きで返す（旗はなるべく守る）。
 
-    1回目のモデル出力がすべて質問なしでも、棄却→再生成の流れで
-    質問を含む候補だけが表示される。プロンプトには【質問必須】が載る。
-    """
+    2026-10-23: 事実確認による棄却が廃止されたため、未確認の自己開示を含む
+    質問なし候補も棄却されず、1回目の生成で T547 の緩和が適用される。"""
     from google import genai
 
     c, _ = client
@@ -3783,9 +4168,10 @@ def test_require_question_flag_repairs_questionless_candidates(client, monkeypat
     assert all(("？" in text) or ("ますか" in text) for text in texts) or (
         "質問のない候補を表示しています" in notice
     )
-    assert len(prompts) == 2
+    assert len(prompts) == 1
     assert "【質問必須】" in prompts[0]
-    assert "【質問必須】" in prompts[1]
+    # T547: 質問なし候補は通知付きで表示される。
+    assert "質問のない候補を表示しています" in notice
     # T548: 質問されたターンの型（1行目で答え→2行目で質問）と聞き返し禁止を明記。
     assert "1行目で確認済みの事実だけですぐに答え" in prompts[0]
     assert "言い換えではなく" in prompts[0]
@@ -3889,6 +4275,55 @@ def test_t542_blocked_response_records_rejected_candidate_texts(client, monkeypa
     assert details, body
     assert any("ドラマ、いいですね。" in item.get("text", "") for item in details)
     assert all(len(item.get("text", "")) <= 120 for item in details)
+
+
+def test_t558_blocked_regeneration_receives_rejected_texts_and_reports_reasons(
+    client, monkeypatch, tmp_path
+):
+    """T558: 全候補が棄却されたら、理由と前回の本文を渡して必ず1回作り直す。
+
+    0案の再生成が「候補不足」「類似」の見た目修復と同じフラグを共有していた
+    ため、先に別の修復が走ると0案で何も作り直さず即停止していた。専用の枠へ
+    分離し、画面の通知にも主な理由を残す。
+    """
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空の再生成確認")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    blocked_payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。", "reply_move": "react"},
+        "alternatives": [],
+        "reason": "相槌で返す", "strategy": "続きを気にする", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps(blocked_payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_API_DIR", str(tmp_path / "no-credential-files"))
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": mid, "response_version": 2,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is True
+    # 初回 + 0案専用の再生成1回。見た目修復に枠を奪われても必ず1回は作る。
+    assert body["api_attempt_count"] == 2
+    assert len(calls) == 2
+    second_instruction = getattr(calls[1]["config"], "system_instruction", "")
+    assert "前回の候補" in second_instruction
+    assert "ドラマ、いいですね。" in second_instruction
+    assert "禁止句読点" in second_instruction
+    assert "禁止句読点" in body["candidate_rejection_summary"]
+    assert "主な理由" in body["candidate_notice"]
 
 
 def test_t550_drink_fact_and_preference_are_separate_lines(client):
@@ -4341,10 +4776,12 @@ def test_t509_answered_question_resumes_generation_without_extra_round_trip(clie
     first = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
     assert first.status_code == 200, first.text
     first_body = first.json()
-    assert first_body["needs_user_info"] is True
+    assert first_body["needs_user_info"] is False
     assert first_body["api_attempt_count"] == 0
-    question = first_body["user_questions"][0]["question"]
-    assert question == "映画のどんなところが好きか教えてください"
+    # 2026-10-23: プレフライトの確認質問は廃止。初回から候補を返す。
+    assert first_body["user_questions"] == []
+    assert first_body["recommended"] is not None
+    question = "映画のどんなところが好きか教えてください"
 
     payload = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
@@ -4527,10 +4964,12 @@ def test_first_mode_without_public_profile_asks_instead_of_guessing(client):
     response = c.post("/api/generate", json={
         "mode": "first", "match_id": mid, "response_version": 2,
     })
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None and body["alternatives"] == []
+    assert body["needs_user_info"] is False, body
+    # 2026-10-23: 確認質問は廃止。相手プロフィールが空でもデモ候補をそのまま返す。
+    assert body["recommended"] is not None and body["alternatives"], body
+    assert body["user_questions"] == [], body
     assert body["api_attempt_count"] == 0
     assert c.get(f"/api/matches/{mid}/messages").json() == []
 
@@ -5203,30 +5642,40 @@ def test_demo_candidate_bodies_obey_absolute_punctuation_rule(client, mode):
         assert all(line.strip() for line in item["text"].splitlines())
 
 
-def test_direct_unanswered_personal_question_is_asked_before_gemini(client, monkeypatch):
+def test_direct_personal_question_returns_candidates_without_confirmation(client, monkeypatch):
+    """2026-10-23: 確認質問は廃止。未確認でもモデルの回答候補をそのまま表示する。"""
     c, backend = client
     c.put("/api/profile", json={"content": json.dumps({"hobbies": ["読書", "カフェ巡り"]}, ensure_ascii=False)})
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
 
-    def forbidden_client(**kwargs):
-        pytest.fail("本人への確認前にGeminiを呼び出した")
+    from google import genai
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "回答", "text": "映画は好きです！"}, "alternatives": [],
+        "reason": "回答する", "strategy": "共有する", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
 
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
-    import google.genai
-    monkeypatch.setattr(google.genai, "Client", forbidden_client)
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={
         "mode": "reply", "match_id": mid, "response_version": 2,
     })
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None and body["alternatives"] == []
-    assert "映画" in body["user_questions"][0]["question"]
+    assert body["needs_user_info"] is False, body
+    assert body["user_questions"] == [], body
+    assert body["recommended"]["text"] == "映画は好きです！", body
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "映画好きですか？"
 
 
-def test_multiple_direct_personal_questions_ask_for_first_unverified_fact_before_gemini(client, monkeypatch):
+def test_multiple_direct_personal_questions_return_candidates_without_confirmation(client, monkeypatch):
+    """2026-10-23: 複数の未確認事項があっても確認質問を出さず候補を返す。"""
     c, _ = client
     c.put("/api/profile", json={
         "content": json.dumps({"movie_preferences": "映画が好き"}, ensure_ascii=False)
@@ -5235,22 +5684,29 @@ def test_multiple_direct_personal_questions_ask_for_first_unverified_fact_before
     partner_question = "映画は好きですか？普段どんな本を読みますか？"
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": partner_question})
 
-    def forbidden_client(**kwargs):
-        pytest.fail("複数質問の未確認情報を確認する前にGeminiを呼び出した")
+    from google import genai
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "回答", "text": "映画は好きです！\n本は小説をよく読みます"}, "alternatives": [],
+        "reason": "両方に答える", "strategy": "共有する", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
 
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
-    import google.genai
-    monkeypatch.setattr(google.genai, "Client", forbidden_client)
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={
         "mode": "reply", "match_id": mid, "response_version": 2,
     })
 
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None and body["alternatives"] == []
-    assert "本" in body["user_questions"][0]["question"]
-    assert "ジャンル" in body["user_questions"][0]["question"]
+    assert body["needs_user_info"] is False, body
+    assert body["user_questions"] == [], body
+    assert body["recommended"] is not None, body
 
 
 def test_candidate_must_answer_all_verified_direct_personal_questions(client):
@@ -5267,7 +5723,7 @@ def test_candidate_must_answer_all_verified_direct_personal_questions(client):
     candidate = backend.Candidate(label="映画だけ回答", text="映画が好きです！")
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_compound_direct_questions_accept_only_when_each_confirmed_fact_is_answered(client):
@@ -5931,7 +6387,7 @@ def test_evasive_answer_to_confirmed_movie_question_is_rejected(client):
     )
     candidate = backend.Candidate(label="回避", text="週末は家でのんびりしていました")
 
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_contradicting_saved_movie_answer_is_rejected(client):
@@ -5941,7 +6397,7 @@ def test_contradicting_saved_movie_answer_is_rejected(client):
     )
     candidate = backend.Candidate(label="矛盾", text="『青い灯台』は観ていません")
 
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_hearsay_about_saved_movie_answer_is_rejected(client):
@@ -5951,7 +6407,7 @@ def test_hearsay_about_saved_movie_answer_is_rejected(client):
     )
     candidate = backend.Candidate(label="伝聞", text="『青い灯台』は面白いと聞きました")
 
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_confirmed_movie_title_only_answer_is_still_accepted(client):
@@ -6000,7 +6456,7 @@ def test_third_party_viewing_of_confirmed_movie_is_rejected(client):
     )
     candidate = backend.Candidate(label="第三者", text="『青い灯台』を観たのは妹です")
 
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_passive_viewing_of_confirmed_movie_is_rejected(client):
@@ -6010,7 +6466,7 @@ def test_passive_viewing_of_confirmed_movie_is_rejected(client):
     )
     candidate = backend.Candidate(label="受動", text="『青い灯台』を観たと言われました")
 
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_confirmed_fact_metadata_is_not_trusted_fact_evidence(client):
@@ -6258,7 +6714,7 @@ def test_recent_movie_answer_does_not_accept_topical_followup_as_answer(client, 
     candidate = backend.Candidate(label="質問で回避", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("candidate_text", [
@@ -6316,7 +6772,7 @@ def test_recent_movie_answer_rejects_claim_that_verified_viewing_is_not_recent(
     candidate = backend.Candidate(label="時期が矛盾", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_recent_movie_answer_allows_historical_viewing_with_explicit_recent_rewatch(client):
@@ -6365,11 +6821,10 @@ def test_recent_movie_filter_keeps_answer_and_drops_evasive_alternatives(client)
 
     filtered = backend.filter_safe_candidates(response, 3, context)
 
+    # 2026-10-23: 「未回答」による棄却は廃止。質問の候補も参考として表示される。
     assert filtered["recommended"]["text"] == "最近は青い灯台を観ました！"
-    assert filtered["available_candidate_count"] == 1
-    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
-    assert {item["label"] for item in filtered["candidate_rejections"]} == {"代替案1", "代替案2"}
-    assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+    assert filtered["available_candidate_count"] == 3
+    assert filtered["candidate_rejections"] == []
 
 
 @pytest.mark.parametrize("candidate_text", [
@@ -6450,14 +6905,15 @@ def test_recent_movie_title_in_question_does_not_count_as_answer_or_reach_send_c
     )
 
     assert not backend._answers_verified_partner_question(value.recommended, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(value.recommended, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(value.recommended, context)
 
     filtered = backend.filter_safe_candidates(value, 2, context)
 
     visible_texts = [filtered["recommended"]["text"], *(item["text"] for item in filtered["alternatives"])]
-    assert visible_texts == ["最近は青い灯台を観ました！"]
-    assert filtered["available_candidate_count"] == 1
-    assert "不足分" in filtered["candidate_notice"]
+    # 2026-10-23: 「未回答」による棄却は廃止。作品名を含む質問だけの候補も表示される。
+    assert visible_texts == [candidate_text, "最近は青い灯台を観ました！"]
+    assert filtered["available_candidate_count"] == 2
+    assert filtered["candidate_rejections"] == []
 
 
 @pytest.mark.parametrize("partner_question", [
@@ -7202,10 +7658,10 @@ def test_direct_unknown_question_returns_user_info_without_calling_gemini(
 
     body = response.json()
     assert response.status_code == 200
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
-    assert topic in body["user_questions"][0]["purpose"]
+    assert body["needs_user_info"] is False
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
     assert c.get("/api/profile").json() == before_profile
 
 
@@ -7247,10 +7703,10 @@ def test_unsafe_direct_answer_becomes_user_question_without_second_generation(cl
     body = response.json()
     assert response.status_code == 200
     assert len(calls) == 1
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
-    assert "買う方" in body["user_questions"][0]["question"]
+    assert body["needs_user_info"] is False
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
 
@@ -7947,7 +8403,7 @@ def test_subjectless_monthly_cafe_frequency_claim_is_checked_against_profile(cli
     }
     candidate = backend.Candidate(label="未確認の頻度", text="カフェには月に数回行きます！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(("evidence", "candidate"), [
@@ -7984,7 +8440,7 @@ def test_negative_qualitative_cafe_frequency_does_not_support_positive_claim(
     candidate = backend.Candidate(label="未確認の肯定頻度", text="カフェにはよく行きます！")
 
     assert not backend._frequency_claim_is_supported(candidate.text, evidence)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("evidence", [
@@ -8458,10 +8914,10 @@ def test_safe_candidate_is_preserved_when_place_search_claim_is_rejected(client)
 
     filtered = backend.filter_safe_candidates(payload, 2, context)
 
-    assert filtered["recommended"]["label"] == "safe"
-    assert filtered["available_candidate_count"] == 1
-    assert "1案" in filtered["candidate_notice"]
-    assert any("未確認の本人事実" in item["reasons"] for item in filtered["candidate_rejections"])
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の候補もそのまま表示される。
+    assert filtered["recommended"]["label"] == "unsupported"
+    assert filtered["available_candidate_count"] == 2
+    assert filtered["candidate_rejections"] == []
 
 
 def test_meeting_unease_filters_outing_questions_but_keeps_neutral_topics(client):
@@ -8611,7 +9067,12 @@ def test_v2_generation_repairs_redundant_reply_purposes_once_and_keeps_safe_resu
     assert "候補の進め方が重なる場合の1回限りの再生成" in calls[1]["config"].system_instruction
     assert body["available_candidate_count"] == 3
     assert len([body["recommended"], *body["alternatives"]]) == 3
-    assert "先に確認した安全候補を加えています" in body["candidate_notice"]
+    # 2026-10-23: 事実確認による棄却は廃止。再生成後の3案がそのまま使われ、
+    # 確認済みプロフィール（カフェ巡り）に基づく共有候補も表示される
+    #（先頭に相槌が自動補われることがある）。
+    texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
+    # 一人称は「僕」に固定される（2026-10-23）。
+    assert any("僕もカフェ巡りが好きです！" in text for text in texts)
 
 
 def test_v2_partial_safe_candidate_set_fills_missing_slot_and_keeps_original_safe_candidates(
@@ -9025,14 +9486,15 @@ def test_v2_partial_diversity_retry_warns_when_safe_fallback_reintroduces_repeti
         ("api1", "model-one"), ("api1", "model-one"), ("api2", "model-two"),
     ]
     assert body["available_candidate_count"] == 3
-    assert "似た候補を含みます" in body["candidate_notice"]
-    assert "安全候補を保持した結果" in body["candidate_notice"]
-    assert all("お気に入りのお店" not in item["text"] for item in [body["recommended"], *body["alternatives"]])
-    assert body["candidate_provenance"] == [
-        {"candidate_index": 0, "api_alias": "API2", "model": "model-two"},
-        {"candidate_index": 1, "api_alias": "API2", "model": "model-two"},
-        {"candidate_index": 2, "api_alias": "API1", "model": "model-one"},
-    ]
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の共有候補もそのまま表示される。
+    texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
+    # 相槌行が補われるため、完全一致ではなく部分一致で確認する。
+    # 一人称は「僕」に固定される（2026-10-23）。
+    assert any("僕もお気に入りのお店があるんです！" in text for text in texts)
+    assert all(
+        item["api_alias"] == "API2" and item["model"] == "model-two"
+        for item in body["candidate_provenance"]
+    )
 
 
 def test_v2_all_unsafe_retry_reports_saved_candidate_provenance(client, monkeypatch):
@@ -9655,10 +10117,11 @@ def test_unrelated_unsupported_personal_claim_from_model_is_blocked_without_extr
     assert body["user_questions"] == []
     candidates = [body["recommended"], *body["alternatives"]]
     assert candidates
-    assert all("映画はときどき観ますよ" not in item["text"] for item in candidates)
-    assert body["available_candidate_count"] < body["requested_candidate_count"]
-    assert body["candidate_notice"]
-    assert body["api_attempt_count"] == len(calls) == 2
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の主張もそのまま表示する。
+    assert any("映画はときどき観ますよ" in item["text"] for item in candidates)
+    assert body["available_candidate_count"] == body["requested_candidate_count"] == 3
+    assert not body.get("candidate_notice")
+    assert body["api_attempt_count"] == len(calls) == 1
     assert c.get(f"/api/matches/{mid}/messages").json() == before_messages
     assert c.get("/api/profile").json() == before_profile
 
@@ -9785,7 +10248,9 @@ def test_negated_movie_opinions_without_evidence_are_blocked(client, claim):
     candidate = backend.Candidate(label="未確認の否定感想", text=claim)
 
     assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
-    assert backend._candidate_rejection_reasons(candidate, context)
+    assert backend.unsupported_personal_claim_topics([candidate], context)
+    # 2026-10-23: 事実確認による棄却は廃止（検出は残り、候補は表示される）。
+    assert not backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(("answer", "claim"), [
@@ -9958,7 +10423,9 @@ def test_movie_negative_preference_requires_matching_scope_and_polarity(answer, 
     candidate = backend.Candidate(label="範囲または極性が違う", text=claim)
 
     assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
-    assert backend._candidate_rejection_reasons(candidate, context)
+    assert backend.unsupported_personal_claim_topics([candidate], context)
+    # 2026-10-23: 事実確認による棄却は廃止（検出は残り、候補は表示される）。
+    assert not backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_past_negative_movie_preference_does_not_ground_present_preference(client):
@@ -10061,7 +10528,9 @@ def test_movie_preference_conjunction_cannot_hide_contradictory_claim(client):
     )
 
     assert "映画" in backend.unsupported_personal_claim_topics([candidate], context)
-    assert backend._candidate_rejection_reasons(candidate, context)
+    assert backend.unsupported_personal_claim_topics([candidate], context)
+    # 2026-10-23: 事実確認による棄却は廃止（検出は残り、候補は表示される）。
+    assert not backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("answer", ["うん", "うんうん", "そうです", "はい"])
@@ -10077,7 +10546,7 @@ def test_movie_yes_no_confirmation_supports_only_broad_positive_preference(answe
     unsupported = backend.Candidate(label="未確認の頻度", text="映画をよく観ます！")
 
     assert not backend._candidate_rejection_reasons(supported, context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(unsupported, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(unsupported, context)
     response = backend.SuggestionsV2(
         needs_user_info=False,
         user_questions=[],
@@ -10116,7 +10585,7 @@ def test_unknown_meal_and_pet_questions_require_user_confirmation(question, cand
     assert backend._topic_for_personal_question(question) == "本人情報"
     assert backend.missing_personal_fact_question(context) is not None
     assert not backend._answers_verified_partner_question(proposed, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(proposed, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(proposed, context)
 
 
 @pytest.mark.parametrize("question", [
@@ -10231,7 +10700,8 @@ def test_binary_meal_and_pet_answers_allow_only_scope_matched_restatements(
         "ephemeral_user_answers": [{"question": question, "answer": answer}],
     }
     proposed = backend.Candidate(label="回答", text=candidate)
-    assert (not backend._candidate_rejection_reasons(proposed, context)) is safe
+    # 2026-10-23: 事実確認による棄却は廃止。safe フラグに関係なく候補は表示される。
+    assert not backend._candidate_rejection_reasons(proposed, context)
 
 
 @pytest.mark.parametrize("partner_question", ["朝ごはん食べますか？", "ペット飼ってる？"])
@@ -10249,10 +10719,10 @@ def test_meal_and_pet_question_preflight_returns_only_matching_user_question(
     body = response.json()
 
     assert response.status_code == 200
-    assert body["needs_user_info"] is True
-    assert partner_question.rstrip("？?") in body["user_questions"][0]["question"]
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
+    assert body["needs_user_info"] is False
+    # 2026-10-23: プレフライトの確認質問は廃止。質問を返さず候補を作る。
+    assert body["user_questions"] == []
+    assert body["recommended"] is not None
 
 
 @pytest.mark.parametrize(("claim", "topic"), [
@@ -10308,7 +10778,8 @@ def test_binary_movie_preference_answer_resolves_question_polarity(
     contradicted = backend.Candidate(label="逆の極性", text=rejected)
 
     assert not backend._candidate_rejection_reasons(allowed, context)
-    assert backend._candidate_rejection_reasons(contradicted, context)
+    # 2026-10-23: 事実確認による棄却は廃止（矛盾する候補も表示される）。
+    assert not backend._candidate_rejection_reasons(contradicted, context)
 
 
 @pytest.mark.parametrize(("question", "answer", "supported", "rejected"), [
@@ -10329,7 +10800,8 @@ def test_binary_movie_preference_answer_preserves_past_scope(
     assert not backend._candidate_rejection_reasons(
         backend.Candidate(label="時制一致", text=supported), context
     )
-    assert backend._candidate_rejection_reasons(
+    # 2026-10-23: 事実確認による棄却は廃止（現在への拡張も表示される）。
+    assert not backend._candidate_rejection_reasons(
         backend.Candidate(label="現在へ拡張", text=rejected), context
     )
 
@@ -10425,7 +10897,8 @@ def test_unverified_negative_movie_preference_is_rejected(question, answer, cand
         "ephemeral_user_answers": [{"question": question, "answer": answer}],
     }
 
-    assert backend._candidate_rejection_reasons(
+    # 2026-10-23: 事実確認による棄却は廃止（未確認の極性も表示される）。
+    assert not backend._candidate_rejection_reasons(
         backend.Candidate(label="極性が未確認", text=candidate), context
     )
 
@@ -10447,7 +10920,8 @@ def test_past_cat_ownership_answer_does_not_confirm_current_ownership(client, ca
     proposed = backend.Candidate(label="飼育経験", text=candidate)
     assert backend._topic_for_personal_question(question) == "本人情報"
     assert backend._binary_personal_question_scope(question) == ("pet_past", "猫")
-    assert (not backend._candidate_rejection_reasons(proposed, context)) is safe
+    # 2026-10-23: 事実確認による棄却は廃止。safe フラグに関係なく候補は表示される。
+    assert not backend._candidate_rejection_reasons(proposed, context)
 
 
 @pytest.mark.parametrize("question", [
@@ -10481,7 +10955,9 @@ def test_current_pet_answer_does_not_confirm_past_ownership(client):
     }
 
     candidate = backend.Candidate(label="過去経験", text="前に猫を飼ったことがあります！")
-    assert backend._candidate_rejection_reasons(candidate, context)
+    assert backend.unsupported_personal_claim_topics([candidate], context)
+    # 2026-10-23: 事実確認による棄却は廃止（検出は残り、候補は表示される）。
+    assert not backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(("question", "answer", "candidate"), [
@@ -10626,13 +11102,10 @@ def test_saved_quality009_purchase_answer_does_not_infer_personality(client):
 
     filtered = backend.filter_safe_candidates(response, 3, context)
 
-    assert filtered["recommended"]["label"] == "確認済み回答の言い換え"
-    assert filtered["available_candidate_count"] == 1
-    assert any(
-        item["label"] == "共感と性格推定" and "未確認の本人事実" in item["reasons"]
-        for item in filtered["candidate_rejections"]
-    )
-    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+    # 2026-10-23: 事実確認による棄却は廃止。性格推定を含む候補も表示される。
+    assert filtered["recommended"]["label"] == "共感と性格推定"
+    assert filtered["available_candidate_count"] == 2
+    assert filtered["candidate_rejections"] == []
 
 
 def test_shopping_personality_claim_needs_explicit_positive_profile_fact(client):
@@ -10907,8 +11380,12 @@ def test_unanswered_personal_question_is_blocked_for_legacy_response(client, mon
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "映画好きですか？"})
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
-    assert response.status_code == 409
-    assert "確認できる情報がありません" in response.json()["detail"]
+    # 2026-10-23: プレフライトの確認質問は廃止。legacy でも 409 で止めない。
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("needs_user_info") is not True
+    assert body.get("user_questions", []) == []
+    assert body["recommended"] is not None
 
 
 @pytest.mark.parametrize(("topic", "claim"), [
@@ -11003,7 +11480,7 @@ def test_overnight_unconfirmed_fact_cases_never_return_sendable_candidates(clien
             "decision_reason": "架空ケース",
             "next_action": "安全に返信します",
         }
-        repeated_responses.extend([candidate_payload, candidate_payload])
+        repeated_responses.append(candidate_payload)
         created = c.post("/api/matches", json={
             "name": f"架空事実検査相手{index}", "description": "会話の練習が好きです",
         })
@@ -11026,8 +11503,11 @@ def test_overnight_unconfirmed_fact_cases_never_return_sendable_candidates(clien
         body = response.json()
         assert response.status_code == 200, f"case {index}: {body}"
         assert body["needs_user_info"] is False, f"case {index}: {body}"
-        assert body["generation_blocked"] is True, f"case {index}: {body}"
-        assert body["recommended"] is None and body["alternatives"] == []
+        # 2026-10-23: 事実確認による棄却は廃止。未確認の主張も（相槌が補われた上で）
+        # 候補として表示される。
+        assert body["generation_blocked"] is not True, f"case {index}: {body}"
+        recommended_text = (body["recommended"] or {}).get("text", "")
+        assert claim_cases[index - 1][-6:] in recommended_text, f"case {index}: {body}"
     assert repeated_responses == []
 
 
@@ -11085,9 +11565,9 @@ def test_overnight_thirty_direct_questions_are_blocked_or_asked_at_matching_gran
         })
         body = response.json()
         assert response.status_code == 200, f"case {index}: {partner_question}"
-        assert body["needs_user_info"] is True, f"case {index}: {partner_question}"
-        assert body["recommended"] is None and body["alternatives"] == []
-        assert body["user_questions"][0]["question"] == expected_user_question, f"case {index}: {partner_question}"
+        assert body["needs_user_info"] is False, f"case {index}: {partner_question}"
+        assert body["recommended"] is not None and body["alternatives"], f"case {index}: {partner_question}"
+        assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止（旧: {expected_user_question}）
 
 
 @pytest.mark.parametrize("candidate_text", [
@@ -11193,8 +11673,12 @@ def test_legacy_response_cannot_return_unsupported_first_person_claim(client, mo
     monkeypatch.setattr(backend, "gemini_configurations", lambda: [("API1", "offline-key", "offline-model")])
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
     response = c.post("/api/generate", json={"mode": "reply", "match_id": mid})
-    assert response.status_code == 502
-    assert response.json()["error_code"] == "invalid_response"
+    # 2026-10-23: 事実確認による棄却は廃止。legacy でも未確認の主張をそのまま返す。
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("needs_user_info") is not True
+    assert body.get("user_questions", []) == []
+    assert "幅広く読む" in body["recommended"]["text"]
 
 
 def test_unrelated_unsupported_claim_does_not_become_user_question(client, monkeypatch):
@@ -11234,16 +11718,14 @@ def test_unrelated_unsupported_claim_does_not_become_user_question(client, monke
     body = response.json()
 
     assert response.status_code == 200
-    assert fake_models.calls == 2
-    # T474: an answered direct question no longer stalls. The verified answer is
-    # relayed verbatim, and the unrelated personal claim is never shown.
+    # 2026-10-23: 事実確認による棄却・回答リレーへの置換は廃止。
+    assert fake_models.calls == 1
     assert body["generation_blocked"] is False, body
     assert body["needs_user_info"] is False
     assert body["user_questions"] == []
-    assert body["recommended"] is not None and body["alternatives"] == []
-    accepted_texts = [body["recommended"]["text"]]
-    assert all("カフェ" not in text for text in accepted_texts), body
-    assert "少し調べてから買います" in body["recommended"]["text"], body
+    assert body["recommended"] is not None
+    texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
+    assert any("カフェ" in text for text in texts), body
 
 
 def test_unjustified_model_user_question_gets_one_safe_retry(client, monkeypatch):
@@ -11297,7 +11779,7 @@ def test_unjustified_model_user_question_gets_one_safe_retry(client, monkeypatch
     assert body["api_attempt_count"] == 3
 
 
-def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(client, monkeypatch):
+def test_invite_opportunity_returns_invitation_without_question_retry(client, monkeypatch):
     from google import genai
 
     c, backend = client
@@ -11356,9 +11838,8 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
 
     class FakeModels:
         def __init__(self):
-            self.responses = [
-                unnecessary_question, unnecessary_question, invite_response, replacement_response,
-            ]
+            # 2026-10-23: 不要な確認質問による再生成は廃止。初回の候補をそのまま使う。
+            self.responses = [invite_response]
             self.calls = []
 
         def generate_content(self, **kwargs):
@@ -11378,7 +11859,7 @@ def test_invite_opportunity_returns_invitation_after_unjustified_question_retry(
     assert body["generation_blocked"] is False, body
     assert body["invite_decision"] == "invite_gently"
     assert any(backend.INVITATION_PATTERN.search(item["text"]) for item in [body["recommended"], *body["alternatives"]])
-    assert body["api_attempt_count"] == len(fake_models.calls) == 4
+    assert body["api_attempt_count"] == len(fake_models.calls) == 1
     assert fake_models.responses == []
 
 
@@ -11600,10 +12081,10 @@ def test_direct_question_filter_keeps_answer_and_rejects_topic_evasion(client):
 
     filtered = backend.filter_safe_candidates(value, 3, context)
 
+    # 2026-10-23: 「未回答」による棄却は廃止。話題すり替えの候補も参考として表示される。
     assert filtered["recommended"]["text"] == "最近は青い灯台を観ました！"
-    assert filtered["available_candidate_count"] == 1
-    assert "1案" in filtered["candidate_notice"]
-    assert all("相手からの直接質問に未回答" in item["reasons"] for item in filtered["candidate_rejections"])
+    assert filtered["available_candidate_count"] == 3
+    assert filtered["candidate_rejections"] == []
 
 
 @pytest.mark.parametrize("candidate_text", [
@@ -11629,7 +12110,7 @@ def test_recent_movie_title_from_verified_answer_does_not_accept_friend_viewing_
     )
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_recent_movie_answer_accepts_explicit_first_person_viewing_with_friend_context(client):
@@ -11704,11 +12185,15 @@ def test_answered_direct_question_keeps_answering_option_and_reports_unsafe_shor
 
     assert response.status_code == 200, response.text
     body = response.json()
+    # 2026-10-23: 「未回答」による棄却は廃止。回答リレー＋2案がそのまま表示される。
     assert body["recommended"]["text"] == "最近は『青い灯台』を観ました！"
-    assert body["available_candidate_count"] == 1
-    assert body["alternatives"] == []
-    assert "安全確認後に表示できる候補は1案です（指定は3案）" in body["candidate_notice"]
+    assert body["available_candidate_count"] == 3
+    assert body["alternatives"]  # 候補が返る
     assert "返信候補の各案にその回答を明確に含めます" in captured["config"].system_instruction
+    texts = [body["recommended"]["text"], *(item["text"] for item in body["alternatives"])]
+    assert "映画館へ行くのが好きなんですか？" in texts
+    assert "映画はときどき観るんですか？" in texts
+    assert body["rejected_candidates"] == []
 
 
 def test_verified_book_genre_answer_rejects_broad_requestion_and_keeps_grounded_reply(client):
@@ -11753,19 +12238,10 @@ def test_verified_book_genre_answer_rejects_broad_requestion_and_keeps_grounded_
 
     filtered = backend.filter_safe_candidates(value, 3, context)
 
+    # 2026-10-23: 「未回答」による棄却は廃止。聞き返し・反対主張の候補も表示される。
     assert filtered["recommended"]["text"] == "小説を読むことが多いです！\n最近読んだ作品ありますか？"
-    assert filtered["available_candidate_count"] == 1
-    assert "不足分" in filtered["candidate_notice"]
-    assert any(
-        rejection["label"] == "広い質問へ戻る"
-        and "相手からの直接質問に未回答" in rejection["reasons"]
-        for rejection in filtered["candidate_rejections"]
-    )
-    assert any(
-        rejection["label"] == "確認回答と反対"
-        and "相手からの直接質問に未回答" in rejection["reasons"]
-        for rejection in filtered["candidate_rejections"]
-    )
+    assert filtered["available_candidate_count"] == 3
+    assert filtered["candidate_rejections"] == []
 
     profile_context = {
         "mode": "reply",
@@ -11840,7 +12316,7 @@ def test_recent_book_answer_does_not_support_habitual_genre_claim(client):
     candidate = backend.Candidate(label="最近の経験を習慣へ拡張", text="ミステリーを読むことが多いです！")
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_recent_only_answer_to_mixed_genre_clarification_does_not_verify_habit(client):
@@ -11857,7 +12333,7 @@ def test_recent_only_answer_to_mixed_genre_clarification_does_not_verify_habit(c
     candidate = backend.Candidate(label="最近の一冊から習慣を推測", text="ミステリーを読むことが多いです！")
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_mixed_genre_answer_accepts_explicit_habit_and_ignores_recent_title(client):
@@ -11945,7 +12421,7 @@ def test_favorite_book_genre_rejects_candidate_with_opposite_preference(client):
     candidate = backend.Candidate(label="好みと矛盾", text="ミステリーは嫌いです！")
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_verified_reading_habit_rejects_candidate_that_claims_rare_reading(client):
@@ -11962,7 +12438,7 @@ def test_verified_reading_habit_rejects_candidate_that_claims_rare_reading(clien
     candidate = backend.Candidate(label="頻度のすり替え", text="小説はたまに読みます！")
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_verified_reading_frequency_rejects_self_contradictory_candidate(client):
@@ -12020,7 +12496,7 @@ def test_unverified_personal_direct_question_rejects_topic_evasion(client, quest
     candidate = backend.Candidate(label="話題すり替え", text=evasive_reply)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_unclassified_binary_personality_question_requires_user_confirmation(client):
@@ -12039,7 +12515,7 @@ def test_unclassified_binary_personality_question_requires_user_confirmation(cli
     assert clarification is not None
     assert "インドア派ですか？それともアウトドア派ですか？" in clarification.question
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_verified_cafe_preference_does_not_allow_evasion_of_yes_no_question(client):
@@ -12061,7 +12537,7 @@ def test_verified_cafe_preference_does_not_allow_evasion_of_yes_no_question(clie
     assert backend._topic_for_personal_question(context["history"][-1]["body"]) == "カフェ好み"
     assert backend._topic_is_verified("カフェ好み", context, context["history"][-1]["body"])
     assert not backend._answers_verified_partner_question(evasive, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, context)
     assert not backend._answers_verified_partner_question(discussion_only, context)
     assert not backend._answers_verified_partner_question(contradictory, context)
     assert not backend._answers_verified_partner_question(non_assertive, context)
@@ -12129,7 +12605,7 @@ def test_generic_cafe_preference_does_not_answer_atmosphere_question(client):
     assert not backend._answers_verified_partner_question(question_only, context)
     assert not backend._answers_verified_partner_question(partner_attribution, context)
     assert not backend._answers_verified_partner_question(reaction_only, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(partner_attribution, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(partner_attribution, context)
 
     context["ephemeral_user_answers"] = [{
         "question": "どんな雰囲気のカフェが好きですか？",
@@ -12389,7 +12865,7 @@ def test_colloquial_personal_questions_require_matching_user_confirmation(
     assert question in clarification.question
     unverified = backend.Candidate(label="未確認", text=unsupported_text)
     assert not backend._answers_verified_partner_question(unverified, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unverified, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(unverified, context)
 
     match_response = c.post("/api/matches", json={"name": "架空のテスト相手", "description": "架空プロフィール"})
     assert match_response.status_code == 201
@@ -12400,9 +12876,9 @@ def test_colloquial_personal_questions_require_matching_user_confirmation(
     })
     body = response.json()
     assert response.status_code == 200, body
-    assert body["needs_user_info"] is True
-    assert body["recommended"] is None and body["alternatives"] == []
-    assert question in body["user_questions"][0]["question"]
+    assert body["needs_user_info"] is False
+    assert body["recommended"] is not None and body["alternatives"]  # デモ候補がそのまま返る
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
 
     context["ephemeral_user_answers"] = [{"question": question, "answer": answer}]
     grounded = backend.Candidate(label="確認済み回答", text=grounded_text)
@@ -12561,9 +13037,10 @@ def test_generic_answer_filter_keeps_safe_candidate_and_reports_shortage(client)
     filtered = backend.filter_safe_candidates(response, 3, context)
 
     assert filtered["recommended"]["text"] == "辛いものは大丈夫です！"
-    assert filtered["alternatives"] == []
-    assert filtered["available_candidate_count"] == 1
-    assert "不足分を不自然な候補で補っていません" in filtered["candidate_notice"]
+    assert filtered["alternatives"]  # 候補が返る
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の予定・経験もそのまま返す。
+    assert filtered["available_candidate_count"] == 3
+    assert not filtered.get("candidate_notice")
 
 
 def test_unverified_shared_preference_or_ownership_is_rejected_but_partner_question_remains(client):
@@ -12593,7 +13070,7 @@ def test_unverified_shared_preference_or_ownership_is_rejected_but_partner_quest
 
     for text in unsafe:
         candidate = backend.Candidate(label="未確認の共通点", text=text)
-        assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
 
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(safe, context)
 
@@ -12620,14 +13097,14 @@ def test_confirmed_pet_fact_can_be_used_but_partner_interest_does_not_ground_it(
     unconfirmed_recent_claim = backend.Candidate(label="最近の経験", text="最近犬を飼い始めました！")
 
     assert all(
-        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, partner_only_context)
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, partner_only_context)
         for candidate in confirmed_candidates
     )
     assert all(
         "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, confirmed_context)
         for candidate in confirmed_candidates
     )
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         unconfirmed_recent_claim,
         confirmed_context,
     )
@@ -12643,7 +13120,7 @@ def test_pet_intent_does_not_ground_current_ownership(client):
     }
     candidate = backend.Candidate(label="現在の飼育", text="犬を飼っています！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("confirmed_negative_intent", [
@@ -12663,7 +13140,7 @@ def test_negative_pet_intent_does_not_ground_positive_intent(client, confirmed_n
     positive = backend.Candidate(label="逆の意向", text="犬を飼いたいです！")
     negative = backend.Candidate(label="同じ意向", text=confirmed_negative_intent + "！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(positive, context)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(negative, context)
 
 
@@ -12685,7 +13162,7 @@ def test_negative_pet_ownership_does_not_ground_current_positive_ownership(clien
     }
     positive = backend.Candidate(label="肯定へのすり替え", text="犬を飼っています！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(positive, context)
 
 
 def test_positive_pet_desire_is_not_negated_by_later_absence_of_a_plan(client):
@@ -12709,7 +13186,7 @@ def test_pet_polarity_is_scoped_to_each_animal_in_one_sentence(client):
         "my_profile": {"facts": {"pet_ownership": "犬を飼ってませんが猫を飼っています"}},
         "ephemeral_user_answers": [],
     }
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         backend.Candidate(label="犬の肯定", text="犬を飼っています！"),
         ownership_context,
     )
@@ -12726,7 +13203,7 @@ def test_pet_polarity_is_scoped_to_each_animal_in_one_sentence(client):
         backend.Candidate(label="犬の好み", text="犬が好きです！"),
         preference_context,
     )
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         backend.Candidate(label="猫の好み反転", text="猫が好きです！"),
         preference_context,
     )
@@ -12746,7 +13223,7 @@ def test_pet_preference_contrast_requires_support_for_each_animal_claim(client):
         "my_profile": {"facts": {"pet_preferences": "犬が苦手で猫が好き"}},
     }
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, dog_only_context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, dog_only_context)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, dog_and_cat_context)
 
 
@@ -12769,11 +13246,11 @@ def test_pet_guard_distinguishes_third_party_and_partner_attribution(client):
     for acknowledgement in ("猫飼ってるんだね！", "猫飼ってるんですね！", "猫飼ってるんだ！"):
         candidate = backend.Candidate(label="相手への相槌", text=acknowledgement)
         assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         unsupported_partner_acknowledgement, context
     )
     assert all(
-        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
         for candidate in third_party_statements
     )
     confirmed_third_party_context = {
@@ -12791,7 +13268,7 @@ def test_pet_guard_distinguishes_third_party_and_partner_attribution(client):
         "history": [{"role": "them", "body": "友達が犬を飼っています！"}],
     }
     different_relationship = backend.Candidate(label="別の第三者", text="同僚が犬を飼っています！")
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         different_relationship,
         partner_friend_fact_context,
     )
@@ -12800,7 +13277,7 @@ def test_pet_guard_distinguishes_third_party_and_partner_attribution(client):
         "my_profile": {"facts": {"family_pets": "母が犬を飼っています"}},
     }
     father_claim = backend.Candidate(label="別の親族", text="父が犬を飼っています！")
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(father_claim, mother_fact_context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(father_claim, mother_fact_context)
 
 
 def test_uncertain_and_corrected_partner_pet_statements_do_not_ground_stale_facts(client):
@@ -12893,17 +13370,17 @@ def test_uncertain_and_corrected_partner_pet_statements_do_not_ground_stale_fact
     ]
 
     assert all(
-        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
         for context in uncertain_contexts
     )
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, corrected_context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, hypothetical_context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, corrected_context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, hypothetical_context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         candidate,
         omitted_animal_correction_context,
     )
     assert all(
-        "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+        "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
         for context in natural_omitted_correction_contexts
     )
 def test_past_pet_ownership_does_not_ground_current_ownership(client):
@@ -12917,7 +13394,7 @@ def test_past_pet_ownership_does_not_ground_current_ownership(client):
     current = backend.Candidate(label="現在の飼育", text="犬を飼っています！")
     matching_past = backend.Candidate(label="過去の飼育", text="前は犬を飼ってた！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(current, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(current, context)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(matching_past, context)
 
 
@@ -12991,12 +13468,12 @@ def test_unconfirmed_movie_habit_is_rejected_even_without_first_person_subject(c
     )
     context["my_profile"]["facts"]["movie_hobby"] = "映画が好き"
 
-    assert all("未確認の本人事実" in backend._candidate_rejection_reasons(candidate, {
+    assert all("未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, {
         **context,
         "my_profile": {"facts": {}},
     }) for candidate in unconfirmed)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(confirmed, context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(
         unconfirmed_recent_with_generic_hobby, context
     )
     context["my_profile"]["facts"]["recent_movie_habit"] = "最近映画にはまっています"
@@ -13029,7 +13506,7 @@ def test_shared_preference_opposite_to_confirmed_fact_is_rejected(client):
     contradictory = backend.Candidate(label="逆の好み", text="私も辛いものは苦手です！")
     grounded = backend.Candidate(label="同じ好み", text="私も辛いものは大丈夫です！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(contradictory, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(contradictory, context)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(grounded, context)
 
 
@@ -13043,7 +13520,7 @@ def test_shared_positive_claim_is_not_grounded_by_negative_profile_fact(client):
     }
     positive = backend.Candidate(label="逆の好み", text="私も猫は好きです！")
 
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(positive, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(positive, context)
 
 
 def test_place_logistics_question_is_not_misclassified_as_user_preference(client):
@@ -13263,7 +13740,7 @@ def test_unknown_direct_personal_questions_require_confirmation_and_block_claims
     assert clarification is not None
     candidate = backend.Candidate(label="未確認の本人事実", text=unsupported_claim)
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
     context["ephemeral_user_answers"] = [{
         "question": clarification.question,
         "answer": unsupported_claim,
@@ -13305,7 +13782,7 @@ def test_unknown_recent_activity_question_requires_matching_temporary_answer(
 
     unsupported = backend.Candidate(label="未確認の本人事実", text=unsupported_claim)
     assert not backend._answers_verified_partner_question(unsupported, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unsupported, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(unsupported, context)
     filtered = backend.filter_safe_candidates(
         backend.SuggestionsV2(
             needs_user_info=False,
@@ -13317,8 +13794,9 @@ def test_unknown_recent_activity_question_requires_matching_temporary_answer(
         1,
         context,
     )
-    assert filtered["available_candidate_count"] == 0
-    assert filtered["generation_blocked"] is True
+    # 2026-10-23: 事実確認による棄却は廃止。検出器は残るが候補は表示する。
+    assert filtered["available_candidate_count"] == 1
+    assert filtered["generation_blocked"] is False
 
     context["ephemeral_user_answers"] = [{
         "question": clarification.question,
@@ -13355,11 +13833,11 @@ def test_same_day_activity_question_is_requested_before_generation(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert "今日" in body["user_questions"][0]["question"]
-    assert expected_clarification in body["user_questions"][0]["question"]
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
+    assert body["needs_user_info"] is False
+    # 2026-10-23: プレフライトの確認質問は廃止。質問を返さず候補を作る。
+    assert body["user_questions"] == []
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
 
 
 def test_nonpersonal_fact_question_does_not_trigger_personal_confirmation(client):
@@ -13438,14 +13916,14 @@ def test_unsupported_direct_personal_questions_require_scoped_user_confirmation(
     })
     assert response.status_code == 200
     response_body = response.json()
-    assert response_body["needs_user_info"] is True
-    assert question in response_body["user_questions"][0]["question"]
-    assert response_body["recommended"] is None
-    assert response_body["alternatives"] == []
+    assert response_body["needs_user_info"] is False
+    assert response_body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
+    assert response_body["recommended"] is not None
+    assert response_body["alternatives"]  # 候補が返る
 
     evasive = backend.Candidate(label="回避", text="そうなんですね！最近はどんなことをしていますか？")
     assert not backend._answers_verified_partner_question(evasive, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, context)
 
     context["ephemeral_user_answers"] = [{
         "question": clarification.question,
@@ -13696,11 +14174,11 @@ def test_future_activity_question_is_shown_before_gemini_generation(client, monk
 
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert "来週の土曜は何してるの？" in body["user_questions"][0]["question"]
-    assert "該当する日の予定や過ごし方" in body["user_questions"][0]["question"]
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
+    assert body["needs_user_info"] is False
+    # 2026-10-23: プレフライトの確認質問は廃止。質問を返さず候補を作る。
+    assert body["user_questions"] == []
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
 
 
 @pytest.mark.parametrize("question", [
@@ -13825,10 +14303,10 @@ def test_recent_past_activity_question_is_confirmed_before_gemini_generation(cli
 
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert body["user_questions"][0]["question"] == "この前に何をしていたか教えてください"
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
+    assert body["needs_user_info"] is False
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止 == "この前に何をしていたか教えてください"
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
 
 
 @pytest.mark.parametrize(("first_question", "second_question"), [
@@ -14033,7 +14511,7 @@ def test_unknown_daily_routine_schedule_question_requires_user_confirmation(
     assert question.rstrip("？?") in clarification.question
     candidate = backend.Candidate(label="未確認の日課", text=unsupported_claim)
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
     context["ephemeral_user_answers"] = [{
         "question": clarification.question,
         "answer": unsupported_claim,
@@ -14112,7 +14590,7 @@ def test_verified_cafe_frequency_question_requires_an_actual_frequency_answer(cl
     assert backend._answers_verified_partner_question(answer, context)
     assert not backend._answers_verified_partner_question(mismatched_answer, context)
     assert backend._answers_verified_partner_question(answer_with_followup, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(mismatched_answer, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(mismatched_answer, context)
 
     vague_frequency_context = {
         **context,
@@ -14489,10 +14967,11 @@ def test_current_student_status_question_is_preflighted_before_gemini(client, mo
 
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
-    assert "学生" in body["user_questions"][0]["question"]
-    assert body["recommended"] is None
-    assert body["alternatives"] == []
+    assert body["needs_user_info"] is False
+    # 2026-10-23: プレフライトの確認質問は廃止。質問を返さず候補を作る。
+    assert body["user_questions"] == []
+    assert body["recommended"] is not None
+    assert body["alternatives"]  # 候補が返る
 
 
 def test_unconfirmed_current_student_candidate_is_rejected(client):
@@ -14508,7 +14987,7 @@ def test_unconfirmed_current_student_candidate_is_rejected(client):
     assert backend._topic_for_personal_question("学生ですか？") == "本人情報"
     assert backend.missing_personal_fact_question(context) is not None
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 def test_explicit_current_student_status_allows_matching_candidate(client):
@@ -14575,24 +15054,16 @@ def test_current_student_status_preflight_answer_then_candidate_generation(clien
     ])
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
 
-    preflight = c.post("/api/generate", json={
-        "mode": "reply", "match_id": mid, "response_version": 2, "count": 1,
-    })
-    assert preflight.status_code == 200, preflight.text
-    question = preflight.json()["user_questions"][0]["question"]
-    assert preflight.json()["needs_user_info"] is True
-    assert question == "現在学生かどうか教えてください"
-    assert calls == []
-
+    # 2026-10-23: プレフライトの確認質問は廃止。初回から生成し、質問は返さない。
     generated = c.post("/api/generate", json={
         "mode": "reply", "match_id": mid, "response_version": 2, "count": 1,
-        "user_answers": [{"question": question, "answer": "はい、今は大学生です"}],
     })
 
     assert generated.status_code == 200, generated.text
     body = generated.json()
     assert len(calls) == 1
     assert body["needs_user_info"] is False
+    assert body["user_questions"] == []
     assert body["recommended"]["text"] == payload["recommended"]["text"]
 
 
@@ -14668,7 +15139,7 @@ def test_current_student_status_answer_rejects_unsupported_extra_self_claims(
     )
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("answer", [
@@ -14976,7 +15447,7 @@ def test_recent_dish_answer_does_not_authorize_extra_cooking_claims(client, cand
     candidate = backend.Candidate(label="追加主張つき", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(
@@ -15081,7 +15552,7 @@ def test_unclassified_direct_question_cannot_be_replaced_by_reaction_or_new_ques
     candidate = backend.Candidate(label="質問回避", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(
@@ -15148,7 +15619,7 @@ def test_unclassified_wh_question_rejects_unrelated_statement(client, candidate_
     candidate = backend.Candidate(label="無関係な話題", text=candidate_text)
 
     assert not backend._answers_verified_partner_question(candidate, context)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize(
@@ -15306,7 +15777,7 @@ def test_unclassified_first_person_facts_are_not_sendable_without_evidence(clien
 
     assert backend._has_unverified_general_personal_claim(claim, context)
     assert backend.unsupported_personal_claim_topics([candidate], context)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(candidate, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(candidate, context)
 
 
 @pytest.mark.parametrize("claim", [
@@ -15502,10 +15973,11 @@ def test_filter_safe_candidates_drops_unknown_direct_answers_without_user_confir
 
     filtered = backend.filter_safe_candidates(value, 3, context)
 
-    assert filtered["recommended"] is None
-    assert filtered["generation_blocked"] is True
-    assert filtered["available_candidate_count"] == 0
-    assert "相手からの直接質問に未回答" in str(filtered["candidate_rejections"])
+    assert filtered["recommended"] is not None
+    # 2026-10-23: 「相手からの直接質問に未回答」による棄却は廃止。
+    assert filtered["generation_blocked"] is False
+    assert filtered["available_candidate_count"] == 2
+    assert "相手からの直接質問に未回答" not in str(filtered["candidate_rejections"])
 
 
 def test_usage_ledger_reserves_and_blocks_when_budget_is_spent(client, monkeypatch):
@@ -15663,7 +16135,8 @@ def test_generate_stops_at_request_deadline_before_provider_call(client, monkeyp
             "私も静かなお店のほうが落ち着くので好きです。",
             "自動",
             "",
-            "私も静かなお店のほうが落ち着くので好きです",
+            # 回答はそのままリレーされるが、一人称は「僕」に固定される（2026-10-23）。
+            "僕も静かなお店のほうが落ち着くので好きです",
         ),
         (
             "最近何してたの？",
@@ -15731,7 +16204,7 @@ def test_unclassified_personal_question_deterministic_fallback_passes_all_guards
             "alternatives": [
                 {
                     "label": "回答漏れ",
-                    "text": "いいですね！\nもっと聞かせてください",
+                    "text": "いいですね。\nもっと聞かせてください",
                 },
                 {
                     "label": "未確認の誘い",
@@ -15751,7 +16224,6 @@ def test_unclassified_personal_question_deterministic_fallback_passes_all_guards
     assert filtered["deterministic_fallback_used"] is True
     assert filtered["available_candidate_count"] == 1
     assert filtered["recommended"]["text"] == expected_text
-    assert filtered["alternatives"] == []
 
 
 def test_unclassified_personal_question_without_user_answer_requests_clarification_without_fallback(
@@ -15779,10 +16251,10 @@ def test_unclassified_personal_question_without_user_answer_requests_clarificati
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["needs_user_info"] is True
+    assert body["needs_user_info"] is False
     assert body["generation_blocked"] is False
-    assert body["recommended"] is None
-    assert len(body["user_questions"]) == 1
+    assert body["recommended"] is not None
+    assert body["user_questions"] == []  # 2026-10-23: 確認質問は廃止
 
 
 def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on_answered_wh_question(
@@ -16198,7 +16670,7 @@ def test_multiline_cafe_atmosphere_and_specific_detail_answers_after_acknowledgm
         ),
     )
     assert backend._answers_verified_partner_question(unrelated_lines, context) is False
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(unrelated_lines, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(unrelated_lines, context)
 
     partner_attributed_second_line = backend.Candidate(
         label="相手帰属の2行目",
@@ -16429,7 +16901,7 @@ def test_schedule_question_in_verified_single_partner_question(client):
     assert '相手からの直接質問に未回答' not in backend._candidate_rejection_reasons(valid_cand, context)
     altered_cand = backend.Candidate(label='誤った予定回答', text='ぜひ行きましょう！日曜日の午後が空いています。ご都合どうですか？')
     assert backend._answers_verified_single_partner_question(altered_cand, context) is False
-    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(altered_cand, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(altered_cand, context)
 
 
 def test_verified_profile_fact_fallback_candidate_occupation(client):
@@ -16479,7 +16951,8 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
     # 3. Fallback integrated with filter_safe_candidates when all candidates fail
     unsafe_cand = backend.Candidate(
         label="未確認詳細あり",
-        text="経理の仕事をしています！\n毎日電卓を叩いて数字とにらめっこしています😊",
+        # 事実確認の棄却は廃止されたため、残る形式違反（句読点）で棄却させる。
+        text="経理の仕事をしています。\n毎日電卓を叩いて数字とにらめっこしています😊",
         reply_move="react",
     )
     raw_suggestions = backend.Suggestions(
@@ -16635,7 +17108,7 @@ def test_direct_reading_question_evasion_rejected_when_user_answered(client):
         reply_move="grounded_share",
     )
     reasons_evasive = backend._candidate_rejection_reasons(evasive, context)
-    assert "相手からの直接質問に未回答" in reasons_evasive
+    assert "相手からの直接質問に未回答" not in reasons_evasive
 
     # Candidate faithfully answers with the user's confirmed reading fact
     good = backend.Candidate(
@@ -16667,7 +17140,7 @@ def test_direct_reading_question_evasion_rejected_when_user_answered(client):
         reply_move="grounded_share",
     )
     reasons_exaggerated = backend._candidate_rejection_reasons(exaggerated_habit, context)
-    assert "相手からの直接質問に未回答" in reasons_exaggerated
+    assert "相手からの直接質問に未回答" not in reasons_exaggerated
 
     # Regression 3: Accuracy test (unconfirmed title substitution) must still be rejected
     wrong_title = backend.Candidate(
@@ -16676,7 +17149,7 @@ def test_direct_reading_question_evasion_rejected_when_user_answered(client):
         reply_move="grounded_share",
     )
     reasons_wrong = backend._candidate_rejection_reasons(wrong_title, context)
-    assert "相手からの直接質問に未回答" in reasons_wrong
+    assert "相手からの直接質問に未回答" not in reasons_wrong
 
 
 def test_last_question_sentence_only_trims_a_single_trailing_question(client):
@@ -16761,8 +17234,8 @@ def test_museum_question_after_partner_story_is_asked_and_enforced(client):
         label="話題転換",
         text="古本屋めぐりもいいですね\n私も旅先では本屋に寄ることが多いです\n最近は何か面白い本を見つけましたか？",
     )
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, answered)
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, answered)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, context)
 
     direct = backend.Candidate(
         label="素直な回答",
@@ -17124,7 +17597,7 @@ def test_holiday_question_unanswered_rejected_and_answered_accepted(client):
         text="静かな路地裏には素敵な発見がたくさんありますよね！\nカフェ巡りは楽しいです",
     )
     reasons = backend._candidate_rejection_reasons(evasive_cand, context)
-    assert "相手からの直接質問に未回答" in reasons
+    assert "相手からの直接質問に未回答" not in reasons
 
     # Answering candidate that does answer the weekend question
     answering_cand = backend.Candidate(
@@ -17253,7 +17726,7 @@ def test_food_ordering_claim_requires_grounding(client):
     }
     assert backend._has_unverified_general_personal_claim(cand_text, context_unconfirmed)
     assert "未確認の本人事実" in backend.unsupported_personal_claim_topics([cand], context_unconfirmed)
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(cand, context_unconfirmed)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(cand, context_unconfirmed)
 
     # 2. Accepted when foods are in profile facts
     context_grounded_facts = {
@@ -17551,7 +18024,7 @@ def test_t472_memo_sentence_answers_seat_question(client):
         label="話題転換",
         text="喫茶店めぐりはいいですね\n最近はどこか行かれましたか？",
     )
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, context)
 
     direct = backend.Candidate(
         label="素直な回答",
@@ -17585,11 +18058,11 @@ def test_t472_memo_answer_term_is_required_and_contradictions_are_rejected(clien
 
     other_value = backend.Candidate(label="別の値", text="カウンター席が好きです")
     assert reflected(focus, other_value, context) is False
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(other_value, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(other_value, context)
 
     negated = backend.Candidate(label="否定", text="窓ぎわの席は苦手です")
     assert reflected(focus, negated, context) is False
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(negated, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(negated, context)
 
 
 def test_t472_stage_floor_after_accepted_invitation(client):
@@ -17767,11 +18240,9 @@ def test_t473_stiff_keigo_is_rewritten_before_candidate_checks(client):
     rejected = backend.filter_safe_candidates(unsafe, 3, context)
     accepted_texts = [rejected["recommended"]["text"]] if rejected.get("recommended") else []
     accepted_texts += [item["text"] for item in rejected.get("alternatives", [])]
-    assert all("行きつけの喫茶店" not in text for text in accepted_texts), rejected
-    assert any(
-        "未確認の本人事実" in item["reasons"]
-        for item in rejected.get("candidate_rejections", [])
-    ), rejected
+    # 2026-10-23: 事実確認による棄却は廃止。未確認の自己開示もそのまま表示される。
+    assert any("行きつけの喫茶店" in text for text in accepted_texts), rejected
+    assert rejected.get("candidate_rejections") == [], rejected
 
 
 def test_t473_unclassified_personal_question_asks_instead_of_blocking(client, monkeypatch):
@@ -17823,9 +18294,10 @@ def test_t473_unclassified_personal_question_asks_instead_of_blocking(client, mo
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["generation_blocked"] is False, body
-    assert body["needs_user_info"] is True, body
-    assert body["recommended"] is None and body["alternatives"] == []
-    assert body["user_questions"] and partner_question in body["user_questions"][0]["question"]
+    assert body["needs_user_info"] is False, body
+    assert body["recommended"] is not None and body["alternatives"] == []
+    # 2026-10-23: 確認質問は廃止。未確認の共有候補がそのまま表示される。
+    assert body["user_questions"] == [], body
 
 
 def test_t473_reply_prompt_carries_the_natural_conversation_guidance(client):
@@ -17904,11 +18376,12 @@ def test_t474_answered_question_stall_relays_the_answer(client, monkeypatch):
     assert body["generation_blocked"] is False, body
     assert body["needs_user_info"] is False, body
     assert body["recommended"] is not None, body
+    # 2026-10-23: 事実確認による棄却は廃止。本人の回答と異なるモデル出力も候補として
+    # 表示され、決定的フォールバックは発動しない。
     relay_text = body["recommended"]["text"]
-    assert "甘いものは好きです" in relay_text
-    assert "季節のタルト" in relay_text
-    assert "苦手" not in relay_text
-    assert body["deterministic_fallback_used"] is True, body
+    assert "苦手" in relay_text, body
+    # 通常の生成経路はフィルタ用メタデータを返さないため、未発動を既定とする。
+    assert body.get("deterministic_fallback_used", False) is False, body
 
 
 def test_t474_answer_scope_must_match_the_partner_question(client):
@@ -18170,7 +18643,7 @@ def test_t482_unanswered_polar_personal_question_is_not_evaded(client):
     assert backend._is_unclassified_question_about_user("写真は撮ったりしますか？") is True
     assert "写真は撮ったりしますか？" in backend._partner_trailing_direct_question(context)
     evasive = backend.Candidate(label="逃避", text="景色を写真におさめるのも素敵ですよね✨")
-    assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(evasive, context)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive, context)
 
     answered = dict(context)
     answered["ephemeral_user_answers"] = [
@@ -18483,7 +18956,7 @@ def test_t477_prompts_distinguish_shared_then_asked_from_pure_question(client):
     assert "相手が質問してきたターンの返信は、事実の回答を必ず含めます" in first_prompt
 
 
-def test_t476_off_topic_self_disclosure_is_demoted(client):
+def test_t476_off_topic_self_disclosure_is_not_demoted(client):
     _, backend = client
     context = {
         "mode": "reply",
@@ -18505,11 +18978,13 @@ def test_t476_off_topic_self_disclosure_is_demoted(client):
     on_topic = backend.Candidate(
         label="つながる", text="トーストにバターの組み合わせって最高ですよね！\n私も朝はトースト派です😊"
     )
+    # 2026-10-23: 話題離れは理由としては残るが、demote 判定からは除外する
+    #（確認済み回答のリレーまで後ろへ回さないため）。
     assert "直前の相手の話題と離れている" in backend._recent_self_repetition_reasons(drifting.text, context)
     assert "直前の相手の話題と離れている" not in backend._recent_self_repetition_reasons(on_topic.text, context)
     ordered, notice = backend._demote_repetitive_self_candidates([drifting, on_topic], context)
-    assert ordered[0] is on_topic
-    assert notice
+    assert ordered[0] is drifting
+    assert not notice
 
 
 def test_t476_paraphrased_question_repeat_is_demoted(client):
@@ -18962,7 +19437,7 @@ def test_t485_verified_answer_relay_survives_partial_topic_match(client):
     assert backend._candidate_is_verified_answer_relay(relay.text, context)
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(relay, context)
     invented = backend.Candidate(label="創作", text="おかずパンやカレーパンが好きなので、週に3回はパン屋に通っています")
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(invented, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(invented, context)
 
 
 def test_t486_fallback_uses_the_established_partner_address(client):
@@ -19740,6 +20215,98 @@ def test_t498_nodesu_exclamation_is_softened(client):
     assert backend._soften_stiff_keigo("僕もよく歩くのです！") == "僕もよく歩くんです！"
 
 
+def test_first_person_is_rewritten_to_boku_in_candidate_body(client):
+    """2026-10-23（ユーザー指定）: 一人称は「僕」に固定する。"""
+    _, backend = client
+    assert backend._normalize_first_person_to_boku("私も喫茶店めぐりが好きです") == "僕も喫茶店めぐりが好きです"
+    assert backend._normalize_first_person_to_boku("私は平日は会社員をしています") == "僕は平日は会社員をしています"
+    assert backend._normalize_first_person_to_boku("私の楽しみは読書です") == "僕の楽しみは読書です"
+    assert backend._normalize_first_person_to_boku("わたしも映画をよく観ます") == "僕も映画をよく観ます"
+    assert backend._normalize_first_person_to_boku("俺はたまに映画を観に行きます") == "僕はたまに映画を観に行きます"
+    assert backend._normalize_first_person_to_boku("自分も同じくらいいいと思います") == "僕も同じくらいいいと思います"
+    # 助詞につながっていない形は語中の一部として残す。
+    assert backend._normalize_first_person_to_boku("私立の大学に行くんですか？") == "私立の大学に行くんですか？"
+    assert backend._normalize_first_person_to_boku("私物のカメラで撮るんですか？") == "私物のカメラで撮るんですか？"
+    assert backend._normalize_first_person_to_boku("私たちはまだマッチしていません") == "私たちはまだマッチしていません"
+    assert backend._normalize_first_person_to_boku("自分自身と比べず前向きにいきましょう") == "自分自身と比べず前向きにいきましょう"
+
+
+def test_filtered_candidates_show_boku_instead_of_watashi(client):
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近は喫茶店巡りをしています"}],
+        "other": {"name": "あおい", "description": "学生"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {"tone": "タメ口"},
+        "ephemeral_user_answers": [],
+    }
+    suggestions = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=backend.Candidate(
+            label="自然", text="えーいいですね！\n僕も行きたかったお店です！", reply_move="react"
+        ),
+        alternatives=[
+            backend.Candidate(label="別案", text="私も行きたかったお店です！", reply_move="grounded_share"),
+            backend.Candidate(label="短め", text="いいですね！", reply_move="react"),
+        ],
+        reason="相手の話題を拾う",
+        strategy="会話を続ける",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="会話初期",
+        next_action="話を続ける",
+    )
+    filtered = backend.filter_safe_candidates(suggestions, 3, context)
+    assert filtered["available_candidate_count"] == 3
+    texts = [item["text"] for item in [filtered["recommended"], *filtered["alternatives"]]]
+    assert "僕も行きたかったお店です！" in texts
+    assert "私も行きたかったお店です！" not in texts
+    assert all("私" not in text for text in texts)
+
+
+def test_prompts_fix_first_person_to_boku(client):
+    _, backend = client
+    common = (backend.PROMPTS / "common.txt").read_text(encoding="utf-8")
+    assert "一人称は「僕」に固定します" in common
+    for name in ("first.txt", "reply.txt", "followup.txt", "like.txt"):
+        prompt = (backend.PROMPTS / name).read_text(encoding="utf-8")
+        assert "「自分も」と共通点" not in prompt
+
+
+def test_v2_generation_instruction_fixes_first_person_to_boku(client, monkeypatch):
+    from google import genai
+
+    c, _ = client
+    mid = add_match(c, "架空りお")
+    c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近は喫茶店巡りをしています"})
+    prompts = []
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "えーいいですね！\n僕も気になっているお店です！", "reply_move": "react"},
+        "alternatives": [
+            {"label": "広げる", "text": "最近よかったお店ありますか？", "reply_move": "expand"},
+            {"label": "短め", "text": "いいですね！", "reply_move": "react"},
+        ],
+        "reason": "相手の話題を拾う", "strategy": "会話を続ける", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            prompts.append(kwargs["config"].system_instruction)
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={"mode": "reply", "match_id": mid, "response_version": 2})
+    assert response.status_code == 200
+    assert prompts
+    assert "一人称は「僕」に固定します" in prompts[0]
+
+
 def test_t498_partner_artist_claim_requires_ground(client):
     _, backend = client
     context = {
@@ -19751,7 +20318,7 @@ def test_t498_partner_artist_claim_requires_ground(client):
         "ephemeral_user_answers": [],
     }
     claiming = backend.Candidate(label="乗っかり", text="キタニタツヤさんの曲いいですよね！\n僕も聴くのでテンション上がりました😊")
-    assert "未確認の本人事実" in backend._candidate_rejection_reasons(claiming, context)
+    assert "未確認の本人事実" not in backend._candidate_rejection_reasons(claiming, context)
     neutral = backend.Candidate(label="共感", text="いいですね！\n気になります！")
     assert "未確認の本人事実" not in backend._candidate_rejection_reasons(neutral, context)
 
@@ -19990,9 +20557,12 @@ def test_t499_far_invitation_blocks_and_asks_user(client, monkeypatch):
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["needs_user_info"] is True
+    assert body["needs_user_info"] is False
+    # 2026-10-23: 本人確認の質問は廃止。遠方への承諾候補は表示せず、ブロックする。
+    assert body["generation_blocked"] is True
+    assert body["user_questions"] == []
     assert body["recommended"] is None
-    assert "遠い" in body["user_questions"][0]["question"]
+    assert "確認質問は行わない設定" in body["blocking_reason"]
 
 
 def test_t500_memo_is_not_relayed_as_a_deterministic_answer(client):
@@ -20307,7 +20877,7 @@ def test_t503_memo_polarity_word_does_not_answer_another_topic(client):
         label='相槌のみ',
         text='分かります休みの日はのんびり過ごすのもいいですよね✨\n普段はどんな映画を観ることが多いんですか？',
     )
-    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive, context)
+    assert '相手からの直接質問に未回答' not in backend._candidate_rejection_reasons(evasive, context)
 
 
 def test_t502_direct_question_to_user_must_be_answered(client):
@@ -20340,7 +20910,7 @@ def test_t502_direct_question_to_user_must_be_answered(client):
         label='相槌のみ',
         text='休日は昼までゆっくりするのも気持ちがいいですよね！\n映画以外におうち時間はどんなことをして過ごしてるんですか？',
     )
-    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive, morning)
+    assert '相手からの直接質問に未回答' not in backend._candidate_rejection_reasons(evasive, morning)
     answered_morning = context(
         '朝は苦手ですか？私は休みの日は昼まで寝てしまいます',
         '朝は苦手です。休みの日はゆっくり起きます。',
@@ -20350,7 +20920,7 @@ def test_t502_direct_question_to_user_must_be_answered(client):
     # (2) 選択肢を前の文に置く二択（犬派・猫派 → そちらはどっちですか？）。
     pet = context('犬派・猫派で言うと、そちらはどっちですか？', '猫が好きです。犬も好きです。')
     evasive_pet = backend.Candidate(label='共感のみ', text='猫も可愛いですよね✨\n動物は他にも好きなものってありますか？')
-    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive_pet, pet)
+    assert '相手からの直接質問に未回答' not in backend._candidate_rejection_reasons(evasive_pet, pet)
     relay_pet = backend.Candidate(label='回答', text='猫が好きです\n犬も好きです')
     assert backend._candidate_rejection_reasons(relay_pet, pet) == []
 
@@ -20361,7 +20931,7 @@ def test_t502_direct_question_to_user_must_be_answered(client):
         label='聞き返しのみ',
         text='札幌だと美味しいお店がたくさんありますよね✨\nこさんは普段どんなジャンルを食べに行くことが多いんですか？',
     )
-    assert '相手からの直接質問に未回答' in backend._candidate_rejection_reasons(evasive_shop, shop)
+    assert "相手からの直接質問に未回答" not in backend._candidate_rejection_reasons(evasive_shop, shop)
     answered_shop = context('札幌ならおすすめのお店とかありますか？', 'すすきののお寿司屋さんがおすすめです。')
     relay_shop = backend.Candidate(label='回答', text='すすきののお寿司屋さんがおすすめです')
     assert backend._candidate_rejection_reasons(relay_shop, answered_shop) == []
@@ -20457,7 +21027,7 @@ def test_t501_pet_ownership_implication_is_rejected(client):
     implied = backend.Candidate(
         label='含み', text='猫派ですー🐈\n実家でも癒やされてます笑'
     )
-    assert '未確認の本人事実' in backend._candidate_rejection_reasons(
+    assert '未確認の本人事実' not in backend._candidate_rejection_reasons(
         implied, context({'name': 'S', 'memo': '実家も札幌でよく帰る。猫派だけど犬も好き。'})
     )
     grounded = backend.Candidate(
@@ -20589,6 +21159,8 @@ def test_t500_blocked_nameless_question_asks_the_user(client, monkeypatch):
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body['needs_user_info'] is True
-    assert body['recommended'] is None
-    assert 'お弁当' in body['user_questions'][0]['question']
+    assert body["needs_user_info"] is False
+    # 2026-10-23: 本人確認の質問は廃止。候補が作れない場合はブロック表示にする。
+    assert body["generation_blocked"] is True
+    assert body["user_questions"] == []
+    assert body["recommended"] is None

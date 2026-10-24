@@ -32,14 +32,21 @@ PHOTOS = DATA / "photos"
 DB = DATA / "app.sqlite3"
 PROMPTS = BASE / "prompts"
 _configured_model = os.getenv("GEMINI_MODEL", "").strip()
-if _configured_model and _configured_model not in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
-    GEMINI_MODEL_PRIORITY = (_configured_model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
-elif _configured_model == "gemini-3.1-flash-lite":
+if _configured_model == "gemini-3.1-flash-lite":
     # T549: 明示的に 3.1-flash-lite が指定されたときはそのモデルを優先する。
     GEMINI_MODEL_PRIORITY = ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite")
 else:
+    # 使うのは flash-lite の 2 モデルだけにする。負荷が高く 503 が出やすい他モデル
+    # （例: gemini-3.5-flash）が GEMINI_MODEL で指定されても無視する。
     GEMINI_MODEL_PRIORITY = ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
 GEMINI_KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
+
+# DeepSeek は OpenAI 互換の HTTP API なので SDK を使わずに呼び出す。
+# 既定の「自動」では Gemini の4スロットのあとに置き、UI で選べば先頭になる。
+DEEPSEEK_ACCOUNT = "DeepSeek"
+DEEPSEEK_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash
+DEEPSEEK_MODEL_LABELS = {DEEPSEEK_MODEL: "v4.1 flash"}
+DEEPSEEK_DEFAULT_API_URL = "https://api.deepseek.com/chat/completions"
 _provider_attempt_lock = threading.Lock()
 _provider_last_attempt: dict[tuple[str, str], float] = {}
 _usage_ledger_lock = threading.Lock()
@@ -294,6 +301,29 @@ class ProfileInput(BaseModel):
     avoid: str = Field(default="", max_length=4000)
 
 
+class ProfileLearnInput(BaseModel):
+    """生成画面の「追加の自由記述」からプロフィール事実を学ぶ入力。"""
+
+    text: str = Field(min_length=1, max_length=1000)
+    api_alias: str = Field(default="", max_length=32)
+    model: str = Field(default="", max_length=64)
+
+
+class LearnedProfileFacts(BaseModel):
+    """自由記述から抽出した本人のプロフィール事実。"""
+
+    has_facts: bool = False
+    name: str = ""
+    age: str = ""
+    area: str = ""
+    job: str = ""
+    hobbies: list[str] = Field(default_factory=list)
+    personality: str = ""
+    style: str = ""
+    goal: str = ""
+    memo: str = ""
+
+
 class ConfirmedFactsInput(BaseModel):
     match_id: int | None = None
     clarification_session_id: str | None = Field(default=None, max_length=64)
@@ -351,6 +381,11 @@ class GenerateInput(BaseModel):
     user_answers: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     clarification_session_id: str | None = Field(default=None, max_length=64)
     skipped_user_info: bool = False
+    # Preferred provider slot. Empty means "自動" (use the configured order).
+    # A chosen API/model is tried first but the remaining slots stay available
+    # as fallbacks when the first choice is rate limited or returns 503.
+    api_alias: str = Field(default="", max_length=20)
+    model: str = Field(default="", max_length=100)
 
     @field_validator("user_answers")
     @classmethod
@@ -534,6 +569,15 @@ class UsageBudgetExceededError(RuntimeError):
 
 class RequestDeadlineExceededError(RuntimeError):
     """The request-wide wall-clock deadline for provider calls has expired."""
+
+
+class ProviderHTTPError(RuntimeError):
+    """HTTP failure from a provider called without its SDK (for example DeepSeek)."""
+
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = code
 
 
 INVITATION_PATTERN = re.compile(
@@ -5666,6 +5710,280 @@ def unsupported_personal_claim_topics(candidates: list[Candidate], context: dict
     return list(dict.fromkeys(found))
 
 
+# 2026-10-23 本人の方針: 「確認できない本人事実」だけでは候補を除外しない。
+# 本人が保存したプロフィール（アンケート由来の事実）と明白に食い違うときだけ除外する。
+# 誤った候補は本人が採用しなければよい、という判断に合わせた緩和。
+_CONTRADICTION_POSITIVE_CLAIM_CUES = (
+    "好き", "大好き", "得意", "よく", "毎日", "いつも", "習慣", "ハマ", "楽しみ",
+    "飲みます", "食べます", "行きます", "通っています", "しています",
+)
+_CONTRADICTION_NEGATIVE_CLAIM_CUES = (
+    "ない", "ません", "苦手", "嫌い", "無理", "できない", "やめた", "行かな",
+    "飲ま", "食べられ", "避け",
+)
+_CONTRADICTION_STRONG_NEGATIVE_CLAIM_CUES = (
+    "苦手", "嫌い", "きらい", "無理", "できない", "やめた", "行かない", "飲まない",
+    "食べない", "避け",
+)
+_CONTRADICTION_NEGATION_SOURCE_CUES = (
+    "ない", "ません", "苦手", "嫌い", "無理", "できない", "飲め", "食べられ",
+    "行かな", "やらな", "避け",
+)
+_CONTRADICTION_NEGATION_SOURCE_PATTERN = (
+    r"(?:" + "|".join(re.escape(cue) for cue in _CONTRADICTION_NEGATION_SOURCE_CUES) + r")"
+)
+_CONTRADICTION_POSITIVE_SOURCE_PATTERN = r"(?:好き|大好き|得意|よく|毎日|いつも|楽しみ|ハマ)"
+_CONTRADICTION_TERM_BOUNDARY = r"(?:^|[はがをもの、])"
+_CONTRADICTION_TRAILING_PARTICLE = r"(?:は|が|を|も|には|って|のほうが)"
+
+
+def _contradiction_clauses(text: str) -> list[str]:
+    return [
+        clause.strip()
+        for clause in re.split(r"[。、,！!？?\n]+", str(text))
+        if clause.strip()
+    ]
+
+
+def _terms_before_cue(clause: str, cue_pattern: str) -> set[str]:
+    """Return the noun-like terms immediately before the first cue in the clause."""
+    match = re.search(cue_pattern, clause)
+    if not match:
+        return set()
+    prefix = re.sub(
+        _CONTRADICTION_TRAILING_PARTICLE + r"+$", "", clause[:match.start()]
+    ).strip()
+    if not prefix:
+        return set()
+    head = re.split(r"[、。！!？?\n]", prefix)[-1]
+    terms: set[str] = set()
+    for chunk in re.split(r"と|や", head):
+        chunk = re.sub(
+            _CONTRADICTION_TRAILING_PARTICLE + r"+$", "", chunk
+        ).strip()
+        # 助詞の直前が漢字・カタカナのときだけ語の区切りとみなす。
+        # 「辛いもの」の「も」のような語中の助詞で壊さないため。
+        parts = [
+            part.strip()
+            for part in re.split(
+                r"(?<=[\u4e00-\u9fffァ-ヶー])" + _CONTRADICTION_TRAILING_PARTICLE,
+                chunk,
+            )
+            if part.strip()
+        ]
+        term = (parts or [chunk])[-1].strip()
+        if 1 <= len(term) <= 12 and not re.fullmatch(r"[はがをもの]+", term):
+            terms.add(term)
+    return terms
+
+
+def _term_claim_tail(clause: str, term: str) -> str | None:
+    match = re.search(
+        _CONTRADICTION_TERM_BOUNDARY
+        + re.escape(term)
+        + _CONTRADICTION_TRAILING_PARTICLE
+        + r"?",
+        clause,
+    )
+    if not match:
+        return None
+    return clause[match.end():]
+
+
+def _claim_tail_for_term(clause: str, term: str) -> str | None:
+    tail = _term_claim_tail(clause, term)
+    if tail is not None:
+        return tail
+    # 「映画鑑賞」に対する「映画」、「カフェ巡り」に対する「カフェ」のような
+    # 主要部だけの言及も同じ話題とする。助詞が続く場合だけ対象にする。
+    for size in (3, 2):
+        if len(term) <= size:
+            continue
+        prefix = term[:size]
+        match = re.search(
+            _CONTRADICTION_TERM_BOUNDARY
+            + re.escape(prefix)
+            + _CONTRADICTION_TRAILING_PARTICLE,
+            clause,
+        )
+        if match:
+            return clause[match.end():]
+    return None
+
+
+def _confirmed_negated_terms(context: dict) -> set[str]:
+    """プロフィールで明確に否定されている語（例「コーヒーは飲めない」）を返す。"""
+    terms: set[str] = set()
+    for source in _trusted_fact_clauses(context, include_negated=True):
+        for clause in _contradiction_clauses(source):
+            if not re.search(_CONTRADICTION_NEGATION_SOURCE_PATTERN, clause):
+                continue
+            terms.update(_terms_before_cue(clause, _CONTRADICTION_NEGATION_SOURCE_PATTERN))
+    return terms
+
+
+# 趣味などの一覧項目はそれ自体が「好き」の表明なので、肯定語の手掛かりが
+# なくても矛盾判定の対象にする。
+_POSITIVE_FACT_KEYS = (
+    "hobbies", "interests", "favorite_foods", "favorite_places", "favorite_music",
+    "favorite_movies", "movie_preferences", "likes", "趣味", "好きなこと",
+)
+
+
+def _confirmed_positive_terms(context: dict) -> set[str]:
+    """プロフィールで肯定的に確認されている語（例「映画が好き」）を返す。"""
+    terms: set[str] = set()
+    for source in _trusted_fact_clauses(context):
+        for clause in _contradiction_clauses(source):
+            terms.update(_terms_before_cue(clause, _CONTRADICTION_POSITIVE_SOURCE_PATTERN))
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    for key in _POSITIVE_FACT_KEYS:
+        value = facts.get(key)
+        values = value if isinstance(value, (list, tuple, set)) else [value]
+        for item in values:
+            if not item:
+                continue
+            for part in _contradiction_clauses(str(item)):
+                if 1 <= len(part) <= 12:
+                    terms.add(part)
+    return terms
+
+
+def _clause_asserts_positive_about(clause: str, term: str) -> bool:
+    tail = _claim_tail_for_term(clause, term)
+    if tail is None:
+        return False
+    if re.search("|".join(_CONTRADICTION_NEGATIVE_CLAIM_CUES), tail[:10]):
+        return False
+    match = re.search("|".join(_CONTRADICTION_POSITIVE_CLAIM_CUES), tail[:20])
+    if not match:
+        return False
+    # 「コーヒーより紅茶が好き」「好きな人も多い」のような比較・一般論は
+    # 本人がその語を好む主張ではない。
+    if re.search(r"より|ではなく|じゃなく", tail[:match.start()]):
+        return False
+    if re.match(r"(?:な人|な方|人も|人は|という|って)", tail[match.end():match.end() + 6]):
+        return False
+    return True
+
+
+def _clause_asserts_negative_about(clause: str, term: str) -> bool:
+    tail = _claim_tail_for_term(clause, term)
+    if tail is None:
+        return False
+    match = re.match(
+        r"[^。]{0,10}?(?:" + "|".join(_CONTRADICTION_STRONG_NEGATIVE_CLAIM_CUES) + r")",
+        tail,
+    )
+    if not match:
+        return False
+    if re.search(r"より|ではなく|じゃなく", tail[:match.start()]):
+        return False
+    if re.match(r"(?:な人|な方|人も|人は|という|って)", tail[match.end():match.end() + 6]):
+        return False
+    return True
+
+
+def _candidate_age_contradicts(text: str, context: dict) -> bool:
+    facts = (context.get("my_profile") or {}).get("facts") or {}
+    match = re.search(r"(\d{2,3})", str(facts.get("age", "") or ""))
+    if not match:
+        return False
+    age = int(match.group(1))
+    for clause in _contradiction_clauses(text):
+        pronoun_age = re.search(
+            r"(?:僕|私|俺|自分)(?:は|も|が)?\s*(?:今|今年|現在|もう)?\s*(\d{2,3})\s*歳",
+            clause,
+        )
+        if pronoun_age and int(pronoun_age.group(1)) != age:
+            return True
+        bare_age = re.search(r"^(?:今年|今|現在)?\s*(\d{2,3})\s*歳(?:です|になり|になった|になったばかり)", clause)
+        if bare_age and int(bare_age.group(1)) != age:
+            return True
+        decade = re.search(r"(?:僕|私|俺|自分)(?:は|も|が)?\s*(\d{2})\s*代", clause)
+        if decade and int(decade.group(1)) != age // 10:
+            return True
+    return False
+
+
+def _candidate_region_contradicts(text: str, context: dict) -> bool:
+    user_regions = _user_region_groups(context)
+    if not user_regions:
+        return False
+    for clause in _contradiction_clauses(text):
+        if not re.search(r"住んで|在住|出身|地元|実家|住まい|暮らして", clause):
+            continue
+        # 相手や第三者の居住地・旅行の話は本人の事実ではない。
+        if re.search(r"相手|あなた|君|彼女|彼|友達|家族|母|父|妹|弟|兄|姉", clause):
+            continue
+        if re.search(r"行き|行った|旅行|帰省|出張|引っ越す予定|引っ越したい", clause):
+            continue
+        regions = _region_groups(clause)
+        if regions and regions.isdisjoint(user_regions):
+            return True
+    return False
+
+
+def _candidate_shopping_trait_contradicts(text: str, context: dict) -> bool:
+    sources = _shopping_personality_fact_clauses(context)
+    if not sources:
+        return False
+    for claim in SHOPPING_PERSONALITY_CLAIM_PATTERN.finditer(text):
+        trait = claim.group("trait")
+        if any(_shopping_trait_is_contradicted(source, trait) for source in sources):
+            return True
+    return False
+
+
+def _candidate_movie_preference_contradicts(text: str, context: dict) -> bool:
+    candidate_signatures = _movie_preference_signatures(text)
+    if not candidate_signatures:
+        return False
+    evidence: dict[tuple[str, str, str], set[str]] = {}
+    for category, marker, polarity, scope in _movie_preference_evidence_signatures(context):
+        evidence.setdefault((category, marker, scope), set()).add(polarity)
+    return any(
+        evidence.get((category, marker, scope))
+        and polarity not in evidence[(category, marker, scope)]
+        for category, marker, polarity, scope in candidate_signatures
+    )
+
+
+def _candidate_contradicts_confirmed_facts(text: str, context: dict) -> bool:
+    """確認済みプロフィールと明白に食い違う本人主張だけを真とする。"""
+    if _candidate_age_contradicts(text, context):
+        return True
+    if _candidate_region_contradicts(text, context):
+        return True
+    if _candidate_shopping_trait_contradicts(text, context):
+        return True
+    if _candidate_movie_preference_contradicts(text, context):
+        return True
+    negated_terms = _confirmed_negated_terms(context)
+    if negated_terms:
+        for clause in _contradiction_clauses(text):
+            if any(_clause_asserts_positive_about(clause, term) for term in negated_terms):
+                return True
+    positive_terms = _confirmed_positive_terms(context)
+    if positive_terms:
+        for clause in _contradiction_clauses(text):
+            if any(_clause_asserts_negative_about(clause, term) for term in positive_terms):
+                return True
+    return False
+
+
+def contradicted_personal_claim_topics(
+    candidates: list[Candidate], context: dict
+) -> list[str]:
+    """確認済み情報と矛盾する本人主張だけを返す（未確認だけでは除外しない）。"""
+    found = [
+        "確認済みの本人情報と矛盾"
+        for candidate in candidates
+        if _candidate_contradicts_confirmed_facts(candidate.text, context)
+    ]
+    return list(dict.fromkeys(found))
+
+
 def _has_unverified_general_personal_claim(text: str, context: dict) -> bool:
     """Catch common concrete personal claims outside the topic-specific catalog.
 
@@ -6129,10 +6447,21 @@ def frontend_script():
 
 @app.get("/api/status")
 def status():
+    configurations = provider_configurations()
+    api_aliases: list[str] = []
+    models: list[str] = []
+    for account, _key, model in configurations:
+        if account not in api_aliases:
+            api_aliases.append(account)
+        if model not in models:
+            models.append(model)
     return {
         "app_id": "matching-reply-assistant",
-        "demo": not bool(gemini_configurations()),
-        "model": GEMINI_MODEL_PRIORITY[0],
+        "demo": not bool(configurations),
+        "model": models[0] if models else GEMINI_MODEL_PRIORITY[0],
+        "models": models or list(GEMINI_MODEL_PRIORITY),
+        "model_labels": dict(DEEPSEEK_MODEL_LABELS),
+        "api_aliases": api_aliases,
     }
 
 
@@ -6167,6 +6496,116 @@ def gemini_configurations() -> list[tuple[str, str, str]]:
     ]
 
 
+def deepseek_configurations() -> list[tuple[str, str, str]]:
+    """Return the DeepSeek slot when `API/deepseek.md` (or the env var) has a key."""
+    key = os.getenv("MRA_DEEPSEEK_KEY", "").strip() or _api_key_from_file("deepseek.md")
+    if not key:
+        return []
+    return [(DEEPSEEK_ACCOUNT, key, DEEPSEEK_MODEL)]
+
+
+def provider_configurations() -> list[tuple[str, str, str]]:
+    """All provider slots in default (automatic) order."""
+    return [*gemini_configurations(), *deepseek_configurations()]
+
+
+def _deepseek_generate(
+    api_key: str,
+    model: str,
+    system_instruction: str,
+    context: dict[str, Any],
+    response_model: type[Any],
+    timeout_seconds: float,
+) -> str:
+    """Call DeepSeek's OpenAI-compatible chat API and return the JSON text.
+
+    Every provider must return the same JSON. DeepSeek supports json_object
+    mode but not Gemini's response_schema object, so the schema is passed as
+    text inside the system instruction and the reply is parsed by the caller.
+    """
+    import httpx
+
+    schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    system_instruction
+                    + "\n\n【出力形式】次のJSONスキーマに従い、JSONオブジェクトだけを返してください。"
+                    + schema
+                ),
+            },
+            {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+        ],
+        "temperature": 0.8,
+        "response_format": {"type": "json_object"},
+        "stream": False,
+    }
+    url = (
+        os.getenv("DEEPSEEK_API_URL", DEEPSEEK_DEFAULT_API_URL).strip()
+        or DEEPSEEK_DEFAULT_API_URL
+    )
+    try:
+        response = httpx.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=max(1.0, timeout_seconds),
+        )
+    except httpx.TimeoutException as exc:
+        # クライアント側のタイムアウトは従来どおり再試行しない。
+        raise TimeoutError("DeepSeek request timed out") from exc
+    if response.status_code >= 400:
+        # 429/5xx は呼び出し側が次の設定へフォールバックする。
+        raise ProviderHTTPError(response.status_code, f"DeepSeek HTTP {response.status_code}")
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise ValueError("DeepSeekの応答形式が不正です") from exc
+    text = str(content or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[A-Za-z]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+def prioritize_gemini_configurations(
+    configurations: list[tuple[str, str, str]],
+    api_alias: str = "",
+    model: str = "",
+) -> list[tuple[str, str, str]]:
+    """Try the user's chosen API/model first, keeping the rest as fallbacks.
+
+    The choice is a preference rather than a lock: when the chosen slot is rate
+    limited or the provider is transiently unavailable (503), generation still
+    falls back to the remaining accounts/models.
+    """
+    alias = str(api_alias or "").strip()
+    preferred_model = str(model or "").strip()
+    if not alias and not preferred_model:
+        return list(configurations)
+
+    def rank(item: tuple[str, str, str]) -> int:
+        account, _key, item_model = item
+        account_match = not alias or account == alias
+        model_match = not preferred_model or item_model == preferred_model
+        if account_match and model_match:
+            return 0
+        if model_match:
+            return 1
+        if account_match:
+            return 2
+        return 3
+
+    # A stable sort keeps the configured priority order within each rank.
+    return sorted(configurations, key=rank)
+
+
 def _is_rate_limit_error(exc: Exception) -> bool:
     """Recognize quota/rate-limit failures without treating other errors as limits."""
     status_code = getattr(exc, "status_code", None)
@@ -6174,6 +6613,73 @@ def _is_rate_limit_error(exc: Exception) -> bool:
         return True
     error_text = f"{type(exc).__name__} {exc}".lower()
     return "429" in error_text or "resource_exhausted" in error_text
+
+
+def _is_transient_provider_error(exc: Exception) -> bool:
+    """Recognize a transient Gemini-side failure worth trying another slot.
+
+    A 503 (UNAVAILABLE) or any other 5xx means the request never reached a
+    usable capacity slot, so trying the next API/model is useful instead of
+    failing the whole generation. Client-side timeouts/connection errors stay
+    non-retried by design, and auth/permission/not-found errors must keep
+    failing fast.
+    """
+    if type(exc).__name__ in {"ServerError", "InternalServerError", "ServiceUnavailableError"}:
+        return True
+    for attr in ("code", "status_code"):
+        value = getattr(exc, attr, None)
+        if isinstance(value, int) and 500 <= value <= 599:
+            return True
+    return False
+
+
+def collect_rejected_candidate_references(
+    pool: dict[str, dict[str, Any]],
+    filtered_result: dict,
+) -> None:
+    """Accumulate candidates that failed safety checks for optional UI reference.
+
+    ``filter_safe_candidates`` keeps rejections internal. The user asked to see
+    which candidates were dropped, so callers keep them in a deduplicated pool
+    (keyed by normalized text) and expose them separately from the counted,
+    safety-checked candidates. Showing them never changes how many safe
+    candidates are returned or how they are counted.
+    """
+    for item in filtered_result.get("candidate_rejections", []) or []:
+        text = (item.get("full_text") or item.get("text") or "").strip()
+        key = re.sub(r"\s+", "", text)
+        if not key or key in pool:
+            continue
+        pool[key] = {
+            "label": item.get("label", ""),
+            "text": text,
+            "reasons": [str(reason) for reason in item.get("reasons", []) or []],
+        }
+
+
+def rejected_candidate_references(
+    pool: dict[str, dict[str, Any]],
+    shown_texts: "list[str] | tuple[str, ...]" = (),
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the rejected candidates that are not already shown as safe ones."""
+    shown = {re.sub(r"\s+", "", text) for text in shown_texts if text}
+    return [item for key, item in pool.items() if key not in shown][:limit]
+
+
+def attach_rejected_candidate_references(
+    payload: dict,
+    pool: dict[str, dict[str, Any]],
+    limit: int = 5,
+) -> dict:
+    """Attach the not-shown rejected candidates to a candidate response payload."""
+    shown = [
+        candidate.get("text", "")
+        for candidate in [payload.get("recommended"), *(payload.get("alternatives") or [])]
+        if isinstance(candidate, dict)
+    ]
+    payload["rejected_candidates"] = rejected_candidate_references(pool, shown, limit)
+    return payload
 
 
 @app.get("/api/profile")
@@ -6229,6 +6735,167 @@ def add_confirmed_facts(data: ConfirmedFactsInput):
     )
     saved = persist_confirmed_facts(records)
     return {"ok": True, "saved": saved}
+
+
+PROFILE_LEARN_SYSTEM_INSTRUCTION = (
+    "あなたは本人のプロフィール更新係です。"
+    "入力の free_text は、本人が生成画面の「追加の自由記述」に書いた文章です。"
+    "そこから本人に関する事実だけを抽出し、JSONで返してください。\n"
+    "・事実の例: 年齢、居住地、仕事や学校、趣味、性格、話し方の希望、目標、その他の自己情報\n"
+    "・指示や希望（例: 質問しないで、短めに、映画の話にしたい、敬語で）は事実ではないので無視する\n"
+    "・書かれていない項目は空文字にし、hobbies は空配列にする。推測や補完はしない\n"
+    "・既存プロフィールと食い違う記述は、新しい free_text の内容を優先する\n"
+    "・事実が1つも含まれない場合は has_facts=false にする\n"
+    "・値は日本語のまま、短く整える"
+)
+
+
+def _extract_profile_facts(
+    free_text: str,
+    profile: dict[str, Any],
+    api_alias: str = "",
+    model: str = "",
+) -> LearnedProfileFacts:
+    """Extract profile facts from the free-text field via the configured provider."""
+    from google import genai
+    from google.genai import types
+
+    configurations = prioritize_gemini_configurations(
+        provider_configurations(), api_alias, model
+    )
+    if not configurations:
+        raise RuntimeError("利用できるAPI設定がありません")
+    context = {
+        "existing_profile": profile,
+        "free_text": free_text,
+    }
+    last_error: Exception | None = None
+    for account, key, model_name in configurations[:4]:
+        try:
+            _reserve_provider_usage(account, model_name)
+            _wait_for_provider_interval(account, model_name)
+            if account == DEEPSEEK_ACCOUNT:
+                response_text = _deepseek_generate(
+                    key,
+                    model_name,
+                    PROFILE_LEARN_SYSTEM_INSTRUCTION,
+                    context,
+                    LearnedProfileFacts,
+                    20.0,
+                )
+            else:
+                client = genai.Client(
+                    api_key=key,
+                    http_options=types.HttpOptions(
+                        timeout=20_000,
+                        retry_options=types.HttpRetryOptions(attempts=1),
+                    ),
+                )
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=json.dumps(context, ensure_ascii=False),
+                    config=types.GenerateContentConfig(
+                        system_instruction=PROFILE_LEARN_SYSTEM_INSTRUCTION,
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                        response_schema=LearnedProfileFacts,
+                    ),
+                )
+                response_text = response.text
+            if not response_text:
+                raise ValueError("プロフィール抽出の応答が空です")
+            return LearnedProfileFacts.model_validate_json(response_text)
+        except Exception as exc:  # 失敗したら次のAPI設定を試す
+            last_error = exc
+            continue
+    raise last_error or RuntimeError("プロフィール抽出に失敗しました")
+
+
+def merge_learned_profile_facts(
+    profile: dict[str, Any], learned: LearnedProfileFacts
+) -> dict[str, Any]:
+    """Merge extracted facts into the stored profile, preferring the new text."""
+    merged = dict(profile)
+    for key in ("name", "age", "area", "job", "personality", "style", "goal"):
+        value = str(getattr(learned, key, "") or "").strip()
+        if value:
+            merged[key] = value
+    if learned.hobbies:
+        existing = merged.get("hobbies")
+        items = (
+            [str(item) for item in existing]
+            if isinstance(existing, (list, tuple))
+            else ([str(existing)] if existing else [])
+        )
+        for item in learned.hobbies:
+            item = str(item).strip()
+            if item and item not in items:
+                items.append(item)
+        if items:
+            merged["hobbies"] = items
+    memo = learned.memo.strip()
+    if memo:
+        previous = str(merged.get("memo") or "").strip()
+        if memo not in previous:
+            merged["memo"] = f"{previous}\n{memo}".strip()
+    return merged
+
+
+def _learned_facts_present(learned: LearnedProfileFacts) -> bool:
+    return learned.has_facts or any([
+        learned.name.strip(),
+        learned.age.strip(),
+        learned.area.strip(),
+        learned.job.strip(),
+        learned.hobbies,
+        learned.personality.strip(),
+        learned.style.strip(),
+        learned.goal.strip(),
+        learned.memo.strip(),
+    ])
+
+
+@app.post("/api/profile/learn")
+def learn_profile(data: ProfileLearnInput):
+    """Add facts written in the free-text field to the profile.
+
+    The user asked to stop rejecting candidates and instead correct facts through
+    the free-text field, so this endpoint turns that text into profile facts.
+    Failure is non-fatal: generation continues with the existing profile.
+    """
+    free_text = data.text.strip()
+    if not free_text:
+        return {"ok": True, "learned": False}
+    with database() as db:
+        row = db.execute("SELECT content FROM profile WHERE id=1").fetchone()
+        raw = row["content"] if row else ""
+    try:
+        profile = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        profile = {"legacy_text": raw}
+    if not isinstance(profile, dict):
+        profile = {"legacy_value": profile}
+    try:
+        learned = _extract_profile_facts(
+            free_text, profile, data.api_alias, data.model
+        )
+    except Exception:
+        logger.warning("プロフィール事実の抽出に失敗しました", exc_info=True)
+        return {"ok": True, "learned": False}
+    if not _learned_facts_present(learned):
+        return {"ok": True, "learned": False}
+    merged = merge_learned_profile_facts(profile, learned)
+    with database() as db:
+        db.execute(
+            "UPDATE profile SET content=? WHERE id=1",
+            (json.dumps(merged, ensure_ascii=False),),
+        )
+    return {
+        "ok": True,
+        "learned": True,
+        "profile": merged,
+        "learned_facts": learned.model_dump(),
+    }
 
 
 @app.get("/api/matches")
@@ -7193,6 +7860,48 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
     return list(dict.fromkeys(repeated))
 
 
+# メッセージ付きいいね（like）の1行目「〇〇さん、初めまして」に限り、読点「、」を
+# 例外的に許可する（モード固有プロンプト prompts/like.txt のテンプレート）。
+# それ以外の位置の句読点は従来どおり禁止する。
+_LIKE_GREETING_LINE_PATTERN = re.compile(r"^[^、。！？!?\n]{1,20}さん、(?:初めまして|はじめまして)[!！]?$")
+
+
+def _like_greeting_comma_exception(text: str, context: dict | None) -> bool:
+    """likeモードの1行目「〇〇さん、初めまして」の読点だけを例外的に許す。
+
+    2行目以降に読点や句点が残る候補、およびlike以外のモードの候補は例外と
+    みなさない。
+    """
+    if (context or {}).get("mode") != "like":
+        return False
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    if not lines or not _LIKE_GREETING_LINE_PATTERN.match(lines[0]):
+        return False
+    rest = "\n".join(lines[1:])
+    return "、" not in rest and "。" not in rest
+
+
+# likeモードの1行目で読点が抜けた「〇〇さん初めまして」も、テンプレートの
+# 「〇〇さん、初めまして」へ機械的に揃える（意味は変えず読点だけ補う）。
+_LIKE_GREETING_WITHOUT_COMMA_PATTERN = re.compile(
+    r"^([^\s、。！？!?\n]{1,20}さん)(初めまして|はじめまして)([!！]?)$"
+)
+
+
+def _ensure_like_greeting_comma(text: str, context: dict | None) -> str:
+    """likeモードの1行目に読点を補い、3行テンプレートの形へ揃える。"""
+    if (context or {}).get("mode") != "like":
+        return text
+    lines = text.splitlines()
+    if not lines:
+        return text
+    match = _LIKE_GREETING_WITHOUT_COMMA_PATTERN.match(lines[0].strip())
+    if not match:
+        return text
+    lines[0] = f"{match.group(1)}、{match.group(2)}{match.group(3)}"
+    return "\n".join(lines)
+
+
 def check_suggestions(
     value: Suggestions | SuggestionsV2,
     count: int,
@@ -7201,7 +7910,11 @@ def check_suggestions(
     enforce_similarity: bool = True,
 ) -> dict:
     candidates = [value.recommended, *value.alternatives]
-    if any("、" in candidate.text or "。" in candidate.text for candidate in candidates):
+    if any(
+        ("、" in candidate.text or "。" in candidate.text)
+        and not _like_greeting_comma_exception(candidate.text, context)
+        for candidate in candidates
+    ):
         raise CandidatePunctuationError("候補本文に使用禁止の句読点が含まれています")
     if any(candidate_has_placeholder(candidate.text) for candidate in candidates):
         raise CandidatePlaceholderError("候補本文に未完成の名前またはテンプレート表現があります")
@@ -8006,6 +8719,15 @@ def _is_unanswered_sensitive_question(text: str) -> bool:
     return bool(re.search(r"^(?:そちら|そっち|あなた|君|きみ)[^?？\n]{0,14}(?:どっち|どちら|どれ)", text))
 
 
+def _fold_first_person_for_comparison(value: str) -> str:
+    """照合用に一人称（僕/私/わたし/俺）を同一視する。
+
+    候補側の一人称は「僕」に固定されるため、確認回答が「私」で書かれていると
+    文字列照合が必ず失敗する。意味に影響しない一人称の違いは吸収する。
+    """
+    return re.sub(r"僕|わたし|私|俺", "\x01", value)
+
+
 def _answers_verified_single_partner_question(candidate: Candidate, context: dict) -> bool:
     """Check that a verified direct question is not silently evaded.
 
@@ -8462,10 +9184,12 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             normalized_answer = re.sub(r"[\s、。！!？?]", "", answer_text)
             if not normalized_answer:
                 continue
+            # 2026-10-24: 一人称の違い（回答「私も」×候補「僕も」）は同一視する。
+            folded_answer = _fold_first_person_for_comparison(normalized_answer)
             # A confirmed answer that holds two sentences is relayed as two
             # lines, so each of those sentences is accepted as the answer.
             answer_sentences = [
-                normalized_part
+                _fold_first_person_for_comparison(normalized_part)
                 for normalized_part in (
                     re.sub(r"[\s、。！!？?]", "", part)
                     for part in re.split(r"[。．.!！?？]+|\n+", answer_text)
@@ -8486,14 +9210,17 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             # location, habits, or past experiences. A small set of clearly
             # partner-directed follow-up questions remains usable; uncertain
             # clauses fail closed and the caller reports candidate shortages.
-            normalized_answer_clause = re.sub(
+            normalized_answer_clause = _fold_first_person_for_comparison(re.sub(
                 r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_answer
-            )
+            ))
             line_segments = re.split(r"(?<=[!?！？])|\n+", candidate.text)
             segments: list[str] = []
             for line_part in (part.strip() for part in line_segments if part.strip()):
                 normalized_line_part = re.sub(r"[\s、。！!？?]", "", line_part)
-                if normalized_line_part == normalized_answer or normalized_line_part in answer_sentences:
+                if (
+                    _fold_first_person_for_comparison(normalized_line_part) == folded_answer
+                    or _fold_first_person_for_comparison(normalized_line_part) in answer_sentences
+                ):
                     segments.append(line_part)
                 else:
                     segments.extend(
@@ -8506,7 +9233,10 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
             for segment in (part.strip() for part in segments if part.strip()):
                 normalized_segment = re.sub(r"[\s、。！!？?]", "", segment)
                 if binary_scope and binary_polarity:
-                    if normalized_segment == normalized_answer or normalized_segment in answer_sentences:
+                    if (
+                        _fold_first_person_for_comparison(normalized_segment) == folded_answer
+                        or _fold_first_person_for_comparison(normalized_segment) in answer_sentences
+                    ):
                         answer_seen = True
                         continue
                     segment_polarity = _binary_answer_polarity(segment)
@@ -8535,12 +9265,14 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
                 # contradictions such as "とは言えません" and arbitrary
                 # claims appended to the confirmed answer.
                 answer_clause = re.sub(r"^(?:はい|うん|そうですね)?(?:私は|自分は|僕は|俺は)?", "", normalized_segment)
+                folded_segment = _fold_first_person_for_comparison(normalized_segment)
+                folded_answer_clause = _fold_first_person_for_comparison(answer_clause)
                 if (
-                    normalized_segment == normalized_answer
-                    or normalized_segment in answer_sentences
-                    or answer_clause == normalized_answer
-                    or answer_clause in answer_sentences
-                    or (normalized_answer_clause and answer_clause == normalized_answer_clause)
+                    folded_segment == folded_answer
+                    or folded_segment in answer_sentences
+                    or folded_answer_clause == folded_answer
+                    or folded_answer_clause in answer_sentences
+                    or (normalized_answer_clause and folded_answer_clause == normalized_answer_clause)
                     or _is_confirmed_cooking_skill_paraphrase(
                         answer_clause,
                         question=question,
@@ -9812,7 +10544,17 @@ def _demote_repetitive_self_candidates(
     """Move candidates that repeat the user's own recent lines to the back."""
     if len(candidates) < 2:
         return candidates, ""
-    repeated = [candidate for candidate in candidates if _recent_self_repetition_reasons(candidate.text, context)]
+    # 2026-10-23: 「直前の相手の話題と離れている」は繰り返しではなく話題の新鮮さの
+    # 指標。確認済み回答のリレーまで後ろへ回ってしまうため、demote 判定から除外する。
+    repeated = []
+    for candidate in candidates:
+        reasons = [
+            reason
+            for reason in _recent_self_repetition_reasons(candidate.text, context)
+            if reason != "直前の相手の話題と離れている"
+        ]
+        if reasons:
+            repeated.append(candidate)
     if not repeated or len(repeated) == len(candidates):
         return candidates, ""
     fresh = [candidate for candidate in candidates if candidate not in repeated]
@@ -10586,7 +11328,7 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     reasons.extend(_partner_premise_conflict_reasons(text, context))
     if partner_requests_contact_stop(context):
         reasons.append("相手がやり取りを終えたい意向")
-    if "、" in text or "。" in text:
+    if ("、" in text or "。" in text) and not _like_greeting_comma_exception(text, context):
         reasons.append("禁止句読点")
     if candidate_has_placeholder(text):
         reasons.append("未完成プレースホルダー")
@@ -10623,14 +11365,8 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T498: 相手が日時を未確定と言った直後に時刻を催促する質問は落とす。
     if _partner_schedule_unsetted(context) and re.search(r"何時|いつになった|いつごろ", text):
         reasons.append("未確定と言われた後の時刻の質問")
-    # T498: 相手が挙げた固有名詞（アーティスト等）を、根拠なく「僕も聴く／好き」と
-    # 言う候補は落とす（共感は「気になります」程度に）。
-    for proper_noun in re.findall(r"[ァ-ヶー]{3,}", text):
-        if proper_noun not in _trusted_fact_text(context):
-            after = text[text.index(proper_noun) + len(proper_noun):][:10]
-            if re.match(r"(?:さん)?(?:の曲|を聴く|も聴く|も好き|も観る|もよく)", after):
-                reasons.append("未確認の本人事実")
-                break
+    # T498 の「相手が挙げた固有名詞に根拠なく乗る」候補も、確認済み情報と
+    # 矛盾しない限りは通す（本人が誤った候補を採用しなければよいため）。
     # T498: 相手が直前に答えた内容（好み・頻度の宣言）を聞き返す候補は落とす。
     if _repeats_partner_fresh_statement(text, context):
         reasons.append("相手が直前に答えた内容を聞き返す")
@@ -10644,26 +11380,15 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手の返信量に対して長すぎる候補")
     if repeated_partner_question_topics([candidate], context):
         reasons.append("相手の既知情報を再質問")
-    # T485: 本人が確認した回答をそのまま伝える候補は、回答中の語が別トピックの
-    # 断定パターンへ部分一致しても（例「カレーパンが好きです」→カレー好み）、
-    # 未確認の本人事実として落とさない。
+    # 2026-10-23: 本人の事実確認は行わない。候補の誤りは本人が自由記述で訂正し、
+    # その内容をプロフィールへ取り込む方針のため、ここでは棄却しない。
     verified_answer_relay = _candidate_is_verified_answer_relay(text, context)
-    if not verified_answer_relay and unsupported_personal_claim_topics([candidate], context):
-        reasons.append("未確認の本人事実")
-    answered_partner_question = _answers_verified_partner_question(candidate, context) or verified_answer_relay
-    # T488: 誘いへの承諾（「ぜひ行きましょう」）は、回答が未確認でも誘いへの返事として成立する。
-    if (
-        not answered_partner_question
-        and partner_latest_message_has_invitation(context)
-        and re.search(r"ぜひ|行きましょう|行きたい|ご一緒|楽しみ|うれしい|嬉しい|いいですね|いいね", text)
-    ):
-        answered_partner_question = True
     # T499: 本人から遠い地域（例：本人は北海道、相手は大阪）への誘いを承諾する候補は
     # 落として本人確認へ回す。
     if _candidate_accepts_far_invitation(text, context) and not verified_answer_relay:
         reasons.append("遠方の誘いへの承諾")
-    if not answered_partner_question:
-        reasons.append("相手からの直接質問に未回答")
+    # 2026-10-23: 「相手からの直接質問に未回答」による棄却は廃止。
+    # 事実確認をしない方針のため、未確認の内容で答える候補も表示する。
     if _has_condescending_offer(text):
         reasons.append("上から目線の表現")
     # T486: 相手が以前に示した日時と違う日時を述べたとき、そのまま受け入れる候補は
@@ -10976,7 +11701,10 @@ def _memo_answer_reflected_in_candidate(question: str, candidate, context: dict)
 
 def _confirmed_answer_reflected_in_candidate(question: str, candidate, context: dict) -> bool:
     """Check that a candidate relays the answer held for this exact question."""
-    normalize = lambda value: re.sub(r"[\s　、。，．！!？?]", "", str(value))
+    # 一人称は候補側で「僕」に固定されるため、回答の「私/わたし」との差は吸収する。
+    normalize = lambda value: re.sub(
+        r"僕|わたし|私", "\x01", re.sub(r"[\s　、。，．！!？?]", "", str(value))
+    )
     prefix = re.split(r"[?？]", getattr(candidate, "text", "") or "", maxsplit=1)[0]
     normalized_prefix = normalize(prefix)
     answer = _unclassified_personal_question_user_answer(context, question)
@@ -11279,7 +12007,10 @@ def _compose_answer_relay_candidate(
     must still pass every candidate check except the length ceiling, which the
     user's own answer must not be shortened to satisfy.
     """
-    clean_answer = "\n".join(_answer_lines_for_candidate(raw_answer))
+    # 2026-10-23（ユーザー指定）: 回答のリレー本文も一人称は「僕」に固定する。
+    clean_answer = _normalize_first_person_to_boku(
+        "\n".join(_answer_lines_for_candidate(raw_answer))
+    )
     if not clean_answer:
         return None
     # T496: 「どんな」「何」「どちら」の質問に「はい好きです」のような極性や
@@ -12003,8 +12734,29 @@ _STIFF_KEIGO_REWRITES = (
     ("していただける", "してもらえる"),
     # T480: 相手を立てる尊敬語・謙譲語を普通の動詞へ戻す（です・ますは保つ）。
     # 安全な語だけを対象にし、意味が変わる広い置換（〜される→〜する 等）は入れない。
+    # 一部の動詞は「〜させていただきます」→「〜します」では不自然になるため先に個別に戻す。
+    ("見させていただきました", "見ました"),
+    ("見させていただきます", "見ます"),
+    ("見せていただきました", "見てもらいました"),
+    ("食べさせていただきました", "食べました"),
+    ("食べさせていただきます", "食べます"),
     ("させていただきます", "します"),
+    ("させていただきました", "しました"),
     ("させていただく", "する"),
+    # 五段動詞の謙譲表現（「送らせていただきました」には「させて」が含まれず、
+    # 上の汎用ルールで置換できないため、未然形ごとに対応する）。
+    ("らせていただきました", "りました"),
+    ("かせていただきました", "きました"),
+    ("わせていただきました", "いました"),
+    ("ませていただきました", "みました"),
+    ("がせていただきました", "ぎました"),
+    ("らせていただきます", "ります"),
+    ("かせていただきます", "きます"),
+    ("わせていただきます", "います"),
+    ("ませていただきます", "みます"),
+    ("がせていただきます", "ぎます"),
+    ("拝見しました", "見ました"),
+    ("拝見して", "見て"),
     ("いたします", "します"),
     # T500: 過去の尊敬「〜されていた」を普通の形へ戻す。
     ("されていたんですね", "してたんですね"),
@@ -12029,6 +12781,8 @@ _STIFF_KEIGO_REWRITES = (
     ("いらっしゃるんですね", "いるんですね"),
     ("いらっしゃるんですか", "いるんですか"),
     ("いらっしゃいますか", "いますか"),
+    # 残る尊敬語の「いらっしゃる」は普通の「いる」へ（「〜していらっしゃるところ」等）。
+    ("いらっしゃる", "いる"),
     ("されてるんですね", "なんですね"),
     ("されているんですね", "なんですね"),
     ("されるんですね", "なんですね"),
@@ -12038,12 +12792,21 @@ _STIFF_KEIGO_REWRITES = (
     ("されてる", "してる"),
     ("されている", "してる"),
     ("行かれる", "行く"),
+    # 「シネコンによく行かれている」のような尊敬語の進行形も普通の形へ。
+    ("行かれて", "行って"),
     ("使われている", "使ってる"),
     ("使われてる", "使ってる"),
+    ("楽しまれている", "楽しんでる"),
+    ("楽しまれて", "楽しんで"),
+    ("飼われている", "飼ってる"),
+    ("飼われていて", "飼っていて"),
+    ("通われて", "通って"),
     # T489: 尊敬の「〜られる」＋「んですか」を普通の形へ戻す。受け身と区別できる
     # よう、対象の動詞を限定し、報告のあった「んですか」形だけを置換する。
     ("撮られるんですか", "撮るんですか"),
     ("読まれるんですか", "読むんですか"),
+    # 「最近小説をよく読まれるんですね！」のような語尾も同じく普通の形へ。
+    ("読まれるんです", "読むんです"),
     ("食べられるんですか", "食べるんですか"),
     ("飲まれるんですか", "飲むんですか"),
     ("書かれるんですか", "書くんですか"),
@@ -12117,6 +12880,28 @@ def _soften_stiff_keigo(text: str) -> str:
     return softened
 
 
+# 2026-10-23（ユーザー指定）: 一人称は「僕」に固定する。助詞との連続だけを対象に
+# するため、私物・私立・私たち・自分自身のような語は書き換えない。
+_FIRST_PERSON_REWRITES = (
+    (re.compile(r"私(?!たち)(?=[はもがとでのにへをからより])"), "僕"),
+    (re.compile(r"わたし(?=[はもがとでのにへをからより])"), "僕"),
+    (re.compile(r"俺(?=[はもがとでのにへをからより])"), "僕"),
+    (re.compile(r"自分(?=[はもが])"), "僕"),
+)
+
+
+def _normalize_first_person_to_boku(text: str) -> str:
+    """Replace other first-person pronouns with 「僕」 in candidate bodies.
+
+    The rewritten text is only kept when it passes the same candidate checks as
+    the model output, so a mechanical replacement never bypasses the safety gate.
+    """
+    normalized = text
+    for pattern, replacement in _FIRST_PERSON_REWRITES:
+        normalized = pattern.sub(replacement, normalized)
+    return normalized
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -12140,7 +12925,10 @@ def filter_safe_candidates(
         split_text = split_pivot_run_on_line(candidate.text).rstrip("\n")
         if split_text != candidate.text:
             candidate = candidate.model_copy(update={"text": split_text})
-        softened_text = _soften_stiff_keigo(candidate.text)
+        softened_text = _ensure_like_greeting_comma(
+            _normalize_first_person_to_boku(_soften_stiff_keigo(candidate.text)),
+            candidate_context,
+        )
         if softened_text != candidate.text:
             softened_candidate = candidate.model_copy(update={"text": softened_text})
             if not _candidate_rejection_reasons(softened_candidate, candidate_context):
@@ -12155,6 +12943,7 @@ def filter_safe_candidates(
                 "label": candidate.label,
                 "reasons": reasons,
                 "text": candidate.text[:120],
+                "full_text": candidate.text,
             })
             continue
         seen.add(normalized)
@@ -12203,7 +12992,7 @@ def filter_safe_candidates(
             fallback_candidate = _build_first_message_fallback_candidate(candidate_context)
         if fallback_candidate is not None:
             # T497: 決定的フォールバックにも尊敬語の言い換え（お好き→好き 等）を適用する。
-            softened_fallback = _soften_stiff_keigo(fallback_candidate.text)
+            softened_fallback = _normalize_first_person_to_boku(_soften_stiff_keigo(fallback_candidate.text))
             if softened_fallback != fallback_candidate.text:
                 softened = fallback_candidate.model_copy(update={"text": softened_fallback})
                 if not _candidate_rejection_reasons(softened, candidate_context):
@@ -12320,14 +13109,14 @@ def demo_suggestions(mode: str, count: int) -> dict:
             ("カジュアル", "はじめまして！\nプロフィールを見てタイプだなと思っていたのでマッチできてうれしいです！\nカフェ好きなんですね😊\nどんなお店によく行きますか？"),
         ]
     elif mode == "like":
-        # T515: デモ例文も prompts/like.txt と同じ3要素（挨拶／プロフィールに触れる／
+        # T515: デモ例文も prompts/like.txt と同じ3行の型（挨拶／プロフィールに触れる／
         # お話ししたい気持ち）を満たす。名前は固定例文では分からないため省く。
         texts = [
-            ("自然体", "はじめまして！\nプロフィールを読んで気になりました\nよかったらお話ししてみたいです！"),
-            ("親しみやすく", "はじめまして！\n紹介文が気になっていいねしました\nよかったらゆっくりお話ししてみたいです！"),
-            ("短め", "はじめまして！\nプロフィールが気になっていいねしました\nよければ少しお話しできたらうれしいです"),
-            ("丁寧", "はじめまして！\nプロフィールを拝見してお話ししてみたいと思いました\nよろしくお願いします！"),
-            ("カジュアル", "はじめまして！\nプロフィールを見て気になっていいねしました\nお話できたらうれしいです！"),
+            ("自然体", "初めまして！\nプロフィールの雰囲気がいいなと思いました\nお話しできたらうれしいです！"),
+            ("親しみやすく", "初めまして！\n紹介文が気になっていいねしました\nよかったらゆっくりお話ししたいです😊"),
+            ("短め", "初めまして！\nプロフィールが気になっていいねしました\nお話しできたらうれしいです！"),
+            ("丁寧", "初めまして！\nプロフィールの趣味が素敵だなと思いました\nお話しできるのが楽しみです！"),
+            ("カジュアル", "初めまして！\nプロフィールを見ていいねしました\nいろんなお話がしてみたいです😊"),
         ]
     elif mode == "followup":
         texts = [
@@ -12529,7 +13318,38 @@ def _apply_conversation_state_floor(result, data: GenerateInput):
 def generate(data: GenerateInput):
     result = _generate_impl(data)
     result = _apply_conversation_state_floor(result, data)
-    return _apply_acknowledgment_supplement_to_result(result, data)
+    result = _apply_acknowledgment_supplement_to_result(result, data)
+    return _drop_user_info_confirmation(result)
+
+
+def _drop_user_info_confirmation(result):
+    """2026-10-23: 本人への確認質問（needs_user_info）を廃止する。
+
+    ユーザーの指示により、本人の事実確認は行わず、確認質問で候補を止めない。
+    候補が返っていればそれをそのまま使い、候補が無い場合だけブロック表示に
+    切り替えて再生成を促す（質問は一切返さない）。
+    """
+    if not isinstance(result, dict) or not result.get("needs_user_info"):
+        return result
+    if result.get("recommended"):
+        return {
+            **result,
+            "needs_user_info": False,
+            "skipped_user_info": False,
+            "generation_blocked": False,
+            "user_questions": [],
+            "user_info_reason": "",
+        }
+    return blocked_user_info_response(
+        "本人への確認質問は行わない設定です。候補を作れる情報が足りないため、"
+        "生成画面の「追加の自由記述」に情報を足すか、もう一度生成してください。",
+        skipped=bool(result.get("skipped_user_info")),
+        demo=bool(result.get("demo")),
+        attempted_models=result.get("attempted_models") or [],
+        api_attempt_count=int(result.get("api_attempt_count") or 0),
+        api_alias=result.get("api_alias"),
+        model=result.get("model"),
+    )
 
 
 def _tidy_candidate_text(text: str) -> str:
@@ -12598,34 +13418,17 @@ def _generate_impl(data: GenerateInput):
         )
     if empty_first_profile and not supplied_profile_answer:
         if data.response_version == 2:
-            return {
-                **user_info_question_response(
-                    "相手のプロフィールに書かれている内容はありますか？",
-                    "プロフィールにない趣味を作らず初回メッセージを作るため",
-                    "相手プロフィールに触れられる情報がありません。",
-                ),
-                "demo": not bool(gemini_configurations()),
-            }
-        raise HTTPException(400, "初回メッセージを作るため相手のプロフィール情報を追加してください")
-    missing_fact = missing_personal_fact_question(context)
-    if missing_fact:
-        if data.response_version != 2:
-            raise HTTPException(409, "本人の好みや経験について確認できる情報がありません。プロフィールを補足するか、確認機能に対応した画面から再生成してください。")
-        if data.skipped_user_info:
-            return blocked_user_info_response(
-                "本人情報の確認がスキップされたため、未確認の事実を含む返信は作成しませんでした。",
-                skipped=True,
-                demo=not bool(gemini_configurations()),
-            )
-        return {
-            **user_info_question_response(
-                missing_fact.question,
-                missing_fact.purpose,
-                "相手から本人の好みや経験について直接質問されており、プロフィールに確認できる情報がありません。",
-            ),
-            "demo": not bool(gemini_configurations()),
-        }
-    configurations = gemini_configurations()
+            # 2026-10-23: 確認質問は廃止。相手プロフィールが空でも候補を作る
+            #（プロフィールにない内容は作らないようプロンプトで指示済み）。
+            pass
+        else:
+            raise HTTPException(400, "初回メッセージを作るため相手のプロフィール情報を追加してください")
+    # 2026-10-23: 本人への確認質問（プレフライト）は廃止。
+    # 足りない情報は生成画面の自由記述で補足してもらう方針のため、
+    # ここで質問を返して候補を止めることはしない。
+    configurations = prioritize_gemini_configurations(
+        provider_configurations(), data.api_alias, data.model
+    )
     if not configurations:
         result = demo_suggestions(data.mode, data.count)
         if data.response_version == 2:
@@ -12646,7 +13449,7 @@ def _generate_impl(data: GenerateInput):
         f"recommendedが1案、alternativesが{data.count-1}案です。"
         "理由 reason は短く日本語で記述し、実際に候補本文へ入れた要素だけを書いてください。"
         "候補に質問を入れていないのに「答えやすい質問を添えて」と書く、誘いを入れていないのに「誘った」と書くなど、本文に無い要素を reason に書かないでください。"
-        + ("response_version=2では不足情報がある場合 needs_user_info=true と質問だけを返し、recommendedはnull、alternativesは空配列、optional_user_questionsは空配列にしてください。候補を返せるときは optional_user_questions を最大1件まで返せますが、これはreplyモードだけの任意の本人向け質問です。optional_user_questions があっても候補を必ず返し、needs_user_infoはfalseにしてください。回答はプロフィールに保存せず、今回の文脈だけで利用してください。skipped_user_info=trueなら同じ質問を繰り返さず、その情報なしでも安全な代替候補を作れる場合だけneeds_user_info=falseで候補を返してください。代替候補を安全に作れない場合はneeds_user_info=trueで返し、サーバーが質問を終了状態へ変換します。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
+        + ("response_version=2では、本人情報が足りなくても候補を止めず、必ずrecommendedとalternativesを返してください。needs_user_infoは常にfalse、user_questionsは空配列にします。確認質問だけを返して候補を止めることはしません。プロフィールにない情報は断定せず、確認済みの範囲や相手への感想・質問で自然に返してください。optional_user_questionsはreplyモードで最大1件まで返せます。回答はプロフィールに保存せず、今回の文脈だけで利用してください。一人称は「僕」に固定します（「私」「わたし」「俺」「自分」は自分の一人称として使わない）。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
            "stageはStage 1からStage 6、invite_decisionはdo_not_invite/continue_conversation/consider_invite/invite_gently/wait/respect_no/ask_user_info/do_not_repeat_invite/schedule_after_acceptance/continue_or_closeのいずれかです。"
            if data.response_version == 2 else "strategyは無理のない提案を1文で記述してください。")
     )
@@ -12696,12 +13499,16 @@ def _generate_impl(data: GenerateInput):
             + _CASUAL_KEIGO_GUIDANCE
         )
     system_instruction += (
-        "\n【呼称の厳守】一人称（私など）を使って話し、自分自身を名前や「〇〇さん」などの三人称で呼んではいけません。"
+        "\n【呼称の厳守】一人称は「僕」を使います（本人プロフィールで一人称を明示している場合はそれに従います）。「私」は使わず、自分自身を名前や「〇〇さん」などの三人称で呼んではいけません。"
     )
     attempted_models: list[dict[str, str]] = []
     fact_repair_used = False
     invite_repair_used = False
     candidate_repair_used = False
+    # 0案（全候補が棄却）になったときの専用の再生成枠。見た目だけの再生成
+    # （候補不足・類似）と同じフラグを共有していたため、そちらを先に使うと
+    # 致命的な0案で再生成できず即停止していた。0案は必ず1回作り直す。
+    blocked_repair_used = False
     partial_candidate_repair_pending = False
     safe_candidate_fallback: SuggestionsV2 | None = None
     safe_candidate_fallback_from_deterministic = False
@@ -12709,6 +13516,7 @@ def _generate_impl(data: GenerateInput):
     safe_candidate_fallback_provider: dict[str, str] | None = None
     safe_candidate_fallback_sources: dict[str, dict[str, str]] = {}
     result_candidate_sources: dict[str, dict[str, str]] = {}
+    rejected_candidate_pool: dict[str, dict[str, Any]] = {}
     eligible_candidate_responses = 0
     question_repair_used = False
     unnecessary_question_repair_used = False
@@ -12723,6 +13531,7 @@ def _generate_impl(data: GenerateInput):
         from google.genai import types
 
         last_rate_limit: Exception | None = None
+        last_transient_error: Exception | None = None
         for account, key, model in configurations:
             try:
                 initial_timeout_ms = 30_000
@@ -12730,13 +13539,15 @@ def _generate_impl(data: GenerateInput):
                     remaining_sec = request_deadline - time.monotonic()
                     if remaining_sec > 0:
                         initial_timeout_ms = max(1_000, min(30_000, int(remaining_sec * 1000)))
-                client = genai.Client(
-                    api_key=key,
-                    http_options=types.HttpOptions(
-                        timeout=initial_timeout_ms,
-                        retry_options=types.HttpRetryOptions(attempts=1),
-                    ),
-                )
+                is_deepseek = account == DEEPSEEK_ACCOUNT
+                if not is_deepseek:
+                    client = genai.Client(
+                        api_key=key,
+                        http_options=types.HttpOptions(
+                            timeout=initial_timeout_ms,
+                            retry_options=types.HttpRetryOptions(attempts=1),
+                        ),
+                    )
                 while True:
                     if len(attempted_models) >= provider_attempt_limit:
                         raise ProviderAttemptLimitError("Provider attempt safety cap reached")
@@ -12745,19 +13556,30 @@ def _generate_impl(data: GenerateInput):
                     _reserve_provider_usage(account, model)
                     _wait_for_provider_interval(account, model)
                     attempted_models.append({"api_alias": account, "model": model})
-                    response = client.models.generate_content(
-                        model=model,
-                        contents=json.dumps(prompt_context(context), ensure_ascii=False),
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            temperature=0.8,
-                            response_mime_type="application/json",
-                            response_schema=response_model,
-                        ),
-                    )
-                    if not response.text:
+                    if is_deepseek:
+                        response_text = _deepseek_generate(
+                            key,
+                            model,
+                            system_instruction,
+                            prompt_context(context),
+                            response_model,
+                            initial_timeout_ms / 1000,
+                        )
+                    else:
+                        response = client.models.generate_content(
+                            model=model,
+                            contents=json.dumps(prompt_context(context), ensure_ascii=False),
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                temperature=0.8,
+                                response_mime_type="application/json",
+                                response_schema=response_model,
+                            ),
+                        )
+                        response_text = response.text
+                    if not response_text:
                         raise ValueError("AIから応答がありません")
-                    parsed = response_model.model_validate_json(response.text)
+                    parsed = response_model.model_validate_json(response_text)
                     parsed_from_safe_fallback = False
                     candidate_notice = ""
                     if (
@@ -12869,6 +13691,7 @@ def _generate_impl(data: GenerateInput):
                             and not safe_candidate_fallback_from_deterministic
                         )
                         filtered_result = filter_safe_candidates(parsed, data.count, context)
+                        collect_rejected_candidate_references(rejected_candidate_pool, filtered_result)
                         if filtered_result.get("deterministic_fallback_used") and not candidate_repair_used:
                             candidate_repair_used = True
                             fallback_candidate = Candidate.model_validate(filtered_result["recommended"])
@@ -12898,6 +13721,7 @@ def _generate_impl(data: GenerateInput):
                         if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
                             parsed = safe_candidate_fallback.model_copy(deep=True)
                             filtered_result = filter_safe_candidates(parsed, data.count, context)
+                            collect_rejected_candidate_references(rejected_candidate_pool, filtered_result)
                             partial_candidate_repair_pending = False
                             current_candidate_source = safe_candidate_fallback_provider or current_candidate_source
                             current_candidate_sources = safe_candidate_fallback_sources or current_candidate_sources
@@ -12967,18 +13791,32 @@ def _generate_impl(data: GenerateInput):
                                     "api_attempt_count": len(attempted_models),
                                     "attempted_models": attempted_models,
                                 }
-                            if not candidate_repair_used:
-                                candidate_repair_used = True
+                            if not blocked_repair_used:
+                                blocked_repair_used = True
                                 reasons = sorted({
                                     reason
                                     for item in filtered_result.get("candidate_rejections", [])
                                     for reason in item.get("reasons", [])
                                 })
+                                # 理由だけでなく、棄却された実際の文も渡して
+                                # 「同じ文をもう一度出さない」方向に寄せる。
+                                rejected_examples = [
+                                    re.sub(r"\s+", " ", str(item.get("full_text") or item.get("text") or "")).strip()[:80]
+                                    for item in filtered_result.get("candidate_rejections", [])
+                                    if str(item.get("full_text") or item.get("text") or "").strip()
+                                ][:3]
                                 system_instruction += (
                                     "\n【候補ごとの安全・形式検査で不適切候補を検出】"
                                     + "、".join(reasons)
                                     + "。問題部分だけでなく全候補を見直し、未確認の本人・相手情報、句読点、既知情報の聞き直しを避けてください。"
                                     "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
+                                    + (
+                                        " 前回の候補（同じ文を再利用しない）: "
+                                        + " / ".join(rejected_examples)
+                                        + "。"
+                                        if rejected_examples
+                                        else ""
+                                    )
                                 )
                                 continue
                             blocked_reasons = sorted({
@@ -13093,10 +13931,18 @@ def _generate_impl(data: GenerateInput):
                                 api_alias=account,
                                 model=model,
                             )
+                            blocked_notice = filtered_result.get("candidate_notice", "")
+                            # 利用者が「何を直せばよいか」分かるように、棄却理由を
+                            # 画面の通知にも残す（JSONの candidate_rejection_summary と同内容）。
+                            if blocked_reasons:
+                                blocked_notice = " ".join(filter(None, [
+                                    blocked_notice,
+                                    "主な理由: " + "、".join(blocked_reasons[:5]) + "。",
+                                ]))
                             blocked_result.update({
                                 "requested_candidate_count": data.count,
                                 "available_candidate_count": 0,
-                                "candidate_notice": filtered_result.get("candidate_notice", ""),
+                                "candidate_notice": blocked_notice,
                                 "candidate_rejection_summary": sorted({
                                     reason
                                     for item in filtered_result.get("candidate_rejections", [])
@@ -13265,152 +14111,6 @@ def _generate_impl(data: GenerateInput):
                             continue
                     else:
                         safe_candidates = [parsed.recommended, *parsed.alternatives]
-                    unsupported_topics = unsupported_personal_claim_topics(
-                        [parsed.recommended, *parsed.alternatives], context
-                    )
-                    if unsupported_topics:
-                        partner_messages = [
-                            message["body"]
-                            for message in context.get("history", [])
-                            if message.get("role") == "them"
-                        ]
-                        direct_topic = (
-                            _topic_for_personal_question(partner_messages[-1])
-                            if partner_messages
-                            else None
-                        )
-                        if data.response_version == 2 and direct_topic in unsupported_topics:
-                            answered_topics = {
-                                topic
-                                for answer in data.user_answers
-                                if (topic := _question_topic(answer.get("question", ""))) is not None
-                            }
-                            if data.skipped_user_info:
-                                return blocked_user_info_response(
-                                    "確認がスキップされたため本人の未確認情報を含む候補を表示しませんでした。",
-                                    skipped=True,
-                                    attempted_models=attempted_models,
-                                    api_attempt_count=len(attempted_models),
-                                    api_alias=account,
-                                    model=model,
-                                )
-                            if direct_topic not in answered_topics:
-                                question = personal_fact_question(
-                                    direct_topic,
-                                    partner_messages[-1] if partner_messages else "",
-                                )
-                                return {
-                                    **user_info_question_response(
-                                        question.question,
-                                        question.purpose,
-                                        "相手から本人への直接質問がありましたが、候補に確認できない本人情報が含まれていました。候補を隠して回答を確認します。",
-                                    ),
-                                    "demo": False,
-                                    "api_alias": account,
-                                    "model": model,
-                                    "api_attempt_count": len(attempted_models),
-                                    "attempted_models": attempted_models,
-                                }
-                        if not fact_repair_used:
-                            fact_repair_used = True
-                            system_instruction += (
-                                "\n【未確認の本人事実による1回限りの修正】前回の候補に確認できない本人の趣味・経験・予定が含まれていました。"
-                                "本人のプロフィールfactsとuser_answersに明記された情報だけを一人称で述べてください。"
-                                "不明な詳細は無理に本人へ質問せず、自己開示を省いて相手の発言への感想や質問を作ってください。"
-                                "回答に必要な本人の直接質問があり、事前確認でも解決できない場合のみneeds_user_info=trueにしてください。"
-                            )
-                            continue
-                        if data.response_version == 2 and not data.skipped_user_info:
-                            if safe_candidate_fallback is not None:
-                                safe_fallback_result = filter_safe_candidates(
-                                    safe_candidate_fallback,
-                                    data.count,
-                                    context,
-                                )
-                                fallback_provider = safe_candidate_fallback_provider or {}
-                                final_candidates = [
-                                    safe_fallback_result["recommended"],
-                                    *safe_fallback_result.get("alternatives", []),
-                                ]
-                                safe_fallback_result.update({
-                                    "demo": False,
-                                    "requested_candidate_count": data.count,
-                                    "skipped_user_info": False,
-                                    "generation_blocked": False,
-                                    "api_alias": fallback_provider.get("api_alias"),
-                                    "model": fallback_provider.get("model"),
-                                    "api_attempt_count": len(attempted_models),
-                                    "attempted_models": attempted_models,
-                                    "candidate_notice": " ".join(filter(None, [
-                                        safe_fallback_result.get("candidate_notice", ""),
-                                        "再生成の候補に未確認情報が含まれていたため、先に確認済みの安全な候補を表示します。",
-                                    ])),
-                                    "candidate_provenance": [
-                                        {
-                                            "candidate_index": index,
-                                            **safe_candidate_fallback_sources.get(
-                                                re.sub(r"\s+", "", candidate.get("text", "")), fallback_provider
-                                            ),
-                                        }
-                                        for index, candidate in enumerate(final_candidates)
-                                    ],
-                                })
-                                return safe_fallback_result
-                            # A hallucinated, unrelated personal claim must not be
-                            # converted into a question to the user. Ask only when
-                            # the missing fact is exactly what the partner directly
-                            # asked; otherwise fail closed after the one repair.
-                            if direct_topic not in unsupported_topics or any(
-                                topic != direct_topic for topic in unsupported_topics
-                            ):
-                                return blocked_user_info_response(
-                                    "候補に相手の質問と関係のない未確認情報が残ったため、本人への無関係な質問に置き換えず候補生成を中断しました。",
-                                    skipped=False,
-                                    attempted_models=attempted_models,
-                                    api_attempt_count=len(attempted_models),
-                                    api_alias=account,
-                                    model=model,
-                                )
-                            answered_topics = {
-                                topic
-                                for answer in data.user_answers
-                                if (topic := _question_topic(answer.get("question", ""))) is not None
-                            }
-                            if unsupported_topics[0] in answered_topics:
-                                return blocked_user_info_response(
-                                    "回答済みの本人情報を使っても安全な候補を作れませんでした。回答内容を繰り返し尋ねず、候補の生成を中断しました。",
-                                    skipped=False,
-                                    attempted_models=attempted_models,
-                                    api_attempt_count=len(attempted_models),
-                                    api_alias=account,
-                                    model=model,
-                                )
-                            question = personal_fact_question(
-                                unsupported_topics[0],
-                                partner_messages[-1] if partner_messages else "",
-                            )
-                            return {
-                                **user_info_question_response(
-                                    question.question,
-                                    question.purpose,
-                                    "候補にプロフィールや本人の回答で確認できない一人称の好み・経験が含まれていました。安全のため候補を表示しませんでした。",
-                                ),
-                                "demo": False,
-                                "api_alias": account,
-                                "model": model,
-                                "api_attempt_count": len(attempted_models),
-                                "attempted_models": attempted_models,
-                            }
-                        if data.response_version == 2 and data.skipped_user_info:
-                            return blocked_user_info_response(
-                                "候補に本人の未確認の好みや経験が含まれていたため、候補を表示せず終了しました。",
-                                skipped=True,
-                                attempted_models=attempted_models,
-                                api_attempt_count=len(attempted_models),
-                                api_alias=account,
-                                model=model,
-                            )
-                        raise ValueError("生成候補に本人の未確認の好みや経験が含まれていました")
                     if (
                         data.response_version == 2
                         and parsed.invite_decision in {"invite_gently", "consider_invite"}
@@ -13618,6 +14318,7 @@ def _generate_impl(data: GenerateInput):
                             system_instruction += (
                                 "\n【句読点違反による1回限りの再生成】前回の候補本文に「、」または「。」が含まれていました。"
                                 "新しい候補を作り直し、送信候補本文にはこの2文字を一切含めないでください。"
+                                "ただしlikeモードの1行目「〇〇さん、初めまして」の読点だけは例外的に許可されています。"
                                 "機械的な削除ではなく自然な文へ書き直してください。メタデータは対象外です。"
                             )
                         elif isinstance(quality_error, CandidateSimilarityError):
@@ -13678,14 +14379,26 @@ def _generate_impl(data: GenerateInput):
                             for index, candidate in enumerate(result_candidates)
                         ]
                         result.update({"skipped_user_info": False, "generation_blocked": False, "api_alias": primary_candidate_source.get("api_alias"), "model": primary_candidate_source.get("model"), "api_attempt_count": len(attempted_models), "attempted_models": attempted_models})
-                    return result
+                    return attach_rejected_candidate_references(result, rejected_candidate_pool)
             except Exception as exc:
+                if isinstance(
+                    exc,
+                    (ProviderAttemptLimitError, RequestDeadlineExceededError, UsageBudgetExceededError),
+                ):
+                    raise
                 if _is_rate_limit_error(exc):
                     last_rate_limit = exc
+                    continue
+                if _is_transient_provider_error(exc):
+                    # A 503/5xx means the provider had no usable capacity for
+                    # this slot; try the next API/model instead of aborting.
+                    last_transient_error = exc
                     continue
                 raise
         if last_rate_limit is not None:
             raise last_rate_limit
+        if last_transient_error is not None:
+            raise last_transient_error
         raise RuntimeError("Geminiの利用可能な設定がありません")
     except Exception as exc:
         logger.warning(
@@ -13705,6 +14418,9 @@ def _generate_impl(data: GenerateInput):
         elif _is_rate_limit_error(exc):
             failure_message = "Geminiの利用枠またはレート制限に達しました。優先順の設定をすべて試しました。時間をおいて再度お試しください。"
             failure_code = "all_models_rate_limited"
+        elif _is_transient_provider_error(exc):
+            failure_message = "Gemini側が一時的に混雑しています（503など）。少し時間をおいて再度お試しください。"
+            failure_code = "provider_unavailable"
         elif any(token in f"{type(exc).__name__} {exc}".lower() for token in ("401", "403", "api_key")):
             failure_message = "Gemini APIキーまたはモデルの利用権限を確認してください。"
             failure_code = "api_permission_denied"
@@ -13762,7 +14478,9 @@ def _generate_impl(data: GenerateInput):
                     for index, candidate in enumerate(final_candidates)
                 ],
             })
-            return safe_fallback_result
+            return attach_rejected_candidate_references(
+                safe_fallback_result, rejected_candidate_pool
+            )
         if isinstance(exc, ProviderAttemptLimitError) and safe_candidate_fallback is not None:
             safe_fallback_result = filter_safe_candidates(
                 safe_candidate_fallback,
@@ -13796,7 +14514,9 @@ def _generate_impl(data: GenerateInput):
                     ])
                 ],
             })
-            return safe_fallback_result
+            return attach_rejected_candidate_references(
+                safe_fallback_result, rejected_candidate_pool
+            )
         # Do not expose raw SDK errors: they may include user data or credentials.
         return JSONResponse(
             status_code=502,
@@ -13805,5 +14525,6 @@ def _generate_impl(data: GenerateInput):
                 "error_code": failure_code,
                 "attempted_models": attempted_models,
                 "api_attempt_count": len(attempted_models),
+                "rejected_candidates": rejected_candidate_references(rejected_candidate_pool),
             },
         )

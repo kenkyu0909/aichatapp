@@ -58,13 +58,14 @@ class LocalApp:
         html = html.replace('<script src="./app.js" defer></script>', ERROR_MONITOR + '\n  <script src="./app.js" defer></script>')
         index_path.write_text(html, encoding="utf-8")
 
-    def start(self, *, mocked_gemini=False, require_movie_answer=False):
+    def start(self, *, mocked_gemini=False, require_movie_answer=False, two_apis=False):
         self.data_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["APP_DATA_DIR"] = str(self.data_dir)
         env["MRA_API_DIR"] = str(self.app_dir / "empty-api")
         env.pop("MRA_API_1_KEY", None)
         env.pop("MRA_API_2_KEY", None)
+        env.pop("MRA_DEEPSEEK_KEY", None)
         env.pop("GEMINI_API_KEY", None)
         env.pop("MRA_TEST_REQUIRE_MOVIE_ANSWER", None)
         command = [sys.executable, "-m", "uvicorn", "app:app"]
@@ -74,6 +75,8 @@ class LocalApp:
             # so no Gemini SDK client or network request can be created.
             self.mock_calls_path = self.data_dir / "mock-provider-calls.jsonl"
             env["MRA_API_1_KEY"] = "test-only-key-not-a-credential"
+            if two_apis:
+                env["MRA_API_2_KEY"] = "test-only-key-2-not-a-credential"
             env["MRA_PROVIDER_MIN_INTERVAL_SECONDS"] = "0"
             env["MRA_MAX_PROVIDER_ATTEMPTS_PER_GENERATE"] = "1"
             env["MRA_TEST_GEMINI_CALL_LOG"] = str(self.mock_calls_path)
@@ -146,6 +149,20 @@ def local_app_with_mocked_gemini(tmp_path):
 
 
 @pytest.fixture
+def local_app_with_two_mocked_apis(tmp_path):
+    app = LocalApp(
+        tmp_path / "two-api-provider-test-database",
+        tmp_path / "two-api-provider-mocked-app-copy",
+        ARTIFACTS / "server-mocked-gemini-two-api.log",
+    )
+    try:
+        app.start(mocked_gemini=True, two_apis=True)
+        yield app
+    finally:
+        app.stop()
+
+
+@pytest.fixture
 def firefox():
     options = Options()
     options.add_argument("-headless")
@@ -166,14 +183,23 @@ def firefox():
         driver.quit()
 
 
-def visible_toast(driver, text):
-    def matches(browser):
-        toast = browser.find_element(By.ID, "toast")
-        return text in toast.text if toast.is_displayed() else False
-    # Firefox can spend several seconds processing the local API while the page
-    # is loaded alongside the rest of the suite; wait for async completion rather
-    # than timing out at the toast's normal display duration.
-    return WebDriverWait(driver, 15).until(matches)
+def assert_toast_hidden(driver):
+    """黒枠トーストはユーザー要望で廃止（2026-10-23）。
+
+    通知領域が表示されないまま、操作結果は画面の各場所に直接出ることを確認する。
+    非同期処理の完了を待つため少し置いてから判定する。
+    """
+    time.sleep(1.0)
+    toast = driver.find_element(By.ID, "toast")
+    assert toast.get_attribute("hidden") is not None
+    assert toast.text == ""
+
+
+def visible_inline_error(driver, container_css, text):
+    """失敗の内容が操作している場所の近く（インライン）に出るまで待つ。"""
+    return WebDriverWait(driver, 15).until(
+        lambda browser: text in browser.find_element(By.CSS_SELECTOR, container_css).text
+    )
 
 
 def modal(driver):
@@ -284,8 +310,12 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
         "週末は友達と落ち着いたカフェに行きました！"
     )
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "履歴を更新しました")
-    assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.them .bubble").text == "週末は友達と落ち着いたカフェに行きました！"
+    # 成功の通知は黒いトーストでは出さない（編集結果が画面に直接反映される）。
+    WebDriverWait(driver, 8).until(
+        lambda browser: "週末は友達と落ち着いたカフェに行きました！"
+        in browser.find_element(By.ID, "messages").text
+    )
+    assert_toast_hidden(driver)
 
     message_input.send_keys("削除確認用の架空メッセージ")
     driver.find_element(By.ID, "send-me").click()
@@ -297,7 +327,14 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     WebDriverWait(driver, 8).until(
         lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
     )
-    visible_toast(driver, "メッセージを削除しました")
+    assert_toast_hidden(driver)
+
+    # The policy/direction/count/require-question controls are hidden behind
+    # the ＋詳細設定 toggle by default, so expand it before interacting.
+    driver.find_element(By.ID, "settings-toggle").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.find_element(By.ID, "advanced-settings").get_attribute("hidden") is None
+    )
 
     policy = driver.find_element(By.ID, "policy")
     assert policy.is_selected()
@@ -329,9 +366,13 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is True
     require_question.click()
 
+    # 候補の「コピー」はコピーしつつ送信済みとして記録する。
     message_count = len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message"))
     driver.find_element(By.CSS_SELECTOR, ".candidate button").click()
-    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == message_count
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
+    )
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == message_count + 1
     if modal(driver).get_attribute("open") is not None:
         driver.find_element(By.ID, "close-modal").click()
 
@@ -349,8 +390,8 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     driver.refresh()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1)
     assert driver.find_element(By.ID, "current-name").text == "架空のあおい"
-    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
-    errors = record_artifact("firefox-core-ui", driver, {"strategy_states": [True, False, True], "candidate_count": 3, "message_delete": True})
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 2
+    errors = record_artifact("firefox-core-ui", driver, {"strategy_states": [True, False, True], "candidate_count": 3, "message_delete": True, "copy_records_message": True})
     assert errors["runtime"] == []
     assert errors["console"] == []
 
@@ -527,7 +568,7 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     app.stop()
 
     driver.find_element(By.ID, "send-them").click()
-    visible_toast(driver, "ローカルサーバーと通信できません")
+    visible_inline_error(driver, "#composer-error", "ローカルサーバーと通信できません")
     assert driver.find_element(By.ID, "message-input").get_attribute("value") == "架空の相手への未保存メッセージ"
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 0
 
@@ -536,19 +577,16 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     profile_dialog = modal(driver)
     profile_field = profile_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input")[0]
     profile_field.send_keys("再起動後も保持する架空プロフィール")
-    if driver.find_element(By.ID, "toast").is_displayed():
-        driver.execute_script("document.getElementById('toast').hidden = true")
     profile_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "ローカルサーバーと通信できません")
+    visible_inline_error(driver, "#modal-body .inline-error", "ローカルサーバーと通信できません")
     assert profile_dialog.get_attribute("open") is not None
     assert profile_field.get_attribute("value").endswith("再起動後も保持する架空プロフィール")
     driver.find_element(By.ID, "close-modal").click()
 
-    driver.execute_script("document.getElementById('toast').hidden = true")
     driver.find_element(By.ID, "first-message").click()
-    visible_toast(driver, "ローカルサーバーと通信できません")
+    visible_inline_error(driver, "#suggestion-list .inline-error", "ローカルサーバーと通信できません")
     assert driver.find_element(By.ID, "first-message").is_enabled()
-    assert not driver.find_element(By.ID, "suggestion-list").is_displayed()
+    assert not driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")
     assert instrumented_errors(driver)["runtime"] == []
 
     driver.find_element(By.ID, "new-contact").click()
@@ -556,10 +594,8 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     name_field = add_dialog.find_elements(By.CSS_SELECTOR, "#modal-body input:not([type=file])")[0]
     name_field.send_keys("再送できる架空の相手")
     add_dialog.find_elements(By.CSS_SELECTOR, "#modal-body textarea")[0].send_keys("架空プロフィール")
-    if driver.find_element(By.ID, "toast").is_displayed():
-        driver.execute_script("document.getElementById('toast').hidden = true")
     add_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "ローカルサーバーと通信できません")
+    visible_inline_error(driver, "#modal-body .inline-error", "ローカルサーバーと通信できません")
     assert add_dialog.get_attribute("open") is not None
     assert name_field.get_attribute("value").endswith("再送できる架空の相手")
 
@@ -569,7 +605,8 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
         app.stop()
         raise
     add_dialog.find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "相手の情報を保存しました")
+    WebDriverWait(driver, 8).until(lambda browser: modal(browser).get_attribute("open") is None)
+    assert not driver.find_elements(By.CSS_SELECTOR, "#modal-body .inline-error")
     driver.find_element(By.CSS_SELECTOR, 'button[data-open="profile"]').click()
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
     WebDriverWait(driver, 8).until(
@@ -577,7 +614,10 @@ def test_firefox_handles_server_stop_and_restart_without_losing_input(local_app,
     )
     next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のゆき" in item.text).click()
     driver.find_element(By.ID, "send-them").click()
-    visible_toast(driver, "相手の発言を履歴に登録しました")
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 1
+    )
+    assert not driver.find_elements(By.CSS_SELECTOR, "#composer-error:not([hidden])")
     driver.refresh()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".contact-item")) == 2)
     original = next(item for item in driver.find_elements(By.CSS_SELECTOR, ".contact-item") if "架空のゆき" in item.text)
@@ -667,6 +707,10 @@ def test_firefox_first_message_and_temporary_profile_questions(local_app, firefo
     sent = driver.find_element(By.CSS_SELECTOR, ".candidate-text").text
     assert "洋画をよく観ます" in sent
     assert driver.find_element(By.CSS_SELECTOR, ".suggestion-heading").text == "✦ 初回メッセージ候補"
+    # 生成直後は候補を表示するだけで、自分の送信済み履歴へは追加しない（自動送信しない）。
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message")) == 0
+    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
+    assert "まだ送信していません" in driver.find_element(By.ID, "suggestion-list").text
     assert driver.execute_script("return window.__generateResponses.at(-1).response_version") == 2
     assert driver.execute_script("return window.__generateResponses.at(-1).user_answers[0].answer") == "映画は好きで洋画をよく観る"
     assert driver.execute_script("return window.__generateResponses.at(-1).match_id") == driver.execute_script("return window.__generateResponses.at(-2).match_id")
@@ -782,7 +826,7 @@ def test_firefox_optional_user_question_keeps_candidates_and_only_regenerates(lo
     driver.find_element(By.ID, "optional-user-answer").send_keys("ミステリーをよく読みます")
     driver.find_element(By.ID, "answer-and-regenerate-optional").click()
     WebDriverWait(driver, 5).until(lambda browser: len(browser.execute_script("return window.__generateResponses") or []) == 4)
-    WebDriverWait(driver, 5).until(lambda browser: "一時的な再生成失敗" in browser.find_element(By.ID, "toast").text)
+    visible_inline_error(driver, "#suggestion-list .inline-error", "一時的な再生成失敗")
     assert len(driver.find_elements(By.CSS_SELECTOR, ".optional-user-question")) == 1
     assert driver.find_element(By.ID, "optional-user-answer").get_attribute("value") == "ミステリーをよく読みます"
     assert driver.execute_script("return window.__profileWrites") == []
@@ -895,14 +939,10 @@ def test_firefox_first_to_reply_copy_manual_record_and_history_flow(local_app, f
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
     assert driver.execute_script("return window.__generatePayloads.at(-1).mode") == "first"
     assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == first_text
+    # 「コピー」はコピーしつつ送信済みとして記録する。
     driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
     WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText !== undefined"))
     assert driver.execute_script("return window.__copiedText") == first_text
-    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
-
-    driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
-    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
-    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1)
     assert driver.find_element(By.CSS_SELECTOR, "article.chat-message.me .bubble").text == first_text
 
@@ -913,14 +953,22 @@ def test_firefox_first_to_reply_copy_manual_record_and_history_flow(local_app, f
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
     assert driver.execute_script("return window.__generatePayloads.at(-1).mode") == "reply"
     assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == reply_text
-    driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
-    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText === arguments[0]", reply_text))
-    assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
-
+    # 「実際に送った文章を記録」では文章を編集でき、保存時にコピーもされる。
+    driver.execute_script("window.__copiedText = undefined")
     driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
     WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
+    assert (
+        modal(driver).find_element(By.CSS_SELECTOR, "#modal-body textarea").get_attribute("value")
+        == reply_text
+    )
     modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 2)
+    WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText === arguments[0]", reply_text))
+    assert driver.find_element(By.ID, "header-advanced").get_attribute("hidden") is not None
+    driver.find_element(By.ID, "header-settings-toggle").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.find_element(By.ID, "header-advanced").get_attribute("hidden") is None
+    )
     driver.find_element(By.ID, "history-button").click()
     history_text = modal(driver).text
     assert first_text in history_text
@@ -939,8 +987,8 @@ def test_firefox_first_to_reply_copy_manual_record_and_history_flow(local_app, f
     ]
     errors = record_artifact("firefox-first-reply-send-history", driver, {
         "modes": ["first", "reply"],
-        "copied_without_recording": True,
-        "manually_recorded_messages": 2,
+        "copy_records_message": True,
+        "manual_record_copies_message": True,
         "history_survived_reload": True,
     })
     assert errors["runtime"] == []
@@ -1012,12 +1060,6 @@ def test_firefox_uses_real_fastapi_generate_route_with_only_gemini_sdk_mocked(
         lambda browser: browser.execute_script("return window.__copiedText !== undefined")
     )
     assert driver.execute_script("return window.__copiedText") == expected
-    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
-
-    record_button = first_candidate.find_elements(By.CSS_SELECTOR, ".candidate-actions button")[1]
-    record_button.click()
-    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
-    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
     WebDriverWait(driver, 8).until(
         lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
     )
@@ -1043,14 +1085,81 @@ def test_firefox_uses_real_fastapi_generate_route_with_only_gemini_sdk_mocked(
             "external_gemini_calls": 0,
             "api_alias": actual_response["api_alias"],
             "model": actual_response["model"],
-            "copied_without_recording": True,
-            "manual_record_and_reload_persisted": True,
+            "copy_records_message": True,
+            "reload_persisted": True,
             "binding": "127.0.0.1",
         },
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
 
+
+
+def test_firefox_provider_selector_switches_api_and_model(local_app_with_two_mocked_apis, firefox):
+    """⚙ 表示設定のセレクタで API1/API2 と 2 モデルを選び、その組み合わせで生成する。"""
+    app = local_app_with_two_mocked_apis
+    driver = firefox
+    driver.get(app.url)
+    add_fictional_contact(driver, "架空のきりん")
+
+    driver.find_element(By.ID, "message-input").send_keys("休日は友達とカフェに行ってきました！")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+
+    # セレクタは ⚙ 表示設定の中にあり、2 API と 2 モデルだけを選べる。
+    driver.find_element(By.ID, "header-settings-toggle").click()
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.find_element(By.ID, "header-advanced").get_attribute("hidden") is None
+    )
+    api_options = [o.get_attribute("value") for o in driver.find_elements(By.CSS_SELECTOR, "#api-alias option")]
+    model_options = [o.get_attribute("value") for o in driver.find_elements(By.CSS_SELECTOR, "#model-select option")]
+    assert api_options == ["", "API1", "API2"]
+    assert model_options == ["", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+
+    driver.execute_script(
+        "document.getElementById('api-alias').value='API2';"
+        "document.getElementById('model-select').value='gemini-3.1-flash-lite';"
+    )
+    driver.execute_script("""
+      window.__actualGenerateResponses = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        const response = await originalFetch(url, options);
+        if (String(url) === '/api/generate') window.__actualGenerateResponses.push(await response.clone().json());
+        return response;
+      };
+    """)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 15).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3
+    )
+
+    actual_response = driver.execute_script("return window.__actualGenerateResponses.at(-1)")
+    assert actual_response["api_alias"] == "API2"
+    assert actual_response["model"] == "gemini-3.1-flash-lite"
+    assert "API2 / gemini-3.1-flash-lite" in driver.find_element(By.CSS_SELECTOR, ".provider-usage").text
+
+    WebDriverWait(driver, 5).until(lambda _: app.mock_calls_path.exists())
+    calls = [
+        json.loads(line)
+        for line in app.mock_calls_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [call["model"] for call in calls] == ["gemini-3.1-flash-lite"]
+
+    errors = record_artifact(
+        "firefox-provider-selector-switch",
+        driver,
+        {
+            "api_options": api_options,
+            "model_options": model_options,
+            "selected": "API2 / gemini-3.1-flash-lite",
+            "external_gemini_calls": 0,
+        },
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
 
 
 def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
@@ -1144,10 +1253,7 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
         lambda browser: browser.execute_script("return window.__copiedText !== undefined")
     )
     assert driver.execute_script("return window.__copiedText") == followup_response["recommended"]["text"]
-    assert saved_history() == first_history
-    followup_buttons[1].click()
-    WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
-    modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    # 「コピー」は送信済みとして記録される。
     WebDriverWait(driver, 8).until(lambda _: len(saved_history()) == 2)
     followup_history = saved_history()
     assert followup_history[-1]["role"] == "me"
@@ -1202,7 +1308,7 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
             "modes": ["first", "followup", "like"],
             "provider_calls": len(provider_calls),
             "external_gemini_calls": 0,
-            "first_and_followup_manual_recorded": True,
+            "first_manual_recorded_and_followup_copy_recorded": True,
             "like_copy_did_not_change_history": True,
             "binding": "127.0.0.1",
         },
@@ -1211,14 +1317,15 @@ def test_firefox_real_generate_route_covers_first_followup_and_like_modes(
     assert errors["console"] == []
 
 
-def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_path, firefox):
+def test_firefox_real_route_generation_returns_candidates_without_confirmation(tmp_path, firefox):
+    """実路由の /api/generate は確認質問を返さず、最初の生成で候補を返す（2026-10-23 方針）。"""
     app = LocalApp(
         tmp_path / "user-info-test-database",
         tmp_path / "user-info-app-copy",
         ARTIFACTS / "server-user-info-mocked-gemini.log",
     )
     try:
-        app.start(mocked_gemini=True, require_movie_answer=True)
+        app.start(mocked_gemini=True)
         driver = firefox
         driver.get(app.url)
         add_fictional_contact(driver, "架空のあかり")
@@ -1252,32 +1359,19 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
         """)
 
         driver.find_element(By.ID, "generate").click()
-        WebDriverWait(driver, 8).until(
-            lambda browser: browser.find_elements(By.CSS_SELECTOR, ".user-info-question")
-        )
-        first_response = driver.execute_script("return window.__realRouteResponses.at(-1)")
-        assert first_response["needs_user_info"] is True
-        assert first_response["recommended"] is None
-        assert first_response["alternatives"] == []
-        assert "映画" in first_response["user_questions"][0]["question"]
-        assert not driver.find_elements(By.CSS_SELECTOR, ".candidate")
-        assert not app.mock_calls_path.exists(), "本人確認前にGemini provider mockが呼ばれた"
-
-        driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys(
-            "映画は好きで洋画をよく観ます"
-        )
-        driver.find_element(By.ID, "resume-generation").click()
+        # 事実確認・確認質問は廃止（2026-10-23）。最初の生成で必ず候補を返す。
         WebDriverWait(driver, 12).until(
-            lambda browser: browser.execute_script("return window.__realRouteResponses.length") == 2
-            and browser.find_elements(By.CSS_SELECTOR, ".candidate")
+            lambda browser: browser.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")
         )
         generated = driver.execute_script("return window.__realRouteResponses.at(-1)")
+        assert generated["needs_user_info"] is False
+        assert generated["user_questions"] == []
+        assert generated["recommended"] is not None
         assert generated["demo"] is False
-        assert generated["recommended"]["text"] == "映画好きで洋画をよく観ます！"
-        assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == generated["available_candidate_count"]
-        assert all(
-            "映画" in candidate.text or "洋画" in candidate.text
-            for candidate in driver.find_elements(By.CSS_SELECTOR, ".candidate-text")
+        assert not driver.find_elements(By.CSS_SELECTOR, ".user-info-question")
+        expected_candidates = [generated["recommended"], *generated["alternatives"]]
+        assert len(driver.find_elements(By.CSS_SELECTOR, "#suggestion-list .candidate")) == len(
+            expected_candidates
         )
 
         with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
@@ -1286,13 +1380,24 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
         with urllib.request.urlopen(app.url + "api/profile", timeout=3) as response:
             assert json.load(response) == profile_before
 
+        def recorded_history():
+            with urllib.request.urlopen(
+                app.url + f"api/matches/{match_id}/messages", timeout=3
+            ) as response:
+                return json.load(response)
+
+        driver.execute_script("window.__copiedText = undefined")
         driver.find_element(By.CSS_SELECTOR, ".candidate-actions button:first-child").click()
         WebDriverWait(driver, 5).until(
             lambda browser: browser.execute_script("return window.__copiedText !== undefined")
         )
         assert driver.execute_script("return window.__copiedText") == generated["recommended"]["text"]
-        with urllib.request.urlopen(app.url + f"api/matches/{match_id}/messages", timeout=3) as response:
-            assert json.load(response) == history
+        # 「コピー」は送信済みとして記録される。
+        WebDriverWait(driver, 8).until(lambda _: len(recorded_history()) == 2)
+        assert [(item["role"], item["body"]) for item in recorded_history()] == [
+            ("them", "映画好きですか？"),
+            ("me", generated["recommended"]["text"]),
+        ]
 
         provider_calls = [
             json.loads(line)
@@ -1300,8 +1405,9 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
         ]
         assert len(provider_calls) == 1
         assert provider_calls[0]["mode"] == "reply"
-        assert provider_calls[0]["user_answer_count"] == 1
-        assert provider_calls[0]["user_answer_matches_expected"] is True
+        # 確認質問がないため、一時回答を渡す再生成は発生しない。
+        assert provider_calls[0]["user_answer_count"] == 0
+        assert provider_calls[0]["user_answer_matches_expected"] is False
         assert provider_calls[0]["model"] == "gemini-3.5-flash-lite"
         errors = record_artifact(
             "firefox-real-generate-user-info-roundtrip-sdk-mocked",
@@ -1311,7 +1417,7 @@ def test_firefox_user_info_roundtrip_uses_real_route_and_temporary_answer(tmp_pa
                 "provider_calls": 1,
                 "provider_calls_before_user_answer": 0,
                 "answer_saved_to_profile": False,
-                "copy_created_sent_message": False,
+                "copy_created_sent_message": True,
                 "external_gemini_calls": 0,
                 "binding": "127.0.0.1",
             },
@@ -1349,9 +1455,13 @@ def test_firefox_user_info_save_button_persists_only_when_pressed(local_app, fir
     WebDriverWait(driver, 8).until(lambda browser: browser.find_elements(By.CSS_SELECTOR, ".user-info-question"))
     driver.find_element(By.CSS_SELECTOR, ".user-info-answer").send_keys("ミステリーが好きです")
     driver.find_element(By.ID, "save-user-info").click()
-    WebDriverWait(driver, 8).until(
-        lambda browser: "保存しました" in browser.find_element(By.ID, "toast").text
-    )
+    # 成功の黒いトーストは廃止済み。保存できたことはプロフィール本体の変化で確認する。
+    def profile_content():
+        with urllib.request.urlopen(local_app.url + "api/profile", timeout=3) as response:
+            return json.load(response)
+
+    WebDriverWait(driver, 8).until(lambda _: profile_content() != profile_before)
+    assert_toast_hidden(driver)
 
     with urllib.request.urlopen(local_app.url + "api/profile", timeout=3) as response:
         profile_after = json.load(response)
@@ -1467,11 +1577,7 @@ def test_firefox_preserves_candidate_line_breaks_in_display_copy_and_saved_histo
     driver.find_element(By.CSS_SELECTOR, ".candidate button").click()
     WebDriverWait(driver, 5).until(lambda browser: browser.execute_script("return window.__copiedText !== undefined"))
     assert driver.execute_script("return window.__copiedText") == expected
-    assert driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me") == []
-    driver.find_element(By.CSS_SELECTOR, ".candidate button:last-child").click()
-    textarea = driver.find_element(By.CSS_SELECTOR, "#modal-body textarea")
-    assert textarea.get_attribute("value") == expected
-    driver.find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
+    # 「コピー」は送信済みとして記録される（改行も保持）。
     WebDriverWait(driver, 8).until(
         lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 1
     )
@@ -1506,17 +1612,20 @@ def test_firefox_distinguishes_invalid_candidate_and_rate_limit_errors(local_app
       };
     """)
     driver.find_element(By.ID, "generate").click()
-    visible_toast(driver, "生成した候補が返信ルールに合わなかったため表示できませんでした")
+    visible_inline_error(
+        driver, "#suggestion-list .inline-error",
+        "生成した候補が返信ルールに合わなかったため表示できませんでした",
+    )
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
 
     driver.execute_script("window.__mockErrorCode='all_models_rate_limited'")
     driver.find_element(By.ID, "generate").click()
-    visible_toast(driver, "Geminiの利用制限に達しました")
+    visible_inline_error(driver, "#suggestion-list .inline-error", "Geminiの利用制限に達しました")
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
 
     driver.execute_script("window.__mockErrorCode='request_attempt_limit'")
     driver.find_element(By.ID, "generate").click()
-    visible_toast(driver, "生成の安全試行上限に達したため停止しました")
+    visible_inline_error(driver, "#suggestion-list .inline-error", "生成の安全試行上限に達したため停止しました")
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
     errors = record_artifact("firefox-generation-error-categories", driver)
     assert errors["runtime"] == []
@@ -1541,7 +1650,11 @@ def test_firefox_keeps_safe_candidate_visible_with_shortage_notice(local_app, fi
             alternatives:[], reason:'架空データのUI検証', strategy:'会話を続ける',
             demo:false, generation_blocked:false,
             requested_candidate_count:3, available_candidate_count:1,
-            candidate_notice:'安全確認後に表示できる候補は1案です（指定は3案）。不足分を不自然な候補で補っていません。'
+            candidate_notice:'安全確認後に表示できる候補は1案です（指定は3案）。不足分を不自然な候補で補っていません。',
+            rejected_candidates:[
+              {label:'代替案1',text:'カフェはよく行くんですか？',reasons:['相手からの直接質問に未回答']},
+              {label:'代替案2',text:'コーヒーは好きですか',reasons:['既知情報の聞き直し']}
+            ]
           }), {status:200,headers:{'Content-Type':'application/json'}});
         }
         return originalFetch(url, options);
@@ -1552,10 +1665,78 @@ def test_firefox_keeps_safe_candidate_visible_with_shortage_notice(local_app, fi
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 1)
     assert "表示できる候補は1案" in driver.find_element(By.CSS_SELECTOR, ".user-info-terminal").text
     assert driver.find_element(By.CSS_SELECTOR, ".candidate-text").text == "そのカフェ気になります！"
+    # 安全確認で除外した案は件数に含めず、参考として別枠で表示する。
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 1
+    rejected_cards = driver.find_elements(By.CSS_SELECTOR, ".rejected-candidate")
+    assert len(rejected_cards) == 2
+    rejected_texts = [
+        card.find_element(By.CSS_SELECTOR, ".rejected-candidate-text").text
+        for card in rejected_cards
+    ]
+    assert "カフェはよく行くんですか？" in rejected_texts
+    assert "コーヒーは好きですか" in rejected_texts
+    assert "相手からの直接質問に未回答" in driver.find_element(
+        By.CSS_SELECTOR, ".rejected-candidate-reasons"
+    ).text
+    assert driver.find_element(
+        By.CSS_SELECTOR, ".rejected-candidates-heading"
+    ).text.startswith("⚠ 安全確認できなかった案")
     errors = record_artifact(
         "firefox-safe-candidate-shortage",
         driver,
-        {"requested_candidate_count": 3, "available_candidate_count": 1, "safe_candidate_retained": True},
+        {"requested_candidate_count": 3, "available_candidate_count": 1, "safe_candidate_retained": True, "rejected_reference_shown": 2},
+    )
+    assert errors["runtime"] == []
+    assert errors["console"] == []
+
+
+def test_firefox_blocked_generation_still_shows_rejected_reference(local_app, firefox):
+    driver = firefox
+    driver.get(local_app.url)
+    add_fictional_contact(driver, "架空の全棄却")
+    driver.find_element(By.ID, "message-input").send_keys("最近どうですか？")
+    driver.find_element(By.ID, "send-them").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.them")) == 1
+    )
+    driver.execute_script("""
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (url, options = {}) => {
+        if (String(url) === '/api/generate') {
+          return new Response(JSON.stringify({
+            recommended:null, alternatives:[], reason:'', strategy:'',
+            demo:false, generation_blocked:true,
+            requested_candidate_count:3, available_candidate_count:0,
+            candidate_notice:'安全確認後に表示できる候補は0案です（指定は3案）。候補を送らず、入力内容を確認してください。',
+            candidate_rejection_summary:['相手からの直接質問に未回答'],
+            candidate_rejection_details:[
+              {label:'代替案1',text:'映画は好きですか？'},
+              {label:'代替案2',text:'週末は何をしていますか？'}
+            ]
+          }), {status:200,headers:{'Content-Type':'application/json'}});
+        }
+        return originalFetch(url, options);
+      };
+    """)
+    driver.find_element(By.ID, "generate").click()
+    WebDriverWait(driver, 8).until(
+        lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".rejected-candidate")) == 2
+    )
+    # 安全な候補は0件のまま。除外案だけを参考として表示する。
+    assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 0
+    rejected_texts = [
+        card.find_element(By.CSS_SELECTOR, ".rejected-candidate-text").text
+        for card in driver.find_elements(By.CSS_SELECTOR, ".rejected-candidate")
+    ]
+    assert "映画は好きですか？" in rejected_texts
+    assert "週末は何をしていますか？" in rejected_texts
+    assert "相手からの直接質問に未回答" in driver.find_element(
+        By.CSS_SELECTOR, ".rejected-candidate-reasons"
+    ).text
+    errors = record_artifact(
+        "firefox-blocked-rejected-reference",
+        driver,
+        {"available_candidate_count": 0, "rejected_reference_shown": 2},
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
@@ -1629,7 +1810,9 @@ def test_firefox_stale_candidate_cannot_be_recorded_after_switching_match(local_
     )
 
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "相手が変わっています。もう一度確認してください")
+    visible_inline_error(
+        driver, "#modal-body .inline-error", "相手が変わっています。もう一度確認してください"
+    )
     assert modal(driver).get_attribute("open") is not None
     assert len(driver.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 0
 
@@ -1755,14 +1938,8 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     assert visible_history(driver) == initial_history
     assert saved_history() == initial_history
 
-    driver.find_element(By.CSS_SELECTOR, ".candidate button:first-child").click()
-    WebDriverWait(driver, 5).until(
-        lambda browser: browser.execute_script("return window.__copiedText !== undefined")
-    )
-    assert driver.execute_script("return window.__copiedText") == followup
-    assert visible_history(driver) == initial_history
-    assert saved_history() == initial_history
-
+    # 「実際に送った文章を記録」では文章を編集でき、保存時にコピーもされる。
+    driver.execute_script("window.__copiedText = undefined")
     driver.find_element(By.CSS_SELECTOR, ".candidate button:nth-child(2)").click()
     WebDriverWait(driver, 5).until(lambda browser: modal(browser).get_attribute("open") is not None)
     assert "実際に送信した文章を記録" in modal(driver).find_element(By.ID, "modal-title").text
@@ -1773,6 +1950,9 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     textarea.send_keys(edited_followup)
     modal(driver).find_element(By.CSS_SELECTOR, "#modal-body button.confirm").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, "article.chat-message.me")) == 2)
+    WebDriverWait(driver, 5).until(
+        lambda browser: browser.execute_script("return window.__copiedText === arguments[0]", edited_followup)
+    )
     expected_history = initial_history + [("me", edited_followup)]
     assert visible_history(driver) == expected_history
     assert saved_history() == expected_history
@@ -1780,7 +1960,7 @@ def test_firefox_followup_copy_and_manual_record_preserve_multiline_history(loca
     errors = record_artifact(
         "firefox-followup-copy-record-before-reload",
         driver,
-        {"mode": "followup", "copy_preserved_history": True, "multiline_saved": True},
+        {"mode": "followup", "manual_record_copies_message": True, "multiline_saved": True},
     )
     assert errors["runtime"] == []
     assert errors["console"] == []
@@ -1865,9 +2045,8 @@ def test_firefox_like_candidate_can_be_copied_without_creating_match_history(loc
         lambda browser: browser.execute_script("return window.__copiedText !== undefined")
     )
     assert driver.execute_script("return window.__copiedText") == like_text
-    WebDriverWait(driver, 5).until(
-        lambda browser: "送信済み履歴には追加していません" in browser.find_element(By.ID, "toast").text
-    )
+    # いいねBOTの候補はコピーするだけで、黒い通知も履歴への追加も発生しない。
+    assert_toast_hidden(driver)
     assert saved_history() == []
 
     driver.find_element(By.ID, "close-modal").click()
@@ -2274,11 +2453,10 @@ def test_firefox_oversize_photo_is_rejected_before_creating_contact(local_app, f
     modal(driver).find_elements(By.CSS_SELECTOR, "#modal-body input:not([type=file])")[0].send_keys("写真検証の架空人物")
     file_input = modal(driver).find_element(By.CSS_SELECTOR, "#modal-body input[type=file]")
     file_input.send_keys(str(oversize))
-    if driver.find_element(By.ID, "toast").is_displayed():
-        driver.execute_script("document.getElementById('toast').hidden = true")
     modal(driver).find_element(By.CSS_SELECTOR, "button.confirm").click()
-    visible_toast(driver, "写真は5MB以下にしてください")
+    visible_inline_error(driver, "#modal-body .inline-error", "写真は5MB以下にしてください")
     assert modal(driver).get_attribute("open") is not None
+    assert_toast_hidden(driver)
     with urllib.request.urlopen(local_app.url + "api/matches", timeout=3) as response:
         assert json.load(response) == []
     driver.execute_script("arguments[0].value = ''", file_input)
