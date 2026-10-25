@@ -10913,27 +10913,10 @@ def _first_message_required_content_reasons(text: str, context: dict) -> list[st
     """
     reasons: list[str] = []
     normalized = re.sub(r"\s+", " ", text)
-    negation_after_expression = re.compile(
-        r"^(?:じゃない|ではない|じゃなく|ではなく|じゃありません|ではありません|"
-        r"じゃなかった|ではなかった|くない|くありません|しくない|しくありません|"
-        r"しくはない|しくはありません|しくもない|しいとは思わない|しいとは思いません|"
-        r"しいとは思えない|しいとは思えません|"
-        r"しいとは思っていない|"
-        r"しいとは言えない|しいとは言えません|しいわけではない|しいわけじゃない|"
-        r"しい気分ではない|しいとは限らない|しい気がしない|"
-        r"いない|いません|(?:という|といった)?わけでは(?:ない|ありません|なかった)|"
-        r"(?:だ)?と思わない|(?:だ)?と思いません|(?:だ)?と思っていない|"
-        r"(?:だ)?と思っていません|(?:だ)?と思えない|(?:だ)?と思えません|"
-        r"気がしない|気がしません|ないです|ない|"
-        r"(?:だ)?とは(?:思わない|思いません|思わず|思わなかった|思わなかったです|思えない|思えません)|"
-        r"(?:だ)?とは言え(?:ない|ません|なかった))"
-    )
-
-    def has_affirmed_expression(pattern: str) -> bool:
-        return any(
-            not negation_after_expression.search(normalized[match.end() : match.end() + 14])
-            for match in re.finditer(pattern, normalized)
-        )
+    # T560: 好意表現とマッチ成立の喜びは必須にしない。実走行で
+    # 「タイプ」「うれしい」を無理に入れた不自然な文や、自然な候補が
+    # 「好意表現不足」で落ちる問題が出たため、挨拶・相手プロフィールの話題・
+    # 質問1つだけを必須にする。
 
     if not re.search(
         r"(?:はじめまして|初めまして|こんにちは|マッチありがとうございます|"
@@ -10941,24 +10924,6 @@ def _first_message_required_content_reasons(text: str, context: dict) -> list[st
         normalized,
     ):
         reasons.append("初回メッセージの挨拶不足")
-
-    if not has_affirmed_expression(
-        r"(?:タイプ|好み|素敵|すてき|魅力的|惹か|好印象|かわいい|可愛い)"
-        r"|(?:プロフィール|雰囲気).{0,10}気にな(?:って|った)",
-    ):
-        reasons.append("初回メッセージの好意表現不足")
-
-    match_joy = False
-    for expression in re.finditer(r"(?:うれ|嬉|よかった|幸せ|光栄|喜び)", normalized):
-        suffix = normalized[expression.end() : expression.end() + 14]
-        if negation_after_expression.search(suffix):
-            continue
-        nearby = normalized[max(0, expression.start() - 24) : expression.end() + 24]
-        if "マッチ" in nearby:
-            match_joy = True
-            break
-    if not match_joy:
-        reasons.append("初回メッセージのマッチ成立の喜び不足")
 
     other = context.get("other") or {}
     profile_sources = [str(other.get("description", ""))]
@@ -10974,7 +10939,7 @@ def _first_message_required_content_reasons(text: str, context: dict) -> list[st
     if not profile_terms or not any(term in normalized for term in profile_terms):
         reasons.append("初回メッセージのプロフィール話題不足")
 
-    if len(re.findall(r"[?？]", text)) != 1:
+    if len(re.findall(r"[?？]+", text)) != 1:
         reasons.append("初回メッセージの質問数不正")
     return reasons
 
@@ -13635,7 +13600,10 @@ def _drop_user_info_confirmation(result):
 
 def _tidy_candidate_text(text: str) -> str:
     """T544: 行頭・行末の空白（全角スペース含む）を落とし、空行を畳む。"""
-    lines = [re.sub(r"^[\s\u3000]+|[\s\u3000]+$", "", line) for line in str(text).splitlines()]
+    value = str(text)
+    # T560: 実生成で動詞の説明形の語尾が抜けた「過ごなんです」が出たため直す。
+    value = value.replace("過ごなんです", "過ごすんです")
+    lines = [re.sub(r"^[\s\u3000]+|[\s\u3000]+$", "", line) for line in value.splitlines()]
     return "\n".join(line for line in lines if line)
 
 

@@ -1274,13 +1274,15 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
     assert context["mode"] == "first"
     assert context["history"] == []
     assert context["other"]["name"] == "架空あかり"
-    assert "初回" in backend.read_prompt("first")
-    assert "軽い好意" in backend.read_prompt("first")
-    assert "マッチできた喜び" in backend.read_prompt("first")
-    assert "複数候補では" in backend.read_prompt("first")
-    assert "要求された案数ぶんの候補を別々に点検" in backend.read_prompt("first")
-    assert "句読点チェックも各候補" in backend.read_prompt("first")
-    assert "主観的な褒め言葉とマッチできた喜び" in backend.read_prompt("first")
+    prompt = backend.read_prompt("first")
+    assert "初回" in prompt
+    assert "相手プロフィールの話題1つ" in prompt
+    assert "必須にしません" in prompt
+    assert "複数候補では" in prompt
+    assert "要求された案数ぶんの候補を別々に点検" in prompt
+    assert "句読点チェックも各候補" in prompt
+    assert "相手プロフィールの話題は1つだけ" in prompt
+    assert "観葉植物" in prompt
     assert "マッチ前" in backend.read_prompt("like")
     assert c.post("/api/generate", json={
         "mode": "first", "match_id": mid, "response_version": 2,
@@ -1296,111 +1298,16 @@ def test_first_message_mode_accepts_empty_history_and_is_separate_from_like(clie
             "初回メッセージの挨拶不足",
         ),
         (
-            "はじめまして！\nマッチありがとうございます😊\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\nマッチできてうれしいです😊\nあおいさんはタイプじゃないですがカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\nあおいさんはタイプじゃなかったですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\n雰囲気は素敵だとは思わないですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\n雰囲気が気になっていないですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\n雰囲気が好みというわけではないですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\nあおいさんはタイプだと思わないですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\nあおいさんはタイプだとは思えないですがマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージの好意表現不足",
-        ),
-        (
-            "はじめまして！\nプロフィールを見て素敵だなと思っていました😊\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできてうれしくないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みだなと思っていましたがマッチできてうれしくはないです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできてよかったとは思いません\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みだなと思っていましたがマッチできて嬉しいとは思いません！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいわけではないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいとは言えません\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいとは思っていないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しい気がしないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいとは思えないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいわけじゃないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しいとは限らないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできてうれしい気分ではないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しくもないです\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
-            "はじめまして！\nあおいさんの雰囲気が好みです！\nマッチできて嬉しくはありません\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？",
-            "初回メッセージのマッチ成立の喜び不足",
-        ),
-        (
             "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでうれしいです！\n休日の旅行も楽しそうですね！\n最近行ったお店ありますか？",
             "初回メッセージのプロフィール話題不足",
         ),
         (
-            "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！",
-            "初回メッセージの質問数不正",
-        ),
-        (
-            "はじめまして！\nマッチありがとうございます😊\nあおいさんめっちゃタイプでマッチできてうれしいです！\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？\n普段どんなところに行きますか？",
+            "はじめまして！\nマッチありがとうございます😊\nカフェ巡りがお好きなんですね！\n最近行ったお店ありますか？\n普段どんなところに行きますか？",
             "初回メッセージの質問数不正",
         ),
     ],
 )
+
 def test_first_mode_withholds_candidates_missing_required_opening_content(
     client, text, required_reason
 ):
@@ -5207,12 +5114,12 @@ def test_each_generation_mode_has_separate_prompt_with_shared_style(client, mode
     assert "会話ですでに答えたことを尋ね返しません" in prompt
 
 
-def test_first_prompt_requires_subjective_interest_and_match_happiness(client):
+def test_first_prompt_keeps_affection_and_match_happiness_optional(client):
     _, backend = client
     prompt = backend.read_prompt("first")
 
-    assert "主観的な好意" in prompt
-    assert "マッチできた喜び" in prompt
+    assert "好意やマッチできた喜び" in prompt
+    assert "必須にしません" in prompt
     assert "推奨候補" in prompt and "絵文字" in prompt
     assert "相手の容姿や服装" in prompt
     assert "相手の名前がプロフィールで確認できる場合" in prompt
@@ -21431,3 +21338,72 @@ def test_profile_confirmed_food_preference_still_passes(client):
     }
     ok = backend.Candidate(label="事実", text="甘いものも好きです✨")
     assert "未確認の食の好み" not in backend._candidate_rejection_reasons(ok, context)
+
+
+def test_first_message_does_not_require_affection_or_match_joy(client):
+    """T560: 好意表現とマッチ成立の喜びがなくても初回候補を棄却しない。"""
+    c, backend = client
+    match_id = c.post(
+        "/api/matches", json={"name": "架空あおい", "description": "ポケモンが好きです"}
+    ).json()["id"]
+    context = backend.build_context(
+        backend.GenerateInput(mode="first", match_id=match_id, response_version=2)
+    )
+    natural = "はじめまして！\nポケモンがお好きなんですね！\n好きなポケモンはいますか？"
+    reasons = backend._first_message_required_content_reasons(natural, context)
+    assert "初回メッセージの好意表現不足" not in reasons
+    assert "初回メッセージのマッチ成立の喜び不足" not in reasons
+
+
+def test_first_message_required_reasons_stay_limited_to_structure(client):
+    """T560: 必須は挨拶・プロフィール話題・質問1つだけ。"""
+    c, backend = client
+    match_id = c.post(
+        "/api/matches", json={"name": "架空あおい", "description": "ポケモンが好きです"}
+    ).json()["id"]
+    context = backend.build_context(
+        backend.GenerateInput(mode="first", match_id=match_id, response_version=2)
+    )
+    no_greeting = "ポケモンがお好きなんですね！\n好きなポケモンはいますか？"
+    assert backend._first_message_required_content_reasons(no_greeting, context) == [
+        "初回メッセージの挨拶不足"
+    ]
+
+
+def test_first_message_double_question_mark_counts_as_one_question(client):
+    """T560: 「いますか？？」は質問1つとして数え、質問数不正で棄却しない。"""
+    c, backend = client
+    match_id = c.post(
+        "/api/matches", json={"name": "架空あおい", "description": "ポケモンが好きです"}
+    ).json()["id"]
+    context = backend.build_context(
+        backend.GenerateInput(mode="first", match_id=match_id, response_version=2)
+    )
+    text = "はじめまして！\nマッチありがとうございます😊\nポケモンがお好きなんですね！\nお気に入りのポケモンはいますか？？"
+    reasons = backend._first_message_required_content_reasons(text, context)
+    assert "初回メッセージの質問数不正" not in reasons
+
+
+def test_first_message_keeps_single_topic_and_same_topic_question(client):
+    """T560: 初回プロンプトが1候補1話題と同話題への質問を指示する。"""
+    _, backend = client
+    prompt = backend.read_prompt("first")
+    assert "相手プロフィールの話題は1つだけ" in prompt
+    assert "別の趣味へ話題を移さないでください" in prompt
+    assert "その話題について1つの答えやすい質問" in prompt or "質問も選んだ話題について1つだけ" in prompt
+    assert "何が良いのか伝わらない曖昧な感想" in prompt
+
+
+def test_first_message_prompt_does_not_force_affection_or_joy(client):
+    """T560: 好意・喜びを必須にしない指示がプロンプトに入る。"""
+    _, backend = client
+    prompt = backend.read_prompt("first")
+    assert "必須にしません" in prompt
+    assert "無理に入れるくらいなら省きます" in prompt
+
+
+def test_tidy_candidate_text_repairs_verb_nan_desu(client):
+    """T560: 動詞の説明形で語尾が抜けた「過ごなんです」を直す。"""
+    _, backend = client
+    fixed = backend._tidy_candidate_text("アニメやゲームをして過ごなんです！")
+    assert fixed == "アニメやゲームをして過ごすんです！"
