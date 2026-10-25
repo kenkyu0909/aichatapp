@@ -10905,11 +10905,11 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
 
 
 def _first_message_required_content_reasons(text: str, context: dict) -> list[str]:
-    """Require the explicit first-message elements from the prompt.
+    """Require the structural first-message elements from the prompt.
 
-    These checks are intentionally narrow lexical guards, not a semantic proof
-    that a message is charming or that every profile paraphrase is understood.
-    They prevent plainly incomplete openers from being shown as sendable.
+    T560: 好意表現とマッチ成立の喜びは必須にしない。必須は挨拶・相手プロフィールの
+    話題1つ・質問1つだけ。これらは文章の魅力ではなく、明白に不完全な初回文を
+    送信可能として表示しないための最小限の構造チェック。
     """
     reasons: list[str] = []
     normalized = re.sub(r"\s+", " ", text)
