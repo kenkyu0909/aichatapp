@@ -110,10 +110,18 @@ async function loadMatches(prefer){
   await selectContact(target,false);
   renderContacts();
 }
+// トークは「最後のメッセージが新しい順」に並べる（無い相手は最後、登録が新しい順）。
+function sortedContacts(){
+  return [...state.matches].sort((a,b)=>{
+    const av=a.last_message_at||"",bv=b.last_message_at||"";
+    if(av!==bv)return av<bv?1:-1;
+    return b.id-a.id;
+  });
+}
 function renderContacts(){
   const list=$("contacts");list.replaceChildren();
   const term=$("search").value.trim().toLocaleLowerCase();
-  const filtered=state.matches.filter(c=>c.name.toLocaleLowerCase().includes(term));
+  const filtered=sortedContacts().filter(c=>c.name.toLocaleLowerCase().includes(term));
   if(!filtered.length)list.append(node("p","empty-chat",state.matches.length?"一致する相手がいません":"左上の＋から相手を登録してください"));
   filtered.forEach(c=>{
     const btn=node("button","contact-item"+(c.id===state.selectedId?" active":""));
@@ -135,6 +143,8 @@ async function selectContact(id,relist=true){
     if(draft)messageDrafts.set(previousId,draft);
     else messageDrafts.delete(previousId);
   }
+  // T566: 別の相手へ移ったときは「追加の自由記述」を空にする（同じ相手の再表示では残す）。
+  if(previousId!==id){$("extra").value="";}
   contactSelectionEpoch+=1;
   conversationRevision+=1;
   const selectionEpoch=contactSelectionEpoch;
@@ -233,7 +243,11 @@ async function refreshConversation(){
     c.message_count=records.length;
     c.incoming_count=records.filter(m=>m.role==="them").length;
     c.outgoing_count=records.filter(m=>m.role==="me").length;
-    c.last_message=records.at(-1)?.body||"";
+    // プレビューと並び順は、日時が最も新しいメッセージに合わせる（同時刻は後から登録した方）。
+    let newest=null;
+    records.forEach(m=>{if(!newest||(m.created_at||"")>=(newest.created_at||""))newest=m;});
+    c.last_message=newest?.body||"";
+    c.last_message_at=newest?.created_at||"";
   }
   renderContacts();
   $("messages-count").textContent="▤ 自分から："+records.filter(m=>m.role==="me").length+"通";
@@ -878,14 +892,51 @@ function exportCurrent(){
 }
 function attach(){
   const settingsToggle=$("settings-toggle"),advancedSettings=$("advanced-settings");
+  // T572: 詳細設定は相手を切り替えても・再読み込み後も保持する。
+  const advancedKey="mra_advanced_settings_v1";
+  const readAdvancedSettings=()=>{try{return JSON.parse(localStorage.getItem(advancedKey))||{};}catch{return {};}};
+  const writeAdvancedSettings=()=>{
+    try{
+      localStorage.setItem(advancedKey,JSON.stringify({
+        policy:$("policy").checked,
+        requireQuestion:$("require-question")?.checked||false,
+        direction:$("direction").value,
+        count:$("count").value,
+        open:!advancedSettings.hidden,
+      }));
+    }catch{}
+  };
+  const applyAdvancedSettings=()=>{
+    const saved=readAdvancedSettings();
+    if(typeof saved.policy==="boolean")$("policy").checked=saved.policy;
+    if(typeof saved.requireQuestion==="boolean")$("require-question").checked=saved.requireQuestion;
+    if(saved.direction){
+      const opt=[...$("direction").options].find(o=>o.value===saved.direction);
+      if(opt)$("direction").value=saved.direction;
+    }
+    if(saved.count){
+      const opt=[...$("count").options].find(o=>o.value===saved.count);
+      if(opt){$("count").value=saved.count;$("generate").textContent=saved.count+"案を生成";}
+    }
+    if(saved.open&&advancedSettings.hidden){
+      advancedSettings.hidden=false;
+      settingsToggle.setAttribute("aria-expanded","true");
+      settingsToggle.textContent="× 詳細設定を閉じる";
+    }
+  };
+  applyAdvancedSettings();
   if(settingsToggle&&advancedSettings){
     settingsToggle.onclick=()=>{
       const expanded=advancedSettings.hidden;
       advancedSettings.hidden=!expanded;
       settingsToggle.setAttribute("aria-expanded",String(expanded));
       settingsToggle.textContent=expanded?"× 詳細設定を閉じる":"＋ 詳細設定";
+      writeAdvancedSettings();
     };
   }
+  $("policy").onchange=writeAdvancedSettings;
+  $("require-question").onchange=writeAdvancedSettings;
+  $("direction").onchange=writeAdvancedSettings;
   const headerToggle=$("header-settings-toggle"),headerAdvanced=$("header-advanced");
   if(headerToggle&&headerAdvanced){
     headerToggle.onclick=()=>{
@@ -912,7 +963,7 @@ function attach(){
   $("generate").onclick=()=>safe(()=>generate("reply"));
   $("first-message").onclick=()=>safe(()=>generate("first"));
   $("follow-up").onclick=()=>safe(()=>generate("followup"));
-  $("count").onchange=()=>{$("generate").textContent=$("count").value+"案を生成";};
+  $("count").onchange=()=>{$("generate").textContent=$("count").value+"案を生成";writeAdvancedSettings();};
   $("history-button").onclick=historyModal;
   $("send-content").onclick=sentModal;
   $("export-button").onclick=exportCurrent;
