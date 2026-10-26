@@ -1443,7 +1443,7 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
             captured.update(kwargs)
             return SimpleNamespace(text=json.dumps({
                 "needs_user_info": True,
-                "user_questions": [{"question": "映画はお好きですか？", "purpose": "本人の好みを捏造せず返答するため"}],
+                "user_questions": [{"question": "映画は好きですか？", "purpose": "本人の好みを捏造せず返答するため"}],
                 "user_info_reason": "相手から好みを尋ねられています",
                 "recommended": None, "alternatives": [], "reason": "", "strategy": "",
                 "conversation_stage": "Stage 2", "invite_decision": "do_not_invite",
@@ -1460,13 +1460,13 @@ def test_v2_user_info_question_is_separate_and_answers_are_ephemeral(client, mon
     # T573: 候補が作れないときは、ブロックではなく本人への確認質問をそのまま返す。
     assert body["needs_user_info"] is True
     assert body["generation_blocked"] is False
-    assert [q["question"] for q in body["user_questions"]] == ["映画はお好きですか？"]
+    assert [q["question"] for q in body["user_questions"]] == ["映画は好きですか？"]
     assert body["recommended"] is None and body["alternatives"] == []
     assert "確認質問は行わない設定" not in body.get("blocking_reason", "")
     messages_before = c.get(f"/api/matches/{mid}/messages").json()
     c.post("/api/generate", json={
         "mode": "reply", "match_id": mid, "response_version": 2,
-        "user_answers": [{"question": "映画はお好きですか？", "answer": "洋画をよく観ます"}],
+        "user_answers": [{"question": "映画は好きですか？", "answer": "洋画をよく観ます"}],
     })
     assert "洋画をよく観ます" in captured["contents"]
     assert c.get("/api/profile").json()["content"] == ""
@@ -1600,12 +1600,13 @@ def test_blocking_user_info_question_has_no_optional_question(client, monkeypatc
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["needs_user_info"] is False
-    # 候補が無い needs_user_info 応答は、質問ではなくブロック表示に変換される。
-    assert body["generation_blocked"] is True
+    # T573/T576: 候補が無い needs_user_info 応答は質問をそのまま返す
+    # （optional_user_questions は候補と一緒にしか出さない）。
+    assert body["needs_user_info"] is True
+    assert body["generation_blocked"] is False
     assert body["recommended"] is None and body["alternatives"] == []
     assert body["optional_user_questions"] == []
-    assert body["user_questions"] == []
+    assert body["user_questions"] == [{"question": "映画は好きですか？", "purpose": "質問に回答するため"}]
 
 
 def test_optional_user_question_is_limited_to_one_and_reply_mode(client):
@@ -3687,7 +3688,7 @@ def test_t531_first_message_fallback_uses_the_profile_topic_for_walking(client):
     context = _t516_first_context("犬と散歩するのが好きです")
     candidate = backend._build_first_message_fallback_candidate(context)
     assert candidate is not None
-    assert "散歩がお好きなんですね！" in candidate.text, candidate.text
+    assert "散歩が好きなんですね！" in candidate.text, candidate.text
     assert "散歩する" not in candidate.text, candidate.text
     assert backend._candidate_rejection_reasons(candidate, context) == []
 
@@ -3727,8 +3728,8 @@ def test_t532_declared_partner_preference_is_not_treated_as_my_fact(client):
     """
     _, backend = client
     cases = (
-        ("読書が好きです", "読書がお好きなんですね！"),
-        ("映画と音楽が好きです", "映画がお好きなんですね！"),
+        ("読書が好きです", "読書が好きなんですね！"),
+        ("映画と音楽が好きです", "映画が好きなんですね！"),
     )
     for description, expected in cases:
         context = _t516_first_context(description)
@@ -3751,15 +3752,15 @@ def test_t533_first_message_fallback_uses_the_profile_word_for_hobbies(client):
         (
             "休日はカフェ巡りをしています",
             "プロフィールのカフェ巡りのところが気になっていました！",
-            "普段はどんなお店に行かれることが多いんですか？",
+            "普段はどんなお店に行くことが多いんですか？",
         ),
         (
             "旅行が好きで、よく写真を撮ります",
-            "旅行がお好きなんですね！",
+            "旅行が好きなんですね！",
             "旅行先はどこが多いんですか？",
         ),
-        ("音楽が好きです", "音楽がお好きなんですね！", "最近よく聴くアーティストはいますか？"),
-        ("喫茶店が好きです", "喫茶店がお好きなんですね！", "普段はどんなお店に行かれることが多いんですか？"),
+        ("音楽が好きです", "音楽が好きなんですね！", "最近よく聴くアーティストはいますか？"),
+        ("喫茶店が好きです", "喫茶店が好きなんですね！", "普段はどんなお店に行くことが多いんですか？"),
     )
     for description, expected_topic, expected_question in cases:
         context = _t516_first_context(description)
@@ -4587,12 +4588,12 @@ def test_t516_first_fallback_does_not_mangle_or_invent_likes(client):
 
 
 def test_t516_first_fallback_keeps_liked_topic_assertion(client):
-    """T516: 好みの宣言（趣味・好きなど）がある名詞は従来どおり「お好きなんですね」を使う。"""
+    """T516: 好みの宣言（趣味・好きなど）がある名詞は「なんですね」で断定する（T576で敬語は丁寧語のみ）。"""
     _, backend = client
     description = "ランニングが趣味です。休日は公園を走ります"
     running = backend._build_first_message_fallback_candidate(_t516_first_context(description))
     assert running is not None
-    assert "ランニングがお好きなんですね！" in running.text, running.text
+    assert "ランニングが好きなんですね！" in running.text, running.text
     assert "公園" not in running.text, running.text
     assert backend._candidate_rejection_reasons(running, _t516_first_context(description)) == []
 
@@ -5171,7 +5172,7 @@ def test_first_demo_candidates_include_interest_and_match_happiness(client):
     candidates = [result["recommended"], *result["alternatives"]]
     interest_markers = (
         "タイプ", "雰囲気が好み", "雰囲気が気", "プロフィールが気",
-        "お好きなところが素敵", "お好きなところが気にな",
+        "好きなところが素敵", "好きなところが気にな",
     )
     happiness_markers = (
         "マッチできてうれしい", "マッチできて嬉しい",
@@ -7871,7 +7872,7 @@ def test_answer_to_app_clarification_verifies_topic_across_scope_mismatch(client
         "history": [{"role": "them", "body": partner}],
         "my_profile": {"facts": {}},
         "ephemeral_user_answers": [{
-            "question": "旅行はお好きですか？",
+            "question": "旅行は好きですか？",
             "answer": "旅行は好きです。景色の写真を撮るために出かけることもあります",
         }],
     }
@@ -11531,7 +11532,7 @@ def test_overnight_unconfirmed_fact_cases_never_return_sendable_candidates(clien
 OVERNIGHT_DIRECT_QUESTION_CASES = [
     ("普段どんなジャンルの本を読みますか？", "普段はどんなジャンルの本を読みますか？"),
     ("最近どんな本を読みましたか？", "最近読んだ本があれば作品名や内容を教えてください"),
-    ("映画は好きですか？", "映画はお好きですか？"),
+    ("映画は好きですか？", "映画は好きですか？"),
     ("最近どんな映画を観ましたか？", "最近観た映画があれば作品名を教えてください"),
     ("どんなジャンルの映画が好きですか？", "好きな映画のジャンルを教えてください"),
     ("新作を見つけたらすぐ買うタイプですか？", "気になる新作はすぐ買う方ですか？それとも少し考えてから買う方ですか？"),
@@ -11544,7 +11545,7 @@ OVERNIGHT_DIRECT_QUESTION_CASES = [
     ("最近はどの辺のカフェによく行きますか？", "最近よく行くカフェの地域やエリアを教えてください"),
     ("好きなカフェはありますか？", "好きなカフェやお店の雰囲気があれば教えてください"),
     ("映画館にはどのくらい行きますか？", "映画館にはどのくらいの頻度で行きますか？"),
-    ("旅行は好きですか？", "旅行はお好きですか？"),
+    ("旅行は好きですか？", "旅行は好きですか？"),
     ("最近どこか旅行しましたか？", "最近行った旅行先やお出かけ先があれば教えてください"),
     ("どのくらい旅行に行きますか？", "旅行にはどのくらいの頻度で行きますか？"),
     ("休日は普段何をしていますか？", "休日は普段どんなふうに過ごすか教えてください"),
@@ -17055,7 +17056,7 @@ def test_first_message_fallback_candidate(client):
     assert fb_first is not None
     assert "はじめまして！" in fb_first.text
     assert "マッチありがとうございます" in fb_first.text
-    assert "書店員をされているんですね！" in fb_first.text
+    assert "書店員をしているんですね！" in fb_first.text
     assert backend._candidate_rejection_reasons(fb_first, context_first) == []
 
     # Integration with filter_safe_candidates when all candidates fail
@@ -18194,8 +18195,8 @@ def test_t472_polite_fallbacks_and_prompts_avoid_stiff_keigo(client):
         assert phrase in backend._CASUAL_KEIGO_GUIDANCE
     for mode in ("reply", "first", "followup", "like"):
         prompt = backend.read_prompt(mode)
-        assert "軽い丁寧語" in prompt
-        assert "軽い尊敬語・謙譲語" in prompt
+        assert "軽い丁寧語" in prompt or "丁寧語（です・ます）" in prompt, mode
+        assert "尊敬語" in prompt and "謙譲語" in prompt, mode
         assert "固い言い回しは使いません" in prompt or "固い言い回しは避け" in prompt
 
 
@@ -18502,7 +18503,7 @@ def test_t475_answer_relay_does_not_open_a_question_turn_with_sounandesu(client)
         "reply_preferences": {"tone": "自動"},
         "invite_decision": "continue_conversation",
         "ephemeral_user_answers": [
-            {"question": "旅行はお好きですか？", "answer": "旅行は好きです。景色の写真を撮るために出かけることもあります。"},
+            {"question": "旅行は好きですか？", "answer": "旅行は好きです。景色の写真を撮るために出かけることもあります。"},
         ],
     }
     relay = backend._build_answered_question_fallback_candidate(shared_then_asked)
@@ -18710,20 +18711,21 @@ def test_t482_glued_greeting_sentence_is_rejected_generally(client):
     assert "文の区切り不足" not in backend._candidate_rejection_reasons(standalone, context)
 
 
-def test_t480_light_respectful_keigo_is_kept_and_stiff_forms_are_softened(client):
-    """T574: 軽い尊敬語（〜されてる・〜行かれる）は残し、固い形だけ崩す。"""
+def test_t480_friendly_keigo_rewrites_honorifics_without_breaking_checks(client):
+    """T480/T576: 尊敬語・謙譲語は普通の動詞へ戻し、固い形だけを別途崩す。"""
     _, backend = client
     cases = {
-        "書店員をされてるんですね！": "書店員をされてるんですね！",
-        "よく行かれるんですか？": "よく行かれるんですか？",
-        "入ったりもされるんですか？": "入ったりもされるんですか？",
-        "どんなカメラを使われているんですか？": "どんなカメラを使われているんですか？",
+        "書店員をされてるんですね！": "書店員なんですね！",
+        "よく行かれるんですか？": "よく行くんですか？",
+        "入ったりもされるんですか？": "入ったりもするんですか？",
+        "どんなカメラを使われているんですか？": "どんなカメラを使ってるんですか？",
         "北口は喫茶店がたくさんありますね✨": "北口は喫茶店がたくさんありますよね✨",
         "行ってみましょうか": "行ってみませんか",
     }
     for original, expected in cases.items():
         assert backend._soften_stiff_keigo(original) == expected, original
     assert backend._soften_stiff_keigo("ありますね") == "ありますよね"
+    assert backend._soften_stiff_keigo("行かれるんですか？") == "行くんですか？"
 
     context = {
         "mode": "reply",
@@ -18751,7 +18753,7 @@ def test_t480_light_respectful_keigo_is_kept_and_stiff_forms_are_softened(client
     )
     filtered = backend.filter_safe_candidates(value, 3, context)
     assert filtered["recommended"] is not None, filtered
-    assert "探される" in filtered["recommended"]["text"], filtered
+    assert "探される" not in filtered["recommended"]["text"], filtered
     assert filtered["recommended"]["text"].splitlines()[0] == "古本屋めぐりが好きなんですね！"
 
 
@@ -18786,8 +18788,9 @@ def test_t480_prompts_state_friendly_keigo_principles(client):
         assert "少し年上の友達" in prompt, mode
         assert "尊敬語" in prompt and "謙譲語" in prompt, mode
     reply_prompt = backend.read_prompt("reply")
-    # T574: 軽い尊敬語・謙譲語は自然に混ぜてよい方針へ変更した。
-    assert "軽い尊敬語・謙譲語" in reply_prompt
+    # T576: 尊敬語・謙譲語は使わず丁寧語のみへ戻した。
+    assert "お好き" in reply_prompt
+    assert "は使わず" in reply_prompt
     assert "ありますよね" in reply_prompt
     assert "いつ空いてます？" in reply_prompt
 
@@ -19402,11 +19405,11 @@ def test_t485_followup_uses_the_full_noun_phrase(client):
     assert backend._latest_topic_noun(context) == "ハード系のパン"
 
 
-def test_t485_light_respectful_osuki_is_kept(client):
-    """T574: 「お好き」などの軽い尊敬語はそのまま残す。"""
+def test_t485_stiff_keigo_softens_osuki(client):
+    """T485/T576: 「お好き」など相手の好みを立てる言い回しを普通の形へ戻す。"""
     _, backend = client
-    assert backend._soften_stiff_keigo("どんなお店のものもお好きなんですか？") == "どんなお店のものもお好きなんですか？"
-    assert backend._soften_stiff_keigo("お好きなパンはありますか？") == "お好きなパンはありますか？"
+    assert backend._soften_stiff_keigo("どんなお店のものもお好きなんですか？") == "どんなお店のものも好きなんですか？"
+    assert backend._soften_stiff_keigo("お好きなパンはありますか？") == "好きなパンはありますか？"
 
 
 def test_t485_short_reception_followed_by_text_is_a_missing_break(client):
@@ -19745,13 +19748,13 @@ def test_t488_echo_opening_is_flagged(client):
     assert "相手の言葉をなぞるだけ" not in backend._candidate_rejection_reasons(reworded, context)
 
 
-def test_t489_respectful_rareru_question_is_kept(client):
-    """T574: 軽い尊敬語（〜られる＋んですか）はそのまま残す。"""
+def test_t489_respectful_rareru_question_is_softened(client):
+    """T489/T576: 尊敬の「〜られる＋んですか」を普通の形へ戻す。"""
     _, backend = client
-    assert backend._soften_stiff_keigo("どんな写真を撮られるんですか？") == "どんな写真を撮られるんですか？"
-    assert backend._soften_stiff_keigo("よく本を読まれるんですか？") == "よく本を読まれるんですか？"
-    assert backend._soften_stiff_keigo("甘いものも食べられるんですか？") == "甘いものも食べられるんですか？"
-    assert backend._soften_stiff_keigo("どんな音楽を聞かれるんですか？") == "どんな音楽を聞かれるんですか？"
+    assert backend._soften_stiff_keigo("どんな写真を撮られるんですか？") == "どんな写真を撮るんですか？"
+    assert backend._soften_stiff_keigo("よく本を読まれるんですか？") == "よく本を読むんですか？"
+    assert backend._soften_stiff_keigo("甘いものも食べられるんですか？") == "甘いものも食べるんですか？"
+    assert backend._soften_stiff_keigo("どんな音楽を聞かれるんですか？") == "どんな音楽を聞くんですか？"
 
 
 def test_t489_schedule_change_is_not_finalized_before_partner_confirms(client):
@@ -20204,12 +20207,10 @@ def test_t497_deterministic_fallback_is_softened(client):
     )
     filtered = backend.filter_safe_candidates(value, 3, context)
     recommended = filtered.get("recommended") or {}
-    text = str(recommended.get("text", ""))
     # 不採用の出力に代えて、決定的な初回フォールバックが用意される。
-    assert text
-    # T574: 「お好き」のような軽い尊敬語はそのまま残してよい。
-    assert "好き" in text
-    assert "よろしくお願いします" not in text
+    assert str(recommended.get("text", ""))
+    # T485/T576: フォールバックにも「お好き」は使わない。
+    assert "お好き" not in str(recommended.get("text", ""))
 
 
 def test_t498_unset_schedule_gets_a_wait_reply(client):
@@ -21099,26 +21100,26 @@ def test_t500_prior_answer_is_not_repeated(client):
     )
 
 
-def test_t500_respectful_past_tense_is_kept(client):
-    """T574: 軽い尊敬語の過去形（〜されていた・〜されてた）はそのまま残す。"""
+def test_t500_respectful_past_tense_is_softened(client):
+    """T500/T576: 軽い尊敬語の過去形（〜されていた・〜されてた）を普通の形へ戻す。"""
     _, backend = client
     softened = backend._soften_stiff_keigo('テニスをされていたんですね')
-    assert softened == 'テニスをされていたんですね'
+    assert softened == 'テニスをしてたんですね'
     assert (
-        backend._soften_stiff_keigo('テニスをされていた頃はどんな大会に出ていたんですか？')
-        == 'テニスをされていた頃はどんな大会に出ていたんですか？'
+        backend._soften_stiff_keigo('ちなみにテニスをされていた頃はどんな大会に出ていたんですか？')
+        == 'ちなみにテニスをしてた頃はどんな大会に出ていたんですか？'
     )
     assert (
         backend._soften_stiff_keigo('学生時代にテニスをされてたんですね✨')
-        == '学生時代にテニスをされてたんですね✨'
+        == '学生時代にテニスをしてたんですね✨'
     )
     assert (
         backend._soften_stiff_keigo('今は何か運動をされたりしますか？')
-        == '今は何か運動をされたりしますか？'
+        == '今は何か運動をしたりしますか？'
     )
     assert (
         backend._soften_stiff_keigo('テニスをやられてたんですね！')
-        == 'テニスをやられてたんですね！'
+        == 'テニスをやってたんですね！'
     )
     assert (
         backend._soften_stiff_keigo('試合にやられてしまった')
@@ -21128,7 +21129,7 @@ def test_t500_respectful_past_tense_is_kept(client):
     assert not backend.candidate_has_high_confidence_japanese_error('こさんはスポーツはよくするんですか？')
     assert (
         backend._soften_stiff_keigo('普段はどんな曲を聴かれるんですか？')
-        == '普段はどんな曲を聴かれるんですか？'
+        == '普段はどんな曲を聴くんですか？'
     )
     assert (
         backend._soften_stiff_keigo('猫を飼っていらっしゃるんですね！')
@@ -21575,7 +21576,7 @@ def test_filter_rejects_prohibited_topic_and_missing_lead_in(client):
     )
     result = backend.filter_safe_candidates(suggestions, 2, context)
     texts = [result["recommended"]["text"], *[a["text"] for a in result["alternatives"]]]
-    assert any("ゲームがお好きなんですね" in text for text in texts)
+    assert any("ゲームが好きなんですね" in text for text in texts)
     assert not any("普段はどんなゲームをすることが多いんですか" in text for text in texts)
     reasons = [
         reason for item in result["candidate_rejections"] for reason in item["reasons"]
@@ -21643,3 +21644,33 @@ def test_generate_instruction_states_prohibited_topic_and_lead_in(client, monkey
     assert "本" in instruction
     assert "【話題を振る運び（最重要）】" in instruction
     assert "受け止め" in instruction
+
+
+def test_t576_polite_only_keigo_policy_across_prompts_and_instruction(client):
+    """T576: 尊敬語・謙譲語は禁止し、丁寧語（です・ます）のみを使う。
+
+    T574で「軽い尊敬語・謙譲語を混ぜてよい」へ緩めた方針を戻す。プロンプトと
+    system_instruction が丁寧語のみの方針を述べ、機械置換も されてる・行かれる・
+    お好き を普通の形へ戻すことをまとめて検証する。
+    """
+    _, backend = client
+    for mode in ("reply", "first", "followup"):
+        prompt = backend.read_prompt(mode)
+        assert "尊敬語（〜される、〜られる、お好き、いらっしゃる）と謙譲語" in prompt, mode
+        assert "は使わず" in prompt, mode
+        assert "軽い尊敬語・謙譲語" not in prompt, mode
+    common_prompt = (backend.PROMPTS / "common.txt").read_text(encoding="utf-8")
+    assert "尊敬語（〜される、〜られる、お好き、いらっしゃる）と謙譲語" in common_prompt
+    assert "軽い尊敬語・謙譲語" not in common_prompt
+    assert backend._CASUAL_KEIGO_GUIDANCE.count("使わないでください") >= 1
+    assert "軽い尊敬語・謙譲語" not in backend._CASUAL_KEIGO_GUIDANCE
+
+    cases = {
+        "休日は何をされてるんですか？": "休日は何をしてるんですか？",
+        "週末は行かれるんですか？": "週末は行くんですか？",
+        "小説がお好きなんですね！": "小説が好きなんですね！",
+        "拝見しました": "見ました",
+        "承知いたしました": "わかりました",
+    }
+    for original, expected in cases.items():
+        assert backend._soften_stiff_keigo(original) == expected, original
