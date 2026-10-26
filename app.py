@@ -7064,15 +7064,19 @@ def learn_profile(data: ProfileLearnInput):
 @app.get("/api/matches")
 def get_matches():
     with database() as db:
+        # 並び順は最後のメッセージが新しい順（メッセージが無い相手は最後に、登録が新しい順）。
+        # 取り込み済みの履歴は created_at が元の日時なので、id順ではなく日時で並べる。
         return [
             dict(r) for r in db.execute("""
                 SELECT a.*,
                        (SELECT COUNT(*) FROM messages m WHERE m.match_id=a.id) AS message_count,
                        (SELECT COUNT(*) FROM messages m WHERE m.match_id=a.id AND m.role='them') AS incoming_count,
                        (SELECT COUNT(*) FROM messages m WHERE m.match_id=a.id AND m.role='me') AS outgoing_count,
-                       (SELECT body FROM messages m WHERE m.match_id=a.id ORDER BY m.id DESC LIMIT 1) AS last_message
+                       (SELECT body FROM messages m WHERE m.match_id=a.id
+                        ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message,
+                       (SELECT MAX(m.created_at) FROM messages m WHERE m.match_id=a.id) AS last_message_at
                 FROM matches a
-                ORDER BY a.id DESC
+                ORDER BY last_message_at DESC, a.id DESC
             """).fetchall()
         ]
 
@@ -10879,7 +10883,10 @@ def _candidate_exceeds_mirrored_length(candidate: Candidate, context: dict) -> b
         return False
 
     target = str(measured.get("target_reply_length", ""))
-    if "原則1文" in target or "1〜2文" in target or "短い1〜2文" in target:
+    if "原則1文" in target:
+        # T570: 相手が1行でも候補は2〜3行まで許容する（短い返信の連鎖を避ける）。
+        maximum_sentences = 3
+    elif "1〜2文" in target or "短い1〜2文" in target:
         # A compact message can still contain several measured utterances
         # (for example 「うん！いいね！楽しみ！」). Honor three such markers
         # without loosening the 1–2 sentence ceiling for ordinary short inputs.
@@ -11532,6 +11539,13 @@ def _candidate_has_question(text: str) -> bool:
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
+    # T575: 自由記述で禁止された話題（「本の話は禁止」等）は、関連語も含めて
+    # 候補本文から決定的に除外する。プロンプトだけでは実走行で守られなかった。
+    prohibited_topics = _extra_prohibited_topics(
+        str((context.get("reply_preferences") or {}).get("extra", "") or "")
+    )
+    if prohibited_topics and _mentions_prohibited_topic(text, prohibited_topics):
+        reasons.append("自由記述で禁止された話題に触れている")
     recent_me_messages = [
         str(m.get("body", ""))
         for m in context.get("history", [])
@@ -11592,6 +11606,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("本人の名前を三人称呼称")
     if context.get("mode") == "first":
         reasons.extend(_first_message_required_content_reasons(text, context))
+    # T575: プロフィールの新しい話題を、受け止めなしで質問だけ振る候補を落とす。
+    if _question_topic_needs_lead_in(text, context):
+        reasons.append("話題を振る前の受け止めがない")
     if candidate_has_missing_sentence_break(text):
         reasons.append("文の区切り不足")
     if candidate_has_high_confidence_japanese_error(text):
@@ -12218,6 +12235,164 @@ def _topic_change_requested(context: dict) -> str:
     if not requested:
         return ""
     return topic or "別の話題"
+
+
+# T575: 自由記述の「〜の話は禁止」「〜には触れない」等の除外指定を、プロンプト任せに
+# せず決定的に守るための関連語グループ。禁止された話題語そのものだけでなく、同じ
+# 話題を指す関連語（例: 「本」→読書・小説・漫画・本屋）が候補本文・質問・reason に
+# 出ないようにする。
+_TOPIC_TERM_GROUPS: tuple[frozenset[str], ...] = (
+    frozenset({"本", "読書", "読む", "読んだ", "読んでいる", "小説", "漫画", "雑誌",
+               "本屋", "書店", "絵本", "文庫", "ページ", "作家", "著者", "エッセイ"}),
+    frozenset({"映画", "映画館", "作品", "鑑賞", "ドラマ", "舞台", "俳優"}),
+    frozenset({"アニメ", "漫画", "アニメーション", "声優"}),
+    frozenset({"音楽", "曲", "アーティスト", "バンド", "ライブ", "歌", "歌手", "演奏"}),
+    frozenset({"ゲーム", "ゲーマー", "ゲーム機", "ゲームソフト"}),
+    frozenset({"カフェ", "喫茶", "喫茶店", "珈琲", "コーヒー", "カフェ巡り"}),
+    frozenset({"旅行", "旅", "観光", "温泉", "海外"}),
+    frozenset({"料理", "自炊", "ご飯", "食事", "食べ物", "グルメ", "レシピ"}),
+    frozenset({"スポーツ", "運動", "ジム", "筋トレ", "ランニング", "散歩", "ヨガ"}),
+    frozenset({"ペット", "犬", "猫", "動物"}),
+    frozenset({"写真", "カメラ", "撮影", "撮る"}),
+    frozenset({"酒", "お酒", "飲み", "ビール", "ワイン", "日本酒", "居酒屋"}),
+    frozenset({"カラオケ", "歌"}),
+)
+
+# 敬語・絵文字のような生成設定の語は「話題」ではないため、禁止話題として扱わない。
+_EXTRA_PROHIBITION_STOPWORDS = frozenset({
+    "敬語", "タメ口", "口調", "文体", "絵文字", "顔文字", "句読点", "記号", "笑",
+    "長文", "短文", "長さ", "名前", "呼び方", "呼称", "一人称", "敬称", "質問",
+    "話題", "話", "誘い", "褒め", "相槌", "自己紹介", "挨拶", "文末", "表現",
+    "言い回し", "内容", "文章", "プロフィール", "趣味", "恋愛", "結婚", "将来",
+    "過去", "天気", "ちなみに",
+})
+
+_EXTRA_PROHIBITION_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"([\u4e00-\u9fafァ-ヶーA-Za-z]{1,10})の話[^\n。]{0,8}?"
+        r"(?:禁止|やめ|避け|触れ|出さ|しないで|控え|なし|抜き)"
+    ),
+    re.compile(
+        r"([\u4e00-\u9fafァ-ヶーA-Za-z]{1,10})(?:には|は|を)[^\n。]{0,6}?"
+        r"(?:禁止|避け|触れ|出さ|しないで|控え|なし)"
+    ),
+)
+
+
+def _extra_prohibited_topics(extra: str) -> list[str]:
+    """T575: 自由記述の「〜の話は禁止」等から禁止された話題語を取り出す。
+
+    抽出した語は _TOPIC_TERM_GROUPS で関連語へ広げ、候補本文・質問・reason に
+    その話題が出ていないかを決定的に検査する。敬語・絵文字のような生成設定の
+    語は話題ではないため除外する。
+    """
+    text = str(extra or "").strip()
+    if not text:
+        return []
+    topics: list[str] = []
+    for pattern in _EXTRA_PROHIBITION_PATTERNS:
+        for match in pattern.finditer(text):
+            topic = re.sub(r"^(?:その|この|あの)", "", match.group(1).strip())
+            if not topic or topic in _EXTRA_PROHIBITION_STOPWORDS:
+                continue
+            if topic not in topics:
+                topics.append(topic)
+    return topics
+
+
+def _prohibited_topic_terms(topic: str) -> set[str]:
+    """禁止された話題語を、同じ話題を指す関連語も含めた語集合へ広げる (T575)."""
+    terms = {topic}
+    for group in _TOPIC_TERM_GROUPS:
+        if topic in group:
+            terms |= set(group)
+    return terms
+
+
+# T575: 1文字の話題語（例:「本」）が別の複合語（日本・本当・本気など）の一部として
+# 出るだけの候補を誤って棄却しないための除外複合語。
+_SINGLE_CHAR_TOPIC_COMPOUND_EXCLUSIONS: dict[str, tuple[str, ...]] = {
+    "本": ("日本", "本当", "本気", "本日", "本来", "本題", "本人", "本格", "本店",
+           "本名", "本音", "本部", "本国", "本院", "本番", "本領", "本望", "本懐",
+           "脚本", "基本", "資本", "台本", "見本", "標本", "原本", "副本", "写本",
+           "配本", "抄本", "版本"),
+}
+
+
+def _topic_term_mentioned(text: str, term: str) -> bool:
+    """候補本文が話題語に触れているか。1文字語は複合語の一部を除外する (T575)."""
+    if not term or not text:
+        return False
+    exclusions = _SINGLE_CHAR_TOPIC_COMPOUND_EXCLUSIONS.get(term)
+    if exclusions:
+        stripped = text
+        for compound in exclusions:
+            stripped = stripped.replace(compound, "　")
+        return term in stripped
+    return term in text
+
+
+def _mentions_prohibited_topic(text: str, prohibited_topics: list[str]) -> bool:
+    """禁止された話題・その関連語が本文に出ているか (T575)."""
+    for topic in prohibited_topics:
+        for term in _prohibited_topic_terms(topic):
+            if _topic_term_mentioned(text, term):
+                return True
+    return False
+
+
+# T575: プロフィールの話題を唐突に質問だけで振っていないかを見るとき、質問より前の
+# 行にこの受け止め表現があれば「受け止め済み」として通す。
+_QUESTION_LEAD_IN_ACK_PATTERN = re.compile(
+    r"なんですね|みたいですね|そうなんですね|が好き|お好き|気になって|"
+    r"素敵|いいですね|わかります|楽しみ"
+)
+
+
+def _question_topic_needs_lead_in(text: str, context: dict) -> bool:
+    """T575: プロフィールの新しい話題を、受け止めなしで質問だけ振っていないか。
+
+    質問行に相手プロフィールの話題語が出ていて、それが直近の相手発言になく
+    （＝自分から振る新話題）、かつ質問より前の行にその話題への受け止めが無い
+    候補を棄却する。「〜なんですね！」→「〜なんですか？」の運びを強制する。
+    """
+    mode = str(context.get("mode") or "")
+    if mode not in {"first", "reply", "followup"}:
+        return False
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    if not lines:
+        return False
+    question_index = next(
+        (i for i, line in enumerate(lines) if _is_ask_sentence(line)), None
+    )
+    if question_index is None:
+        return False
+    question_line = lines[question_index]
+    other = context.get("other") or {}
+    profile_sources = [str(other.get("description", ""))]
+    profile_sources.extend(
+        str(value) for value in other.get("temporary_user_supplied_profile_facts", [])
+    )
+    profile_terms, _ = _profile_topic_terms(profile_sources)
+    if not profile_terms:
+        return False
+    mentioned = [term for term in profile_terms if term in question_line]
+    if not mentioned:
+        return False
+    # 直近の相手発言に出ている話題は、自分から振る新話題ではないため対象外。
+    recent_partner = " ".join(
+        str(message.get("body", ""))
+        for message in context.get("history", [])[-6:]
+        if message.get("role") == "them"
+    )
+    if any(term in recent_partner for term in mentioned):
+        return False
+    lead_in = "\n".join(lines[:question_index])
+    if any(term in lead_in for term in mentioned):
+        return False
+    if _QUESTION_LEAD_IN_ACK_PATTERN.search(lead_in):
+        return False
+    return True
 
 
 def _recent_relay_text(context: dict, lookback: int = 3) -> str:
@@ -12870,7 +13045,8 @@ _ACK_POOL_CASUAL = ("そうなんだ！", "いいね！", "なるほど！")
 _CASUAL_KEIGO_GUIDANCE = (
     "「〜ですよね！」「〜なんですね」「〜かもです」「〜ですかね？」「〜しましょー」「おけです」「りょーかいですー」のように軽く柔らかく崩し、"
     "「いかがですか」「〜でしょうか」「〜いただけますか」「お越しください」「心待ちにしております」「承知いたしました」のような固い言い回しは使わないでください。"
-    "相槌は「えーそうなんですか」「わかります！」のように短く感情を添え、質問は「ちなみに〜？」のように短く軽くし、自分の話を一言添えてから質問を返してください。"
+    "丁寧語を基本に、軽い尊敬語・謙譲語（〜されてる、〜行かれる など）は自然な場面で混ぜてよく、毎文に重ねないでください。"
+    "相槌は「えーそうなんですか」「わかります！」のように短く感情を添え、質問は前の文から自然につなげて短く軽くし、自分の話を一言添えてから質問を返してください。"
 )
 
 
@@ -12978,7 +13154,7 @@ _STIFF_KEIGO_REWRITES = (
     ("言っていただける", "言ってもらえる"),
     ("していただけて", "してもらえて"),
     ("していただける", "してもらえる"),
-    # T480: 相手を立てる尊敬語・謙譲語を普通の動詞へ戻す（です・ますは保つ）。
+    # T480/T574: 固いビジネス敬語・重い謙譲語だけを普通の動詞へ戻す（です・ますは保つ）。
     # 安全な語だけを対象にし、意味が変わる広い置換（〜される→〜する 等）は入れない。
     # 一部の動詞は「〜させていただきます」→「〜します」では不自然になるため先に個別に戻す。
     ("見させていただきました", "見ました"),
@@ -13004,62 +13180,15 @@ _STIFF_KEIGO_REWRITES = (
     ("拝見しました", "見ました"),
     ("拝見して", "見て"),
     ("いたします", "します"),
-    # T500: 過去の尊敬「〜されていた」を普通の形へ戻す。
-    ("されていたんですね", "してたんですね"),
-    ("されていたんですか", "してたんですか"),
-    ("されていた頃", "してた頃"),
-    ("されていたとき", "してたとき"),
-    ("されてたんですね", "してたんですね"),
-    ("されてたんですか", "してたんですか"),
-    ("されてた", "してた"),
-    ("されたりしますか", "したりしますか"),
-    ("やられてたんですね", "やってたんですね"),
-    ("やられてたんですか", "やってたんですか"),
-    ("やられてるんですね", "やってるんですね"),
-    ("やられていたんですね", "やってたんですね"),
-    # T500: 実走で残った尊敬語（聴かれる・いらっしゃる）。
-    ("聴かれるんですか", "聴くんですか"),
-    ("聴かれますか", "聴きますか"),
-    ("聴かれて", "聴いて"),
-    ("聴かれる", "聴く"),
+    # T574: 軽い尊敬語・謙譲語（〜されてた、〜行かれる、〜聴かれる など）は自然な
+    # 表現としてそのまま残す。固いビジネス敬語だけを置換対象にする。
     ("飼っていらっしゃるんですね", "飼ってるんですね"),
     ("飼っていらっしゃる", "飼ってる"),
     ("いらっしゃるんですね", "いるんですね"),
     ("いらっしゃるんですか", "いるんですか"),
     ("いらっしゃいますか", "いますか"),
-    # 残る尊敬語の「いらっしゃる」は普通の「いる」へ（「〜していらっしゃるところ」等）。
+    # 重い尊敬語の「いらっしゃる」は普通の「いる」へ（「〜していらっしゃるところ」等）。
     ("いらっしゃる", "いる"),
-    ("されてるんですね", "なんですね"),
-    ("されているんですね", "なんですね"),
-    ("されるんですね", "なんですね"),
-    ("されてるんですか", "してるんですか"),
-    ("されているんですか", "してるんですか"),
-    ("されるんですか", "するんですか"),
-    ("されてる", "してる"),
-    ("されている", "してる"),
-    ("行かれる", "行く"),
-    # 「シネコンによく行かれている」のような尊敬語の進行形も普通の形へ。
-    ("行かれて", "行って"),
-    ("使われている", "使ってる"),
-    ("使われてる", "使ってる"),
-    ("楽しまれている", "楽しんでる"),
-    ("楽しまれて", "楽しんで"),
-    ("飼われている", "飼ってる"),
-    ("飼われていて", "飼っていて"),
-    ("通われて", "通って"),
-    # T489: 尊敬の「〜られる」＋「んですか」を普通の形へ戻す。受け身と区別できる
-    # よう、対象の動詞を限定し、報告のあった「んですか」形だけを置換する。
-    ("撮られるんですか", "撮るんですか"),
-    ("読まれるんですか", "読むんですか"),
-    # 「最近小説をよく読まれるんですね！」のような語尾も同じく普通の形へ。
-    ("読まれるんです", "読むんです"),
-    ("食べられるんですか", "食べるんですか"),
-    ("飲まれるんですか", "飲むんですか"),
-    ("書かれるんですか", "書くんですか"),
-    ("聞かれるんですか", "聞くんですか"),
-    ("作られるんですか", "作るんですか"),
-    ("見られるんですか", "見るんですか"),
-    ("観られるんですか", "観るんですか"),
     ("ありますね", "ありますよね"),
     ("いきませんか", "行きませんか"),
     ("いきましょう", "行きましょう"),
@@ -13072,15 +13201,7 @@ _STIFF_KEIGO_REWRITES = (
     ("てみましょうか", "てみませんか"),
     ("てみますか", "てみませんか"),
     ("てみようか", "てみませんか"),
-    # T485: 「お好き」など相手の好みを立てる言い回しを普通の形へ戻す。
-    ("お好きなんですか", "好きなんですか"),
-    ("お好きなんで", "好きなんで"),
-    ("お好きですか", "好きですか"),
-    ("お好きなもの", "好きなもの"),
-    ("お好きな", "好きな"),
-    ("がお好き", "が好き"),
-    ("もお好き", "も好き"),
-    ("お好き", "好き"),
+    # T574: 「お好き」などの軽い尊敬語も自然な表現としてそのまま残す。
     # T487: 「何時に変更するか教えてもらえますか」のような硬い確認を普通の形へ。
     ("何時に変更するか教えてもらえますか", "何時になったんですか"),
     ("何時に変更するか教えていただけますか", "何時になったんですか"),
@@ -13102,12 +13223,9 @@ def _has_condescending_offer(text: str) -> bool:
 
 
 _PARTNER_HONORIFIC_REWRITES = (
+    # T574: 「〜されてるんですね」のような軽い尊敬語は自然な表現として残す。
+    # ここでは重複した名詞（「東京の東京」等）の整理だけを行う。
     (re.compile(r"([\u30a1-\u30f6\u4e00-\u9faf]{2,4})\u306e\1"), r"\1"),
-    (re.compile(r"(.{1,14}?)をされてるんですね"), r"\1なんですね"),
-    (re.compile(r"(.{1,14}?)をされているんですね"), r"\1なんですね"),
-    (re.compile(r"(.{1,14}?)をされるんですね"), r"\1なんですね"),
-    (re.compile(r"(.{1,14}?)をされてるんですか"), r"\1なんですか"),
-    (re.compile(r"(.{1,14}?)をされてる"), r"\1してる"),
 )
 
 
@@ -13237,7 +13355,8 @@ def filter_safe_candidates(
         if fallback_candidate is None and candidate_context.get("mode") == "first":
             fallback_candidate = _build_first_message_fallback_candidate(candidate_context)
         if fallback_candidate is not None:
-            # T497: 決定的フォールバックにも尊敬語の言い換え（お好き→好き 等）を適用する。
+            # T497/T574: 決定的フォールバックにも固いビジネス敬語の言い換えだけを適用する
+            # （軽い尊敬語・謙譲語はそのまま残す）。
             softened_fallback = _normalize_first_person_to_boku(_soften_stiff_keigo(fallback_candidate.text))
             if softened_fallback != fallback_candidate.text:
                 softened = fallback_candidate.model_copy(update={"text": softened_fallback})
@@ -13565,15 +13684,16 @@ def generate(data: GenerateInput):
     result = _generate_impl(data)
     result = _apply_conversation_state_floor(result, data)
     result = _apply_acknowledgment_supplement_to_result(result, data)
-    return _drop_user_info_confirmation(result)
+    return _drop_user_info_confirmation(_apply_extra_adoption_to_result(result, data))
 
 
 def _drop_user_info_confirmation(result):
-    """2026-10-23: 本人への確認質問（needs_user_info）を廃止する。
+    """2026-10-25: 候補が作れないときは、本人への確認質問を表示して回答を求める（T573）。
 
-    ユーザーの指示により、本人の事実確認は行わず、確認質問で候補を止めない。
-    候補が返っていればそれをそのまま使い、候補が無い場合だけブロック表示に
-    切り替えて再生成を促す（質問は一切返さない）。
+    候補が返っていればそれをそのまま使い、確認質問で候補を止めない
+    （2026-10-23 の方針は維持）。候補が無く質問があるときは、何が足りないか
+    分からない曖昧なブロックの代わりに、質問をそのまま本人へ返す。
+    質問も無いときだけブロック表示にし、理由（user_info_reason）を添える。
     """
     if not isinstance(result, dict) or not result.get("needs_user_info"):
         return result
@@ -13586,9 +13706,15 @@ def _drop_user_info_confirmation(result):
             "user_questions": [],
             "user_info_reason": "",
         }
+    if result.get("user_questions"):
+        return {**result, "skipped_user_info": False, "generation_blocked": False}
+    reason = str(result.get("user_info_reason") or "").strip()
     return blocked_user_info_response(
-        "本人への確認質問は行わない設定です。候補を作れる情報が足りないため、"
-        "生成画面の「追加の自由記述」に情報を足すか、もう一度生成してください。",
+        reason
+        or (
+            "本人への確認質問は行わない設定です。候補を作れる情報が足りないため、"
+            "生成画面の「追加の自由記述」に情報を足すか、もう一度生成してください。"
+        ),
         skipped=bool(result.get("skipped_user_info")),
         demo=bool(result.get("demo")),
         attempted_models=result.get("attempted_models") or [],
@@ -13603,8 +13729,54 @@ def _tidy_candidate_text(text: str) -> str:
     value = str(text)
     # T560: 実生成で動詞の説明形の語尾が抜けた「過ごなんです」が出たため直す。
     value = value.replace("過ごなんです", "過ごすんです")
-    lines = [re.sub(r"^[\s\u3000]+|[\s\u3000]+$", "", line) for line in value.splitlines()]
+    # T565: ✨は禁止。行頭の✨は取り除き、それ以外は「！」へ置き換える。
+    value = value.replace("✨️", "✨")
+    lines = []
+    for line in value.splitlines():
+        line = re.sub(r"^(?:[\s\u3000]*✨)+", "", line)
+        line = line.replace("✨", "！")
+        lines.append(re.sub(r"^[\s\u3000]+|[\s\u3000]+$", "", line))
     return "\n".join(line for line in lines if line)
+
+
+_EXTRA_ADOPTION_QUOTED = re.compile(
+    r"[「『]([^「」』]{1,40})[」』]\s*(?:は採用|を採用|を使[ってう]|を使用|で返す|で返して|を含めて|を入れて|と返す)"
+)
+_EXTRA_ADOPTION_BARE = re.compile(r"([^\n「」『』]{1,30}?)\s*は採用")
+
+
+def _extra_adoption_phrase(extra: str) -> str:
+    """T571: 自由記述の「〜は採用」のような採用指定から、使うべき文言を取り出す。"""
+    text = str(extra or "").strip()
+    if not text:
+        return ""
+    match = _EXTRA_ADOPTION_QUOTED.search(text)
+    if match:
+        return match.group(1).strip()
+    match = _EXTRA_ADOPTION_BARE.search(text)
+    if match:
+        return match.group(1).strip().rstrip("。")
+    return ""
+
+
+def _apply_extra_adoption_to_result(result, data):
+    """T571: 自由記述に文言の採用指定があるとき、その文言を候補本文へ入れる。
+
+    プロンプトで指示しても従わない実走行があったため、最終段で決定的に
+    文言を含める。ユーザーの自由記述の指示はミラーリング規則より優先する。
+    """
+    if not isinstance(result, dict) or result.get("generation_blocked") or result.get("needs_user_info"):
+        return result
+    if data.mode != "reply":
+        return result
+    phrase = _extra_adoption_phrase(data.extra)
+    if not phrase:
+        return result
+    for key in ("recommended", "alternatives"):
+        item = result.get(key)
+        if isinstance(item, dict) and item.get("text") and phrase not in item["text"]:
+            item["text"] = _tidy_candidate_text(f"{phrase}\n{item['text']}")
+    return result
 
 
 def _apply_acknowledgment_supplement_to_result(result, data: GenerateInput):
@@ -13630,6 +13802,11 @@ def _apply_acknowledgment_supplement_to_result(result, data: GenerateInput):
         return result
     for entry, new_candidate in zip(entries, updated):
         entry["text"] = _tidy_candidate_text(new_candidate.text)
+    rejected = result.get("rejected_candidates")
+    if isinstance(rejected, list):
+        for item in rejected:
+            if isinstance(item, dict) and item.get("text"):
+                item["text"] = _tidy_candidate_text(str(item["text"]))
     return result
 
 
@@ -13754,6 +13931,30 @@ def _generate_impl(data: GenerateInput):
     system_instruction += (
         "\n【呼称の厳守】一人称は「僕」を使います（本人プロフィールで一人称を明示している場合はそれに従います）。「私」は使わず、自分自身を名前や「〇〇さん」などの三人称で呼んではいけません。"
     )
+    if data.mode in {"first", "reply", "followup"}:
+        system_instruction += (
+            "\n【話題を振る運び（最重要）】\n"
+            "- 相手のプロフィールから新しい話題を振るときや、話題を切り替えるときは、"
+            "いきなり質問だけを置かず、質問の直前に、その話題に触れた短い受け止めを1行置いてください。\n"
+            "- 受け止めは「〜がお好きなんですね！」「〜が趣味なんですね！」「〜をされてるんですね！」のように、"
+            "その話題を取り上げたことが伝わる形にします。そのうえで「〜なんですか？」"
+            "「どんな〜なんですか？」と質問を続けます。\n"
+            "- 例: 「ゲームがお好きなんですね！」→「普段はどんなゲームをされるんですか？」。"
+            "受け止めを省いて「普段はどんなゲームをすることが多いんですか？」とだけ書いてはいけません。\n"
+            "- 相手のプロフィールや直近の会話に出ていない具体的なもの（好きなスイーツの種類、本を読む場所など）を"
+            "突然尋ねないでください。話題はプロフィールか直近の会話に出たものだけから選びます。\n"
+            "- 相手の直前の発言を拾って深める場合は、その発言の中の具体物から一段だけ進めます。\n"
+        )
+    prohibited_topics = _extra_prohibited_topics(data.extra)
+    if prohibited_topics:
+        system_instruction += (
+            "\n【自由記述の除外指定（厳守）】\n"
+            "- 利用者の自由記述で次の話題が禁止されています: "
+            + "、".join(prohibited_topics)
+            + "。この話題とその関連語（例: 本なら読書・小説・漫画・本屋）を、"
+            "候補本文・質問・reason のどの部分にも出さないでください。"
+            "その話題には触れず、別の確認済みの話題で自然に返してください。\n"
+        )
     state = context.get("conversation_state") or {}
     last_partner_message = str(state.get("last_partner_message") or "").strip()
     if last_partner_message and data.mode == "reply":
@@ -13893,8 +14094,15 @@ def _generate_impl(data: GenerateInput):
                         ]))
                     if data.response_version == 2 and parsed.needs_user_info:
                         if data.skipped_user_info:
+                            skip_questions = " / ".join(
+                                str(q.question)
+                                for q in (parsed.user_questions or [])[:2]
+                                if getattr(q, "question", "")
+                            )
+                            suffix = f" 確認したいこと: {skip_questions}" if skip_questions else ""
                             return blocked_user_info_response(
-                                "必要な本人情報が確認できず、安全な代替返信を作れませんでした。プロフィールを補足してから再生成してください。",
+                                "必要な本人情報が確認できず、安全な代替返信を作れませんでした。"
+                                "プロフィールを補足してから再生成してください。" + suffix,
                                 skipped=True,
                                 attempted_models=attempted_models,
                                 api_attempt_count=len(attempted_models),
