@@ -21674,3 +21674,147 @@ def test_t576_polite_only_keigo_policy_across_prompts_and_instruction(client):
     }
     for original, expected in cases.items():
         assert backend._soften_stiff_keigo(original) == expected, original
+
+
+def test_t577_scope_and_understanding_questions_count_as_about_user(client):
+    """T577: 「何のゼミ入ってるんですか？」「重機扱ったりってことですか？」を
+    本人への直接質問として扱い、第三者の話題（友達のゼミ）は除外する。"""
+    _, backend = client
+    assert backend._is_unclassified_question_about_user("何のゼミ入ってるんですか？？") is True
+    assert backend._is_unclassified_question_about_user("重機扱ったりってことですか？") is True
+    assert backend._is_unclassified_question_about_user("友達は何のゼミ入ってるんですか？") is False
+
+
+def test_t577_partner_trailing_direct_question_recovers_scope_and_understanding_asks(client):
+    """T577: 復帰経路が未分類の直接質問（ゼミ・重機）を本人確認へ回せる。"""
+    _, backend = client
+    for body, expected in (
+        ("ゼミ大変ですね😭\n何のゼミ入ってるんですか？？", "何のゼミ入ってるんですか"),
+        ("重機扱ったりってことですか？", "重機扱ったりってことですか"),
+    ):
+        context = {
+            "mode": "reply",
+            "history": [{"role": "them", "body": body}],
+            "my_profile": {"facts": {}},
+            "ephemeral_user_answers": [],
+        }
+        assert expected in backend._partner_trailing_direct_question(context), body
+
+
+def test_t577_gate_allows_content_shared_confirmation_for_scope_questions(client):
+    """T577: 未知の所属質問への確認質問は、内容語が重なる場合だけ本人確認として認める。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "何のゼミ入ってるんですか？？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    expected = backend.missing_personal_fact_question(context)
+    assert expected is not None
+    assert backend.model_user_info_questions_are_necessary(context, [expected]) is True
+    assert backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="何のゼミを専攻しているか教えてください", purpose="所属の確認")],
+    ) is True
+    assert backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="趣味は何ですか？", purpose="無関係な話題の質問")],
+    ) is False
+
+    heavy_context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "重機扱ったりってことですか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    assert backend.model_user_info_questions_are_necessary(
+        heavy_context,
+        [backend.UserQuestion(question="重機を扱ったことがあるか教えてください", purpose="経験の確認")],
+    ) is True
+    assert backend.model_user_info_questions_are_necessary(
+        heavy_context,
+        [backend.UserQuestion(question="好きな食べ物は何ですか？", purpose="無関係な話題の質問")],
+    ) is False
+
+
+def test_t577_gate_rejects_granularity_mismatch_for_direct_question(client):
+    """T577: 相手の質問と粒度が食い違う確認質問（経験→好み）は本人確認として認めない。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近どんな映画を観ましたか？"}],
+        "my_profile": {"facts": {}},
+        "ephemeral_user_answers": [],
+    }
+    expected = backend.missing_personal_fact_question(context)
+    assert expected is not None
+    assert backend.model_user_info_questions_are_necessary(context, [expected]) is True
+    assert backend.model_user_info_questions_are_necessary(
+        context,
+        [backend.UserQuestion(question="映画は好きですか？", purpose="好みの確認")],
+    ) is False
+    assert backend.model_user_info_questions_are_necessary(
+        context,
+        [
+            expected,
+            backend.UserQuestion(question="どの地域に住んでいますか？", purpose="地域の確認"),
+        ],
+    ) is False
+
+
+def test_t577_soften_stiff_keigo_removes_honorific_past_forms(client):
+    """T577: 実会話に残った尊敬語の過去形（〜されてました）を普通の形へ戻す。"""
+    _, backend = client
+    cases = {
+        "ライトアップとかされてました？": "ライトアップとかしてました？",
+        "最近は行かれましたか？": "最近は行きましたか？",
+        "どんな本を読まれましたか？": "どんな本を読みましたか？",
+        "週末は何をされてましたか？": "週末は何をしてましたか？",
+        "その映画はもう観られましたか？": "その映画はもう観ましたか？",
+    }
+    for original, expected in cases.items():
+        assert backend._soften_stiff_keigo(original) == expected, original
+
+
+def test_t577_v2_instruction_allows_needs_user_info_only_for_unanswerable_ask(client, monkeypatch):
+    """T577: v2では答えられない直接質問だけ needs_user_info に回す方針を指示する。"""
+    from google import genai
+
+    c, backend = client
+    match_id = add_match(c, "架空ゼミの相手", description="大学のゼミの話が好きです。")
+    c.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": "何のゼミ入ってるんですか？？"})
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": True,
+                "user_questions": [
+                    {"question": "何のゼミに入っているか教えてください", "purpose": "所属の確認"}
+                ],
+                "user_info_reason": "本人情報の確認",
+                "recommended": None,
+                "alternatives": [],
+                "reason": "",
+                "strategy": "",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "ask_user_info",
+                "decision_reason": "",
+                "next_action": "",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": match_id, "response_version": 2, "count": 3},
+    )
+    assert response.status_code == 200, response.text
+    instruction = captured["config"].system_instruction
+    assert "どれでも答えられない場合" in instruction
+    assert "needs_user_info=true" in instruction
+    assert "答えられる直接質問があるのにneeds_user_infoにすることはできません" in instruction
+    assert "肯定か否定を明示" in instruction
+    assert "否定の経験" in instruction

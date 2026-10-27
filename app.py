@@ -3133,6 +3133,63 @@ def _missing_personal_fact_question_once(context: dict) -> UserQuestion | None:
     return personal_fact_question(topic, question_text)
 
 
+def _question_information_kinds(text: str) -> set[str]:
+    """Return the kinds of information a question asks for.
+
+    Used to keep a confirmation question at the same granularity as the
+    partner's question (T577). Asking "映画は好きですか" in place of "最近どんな
+    映画を観ましたか" changes what is being asked, so those two must not match.
+    """
+    kinds: set[str] = set()
+    if re.search(r"好き|嫌い|苦手|得意|好み|気に入", text):
+        kinds.add("preference")
+    if re.search(
+        r"観ました|見ました|行きました|食べました|飲みました|読みました|やりました|"
+        r"行ったこと|観たこと|見たこと|食べたこと|やったこと|たり|"
+        r"(?:こと|経験)(?:が|は)?(?:ある|あります|あるか)",
+        text,
+    ):
+        kinds.add("experience")
+    if re.search(
+        r"何の|どの|専攻|学部|学科|ゼミ|サークル|部活|仕事|職業|バイト|住んで|在住|歳|年齢",
+        text,
+    ):
+        kinds.add("status")
+    if re.search(r"よく|頻度|どのくらい|どれくらい|何回|毎日|毎週|週に|月に", text):
+        kinds.add("frequency")
+    if re.search(r"いつ|予定|空いて|都合|何時|日程", text):
+        kinds.add("schedule")
+    return kinds
+
+
+def _questions_share_confirmation_content(model_question: str, asked_question: str) -> bool:
+    """True when a confirmation question asks about the same content as the partner's ask.
+
+    T577: 未知の直接質問（「何のゼミ入ってるんですか？」「重機扱ったりって
+    ことですか？」）への確認質問を、本人への確認として認めるための判定。
+    固有の内容語が重なり、好みと経験・所属のように情報の種類が食い違わない
+    ときだけ真を返す。無関係な話題への質問や粒度のすり替えを防ぐ。
+    """
+    if not (_content_nouns(model_question) & _content_nouns(asked_question)):
+        model_tokens = _content_nouns(model_question)
+        asked_tokens = _content_nouns(asked_question)
+        # 漢字の連続は「重機扱」のように述語まで含むことがあるため、語の
+        # 完全一致だけでなく包含でも同じ内容語とみなす（「重機」と「重機扱」）。
+        if not any(
+            len(model_token) >= 2
+            and len(asked_token) >= 2
+            and (model_token in asked_token or asked_token in model_token)
+            for model_token in model_tokens
+            for asked_token in asked_tokens
+        ):
+            return False
+    model_kinds = _question_information_kinds(model_question)
+    asked_kinds = _question_information_kinds(asked_question)
+    if ("preference" in model_kinds) != ("preference" in asked_kinds):
+        return False
+    return True
+
+
 def model_user_info_questions_are_necessary(context: dict, questions: list[UserQuestion]) -> bool:
     """Allow model-originated questions only for explicit asks or accepted-date logistics."""
     preflight_question = missing_personal_fact_question(context)
@@ -3140,9 +3197,32 @@ def model_user_info_questions_are_necessary(context: dict, questions: list[UserQ
         if len(questions) != 1:
             return False
         normalize = lambda value: re.sub(r"\s+|[?？。！!]", "", value)
-        return normalize(questions[0].question) == normalize(preflight_question.question)
+        if normalize(questions[0].question) == normalize(preflight_question.question):
+            return True
+        # T577: モデルが同じ内容を自分の言葉で確認する場合も許可する。
+        return _questions_share_confirmation_content(
+            questions[0].question, preflight_question.question
+        )
     if not questions:
         return False
+    # T577: 分類外の直接質問（「何のゼミ入ってるんですか？」）に、本人の
+    # 確認質問で答える経路を許可する。相手の質問と内容語が重なる場合だけ。
+    partner_messages = [
+        str(item.get("body", ""))
+        for item in context.get("history", [])
+        if item.get("role") == "them"
+    ]
+    if partner_messages:
+        focus = _last_question_sentence(partner_messages[-1]) or partner_messages[-1]
+        if (
+            _is_ask_sentence(focus)
+            and _is_unclassified_direct_question(focus)
+            and any(
+                _questions_share_confirmation_content(question.question, focus)
+                for question in questions
+            )
+        ):
+            return True
     history = context.get("history", [])
     last_partner_index = max(
         (index for index, item in enumerate(history) if item.get("role") == "them"),
@@ -9702,6 +9782,19 @@ def _is_unclassified_question_about_user(text: str) -> bool:
     # はい/いいえ質問も本人への直接質問として確認する。
     if _is_polar_personal_question(question):
         return True
+    # T577: 「何のゼミ入ってるんですか？」のような所属・専攻の質問や、
+    # 「重機扱ったりってことですか？」のような相手の理解を確認する質問も、
+    # 本人への直接質問として確認する。第三者の話題（「友達は何のゼミ…」）は
+    # 上のthird_party判定で除外済み。
+    if not re.match(
+        r"^(?:この|その|あの|ここ|そこ|あそこ|私の|僕の|俺の|自分の)", question
+    ) and re.search(
+        r"(?:何の|どの)(?:ゼミ|専攻|学部|学科|サークル|部活)|"
+        r"(?:ゼミ|専攻|学部|学科|サークル|部活)(?:は|って|に)?(?:何|どこ|どんな)|"
+        r"ってことですか[?？]?$",
+        question,
+    ):
+        return True
     return bool(INVITATION_PATTERN.search(question) or re.search(
         r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
         r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
@@ -13181,6 +13274,32 @@ _STIFF_KEIGO_REWRITES = (
     ("拝見しました", "見ました"),
     ("拝見して", "見て"),
     ("いたします", "します"),
+    # T577: 実会話に残った尊敬語の過去形（「ライトアップとかされてました？」）。
+    # 長い形から先に戻し、後続の「〜されてた」ルールで壊れないようにする。
+    ("されてましたか", "してましたか"),
+    ("されてました", "してました"),
+    ("行かれましたか", "行きましたか"),
+    ("行かれました", "行きました"),
+    ("来られましたか", "来ましたか"),
+    ("来られました", "来ました"),
+    ("読まれましたか", "読みましたか"),
+    ("読まれました", "読みました"),
+    ("見られましたか", "見ましたか"),
+    ("見られました", "見ました"),
+    ("観られましたか", "観ましたか"),
+    ("観られました", "観ました"),
+    ("食べられましたか", "食べましたか"),
+    ("食べられました", "食べました"),
+    ("飲まれましたか", "飲みましたか"),
+    ("飲まれました", "飲みました"),
+    ("撮られましたか", "撮りましたか"),
+    ("撮られました", "撮りました"),
+    ("書かれましたか", "書きましたか"),
+    ("書かれました", "書きました"),
+    ("作られましたか", "作りましたか"),
+    ("作られました", "作りました"),
+    ("使われましたか", "使いましたか"),
+    ("使われました", "使いました"),
     # T500: 過去の尊敬「〜されていた」を普通の形へ戻す。
     ("されていたんですね", "してたんですね"),
     ("されていたんですか", "してたんですか"),
@@ -13937,7 +14056,7 @@ def _generate_impl(data: GenerateInput):
         f"recommendedが1案、alternativesが{data.count-1}案です。"
         "理由 reason は短く日本語で記述し、実際に候補本文へ入れた要素だけを書いてください。"
         "候補に質問を入れていないのに「答えやすい質問を添えて」と書く、誘いを入れていないのに「誘った」と書くなど、本文に無い要素を reason に書かないでください。"
-        + ("response_version=2では、本人情報が足りなくても候補を止めず、必ずrecommendedとalternativesを返してください。needs_user_infoは常にfalse、user_questionsは空配列にします。確認質問だけを返して候補を止めることはしません。プロフィールにない情報は断定せず、確認済みの範囲や相手への感想・質問で自然に返してください。optional_user_questionsはreplyモードで最大1件まで返せます。回答はプロフィールに保存せず、今回の文脈だけで利用してください。一人称は「僕」に固定します（「私」「わたし」「俺」「自分」は自分の一人称として使わない）。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
+        + ("response_version=2では、原則として本人情報が足りなくても候補を止めず、recommendedとalternativesを返してください。ただし相手から本人への直接質問があり、プロフィールfacts・今回のuser_answers・これまでの会話で確認済みの本人発言のどれでも答えられない場合は、推測や質問のすり替えをせず、needs_user_info=true、user_questionsにその質問への回答を本人へ確認する質問を1件、recommended=null、alternatives=[]で返してください。答えられる直接質問があるのにneeds_user_infoにすることはできません。それ以外はneeds_user_info=false、user_questionsは空配列にします。プロフィールにない情報は断定せず、確認済みの範囲や相手への感想・質問で自然に返してください。optional_user_questionsはreplyモードで最大1件まで返せます。回答はプロフィールに保存せず、今回の文脈だけで利用してください。一人称は「僕」に固定します（「私」「わたし」「俺」「自分」は自分の一人称として使わない）。生成可能なら候補を返し、conversation_stage・invite_decision・decision_reason・next_actionも記述してください。"
            "stageはStage 1からStage 6、invite_decisionはdo_not_invite/continue_conversation/consider_invite/invite_gently/wait/respect_no/ask_user_info/do_not_repeat_invite/schedule_after_acceptance/continue_or_closeのいずれかです。"
            if data.response_version == 2 else "strategyは無理のない提案を1文で記述してください。")
     )
@@ -13945,6 +14064,8 @@ def _generate_impl(data: GenerateInput):
         system_instruction += (
             "\n3案はそれぞれ単独で送れる完成品にし、同じ反応の言い換えを並べず切り口を変えてください。"
             "相手が直前に質問しているときは、全案でその質問への回答を最優先してください。"
+            "「〜ってことですか？」「〜たりしますか？」のような確認やはい/いいえの質問には、1行目で「はい、そうです！」「いや、そうじゃなくて〜です」のように肯定か否定を明示し、「そーなんですね」「調べてみます」だけで済ませないでください。"
+            "相手が「知らない」「初めて」「やったことない」と否定の経験を言ったときは「そーなんですか」で返さず、「初めてなんですね！」「やったことないんですか！」のように相手の言葉を受けてください。"
             "質問は、相手の話題を一段深く掘る自然な場合だけに入れ、3案すべてに質問を入れる必要はありません。"
             "相手が質問していないターンでは、少なくとも1案は相手の話題を深掘りする質問、"
             "別の1案は確認済みの自分の経験や感想の共有にして、相槌だけの案と差をつけてください。"

@@ -1,5 +1,37 @@
 # 検証進捗
 
+## 2026-10-27 T577 実会話のかみ合い改善（直接質問への回答・yes/no 反応・必要時のみ本人確認）＋プロフィールの「経理」削除
+
+- ユーザー指示: 「実会話で普通に会話がかみ合わない」症状の改善。あわせて「本人プロフィールに入っている“経理の仕事”を消して」。
+
+### 実装（app.py）
+
+- 直接質問スコープ判定の拡張: `_is_unclassified_question_about_user`（9739付近）に「ゼミ／専攻／学部」系と「〜ってことですか？」（理解確認）を本人向け質問として追加。
+- 本人確認ゲートの適正化: 新規 `_question_information_kinds` と `_questions_share_confirmation_content`（約3140-3190）を追加。`model_user_info_questions_are_necessary`（3193付近）に「内容語を共有していれば確認質問として許可」する分岐を追加。v2 の「needs_user_info は常に false」を撤回し、**答えられない直接質問のときだけ**本人確認へ回す。
+- 敬語の残り除去: `_STIFF_KEIGO_REWRITES`（13274付近）へ尊敬語の過去形（〜されていた／〜られた 等）を追加し、`_soften_stiff_keigo`（13413付近）で丁寧語へ統一。
+- v2 出力指示（14054-14078）に yes/no・否定経験への反応規則と「必要時のみ needs_user_info」を追記。
+- 注記: 「未確認の本人事実」を `_candidate_rejection_reasons` で決定的に棄却しないのは 2026-10-23 の意図的な方針（コメント11739-11747）。`unsupported_personal_claim_topics`（5745）は未使用、相手の直接質問への未回答棄却も廃止済みのため、**未確認事実の決定的棄却は再導入せずプロンプト強化のみで対処**。
+
+### 実装（prompts）
+
+- `prompts/reply.txt`: 未確認詳細リストに「学歴（学校・学部・ゼミ・専攻）」を追加（創作禁止）。直接質問回答・needs_user_info・yes/no・否定経験の規則を追記。
+- `prompts/common.txt`: 直接質問の対象リストに「学歴（学校・学部・ゼミ・専攻）」を追加。
+
+### 検証
+
+- 回帰テスト6件追加（`test_t577_scope_and_understanding_questions_count_as_about_user`、`test_t577_partner_trailing_direct_question_recovers_scope_and_understanding_asks`、`test_t577_gate_allows_content_shared_confirmation_for_scope_questions`、`test_t577_gate_rejects_granularity_mismatch_for_direct_question`、`test_t577_soften_stiff_keigo_removes_honorific_past_forms`、`test_t577_v2_instruction_allows_needs_user_info_only_for_unanswerable_ask`）。`-k t577` → **6 passed**、影響候補の focused **224 passed**、全pytest **2182 passed**（基準2176＋新規6）。
+- 実API E2E（隔離DBコピー＋`APP_DATA_DIR`＋`MRA_API_DIR`、`t577_live.py`、match 33/51/49・status=200/demo=False）: match 51 は yes/no に回答（「そうですねそんな感じです！」）で改善。match 49 は尊敬語なし。match 33 は依然「ゼミは経済学／経営をやってる」と創作（上記の意図的な未棄却方針による既知の残存課題）。3案同型・質問すり替え（recommended が「学生の頃はどんな科目…」）は残存。
+- サーバー: 現行アプリ（8765）を Hidden で再起動し T577 を反映（新 app pid 28244、`/api/status` 200・demo=false）。
+
+### プロフィールの「経理」削除（ユーザー明示依頼・実DB書き込み許可済み）
+
+- 実DB `data/app.sqlite3` の `profile.content`（JSON）に `"job": "経理"` が入っていた。`merge_profile_content_preserving_keys` は incoming に無いキーを残すため、キー削除ではなく **`job` を空文字へ更新**（他キーは不変）。書き込み後、稼働中アプリの `GET /api/profile` で `job: ""` を確認（再起動不要、HTTP 200）。他のプロフィール項目・`confirmed_facts`・履歴は無変更。
+
+### 残存課題
+
+- 未確認の本人事実（例: 学歴）の創作は意図的に非棄却のため、プロンプト遵守に依存して残ることがある。
+- 3案が同型になりやすい／質問のすり替え。
+
 ## 2026-10-26 T576 敬語の方針を「丁寧語のみ」へ（T574の緩和を撤回）
 
 - ユーザー指示: 「尊敬語謙譲語禁止 丁寧語のみ使用か」→ T574で「軽い尊敬語・謙譲語は混ぜてよい」へ緩めた方針を戻し、**尊敬語・謙譲語は禁止、丁寧語（です・ます）のみ**へ変更。固いビジネス敬語の禁止は維持し、文の硬さを上げないよう軽い崩し（〜ですよね！／〜かもです 等）は温存。
