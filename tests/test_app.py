@@ -21818,3 +21818,47 @@ def test_t577_v2_instruction_allows_needs_user_info_only_for_unanswerable_ask(cl
     assert "答えられる直接質問があるのにneeds_user_infoにすることはできません" in instruction
     assert "肯定か否定を明示" in instruction
     assert "否定の経験" in instruction
+
+
+def test_t578_three_candidate_instruction_assigns_distinct_roles(client, monkeypatch):
+    """T578: 3案生成時に recommended/alternatives へ役割を明示する指示が入る。"""
+    from google import genai
+
+    c, _backend = client
+    match_id = add_match(c, "架空カフェの相手", description="カフェ巡りが趣味です。")
+    c.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": "最近はカフェ巡りにハマってるんです！"})
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [],
+                "user_info_reason": "",
+                "recommended": {"label": "素直な反応", "text": "カフェ巡りいいですね！\nそういう時間って落ち着きますよね！", "reply_move": "react"},
+                "alternatives": [
+                    {"label": "深掘り", "text": "いいですよね！\nどんなお店を見つけることが多いんですか？", "reply_move": "expand"},
+                    {"label": "自分の共有", "text": "いいですよね！\n僕も休日は喫茶店をのぞいてます！", "reply_move": "grounded_share"},
+                ],
+                "reason": "相手の趣味への反応を軸にした",
+                "strategy": "",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "",
+                "next_action": "",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "test-only-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": match_id, "response_version": 2, "count": 3},
+    )
+    assert response.status_code == 200, response.text
+    instruction = captured["config"].system_instruction
+    assert "recommendedは相手の直前発言に素直に反応する案" in instruction
+    assert "alternatives[0]は相手の話題を一段深く掘る質問の案" in instruction
+    assert "alternatives[1]は確認済みの自分の経験や感想を短く共有する案" in instruction
+    assert "3案を同じ役割や同じ切り口にしないでください" in instruction
