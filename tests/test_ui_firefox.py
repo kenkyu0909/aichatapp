@@ -356,14 +356,14 @@ def test_firefox_console_and_core_ui_with_strategy_toggle(local_app, firefox):
     assert len(driver.find_elements(By.CSS_SELECTOR, ".candidate")) == 3
     assert driver.execute_script("return window.__generateResponses.at(-1).show_policy") is True
 
-    # T546: 質問必須チェックの有無が /api/generate の要求に反映される。
+    # T546/T581: 質問必須チェック（T581から既定ON）の有無が /api/generate の要求に反映される。
     require_question = driver.find_element(By.ID, "require-question")
-    assert not require_question.is_selected()
-    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is False
+    assert require_question.is_selected()
+    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is True
     require_question.click()
     driver.find_element(By.ID, "generate").click()
     WebDriverWait(driver, 8).until(lambda browser: len(browser.find_elements(By.CSS_SELECTOR, ".candidate")) == 3)
-    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is True
+    assert driver.execute_script("return window.__generateResponses.at(-1).require_question") is False
     require_question.click()
 
     # 候補の「コピー」はコピーしつつ送信済みとして記録する。

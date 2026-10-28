@@ -110,20 +110,35 @@ async function loadMatches(prefer){
   await selectContact(target,false);
   renderContacts();
 }
-// トークは「最後のメッセージが新しい順」に並べる（無い相手は最後、登録が新しい順）。
+// トークの並び順: "last"=最後のメッセージが新しい順（無い相手は最後）、"name"=名前の五十音順。
+const CONTACT_SORT_KEY="mra_contact_sort_v1";
+function contactSortOrder(){
+  try{return localStorage.getItem(CONTACT_SORT_KEY)==="name"?"name":"last";}catch{return "last";}
+}
 function sortedContacts(){
-  return [...state.matches].sort((a,b)=>{
+  const matches=[...state.matches];
+  if(contactSortOrder()==="name"){
+    return matches.sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ja")||(b.id-a.id));
+  }
+  return matches.sort((a,b)=>{
     const av=a.last_message_at||"",bv=b.last_message_at||"";
     if(av!==bv)return av<bv?1:-1;
     return b.id-a.id;
   });
 }
+function updateClearSearchButton(){
+  const button=$("clear-search"),input=$("search");
+  if(button&&input)button.hidden=!input.value;
+}
 function renderContacts(){
   const list=$("contacts");list.replaceChildren();
   const term=$("search").value.trim().toLocaleLowerCase();
+  updateClearSearchButton();
   const filtered=sortedContacts().filter(c=>c.name.toLocaleLowerCase().includes(term));
   if(!filtered.length)list.append(node("p","empty-chat",state.matches.length?"一致する相手がいません":"左上の＋から相手を登録してください"));
   filtered.forEach(c=>{
+    // 行は「本文ボタン」と「削除ボタン」を分けたラッパーにする（button の入れ子を避ける）。
+    const row=node("div","contact-row");
     const btn=node("button","contact-item"+(c.id===state.selectedId?" active":""));
     btn.type="button";btn.append(photoAvatar(c));
     const info=node("span","contact-item-details");
@@ -133,8 +148,29 @@ function renderContacts(){
     info.append(head,node("span","contact-preview",c.last_message||c.description||"会話はまだありません"));
     btn.append(info);
     btn.addEventListener("click",()=>safe(()=>selectContact(c.id)));
-    list.append(btn);
+    const del=node("button","contact-delete","×");
+    del.type="button";del.title=c.name+"を削除";del.setAttribute("aria-label",c.name+"を削除");
+    del.addEventListener("click",e=>{e.stopPropagation();safe(()=>deleteContact(c));});
+    row.append(btn,del);
+    list.append(row);
   });
+}
+async function deleteContact(contact){
+  if(!confirm("「"+contact.name+"」を削除しますか？\nこの相手との会話履歴もすべて削除され、元に戻せません。"))return;
+  invalidateGenerationResults();
+  beginContactMutation(contact.id);
+  try{
+    await api("/matches/"+contact.id,{method:"DELETE"});
+    messageDrafts.delete(contact.id);
+    const wasSelected=state.selectedId===contact.id;
+    state.matches=state.matches.filter(c=>c.id!==contact.id);
+    if(wasSelected){
+      const next=sortedContacts()[0]?.id??null;
+      await selectContact(next,false);
+    }
+    renderContacts();
+    notice("「"+contact.name+"」を削除しました");
+  }finally{endContactMutation(contact.id);}
 }
 async function selectContact(id,relist=true){
   const previousId=state.selectedId;
@@ -898,6 +934,7 @@ function attach(){
   const writeAdvancedSettings=()=>{
     try{
       localStorage.setItem(advancedKey,JSON.stringify({
+        v:2,
         policy:$("policy").checked,
         requireQuestion:$("require-question")?.checked||false,
         direction:$("direction").value,
@@ -909,7 +946,9 @@ function attach(){
   const applyAdvancedSettings=()=>{
     const saved=readAdvancedSettings();
     if(typeof saved.policy==="boolean")$("policy").checked=saved.policy;
-    if(typeof saved.requireQuestion==="boolean")$("require-question").checked=saved.requireQuestion;
+    // T581: 質問必須を既定ONにした。v1 の保存値（false）で打ち消されないよう、
+    // v2 で保存された値だけを復元する。
+    if(typeof saved.requireQuestion==="boolean"&&saved.v===2)$("require-question").checked=saved.requireQuestion;
     if(saved.direction){
       const opt=[...$("direction").options].find(o=>o.value===saved.direction);
       if(opt)$("direction").value=saved.direction;
@@ -947,6 +986,15 @@ function attach(){
     };
   }
   $("search").addEventListener("input",renderContacts);
+  $("clear-search").onclick=()=>{$("search").value="";renderContacts();$("search").focus();};
+  const sortSelect=$("sort-order");
+  if(sortSelect){
+    sortSelect.value=contactSortOrder();
+    sortSelect.onchange=()=>{
+      try{localStorage.setItem(CONTACT_SORT_KEY,sortSelect.value==="name"?"name":"last");}catch{}
+      renderContacts();
+    };
+  }
   $("message-input").addEventListener("input",()=>{
     if(state.selectedId===null)return;
     const draft=$("message-input").value;

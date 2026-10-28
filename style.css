@@ -21,11 +21,21 @@ button:disabled{opacity:.48;cursor:not-allowed}
 .layout{flex:1;min-height:0;display:grid;grid-template-columns:256px minmax(0,1fr)}
 .contacts{background:#fff;border-right:1px solid #dbe1e9;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .search-row{height:63px;min-height:63px;display:flex;align-items:center;gap:7px;padding:10px 10px 10px 9px}
-.search-row input{flex:1;width:0;border:0;background:#f1f2f5;border-radius:20px;padding:8px 14px;color:#35425a;outline:none}
+.search-input-wrap{flex:1;width:0;position:relative;display:flex;align-items:center}
+.search-row input{flex:1;width:0;border:0;background:#f1f2f5;border-radius:20px;padding:8px 30px 8px 14px;color:#35425a;outline:none}
 .search-row input::placeholder{color:#a0a7b5}
 .search-row button{width:33px;height:33px;border:0;background:#00ba88;border-radius:50%;color:#fff;font-size:26px;line-height:1;display:grid;place-items:center}
+.search-row .search-clear{position:absolute;right:5px;width:20px;height:20px;background:#c3c9d4;font-size:14px;color:#fff}
+.search-row .search-clear:hover{background:#98a1b1}
+.search-row .search-clear[hidden]{display:none}
+.sort-row{display:flex;align-items:center;gap:6px;padding:0 10px 8px;font-size:11px;color:#77808f}
+.sort-row label{white-space:nowrap}
+.sort-row select{flex:1;min-width:0;border:1px solid #dbe1e9;border-radius:14px;background:#f7f9fc;padding:4px 8px;font-size:11px;color:#35425a;outline:none}
 .contact-scroller{overflow:auto;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:#b5b8c0 transparent}
-.contact-item{background:#fff;border:0;border-bottom:1px solid #edf0f3;width:100%;min-height:57px;padding:7px 8px;display:flex;align-items:center;gap:9px;text-align:left;color:#2f3851}
+.contact-row{position:relative}
+.contact-item{background:#fff;border:0;border-bottom:1px solid #edf0f3;width:100%;min-height:57px;padding:7px 34px 7px 8px;display:flex;align-items:center;gap:9px;text-align:left;color:#2f3851}
+.contact-delete{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:22px;height:22px;border:1px solid #e3c2c2;border-radius:50%;background:#fff;color:#c46a6a;font-size:14px;line-height:1;display:grid;place-items:center;cursor:pointer}
+.contact-delete:hover{background:#fdecec;border-color:#e0a9a9;color:#b14848}
 .contact-item:hover{background:#f5f8fa}
 .contact-item.active{background:#e8fcf5}
 .avatar{display:grid;place-items:center;color:#fff;width:40px;height:40px;flex-shrink:0;border-radius:50%;font-size:17px;font-weight:700;background:linear-gradient(135deg,#00c6ac,#29bc91)}
@@ -172,7 +182,7 @@ button:disabled{opacity:.48;cursor:not-allowed}
 .composer .inline-error{margin:0 0 9px}
 .suggestion-list>.inline-error{flex:1 0 100%;margin:0}
 @media(max-width:1120px){.layout{grid-template-columns:226px minmax(0,1fr)}.conversation-header{flex-wrap:wrap;padding:8px 12px}.header-tools{margin-left:45px}.composer{gap:6px}.contact-preview{max-width:140px}.config-line .helper{display:none}.settings-note{display:none}.config-line.inline{gap:9px}.config-line.inline select{min-width:120px}.action-line{flex-wrap:wrap}.action-line input{flex-basis:100%}.action-line button{flex:1}}
-@media(max-width:740px){.global-header{height:auto;padding:10px;align-items:flex-start;flex-wrap:wrap}.global-actions{width:100%;overflow:auto}.layout{grid-template-columns:75px minmax(0,1fr)}.search-row{padding:8px 5px;flex-direction:column;height:auto;gap:4px}.search-row input{width:65px;font-size:9px;padding:6px 4px}.search-row button{width:31px;height:31px}.contact-item{padding:8px;justify-content:center}.contact-item-details,.contacts-footer{display:none}.conversation-header{min-height:75px}.header-tools{margin-left:0;gap:4px}.tone-toggle button{font-size:9px;padding:4px}.utility-button{padding:5px;font-size:9px}.contact-bio{max-width:160px}.composer{padding:9px}.policy-banner small{display:none}.config-line{flex-wrap:wrap}.send-row>span{display:none}}
+@media(max-width:740px){.global-header{height:auto;padding:10px;align-items:flex-start;flex-wrap:wrap}.global-actions{width:100%;overflow:auto}.layout{grid-template-columns:75px minmax(0,1fr)}.search-row{padding:8px 5px;flex-direction:column;height:auto;gap:4px}.search-input-wrap{flex:none;width:100%}.search-row input{width:65px;font-size:9px;padding:6px 4px}.search-row button{width:31px;height:31px}.search-row .search-clear{right:1px;width:16px;height:16px;font-size:11px}.sort-row{display:none}.contact-item{padding:8px;justify-content:center}.contact-delete{display:none}.contact-item-details,.contacts-footer{display:none}.conversation-header{min-height:75px}.header-tools{margin-left:0;gap:4px}.tone-toggle button{font-size:9px;padding:4px}.utility-button{padding:5px;font-size:9px}.contact-bio{max-width:160px}.composer{padding:9px}.policy-banner small{display:none}.config-line{flex-wrap:wrap}.send-row>span{display:none}}
 
 
 /* Connected-backend controls added on top of the approved UI */
