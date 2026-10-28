@@ -1,5 +1,69 @@
 # 検証進捗
 
+## 2026-10-28 T581 20通テストの指摘対応（質問必須の既定化・相手の文順・具体性・不自然表現）
+
+- ユーザー指摘（t580 のHTML入力フォーム経由）: 全体=「相手の返信の意味を考えていない／全く質問をしてない」、APP2=自炊の可否だけでなく中身を話せ、APP3=「作りすぎちゃうのわかります笑」が不自然＋相手の話題順（一人分→得意料理）と回答順が逆、APP4=「パスタばかり」への返答がない＋質問ゼロ、APP6/APP10/APP11=おすすめ・場所を聞かれて具体物がない、APP7=研究を聞かれて研究に答えず食べ物へずれる、APP8=「歌いに行く」だけ、APP12=「風景をカメラに残す」が不自然。加えて「相手役は質問禁止」で再テスト。
+
+### 実装（app.py）
+
+- 3案の役割指示（v2・count=3・reply/followup）を改訂: **全案に質問を1つ必ず入れる**（相手が会話終了を望む場合のみ例外）。recommended=反応してから質問／alternatives[0]=一段深い質問／alternatives[1]=共有してから質問。
+- 「【相手の文に沿う（最重要）】」を追加: 相手が話した話題・具体物を**話した順番のまま**拾う。二つ以上なら順番を入れ替えない。「そうなんですね！」だけで具体物を受け流さず本文に一度出す。
+- 「おすすめ／どこ／知りたい」には具体物を1つ以上。固有名詞は相手発言・プロフィール・確認済み事実にあるものだけを使い新規に作らない。無いときは範囲を絞る質問にする。
+- 「〜のわかります」ではなく「〜ですよね／〜ますよね」、「風景をカメラに残す」ではなく「写真に撮る」と書く指示を追加。
+- 決定的棄却を2件追加（`_candidate_rejection_reasons`）: 「共感の言い方が不自然」（`〜のわかります`。「気持ちはわかります」等は除外）、「不自然な言い回し」（`カメラ／レンズに残す`）。
+- `_answer_matches_asked_category(question, answer)` を新設し、`_compose_answer_relay_candidate` で使用。「好きな食べ物は何ですか？」に確認済み事実「海が大好きです」をそのままリレーしていたt580 APP19の事故を防ぐ（カテゴリ語彙: 食べ物/音楽/映画/国/スポーツ/動物）。
+
+### 実装（UI）
+
+- `index.html`: 「質問必須」を既定チェックに変更。`app.js`: 保存設定キー `mra_advanced_settings_v1` に `v:2` を書き、`v:2` の保存値だけ `requireQuestion` を復元（旧保存値 `false` で新既定が打ち消されないようにする）。
+
+### テスト
+
+- `test_answer_category_guard_blocks_off_category_relay` / `test_filter_rejects_unnatural_wakarimasu_phrasing` / `test_filter_rejects_camera_ni_nokosu_phrasing` を追加。
+- `test_t578_three_candidate_instruction_assigns_distinct_roles` の期待文を新役割に更新＋新指示3件を追加。
+- `test_ui_firefox.py`: 質問必須の既定ONに合わせて期待値を反転。
+
+### 句読点の決定的修復（T581追補）
+
+- プロンプトで句読点（「、」「。」）を禁止しても実走行で混入が止まらず、棄却→再生成が多発して会話が停止した。方針を変え、句読点は「棄却＋再生成」ではなく**文の区切りとして実改行へ決定的に修復して採用**する。
+- `_break_candidate_sentence_punctuation(text, context)` を新設（app.py 8153付近）。`filter_safe_candidates` で `_candidate_rejection_reasons` が「禁止句読点」だけを理由に含む候補を修復候補で再判定し、**他の棄却理由が1つも残らない場合に限り**差し替える（`if not repaired_reasons`）。修復したときは notice「候補本文の句読点を文の区切りとして改行に整えました。内容を確認して選んでください。」を付与。
+- likeモード1行目「〇〇さん、初めまして」の読点だけは例外保持。`_like_greeting_comma_exception` は2行目に読点があると False になるため、`_LIKE_GREETING_LINE_PATTERN` を直接使って1行目の形だけで判定する。
+
+### テスト（追補）
+
+- 新規: `test_break_candidate_sentence_punctuation_splits_into_lines`（読点・句点→改行、like1行目は保持）、`test_filter_safe_candidates_repairs_punctuation_instead_of_blocking`（句読点だけの候補を修復採用＋notice）。
+- 句読点の決定的修復で前提が変わった既存テストを、意図を保って更新: `test_candidate_punctuation_is_filtered_without_regenerating_safe_candidates` → `..._is_repaired_...`（修復採用・再生成なし・api_attempt_count=1）、`test_provider_attempt_limit_...`（修復で消えない未完成プレースホルダーで棄却を維持し502）、`test_unclassified_personal_question_deterministic_fallback_passes_all_guards` / `test_generate_returns_deterministic_fallback_...` / `test_verified_profile_fact_fallback_candidate_occupation`（未完成プレースホルダー理由へ変更）、`test_t542` / `test_t558`（プレースホルダー併存で本文に読点を残し棄却詳細を検証）。
+- `tests/test_app.py` 全件: **2060 passed**。
+
+### 再テスト（t581）
+
+- 相手役は**質問を一切しない**（断定・共有のみ20件）。`require_question=True` で3案生成し、質問の有無＋相手発言との語の重なりで最良案を選んで送信。HTMLに入力フォーム（`add_feedback_form.py`）を注入し、指摘をブラウザから直接書けるようにした。
+
+## 2026-10-28 T579 長さ超過の棄却を廃止＋「受け止めなし」誤判定の修正
+
+- ユーザー指示: (1) 除外理由「相手の返信量に対して長すぎる候補」では**除外しない**ようにする。(2) 除外理由「話題を振る前の受け止めがない」がなぜ出るのか。ルールが守られていないのはプロンプト／設計が悪いのでは。
+
+### 実装（app.py）
+
+- 長さ超過の棄却を廃止: `_candidate_rejection_reasons`（11735付近）から `_candidate_exceeds_mirrored_length` による「相手の返信量に対して長すぎる候補」の追加を削除。長めの候補も本人が選べるよう表示する。`_candidate_exceeds_mirrored_length` は参考の長さ計測として残置（棄却には未使用）。
+- 受け止め判定の誤検出を修正: `_QUESTION_LEAD_IN_ACK_PATTERN` を拡張し、「なるほど！」「たしかに！」「へえ！」「えー！」「えっ」「本当」「すごい」「楽しそう」「興味」「面白」やタメ口の「〜なんだね」「〜みたいだね」等を**正当な受け止め**として通す（「えーと」は `えー(?!と)` で除外）。従来は「なんですね」「が好き」「気になって」等の形しか数えておらず、正しい受け止めを「受け止めなし」と**誤棄却**していた（プローブで実測: 「なるほど！\n普段はどんなゲーム…？」「へえ、そうなんだ！\n…」がいずれも誤棄却）。
+- 「受け止めなしでプロフィールの新話題を質問だけ振る」判定そのもの（`_question_topic_needs_lead_in`）は維持。
+
+### テスト
+
+- 長さ棄却の期待値5件を反転（`not in` へ）＋ `test_overlong_candidate_is_no_longer_rejected_after_length_policy_change` を追加。`test_lead_in_check_accepts_natural_reactions_without_topic_word` を追加。focused `-k "lead_in or prohibited_topic or length or overlong or mirrored or short_partner or t575"` → **25 passed**。
+
+### 追加対応（ユーザー回答: 「1回だけ自動で作り直す」）
+
+- 棄却理由に応じた直し方の指示 `_rejection_repair_hints`（app.py 12491付近）を追加。「話題を振る前の受け止めがない」のときだけ、質問前に受け止めを1行入れる具体例つきの指示を再生成プロンプトへ足す。
+- 既存の再生成3経路（`候補ごとの安全・形式検査...`×2、`不足分の候補だけを補う1回限りの再生成`）にこの指示を付与。再生成は従来どおり各1回のみ。
+- テスト `test_rejection_repair_hints_explain_missing_lead_in` を追加（受け止め理由のみヒントを返す）。focused 7 passed。
+
+### 残課題
+
+- 再生成1回でも直らない場合は従来どおり棄却候補として「参考」に残る。
+- 20通の会話テスト（ユーザー指定・HTML）を実行し、生成案を全件提示してユーザーと不良点を確認する。
+
 ## 2026-10-27 T578 3案の役割を事前に明示（3案同型の抑止）
 
 - 背景: 実会話の残存課題「3案が同型になりやすい」（T577 実API検証で観測）。指示ブランチの P1「生成前に異なる返信方針（素直な反応／話題の進展／適度な親しみ）を決めて3案を安定生成」に対応。

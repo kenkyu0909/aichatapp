@@ -8142,6 +8142,44 @@ def _like_greeting_comma_exception(text: str, context: dict | None) -> bool:
     return "、" not in rest and "。" not in rest
 
 
+_CANDIDATE_PUNCTUATION_TO_BREAK = str.maketrans({
+    "、": "\n",
+    "，": "\n",
+    "。": "\n",
+    "．": "\n",
+})
+
+
+def _break_candidate_sentence_punctuation(text: str, context: dict | None = None) -> str:
+    """T581: 候補本文の読点・句点を実改行へ直し、1文1行にする。
+
+    プロンプトで禁止しても実走行では「、」「。」が混入し、棄却と再生成を
+    繰り返して会話が停止した。句読点を禁止記号として落とすのではなく、
+    文の区切り位置として実改行に置き換え、読みやすい話し言葉へ整える。
+    likeモードの1行目「〇〇さん、初めまして」の読点だけは例外として残す。
+    """
+    value = str(text)
+    if not any(char in value for char in "、，。．"):
+        return value
+    lines = value.splitlines()
+    # likeモードの1行目「〇〇さん、初めまして」の読点だけは例外として残す。
+    # 2行目以降の読点は文の区切りとして改行する（_like_greeting_comma_exception
+    # は2行目に読点があるとFalseになるため、ここでは1行目の形だけで判定する）。
+    keep_first_line = bool(
+        (context or {}).get("mode") == "like"
+        and lines
+        and _LIKE_GREETING_LINE_PATTERN.match(lines[0].strip())
+    )
+    repaired: list[str] = []
+    for index, line in enumerate(lines):
+        if keep_first_line and index == 0:
+            repaired.append(line)
+            continue
+        repaired.extend(line.translate(_CANDIDATE_PUNCTUATION_TO_BREAK).splitlines())
+    cleaned = [part.strip() for part in repaired if part.strip()]
+    return "\n".join(cleaned) if cleaned else value.strip()
+
+
 # likeモードの1行目で読点が抜けた「〇〇さん初めまして」も、テンプレートの
 # 「〇〇さん、初めまして」へ機械的に揃える（意味は変えず読点だけ補う）。
 _LIKE_GREETING_WITHOUT_COMMA_PATTERN = re.compile(
@@ -8658,6 +8696,76 @@ def _answer_type_matches_question(question: str, answer: str) -> bool:
     if re.match(r"^(?:はい|いいえ|うん)", answer) and len(answer) <= 8:
         return False
     return len(answer) >= 4
+
+
+# T581: 質問が求めるカテゴリと**別カテゴリ**の確認済み事実をそのまま
+# リレーしてしまう事故（「好きな音楽は？」→「カレーが好きです」など）を防ぐ語彙。
+# 回答がどのカテゴリにも当てはまらない場合は判定しない。ジャンル名のように
+# 語彙に無い正しい答え（「アニメ映画だと何が？」→「ミステリーやアクション」）を
+# 誤って棄却しないため、別カテゴリへの一致だけを不一致とみなす。
+_ANSWER_CATEGORY_LEXICON: dict[tuple[str, ...], tuple[str, ...]] = {
+    ("食べ物", "食べもの", "料理", "ご飯", "ごはん", "食事", "グルメ"): (
+        "食", "料理", "ご飯", "ごはん", "飯", "パン", "麺", "肉", "魚", "野菜", "果物",
+        "フルーツ", "甘い", "スイーツ", "お菓子", "菓子", "パフェ", "ケーキ", "プリン",
+        "アイス", "チョコ", "和食", "洋食", "中華", "ラーメン", "うどん", "そば", "パスタ",
+        "ピザ", "カレー", "寿司", "刺身", "餃子", "焼肉", "鍋", "味噌", "醤油", "コーヒー",
+        "紅茶", "お酒", "ワイン", "ビール", "スープ", "定食", "弁当",
+    ),
+    ("音楽", "曲", "歌", "アーティスト", "歌手", "バンド"): (
+        "音楽", "曲", "歌", "ボカロ", "バンド", "アーティスト", "歌手", "ロック", "ポップ",
+        "ジャズ", "クラシック", "ヒップホップ", "洋楽", "邦楽", "演歌", "アイドル", "ピアノ",
+        "ギター", "ドラム", "カラオケ",
+    ),
+    ("映画", "ドラマ", "アニメ", "作品"): (
+        "映画", "ドラマ", "アニメ", "作品", "監督", "俳優", "女優", "漫画", "マンガ", "配信",
+    ),
+    ("国", "海外", "外国"): (
+        "国", "海外", "外国", "アメリカ", "韓国", "台湾", "ハワイ", "ヨーロッパ", "アジア",
+        "フランス", "イタリア", "スペイン", "タイ", "ベトナム", "グアム", "中国", "カナダ",
+    ),
+    ("スポーツ", "運動"): (
+        "スポーツ", "運動", "サッカー", "野球", "テニス", "ゴルフ", "バスケ", "スキー",
+        "スノボ", "ランニング", "筋トレ", "ジム", "ヨガ", "水泳", "卓球", "バドミントン",
+    ),
+    ("動物", "ペット"): (
+        "犬", "猫", "ペット", "動物", "ハムスター", "鳥", "うさぎ", "フェレット",
+    ),
+}
+_ANSWER_CATEGORY_STOPWORDS = {
+    "好き", "大好き", "嫌い", "苦手", "趣味", "最近", "普段", "一番", "どんな", "何",
+    "どこ", "いつ", "どれ", "ですか", "ますか", "です", "ます", "僕", "私",
+}
+
+
+def _answer_matches_asked_category(question: str, answer: str) -> bool:
+    """質問が求めるカテゴリと回答が**明確に別カテゴリ**でないか (T581).
+
+    「好きな音楽は何ですか？」に「カレーが好きです」のような、別カテゴリの
+    確認済み事実をそのままリレーする事故だけを止める。回答がどのカテゴリにも
+    当てはまらない場合は判定しない（従来どおり通す）。
+    """
+    asked_groups = [
+        words
+        for triggers, words in _ANSWER_CATEGORY_LEXICON.items()
+        if any(trigger in question for trigger in triggers)
+    ]
+    if not asked_groups:
+        return True
+    # 質問が出している語そのものを答えが使っていれば、語彙に無い答えでも通す
+    # （「好きなパフェは？」→「抹茶のパフェ」、「アニメ映画は？」→「ミステリー」）。
+    for token in re.findall(r"[一-龯ぁ-んァ-ヶー]{2,}", question):
+        if token in _ANSWER_CATEGORY_STOPWORDS:
+            continue
+        if token in answer:
+            return True
+    if any(any(word in answer for word in words) for words in asked_groups):
+        return True
+    for triggers, words in _ANSWER_CATEGORY_LEXICON.items():
+        if any(trigger in question for trigger in triggers):
+            continue
+        if any(word in answer for word in words):
+            return False
+    return True
 
 
 def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
@@ -11706,6 +11814,15 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("文の区切り不足")
     if candidate_has_high_confidence_japanese_error(text):
         reasons.append("明らかな誤字")
+    # T581: 「作りすぎちゃうのわかります笑」のような助詞の抜けた共感は不自然。
+    # 「気持ちはわかります」「言いたいことはわかります」は自然なので残す。
+    if re.search(r"(?:の|のが)わかり(?:ます|ました)", text) and not re.search(
+        r"(?:気持ち|気持|言いたいこと|言ってること|言ってる意味)は?わかり", text
+    ):
+        reasons.append("共感の言い方が不自然")
+    # T581: 「風景をカメラに残す」のような不自然な言い回し。
+    if re.search(r"(?:カメラ|レンズ)に残す", text):
+        reasons.append("不自然な言い回し")
     if any(not line.strip() for line in text.splitlines()):
         reasons.append("空行")
     # T487: 書き出しが直前ではなく前のターンの相手発言に相槌している候補を落とす。
@@ -11732,8 +11849,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
         reasons.append("相手の質問の聞き返し")
     if _candidate_misreads_user_question_as_partner_info(text, context):
         reasons.append("本人への質問を相手の情報として受け止めている")
-    if _candidate_exceeds_mirrored_length(candidate, context):
-        reasons.append("相手の返信量に対して長すぎる候補")
+    # 2026-10-28（ユーザー指定）: 「相手の返信量に対して長すぎる候補」での棄却は廃止。
+    # 長めの候補も本人が選べるよう表示する。_candidate_exceeds_mirrored_length は
+    # 参考の長さ計測として残しているが、もう棄却には使わない。
     if repeated_partner_question_topics([candidate], context):
         reasons.append("相手の既知情報を再質問")
     # 2026-10-23: 本人の事実確認は行わない。候補の誤りは本人が自由記述で訂正し、
@@ -12436,9 +12554,14 @@ def _mentions_prohibited_topic(text: str, prohibited_topics: list[str]) -> bool:
 
 # T575: プロフィールの話題を唐突に質問だけで振っていないかを見るとき、質問より前の
 # 行にこの受け止め表現があれば「受け止め済み」として通す。
+# 2026-10-28: 「なるほど！」「たしかに！」「へえ！」のような正当な相槌や、タメ口の
+# 「〜なんだね」「〜みたいだね」も受け止めとして通す。従来は「なんですね」等の形
+# だけを数えていたため、正しい受け止めを誤って棄却していた。
 _QUESTION_LEAD_IN_ACK_PATTERN = re.compile(
-    r"なんですね|みたいですね|そうなんですね|が好き|お好き|気になって|"
-    r"素敵|いいですね|わかります|楽しみ"
+    r"なんですね|なんですかね|なんだね|なんだ|みたいですね|みたい|そうなんですね|そうなんだ|"
+    r"が好き|お好き|好き|気になって|気になる|素敵|いいですね|いいね|いいな|"
+    r"わかります|わかる|なるほど|たしかに|確かに|へえ|えー(?!と)|えっ|ほんと|本当|"
+    r"すごい|楽しそう|楽しみ|興味|面白|おもしろ|ですよね|だよね|だね"
 )
 
 
@@ -12488,6 +12611,23 @@ def _question_topic_needs_lead_in(text: str, context: dict) -> bool:
     return True
 
 
+def _rejection_repair_hints(reasons) -> str:
+    """棄却理由に応じた、再生成時にAIへ渡す具体的な直し方の指示 (T579).
+
+    「1回限りの再生成」は理由を並べるだけで、直し方の説明が無いとモデルが
+    同じミスを繰り返しやすい。誤りやすい理由に限り、その場の直し方を明示する。
+    """
+    reason_set = set(reasons or [])
+    hints: list[str] = []
+    if "話題を振る前の受け止めがない" in reason_set:
+        hints.append(
+            "プロフィールの新しい話題を質問するときは、質問の直前にその話題への受け止めを必ず1行入れてください"
+            "（例:「ゲームが好きなんですね！」の次の行に「普段はどんなゲームをするんですか？」）。"
+            "受け止めを省いて質問だけを置くと不適切になります。"
+        )
+    return "".join(hints)
+
+
 def _recent_relay_text(context: dict, lookback: int = 3) -> str:
     """直近の自分の発言（フォールバックの型の重複判定用）(T491)."""
     prior = [
@@ -12530,6 +12670,9 @@ def _compose_answer_relay_candidate(
     # T496: 「どんな」「何」「どちら」の質問に「はい好きです」のような極性や
     # 評価語だけで答える型の不一致は、リレーを作らず本人確認へ回す。
     if not _answer_type_matches_question(question, clean_answer):
+        return None
+    # T581: カテゴリ違い（「好きな食べ物は？」→「海が大好きです」）をリレーしない。
+    if not _answer_matches_asked_category(question, clean_answer):
         return None
     compound_parts = _compound_direct_personal_question_parts(question)
     if len(compound_parts) == 1:
@@ -13462,6 +13605,7 @@ def filter_safe_candidates(
     accepted: list[Candidate] = []
     rejected: list[dict[str, Any]] = []
     seen: set[str] = set()
+    punctuation_repaired = False
     candidate_context = {
         **context,
         "invite_decision": getattr(value, "invite_decision", None),
@@ -13479,6 +13623,23 @@ def filter_safe_candidates(
             if not _candidate_rejection_reasons(softened_candidate, candidate_context):
                 candidate = softened_candidate
         reasons = _candidate_rejection_reasons(candidate, candidate_context)
+        if "禁止句読点" in reasons:
+            # T581: 句読点だけが理由の候補は、記号を実改行へ直して再判定する。
+            # 他の安全性を満たすなら採用し、再生成や停止で会話を止めない。
+            repaired_text = _break_candidate_sentence_punctuation(
+                candidate.text, candidate_context
+            )
+            if repaired_text != candidate.text:
+                repaired_candidate = candidate.model_copy(update={"text": repaired_text})
+                repaired_reasons = _candidate_rejection_reasons(
+                    repaired_candidate, candidate_context
+                )
+                # 句読点を直しても他の棄却理由（プレースホルダー等）が残る場合は
+                # 採用しない。修復は「句読点だけが問題」の候補に限定する。
+                if not repaired_reasons:
+                    candidate = repaired_candidate
+                    reasons = repaired_reasons
+                    punctuation_repaired = True
         normalized = re.sub(r"\s+", "", candidate.text)
         if normalized in seen:
             reasons.append("重複候補")
@@ -13589,6 +13750,10 @@ def filter_safe_candidates(
     if deterministic_fallback_used:
         notices.append(
             "生成された候補が安全検査を通過しなかったため、確認済みの回答をそのまま反映した最小限の安全な候補を1案表示しています。"
+        )
+    if punctuation_repaired:
+        notices.append(
+            "候補本文の句読点を文の区切りとして改行に整えました。内容を確認して選んでください。"
         )
     if len(accepted) < requested_count:
         notices.append(
@@ -14066,14 +14231,25 @@ def _generate_impl(data: GenerateInput):
             "相手が直前に質問しているときは、全案でその質問への回答を最優先してください。"
             "「〜ってことですか？」「〜たりしますか？」のような確認やはい/いいえの質問には、1行目で「はい、そうです！」「いや、そうじゃなくて〜です」のように肯定か否定を明示し、「そーなんですね」「調べてみます」だけで済ませないでください。"
             "相手が「知らない」「初めて」「やったことない」と否定の経験を言ったときは「そーなんですか」で返さず、「初めてなんですね！」「やったことないんですか！」のように相手の言葉を受けてください。"
-            "質問は、相手の話題を一段深く掘る自然な場合だけに入れ、3案すべてに質問を入れる必要はありません。"
+            "【質問は全案に必ず1つ】どの案も、相手への反応や回答だけで終わらせず、最後に相手へ質問を1つ入れてください。"
+            "質問のない候補は作りません（相手が会話を終えたい意向を示している場合だけ例外です）。"
             "相手が質問していないターンは案ごとの役割を固定します。"
-            "recommendedは相手の直前発言に素直に反応する案、"
+            "recommendedは相手の直前発言に素直に反応してから質問する案、"
             "alternatives[0]は相手の話題を一段深く掘る質問の案、"
-            "alternatives[1]は確認済みの自分の経験や感想を短く共有する案にしてください。"
+            "alternatives[1]は確認済みの自分の経験や感想を短く共有してから質問する案にしてください。"
             "どの案も相槌だけで終わらせず、3案を同じ役割や同じ切り口にしないでください。"
-            "相手が質問したターンでは全案でその質問への回答を最優先し、"
-            "回答と反応だけで自然に成立する案は質問なしで完成させてください。"
+            "相手が質問したターンでは全案でその質問への回答を最優先し、回答のあとに質問を1つ続けます。"
+            "【相手の文に沿う（最重要）】相手の直前の文に含まれる話題と具体物を、相手が話した順番のまま拾ってください。"
+            "相手が二つ以上続けて話したら先に出た話題への反応を先に置き後から出た質問への回答を後に置きます。順番を入れ替えてはいけません。"
+            "「そうなんですね！」「いいですね！」だけで相手の具体物（料理名や場所や作品名）を流さず本文に一度は触れてください。"
+            "相手が「おすすめ」「どこ」「知りたい」と聞いたら具体物を1つ以上入れて答えます。"
+            "お店や地名や作品名などの固有名詞は相手の発言かプロフィールや確認済みの事実にあるものだけを使い新しく作らないでください。"
+            "使える具体物が無いときは「どんな系統が好きなんですか？」のように範囲を絞る質問にしてください。"
+            "「〜のわかります」ではなく「〜ですよね」「〜ますよね」と書きます。「風景をカメラに残す」のような不自然な言い方はせず「写真に撮る」と書きます。"
+            "相手が「好きな食べ物は何ですか？」のようにカテゴリを指定して聞いたらそのカテゴリに属する確認済みの事実で答えます。"
+            "別カテゴリの事実で答えないでください（食べ物を聞かれて海が好きと答えない）。"
+            "そのカテゴリの事実が無ければ「まだ決めてない」と正直に返すか相手に選んでもらう質問にしてください。"
+            "文末に「。」を付けません。「〜ですよね」「〜ますよね」の後ろも「。」を付けず、そのまま改行するか「！」で終えます。"
             "相手の文数上限（短い相手には最大2行、2文以上の相手にも最大3行）は守り、"
             "短文の相手に長い自己開示を返さないでください。"
             "会話方針がinvite_gentlyなら、3案のいずれかをinviteにして自然に誘います。"
@@ -14176,6 +14352,17 @@ def _generate_impl(data: GenerateInput):
         unresolved = str(state.get("unresolved_question") or "").strip()
         if unresolved:
             system_instruction += f"- 相手から届いている問いかけ: 「{unresolved[:160]}」\n"
+    if data.mode in {"first", "reply", "followup"}:
+        # T581: プロンプト内の例文に「、」「。」が多く、実走行で候補本文に
+        # 読点・句点が混入して棄却が繰り返された。指示の最後に置いて
+        # 読み直しを促す（末尾の指示ほど守られやすい）。
+        system_instruction += (
+            "\n【提出前チェック（最優先）】送信候補本文には読点「、」と句点「。」を1文字も入れません。"
+            "文は句点ではなく実際の改行で区切ります。1行に文を2つ置かず1文ごとに改行します。"
+            "書き終えたら各候補本文を読み直し、この2文字が1つでも残っていれば削除して句読点の無い自然な話し言葉に直してください。"
+            "文の途中に「、」を入れずそこで改行します。"
+            "この確認はreason・strategy・user_questionsなどのメタデータには適用しません。\n"
+        )
     attempted_models: list[dict[str, str]] = []
     fact_repair_used = False
     invite_repair_used = False
@@ -14398,6 +14585,7 @@ def _generate_impl(data: GenerateInput):
                                 + "、".join(reasons)
                                 + "。問題部分だけでなく全候補を見直し、未確認の本人・相手情報、句読点、既知情報の聞き直しを避けてください。"
                                 "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
+                                + _rejection_repair_hints(reasons)
                             )
                             continue
                         if filtered_result.get("generation_blocked") and safe_candidate_fallback is not None:
@@ -14492,6 +14680,7 @@ def _generate_impl(data: GenerateInput):
                                     + "、".join(reasons)
                                     + "。問題部分だけでなく全候補を見直し、未確認の本人・相手情報、句読点、既知情報の聞き直しを避けてください。"
                                     "安全で自然な候補が作れない場合は本人情報を推測せず、needs_user_info=trueで正確な質問だけを返してください。"
+                                    + _rejection_repair_hints(reasons)
                                     + (
                                         " 前回の候補（同じ文を再利用しない）: "
                                         + " / ".join(rejected_examples)
@@ -14770,6 +14959,7 @@ def _generate_impl(data: GenerateInput):
                                 "recommendedを1案、alternativesを不足数から1を引いた案数にしてください。"
                                 "各候補は通常どおりすべての事実・拒否・文体・重複検査を受けます。安全な候補が作れない場合は候補数不足のまま返してください。"
                                 + (" 除外理由: " + "、".join(rejected_reasons) + "。" if rejected_reasons else "")
+                                + _rejection_repair_hints(rejected_reasons)
                             )
                             continue
                         if (
@@ -15000,6 +15190,7 @@ def _generate_impl(data: GenerateInput):
                             system_instruction += (
                                 "\n【句読点違反による1回限りの再生成】前回の候補本文に「、」または「。」が含まれていました。"
                                 "新しい候補を作り直し、送信候補本文にはこの2文字を一切含めないでください。"
+                                "特に「〜ですよね」「〜ますよね」「〜なんですね」の文末に「。」を付けず、そのまま改行するか「！」で終えます。"
                                 "ただしlikeモードの1行目「〇〇さん、初めまして」の読点だけは例外的に許可されています。"
                                 "機械的な削除ではなく自然な文へ書き直してください。メタデータは対象外です。"
                             )

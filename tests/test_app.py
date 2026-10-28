@@ -4257,9 +4257,11 @@ def test_t542_blocked_response_records_rejected_candidate_texts(client, monkeypa
     c, _ = client
     mid = add_match(c, "架空りお")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    # T581: 句読点だけの候補は改行へ修復して採用するようになったため、棄却理由を
+    # 残しつつ本文に読点を含める（未完成プレースホルダー＋読点）。
     blocked_payload = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。", "reply_move": "react"},
+        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。〇〇さんはどうですか？", "reply_move": "react"},
         "alternatives": [],
         "reason": "相槌で返す", "strategy": "続きを気にする", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
@@ -4297,9 +4299,11 @@ def test_t558_blocked_regeneration_receives_rejected_texts_and_reports_reasons(
     c, _ = client
     mid = add_match(c, "架空の再生成確認")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "最近はドラマを続けて観ることが多いです"})
+    # T581: 句読点だけの候補は改行へ修復して採用するようになったため、0案にして
+    # 再生成を確認するには別の棄却理由（未完成プレースホルダー）を併せて持たせる。
     blocked_payload = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。", "reply_move": "react"},
+        "recommended": {"label": "句読点あり", "text": "ドラマ、いいですね。続きが気になります。〇〇さんはどうですか？", "reply_move": "react"},
         "alternatives": [],
         "reason": "相槌で返す", "strategy": "続きを気にする", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "", "next_action": "",
@@ -4327,8 +4331,8 @@ def test_t558_blocked_regeneration_receives_rejected_texts_and_reports_reasons(
     second_instruction = getattr(calls[1]["config"], "system_instruction", "")
     assert "前回の候補" in second_instruction
     assert "ドラマ、いいですね。" in second_instruction
-    assert "禁止句読点" in second_instruction
-    assert "禁止句読点" in body["candidate_rejection_summary"]
+    assert "未完成プレースホルダー" in second_instruction
+    assert "未完成プレースホルダー" in body["candidate_rejection_summary"]
     assert "主な理由" in body["candidate_notice"]
 
 
@@ -5778,30 +5782,31 @@ def test_same_topic_questions_with_different_scopes_are_checked_independently(cl
     assert not backend._answers_verified_partner_question(recent_only, context)
 
 
-def test_candidate_punctuation_is_filtered_without_regenerating_safe_candidates(client, monkeypatch):
+def test_candidate_punctuation_is_repaired_without_regenerating_safe_candidates(client, monkeypatch):
+    """T581: 句読点は棄却ではなく改行へ修復し、安全な候補を再生成せず活かす。
+
+    旧仕様では句読点入りの候補を棄却し、不足分を別プロバイダ呼び出しで作り
+    直していた。実走行でこれが再生成の多発と会話停止を招いたため、記号を文の
+    区切りとして実改行へ直し、1回の呼び出しで3案そろえる。
+    """
     from google import genai
 
     c, backend = client
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "カフェ好きです！"})
-    responses = [
-        {"needs_user_info": False, "user_questions": [], "user_info_reason": "",
-         "recommended": {"label": "自然", "text": "そうなんですね。それはいいですね"},
-         "alternatives": [{"label": "別案", "text": "気になります"}, {"label": "質問", "text": "どんなお店ですか？"}],
-         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
-         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
-        {"needs_user_info": False, "user_questions": [], "user_info_reason": "",
-         "recommended": {"label": "自然", "text": "カフェ好きなんですね！\nよく行くお店はありますか？"},
-         "alternatives": [{"label": "別案", "text": "気になるお店ありますか？"}, {"label": "質問", "text": "落ち着いたお店が好きですか？"}],
-         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
-         "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける"},
-    ]
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {"label": "自然", "text": "そうなんですね。それはいいですね"},
+        "alternatives": [{"label": "別案", "text": "気になります"}, {"label": "質問", "text": "どんなお店ですか？"}],
+        "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
+        "invite_decision": "continue_conversation", "decision_reason": "会話初期", "next_action": "話題を続ける",
+    }
     calls = []
 
     class FakeModels:
         def generate_content(self, **kwargs):
             calls.append(kwargs)
-            return SimpleNamespace(text=json.dumps(responses.pop(0), ensure_ascii=False))
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
 
     monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
     monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
@@ -5813,8 +5818,9 @@ def test_candidate_punctuation_is_filtered_without_regenerating_safe_candidates(
     assert all("、" not in item["text"] and "。" not in item["text"] for item in candidates)
     assert body["requested_candidate_count"] == 3
     assert body["available_candidate_count"] == 3
-    assert body["api_attempt_count"] == 2
-    assert len(calls) == 2
+    assert body["api_attempt_count"] == 1
+    assert len(calls) == 1
+    assert "改行に整えました" in body.get("candidate_notice", "")
     assert c.get(f"/api/matches/{mid}/messages").json()[-1]["body"] == "カフェ好きです！"
 
 
@@ -5990,33 +5996,26 @@ def test_mirroring_metrics_use_recent_partner_messages_and_never_me_messages_as_
     assert backend.missing_personal_fact_question(context) is not None
 
 
-def test_short_partner_message_rejects_overlong_candidate_and_preserves_safe_options(client):
+def test_overlong_candidate_is_no_longer_rejected_after_length_policy_change(client):
+    """2026-10-28（ユーザー指定）: 長さ超過だけを理由にした棄却を廃止する。"""
     _, backend = client
     context = {
         "mode": "reply",
         "history": [{"role": "them", "body": "カフェ好きです！"}],
     }
-    value = backend.Suggestions(
-        recommended={
-            "label": "長すぎる返信",
-            "text": "いいですね！\nカフェ巡り楽しそうです\n最近のお店も気になります\nどんなお店が好きですか？",
-        },
-        alternatives=[
-            {"label": "短い返信", "text": "カフェ好きなんですね！\nよく行くお店ありますか？"},
-            {"label": "別の短い返信", "text": "いいですね！\n最近行ったお店ありますか？"},
-        ],
-        reason="相手の話題に反応する",
-        strategy="短く会話を続ける",
+    overlong = backend.Candidate(
+        label="長めの返信",
+        text=(
+            "いいですね！\n"
+            "カフェ巡り楽しそうです\n"
+            "最近のお店も気になります\n"
+            "どんなお店が好きですか？"
+        ),
     )
 
-    result = backend.filter_safe_candidates(value, 3, context)
-
-    assert result["available_candidate_count"] == 2
-    assert [result["recommended"]["label"], result["alternatives"][0]["label"]] == [
-        "短い返信", "別の短い返信",
-    ]
-    assert "相手の返信量に対して長すぎる候補" in result["candidate_rejections"][0]["reasons"]
-    assert "安全確認後に表示できる候補は2案です（指定は3案）" in result["candidate_notice"]
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(
+        overlong, context
+    )
 
 
 def test_reply_length_guard_allows_acknowledgment_and_question_for_two_sentence_partner(client):
@@ -6042,7 +6041,7 @@ def test_reply_length_guard_allows_acknowledgment_and_question_for_two_sentence_
     assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(three_lines, context)
 
     four_lines = backend.Candidate(
-        label="長すぎる",
+        label="長め",
         text=(
             "そうなんですね\n"
             "鎌倉や川越は落ち着いて歩けるんですね\n"
@@ -6050,10 +6049,11 @@ def test_reply_length_guard_allows_acknowledgment_and_question_for_two_sentence_
             "またゆっくりお話ししましょう"
         ),
     )
-    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(four_lines, context)
+    # 2026-10-28: 長さ超過はもう棄却理由にしない。
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(four_lines, context)
 
 
-def test_reply_length_guard_still_caps_acknowledgment_without_question(client):
+def test_reply_length_guard_no_longer_rejects_acknowledgment_without_question(client):
     _, backend = client
     context = {
         "mode": "reply",
@@ -6073,7 +6073,8 @@ def test_reply_length_guard_still_caps_acknowledgment_without_question(client):
             "写真展のあとの喫茶店も素敵ですね"
         ),
     )
-    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(no_question, context)
+    # 2026-10-28: 長さ超過はもう棄却理由にしない。
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(no_question, context)
 
 
 def test_answer_to_app_weekend_clarification_verifies_across_scope_mismatch(client):
@@ -6119,7 +6120,7 @@ def test_shared_prompt_requires_acknowledgment_and_a_question(client):
     assert "原則として短い相槌を1つ入れて" in prompt
 
 
-def test_reply_length_guard_exempts_first_messages_but_caps_serious_context(client):
+def test_reply_length_guard_no_longer_rejects_serious_context(client):
     _, backend = client
     candidate = backend.Candidate(
         label="丁寧な返信",
@@ -6136,10 +6137,11 @@ def test_reply_length_guard_exempts_first_messages_but_caps_serious_context(clie
     }
 
     assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(candidate, first_context)
-    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(candidate, serious_context)
+    # 2026-10-28: 深刻な話題でも長さ超過はもう棄却理由にしない。
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(candidate, serious_context)
 
 
-def test_reply_length_guard_caps_serious_disclosure_even_when_it_is_latest(client):
+def test_reply_length_guard_no_longer_rejects_serious_disclosure_even_when_it_is_latest(client):
     _, backend = client
     candidate = backend.Candidate(
         label="短文の相手に長すぎる返信",
@@ -6160,10 +6162,11 @@ def test_reply_length_guard_caps_serious_disclosure_even_when_it_is_latest(clien
     assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(candidate, context)
 
     four_lines = backend.Candidate(
-        label="短文の相手に長すぎる返信",
+        label="短文の相手に長めの返信",
         text="それは大変でしたね\n無理しないでくださいね\n話してくれてありがとうございます\nまた話してくださいね",
     )
-    assert "相手の返信量に対して長すぎる候補" in backend._candidate_rejection_reasons(four_lines, context)
+    # 2026-10-28: 長さ超過はもう棄却理由にしない。
+    assert "相手の返信量に対して長すぎる候補" not in backend._candidate_rejection_reasons(four_lines, context)
 
 
 @pytest.mark.parametrize("partner_text", [
@@ -7735,12 +7738,15 @@ def test_provider_attempt_limit_stops_quality_repair_before_an_extra_call(client
     c, backend = client
     mid = add_match(c, "架空あかり")
     c.post(f"/api/matches/{mid}/messages", json={"role": "them", "body": "今日はカフェに行きました！"})
+    # T581: 句読点は改行へ修復して採用するようになったため、プロバイダ上限で
+    # 追加呼び出しを止める状況を作るには、修復で消えない棄却理由（未完成
+    # プレースホルダー）を候補に持たせる。
     payload = {
         "needs_user_info": False, "user_questions": [], "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "カフェに行きました、楽しそうです"},
+        "recommended": {"label": "自然", "text": "カフェに行きました\n〇〇さんも行きますか"},
         "alternatives": [
-            {"label": "別案", "text": "どんなお店でしたか。"},
-            {"label": "短め", "text": "いいですね、素敵です。"},
+            {"label": "別案", "text": "〇〇さんはどんなお店でしたか"},
+            {"label": "短め", "text": "いいですね\n〇〇さんも素敵です"},
         ],
         "reason": "理由", "strategy": "方針", "conversation_stage": "Stage 2",
         "invite_decision": "continue_conversation", "decision_reason": "会話中", "next_action": "話題を続ける",
@@ -16210,19 +16216,22 @@ def test_unclassified_personal_question_deterministic_fallback_passes_all_guards
     assert backend._answers_verified_partner_question(fallback, context) is True
     assert backend._candidate_rejection_reasons(fallback, context) == []
 
+    # T581: 句読点は改行へ修復して採用するようになったため、モデル候補が全滅して
+    # 決定的フォールバックへ落ちる状況は、修復で消えない棄却理由で作る
+    # （未完成プレースホルダー＋句読点の併存はプレースホルダー理由で残る）。
     unsafe_model = backend.SuggestionsV2.model_validate(
         {
             "needs_user_info": False,
             "user_questions": [],
             "user_info_reason": "",
             "recommended": {
-                "label": "句読点違反",
-                "text": "そうなんですね。詳しく教えてください。",
+                "label": "未完成プレースホルダー",
+                "text": "そうなんですね。〇〇さんも詳しく教えてください。",
             },
             "alternatives": [
                 {
-                    "label": "回答漏れ",
-                    "text": "いいですね。\nもっと聞かせてください",
+                    "label": "未完成プレースホルダー",
+                    "text": "いいですね。\n〇〇さんももっと聞かせてください",
                 },
                 {
                     "label": "未確認の誘い",
@@ -16290,13 +16299,15 @@ def test_generate_returns_deterministic_fallback_when_all_model_attempts_fail_on
         "needs_user_info": False,
         "user_questions": [],
         "user_info_reason": "",
+        # T581: 句読点は改行へ修復して採用するようになったため、全候補を棄却して
+        # 決定的フォールバックへ落とすには、修復で消えない棄却理由を持たせる。
         "recommended": {
             "label": "不適切1",
-            "text": "みなとみらいの海沿いをよく散歩します。最近は赤レンガ倉庫にも毎週行っています。",
+            "text": "みなとみらいの海沿いをよく散歩します。〇〇さんも散歩しますか。",
         },
         "alternatives": [
-            {"label": "不適切2", "text": "横浜の公園もよく歩きますよ。"},
-            {"label": "不適切3", "text": "散歩は気持ちいいですよね。"},
+            {"label": "不適切2", "text": "横浜の公園もよく歩きますよ。〇〇さんはどこに行きますか。"},
+            {"label": "不適切3", "text": "散歩は気持ちいいですよね。〇〇さんも好きですか。"},
         ],
         "reason": "理由",
         "strategy": "方針",
@@ -16968,9 +16979,10 @@ def test_verified_profile_fact_fallback_candidate_occupation(client):
 
     # 3. Fallback integrated with filter_safe_candidates when all candidates fail
     unsafe_cand = backend.Candidate(
-        label="未確認詳細あり",
-        # 事実確認の棄却は廃止されたため、残る形式違反（句読点）で棄却させる。
-        text="経理の仕事をしています。\n毎日電卓を叩いて数字とにらめっこしています😊",
+        label="未完成の候補",
+        # T581: 句読点は改行へ修復して採用するようになったため、フォールバックを
+        # 誘発するには修復で消えない棄却理由（未完成プレースホルダー）を使う。
+        text="経理の仕事をしています\n毎日電卓を叩いて数字とにらめっこしています😊\n〇〇さんはどうですか",
         reply_move="react",
     )
     raw_suggestions = backend.Suggestions(
@@ -21290,7 +21302,9 @@ def test_reply_prompt_anchors_last_partner_message_and_does_not_force_roles(clie
     assert "相手のプロフィールにある好みを自分の好みとして言ったり" in prompt
     assert "1案目はreact" not in prompt
     assert "少なくとも1〜2案には" not in prompt
-    assert "3案すべてに質問を入れる必要はありません" in prompt
+    # T581: 3案すべてに質問を必須にする方針へ変更（相手が終了を望む場合のみ例外）。
+    assert "【質問は全案に必ず1つ】" in prompt
+    assert "3案すべてに質問を入れる必要はありません" not in prompt
     assert "休日は何をしてますか？" in captured["contents"]
 
 
@@ -21584,6 +21598,42 @@ def test_filter_rejects_prohibited_topic_and_missing_lead_in(client):
     assert "話題を振る前の受け止めがない" in reasons
 
 
+def test_lead_in_check_accepts_natural_reactions_without_topic_word(client):
+    """2026-10-28: 「なるほど！」等の正当な相槌を、受け止めなしと誤判定しない。"""
+    c, backend = client
+    match_id = add_match(c, "架空ゲーム好き3", description="ゲームが好きです。")
+    c.post(f"/api/matches/{match_id}/messages", json={"role": "them", "body": "よろしくね！"})
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=match_id))
+
+    assert backend._question_topic_needs_lead_in(
+        "なるほど！\n普段はどんなゲームをすることが多いんですか？", context
+    ) is False
+    assert backend._question_topic_needs_lead_in(
+        "たしかに！\n普段はどんなゲームをすることが多いんですか？", context
+    ) is False
+    assert backend._question_topic_needs_lead_in(
+        "へえ、そうなんだ！\n普段はどんなゲームをするの？", context
+    ) is False
+    assert backend._question_topic_needs_lead_in(
+        "ゲームが好きなんですね！\n普段はどんなゲームをすることが多いんですか？", context
+    ) is False
+    # 受け止めが本当に無い候補は従来どおり棄却する。
+    assert backend._question_topic_needs_lead_in(
+        "普段はどんなゲームをすることが多いんですか？", context
+    ) is True
+
+
+def test_rejection_repair_hints_explain_missing_lead_in(client):
+    """T579: 受け止めなしの棄却理由には、再生成時の具体的な直し方を指示する。"""
+    _, backend = client
+    hint = backend._rejection_repair_hints(["話題を振る前の受け止めがない"])
+    assert "受け止め" in hint
+    assert "なんですね" in hint
+    # 他の理由には付けない（無関係な指示でモデルを混乱させない）。
+    assert backend._rejection_repair_hints(["禁止句読点"]) == ""
+    assert backend._rejection_repair_hints([]) == ""
+
+
 def test_filter_rejects_prohibited_topic_candidate_deterministically(client):
     """T575: 自由記述で禁止された話題（関連語含む）の候補は決定的に棄却する。"""
     c, backend = client
@@ -21858,7 +21908,142 @@ def test_t578_three_candidate_instruction_assigns_distinct_roles(client, monkeyp
     )
     assert response.status_code == 200, response.text
     instruction = captured["config"].system_instruction
-    assert "recommendedは相手の直前発言に素直に反応する案" in instruction
+    assert "recommendedは相手の直前発言に素直に反応してから質問する案" in instruction
     assert "alternatives[0]は相手の話題を一段深く掘る質問の案" in instruction
-    assert "alternatives[1]は確認済みの自分の経験や感想を短く共有する案" in instruction
+    assert "alternatives[1]は確認済みの自分の経験や感想を短く共有してから質問する案" in instruction
     assert "3案を同じ役割や同じ切り口にしないでください" in instruction
+    # T581: 質問は全案に必ず1つ。相手の文の順番どおりに拾う。
+    assert "【質問は全案に必ず1つ】" in instruction
+    assert "【相手の文に沿う（最重要）】" in instruction
+    assert "相手が話した順番のまま拾ってください" in instruction
+
+
+def test_answer_category_guard_blocks_off_category_relay(client):
+    """T581: 質問のカテゴリと**明確に別カテゴリ**の事実だけをリレーしない。
+
+    「好きな音楽は？」に「カレーが好きです」は不一致。一方、語彙に無い正しい
+    答え（ジャンル名など）やカテゴリ語の無い質問は誤って棄却しない。
+    """
+    _, backend = client
+    assert backend._answer_matches_asked_category(
+        "好きな音楽は何ですか？", "カレーが好きです"
+    ) is False
+    assert backend._answer_matches_asked_category(
+        "好きな食べ物は何ですか？", "カレーが好きです"
+    ) is True
+    assert backend._answer_matches_asked_category(
+        "好きな食べ物は何ですか？", "甘いものは好きです"
+    ) is True
+    # 語彙に無い正しい答え（ジャンル名）を誤って棄却しない。
+    assert backend._answer_matches_asked_category(
+        "アニメ映画だと何が好きですか？", "ミステリーやアクションをよく観ます"
+    ) is True
+    # カテゴリ語が質問に無いときは判定しない（従来どおり通す）。
+    assert backend._answer_matches_asked_category(
+        "休日は何をしてますか？", "海が大好きです"
+    ) is True
+
+
+def test_filter_rejects_unnatural_wakarimasu_phrasing(client):
+    """T581: 「〜のわかります」は不自然。「〜ですよね」なら通す。"""
+    c, backend = client
+    match_id = add_match(c, "架空の料理好き", description="料理が好きです。")
+    c.post(
+        f"/api/matches/{match_id}/messages",
+        json={"role": "them", "body": "一人分だと余っちゃいます😅 得意な料理はありますか？"},
+    )
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=match_id))
+    unnatural = backend.Candidate(
+        label="x",
+        text="和食が多いです！\n一人分だと作りすぎちゃうのわかります笑\n得意な料理はカレーです！",
+    )
+    assert "共感の言い方が不自然" in backend._candidate_rejection_reasons(unnatural, context)
+    natural = backend.Candidate(
+        label="y",
+        text="和食が多いです！\n一人分だと作りすぎちゃいますよね\n得意な料理はカレーです！",
+    )
+    assert "共感の言い方が不自然" not in backend._candidate_rejection_reasons(natural, context)
+
+
+def test_filter_rejects_camera_ni_nokosu_phrasing(client):
+    """T581: 「風景をカメラに残す」は不自然。「写真に撮る」なら通す。"""
+    c, backend = client
+    match_id = add_match(c, "架空の写真好き", description="写真が趣味です。")
+    c.post(
+        f"/api/matches/{match_id}/messages",
+        json={"role": "them", "body": "景色の写真を撮るのが好きです！"},
+    )
+    context = backend.build_context(backend.GenerateInput(mode="reply", match_id=match_id))
+    unnatural = backend.Candidate(
+        label="x", text="いいですよね！\n僕も風景をカメラに残すのが好きです！"
+    )
+    assert "不自然な言い回し" in backend._candidate_rejection_reasons(unnatural, context)
+    natural = backend.Candidate(
+        label="y", text="いいですよね！\n僕も風景を写真に撮るのが好きです！"
+    )
+    assert "不自然な言い回し" not in backend._candidate_rejection_reasons(natural, context)
+
+
+def test_break_candidate_sentence_punctuation_splits_into_lines(client):
+    """T581: 混入した読点・句点は文の区切りとして実改行へ直す。"""
+    _, backend = client
+    repaired = backend._break_candidate_sentence_punctuation(
+        "カラオケいいですね。\n僕も歌うの好きなんですけど、最近よく歌うアーティストとかあるんですか？",
+        {"mode": "reply"},
+    )
+    assert "、" not in repaired
+    assert "。" not in repaired
+    assert repaired == (
+        "カラオケいいですね\n僕も歌うの好きなんですけど\n最近よく歌うアーティストとかあるんですか？"
+    )
+    # likeモードの1行目「〇〇さん、初めまして」の読点だけは残す。
+    like = backend._break_candidate_sentence_punctuation(
+        "ゆいさん、初めまして\nプロフィールの雰囲気が、いいなと思いました",
+        {"mode": "like"},
+    )
+    assert like == "ゆいさん、初めまして\nプロフィールの雰囲気が\nいいなと思いました"
+
+
+def test_filter_safe_candidates_repairs_punctuation_instead_of_blocking(client, monkeypatch):
+    """T581: 句読点だけが理由の候補は棄却で停止せず、改行へ直して表示する。"""
+    from google import genai
+
+    c, backend = client
+    match_id = add_match(c, "架空のカラオケ好き")
+    c.post(
+        f"/api/matches/{match_id}/messages",
+        json={"role": "them", "body": "私は時間があるとカラオケに行くことが多いです🎤"},
+    )
+    payload = {
+        "needs_user_info": False, "user_questions": [], "user_info_reason": "",
+        "recommended": {
+            "label": "反応",
+            "text": "カラオケいいですね🎤\n僕も歌うの好きなんですけど、最近よく歌うアーティストとかあるんですか？",
+            "reply_move": "react",
+        },
+        "alternatives": [],
+        "reason": "反応して質問する", "strategy": "カラオケの話題を深掘りする",
+        "conversation_stage": "Stage 2", "invite_decision": "continue_conversation",
+        "decision_reason": "", "next_action": "",
+    }
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setenv("MRA_API_DIR", str(Path(__file__).parent / "no-credentials"))
+    monkeypatch.delenv("MRA_API_2_KEY", raising=False)
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post("/api/generate", json={
+        "mode": "reply", "match_id": match_id, "response_version": 2, "count": 1,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["generation_blocked"] is False
+    text = body["recommended"]["text"]
+    assert "、" not in text and "。" not in text
+    assert "僕も歌うの好きなんですけど" in text
+    assert "最近よく歌うアーティストとかあるんですか？" in text
+    assert "改行に整えました" in body.get("candidate_notice", "")
+
