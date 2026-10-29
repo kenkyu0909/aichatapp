@@ -22004,6 +22004,72 @@ def test_break_candidate_sentence_punctuation_splits_into_lines(client):
     assert like == "ゆいさん、初めまして\nプロフィールの雰囲気が\nいいなと思いました"
 
 
+def test_break_candidate_sentence_punctuation_keeps_vocative_with_greeting(client):
+    """T583: 「アイさん、はじめまして！」の読点で名前だけの行を作らない。"""
+    _, backend = client
+    repaired = backend._break_candidate_sentence_punctuation(
+        "アイさん、はじめまして！\nマッチありがとうございます😊",
+        {"mode": "first"},
+    )
+    lines = repaired.splitlines()
+    # 名前だけの行が孤立しない（次の行と連結する）。
+    assert "アイさん" not in lines
+    assert lines[0] == "アイさんはじめまして！"
+    assert lines[1] == "マッチありがとうございます😊"
+
+
+def test_correct_known_candidate_typos_fixes_shiyou(client):
+    """T583: 実走行で観測した「市用のルー」を「市販のルー」に直す。"""
+    _, backend = client
+    assert backend._correct_known_candidate_typos(
+        "市用のルーだと何を使っていることが多いんですか？"
+    ) == "市販のルーだと何を使っていることが多いんですか？"
+    # 正しい語は変えない。
+    assert backend._correct_known_candidate_typos("市販のルーを使ってます") == "市販のルーを使ってます"
+
+
+def test_uniquify_candidate_labels_removes_duplicates(client):
+    """T583: 候補ラベルの重複を連番で一意にする。"""
+    _, backend = client
+    result = {
+        "recommended": {"label": "代替案1", "text": "A"},
+        "alternatives": [
+            {"label": "代替案1", "text": "B"},
+            {"label": "深掘り", "text": "C"},
+            {"label": "深掘り", "text": "D"},
+        ],
+    }
+    out = backend._uniquify_candidate_labels(result)
+    labels = [out["recommended"]["label"], *[a["label"] for a in out["alternatives"]]]
+    assert len(labels) == len(set(labels))
+    assert out["alternatives"][0]["label"] == "代替案2"
+
+
+def test_t583_repeated_second_helpings_frame_is_demoted(client):
+    """T583: 名詞だけが違う「他に〜あるんですか？」の反復を後ろへ回す。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {"role": "me", "body": "他に何かよく入れる具材とかあるんですか？"},
+            {"role": "them", "body": "キムチを入れることもあります"},
+        ],
+        "other": {"name": "アイ", "description": "医療関係"},
+        "my_profile": {"facts": {"name": "S", "style": "敬語で短め"}, "avoid": []},
+        "reply_preferences": {"tone": "敬語"},
+        "invite_decision": "continue_conversation",
+        "ephemeral_user_answers": [],
+    }
+    repeated = backend.Candidate(label="反復", text="他にもよく使う隠し味とかあるんですか？")
+    assert "直近の自分と同じ趣旨の質問" in backend._recent_self_repetition_reasons(
+        repeated.text, context
+    )
+    fresh = backend.Candidate(label="別", text="餃子は何個くらい食べるんですか？")
+    assert "直近の自分と同じ趣旨の質問" not in backend._recent_self_repetition_reasons(
+        fresh.text, context
+    )
+
+
 def test_filter_safe_candidates_repairs_punctuation_instead_of_blocking(client, monkeypatch):
     """T581: 句読点だけが理由の候補は棄却で停止せず、改行へ直して表示する。"""
     from google import genai

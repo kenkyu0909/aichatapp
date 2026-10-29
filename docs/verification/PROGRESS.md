@@ -1,5 +1,25 @@
 # 検証進捗
 
+## 2026-10-29 T584 t583会話テストで観測した不備の修正（初回改行・誤字・ラベル重複・質問の反復）
+
+- 経緯: T583 の会話テスト方法を修正（相手役は質問・話題変更をしない）。t583 を20/20完走し、観測した既知の不備を修正。
+
+### 実装（app.py）
+
+- **初回の改行バグ**: 「アイさん、はじめまして！」の読点を改行修復が文の区切りとみなし、「アイさん」だけの行を孤立させていた。`_VOCATIVE_LINE_PATTERN` / `_merge_vocative_line_breaks` を新設し、`_break_candidate_sentence_punctuation` で呼びかけだけの行を次の行と連結する（「アイさんはじめまして！」）。
+- **既知の誤字の決定的修復**: `_KNOWN_CANDIDATE_TYPO_CORRECTIONS` / `_correct_known_candidate_typos` を新設。「市用のルー」→「市販のルー」。誤字は棄却すると候補数不足（3案→2案）を招くため、書き換えで直して採用する（`filter_safe_candidates` の正規化チェーンに組み込み）。
+- **候補ラベルの重複解消**: `_uniquify_candidate_labels` を新設し `/api/generate` の最終段で適用。モデルが「代替案1」を2つ付ける等の重複を、連番を進めて一意化する。
+- **「他に〜あるんですか？」の反復**: `_SECOND_HELPINGS_FRAME_PATTERN` を新設し、name部分だけが違う同じ問いかけの枠を `_recent_self_repetition_reasons` で「直近の自分と同じ趣旨の質問」として後ろへ回す（棄却ではなく並べ替え）。
+
+### テスト
+
+- 新規4件: `test_break_candidate_sentence_punctuation_keeps_vocative_with_greeting` / `test_correct_known_candidate_typos_fixes_shiyou` / `test_uniquify_candidate_labels_removes_duplicates` / `test_t583_repeated_second_helpings_frame_is_demoted`。
+- `tests/test_app.py` 全件: **2066 passed**（既存2062＋新規4）。
+
+### 未対応（モデル起因と判断）
+
+- 3案そろわない回（turn2/6/16/17）は、不足分の再生成が実際に走っている（`api_attempt_count` が概ね2）が、狭い同一話題で安全な3案目を作れないモデル側の限界。棄却理由は「不足分を不自然な候補で補わない」設計どおり。追加の再生成（API消費増）や require_question 緩和は方針判断が必要なため未変更。
+
 ## 2026-10-29 T583 知ったかぶり禁止（一般知識・作品は既定で「知らない」前提）
 
 - ユーザー指示: 「アプリは映画や本など一般教養を基本『見たことない／知らない』前提で話す。**知っている場合だけ**ユーザーが自由記述（reply_preferences.extra）に記載し、そのときは知っている反応をしてよい」。t582（相手役を毎ターン手書きでやり直した20通）で「函館の夜景きれいですよね」「地球岬は海が広くて…」「朝市の海鮮丼は格別」等、実際は知らない土地・名物を既知のように述べる事象が複数確認された。

@@ -8150,6 +8150,31 @@ _CANDIDATE_PUNCTUATION_TO_BREAK = str.maketrans({
 })
 
 
+# T583: 呼びかけだけの行（「アイさん」）。句読点の改行修復が
+# 「アイさん、はじめまして！」の読点で行を割り、名前だけの行が孤立していた。
+_VOCATIVE_LINE_PATTERN = re.compile(r"^[^\s、。！？!?]{1,12}(?:さん|ちゃん|君|くん|様)$")
+
+
+def _merge_vocative_line_breaks(parts: list[str]) -> list[str]:
+    """T583: 呼びかけだけの行を次の行と連結する。
+
+    句読点を改行へ直す修復が「アイさん、はじめまして！」の読点を文の区切りと
+    みなし、「アイさん」だけの行を作っていた。名前だけの行は文ではないため、
+    次の行と連結して1文に戻す。
+    """
+    merged: list[str] = []
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        if _VOCATIVE_LINE_PATTERN.match(part) and index + 1 < len(parts):
+            merged.append(part + parts[index + 1])
+            index += 2
+            continue
+        merged.append(part)
+        index += 1
+    return merged
+
+
 def _break_candidate_sentence_punctuation(text: str, context: dict | None = None) -> str:
     """T581: 候補本文の読点・句点を実改行へ直し、1文1行にする。
 
@@ -8177,6 +8202,8 @@ def _break_candidate_sentence_punctuation(text: str, context: dict | None = None
             continue
         repaired.extend(line.translate(_CANDIDATE_PUNCTUATION_TO_BREAK).splitlines())
     cleaned = [part.strip() for part in repaired if part.strip()]
+    # T583: 「アイさん」だけの行が孤立しないよう、呼びかけの行を連結する。
+    cleaned = _merge_vocative_line_breaks(cleaned)
     return "\n".join(cleaned) if cleaned else value.strip()
 
 
@@ -10799,6 +10826,13 @@ def _line_opening_key(line: str) -> str:
     return _normalized_repetition_key(line)[:8]
 
 
+# T583: 「他に〜あるんですか？」「ほかに〜いますか？」のように、名詞が違っても
+# 同じ「他に何かないか」という問いかけの枠。名詞だけが変わる反復を拾う。
+_SECOND_HELPINGS_FRAME_PATTERN = re.compile(
+    r"(?:他に|ほかに|別に)[^\n]{0,30}(?:ある|ありま|いる|いま)"
+)
+
+
 def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6) -> list[str]:
     """Reasons why a candidate repeats the user's own recent lines or questions."""
     prior_me = [
@@ -10915,6 +10949,24 @@ def _recent_self_repetition_reasons(text: str, context: dict, lookback: int = 6)
         reasons.append("直前の相手の話題と離れている")
     if _question_repeats_previous_ask(text, context):
         reasons.append("直前の自分の質問と同じ")
+    # T583: 「他に〜あるんですか？」のように中身が違っても同じ問いかけの枠を
+    # 繰り返す候補を後ろへ回す。実走行で「他に何か…あるんですか？」が多数ターン
+    # 続いた（相手は毎回1つ答えるだけなので枠の反復が目立つ）。
+    if (
+        not topic_change_requested
+        and any(
+            _SECOND_HELPINGS_FRAME_PATTERN.search(line)
+            for line in text.splitlines()
+            if _is_ask_sentence(line)
+        )
+        and any(
+            _SECOND_HELPINGS_FRAME_PATTERN.search(line)
+            for body in prior_me
+            for line in str(body).splitlines()
+            if _is_ask_sentence(line)
+        )
+    ):
+        reasons.append("直近の自分と同じ趣旨の質問")
     if _candidate_mixes_partner_address(text, context):
         reasons.append("相手の呼び方が揺れている")
     return reasons
@@ -13590,6 +13642,23 @@ def _normalize_first_person_to_boku(text: str) -> str:
     return normalized
 
 
+# T583: 実走行で観測した明確な誤字だけを決定的に直す。誤字は棄却すると候補数
+# 不足（3案→2案）を招くため、書き換えで正しい語に直して採用する。対象は
+# モデルが高頻度で混同する語に限定し、一般の校正には広げない。
+_KNOWN_CANDIDATE_TYPO_CORRECTIONS = (
+    ("市用", "市販"),
+)
+
+
+def _correct_known_candidate_typos(text: str) -> str:
+    """T583: 既知の誤字（「市用のルー」→「市販のルー」）を書き換える。"""
+    corrected = text
+    for wrong, right in _KNOWN_CANDIDATE_TYPO_CORRECTIONS:
+        if wrong in corrected:
+            corrected = corrected.replace(wrong, right)
+    return corrected
+
+
 def filter_safe_candidates(
     value: Suggestions | SuggestionsV2,
     requested_count: int,
@@ -13615,7 +13684,9 @@ def filter_safe_candidates(
         if split_text != candidate.text:
             candidate = candidate.model_copy(update={"text": split_text})
         softened_text = _ensure_like_greeting_comma(
-            _normalize_first_person_to_boku(_soften_stiff_keigo(candidate.text)),
+            _normalize_first_person_to_boku(
+                _soften_stiff_keigo(_correct_known_candidate_typos(candidate.text))
+            ),
             candidate_context,
         )
         if softened_text != candidate.text:
@@ -14030,7 +14101,37 @@ def generate(data: GenerateInput):
     result = _generate_impl(data)
     result = _apply_conversation_state_floor(result, data)
     result = _apply_acknowledgment_supplement_to_result(result, data)
-    return _drop_user_info_confirmation(_apply_extra_adoption_to_result(result, data))
+    result = _drop_user_info_confirmation(_apply_extra_adoption_to_result(result, data))
+    return _uniquify_candidate_labels(result)
+
+
+def _uniquify_candidate_labels(result):
+    """T583: 候補ラベルの重複を決定的に解消する。
+
+    モデルが複数案に同じラベル（例:「代替案1」を2つ）を付けることがあり、
+    選択UIで見分けがつかなかった。2つ目以降は連番を進めて一意なラベルにする。
+    """
+    if not isinstance(result, dict):
+        return result
+    entries = [result.get("recommended"), *(result.get("alternatives") or [])]
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("label"):
+            continue
+        label = str(entry["label"]).strip()
+        if label not in seen:
+            seen.add(label)
+            continue
+        match = re.match(r"^(.*?)(\d+)$", label)
+        number = int(match.group(2)) + 1 if match else 1
+        stem = match.group(1) if match else label
+        unique = f"{stem}{number}"
+        while unique in seen:
+            number += 1
+            unique = f"{stem}{number}"
+        entry["label"] = unique
+        seen.add(unique)
+    return result
 
 
 def _drop_user_info_confirmation(result):
