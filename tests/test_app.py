@@ -22047,3 +22047,69 @@ def test_filter_safe_candidates_repairs_punctuation_instead_of_blocking(client, 
     assert "最近よく歌うアーティストとかあるんですか？" in text
     assert "改行に整えました" in body.get("candidate_notice", "")
 
+
+def test_knowledge_disclaimer_policy_present_in_prompts(client):
+    """T583: 知ったかぶり禁止。一般知識・作品は既定で「知らない」前提にする方針を
+    common.txt とモード別プロンプトに持たせる。"""
+    _, backend = client
+    common = (backend.PROMPTS / "common.txt").read_text(encoding="utf-8")
+    assert "【一般知識・作品の扱い（知ったかぶり禁止）】" in common
+    assert "原則として知らない前提" in common
+    assert "観たことないんですけど" in common
+    assert "自由記述" in common and "知っている" in common
+    for mode in ("reply", "first", "followup"):
+        prompt = backend.read_prompt(mode)
+        assert "【一般知識・作品の扱い（知ったかぶり禁止）】" in prompt, mode
+        assert "知らない前提" in prompt, mode
+
+
+def test_knowledge_disclaimer_instruction_in_system_prompt(client, monkeypatch):
+    """T583: system_instruction にも知ったかぶり禁止の方針を明示する。"""
+    from google import genai
+
+    c, _ = client
+    match_id = add_match(c, "架空の旅好き", description="旅行と映画が好きです。")
+    c.post(
+        f"/api/matches/{match_id}/messages",
+        json={"role": "them", "body": "地球岬は海が広くてきれいでしたよ！"},
+    )
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "needs_user_info": False,
+                "user_questions": [],
+                "optional_user_questions": [],
+                "user_info_reason": "",
+                "recommended": {
+                    "label": "反応",
+                    "text": "行ったことないんですけど\n海が広く見えるところなんですね！\nどんな景色だったんですか？",
+                    "reply_move": "react",
+                },
+                "alternatives": [
+                    {"label": "深掘り", "text": "いいですね！\n室蘭の海はどんな感じなんですか？", "reply_move": "expand"},
+                    {"label": "共有", "text": "いいですね！\n僕も海沿いを歩くのが好きなんです！", "reply_move": "grounded_share"},
+                ],
+                "reason": "相手の話題への反応",
+                "strategy": "",
+                "conversation_stage": "Stage 2",
+                "invite_decision": "continue_conversation",
+                "decision_reason": "",
+                "next_action": "",
+            }, ensure_ascii=False))
+
+    monkeypatch.setenv("MRA_API_1_KEY", "offline-placeholder-key")
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: SimpleNamespace(models=FakeModels()))
+    response = c.post(
+        "/api/generate",
+        json={"mode": "reply", "match_id": match_id, "response_version": 2, "count": 3},
+    )
+    assert response.status_code == 200, response.text
+    instruction = captured["config"].system_instruction
+    assert "【一般知識は知らない前提（知ったかぶり禁止）】" in instruction
+    assert "観たことないんですけど" in instruction
+    assert "観光地・名所・店・商品・有名人" in instruction
+    assert "reply_preferences.extra" in instruction
+
