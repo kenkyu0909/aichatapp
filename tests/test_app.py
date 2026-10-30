@@ -20317,6 +20317,31 @@ def test_t587_run_on_candidate_is_evaluated_after_structural_repair(client):
     assert all((item or {}).get("text") != run_on.text for item in kept)
 
 
+def test_t588_question_line_without_terminal_mark_gets_question_mark(client):
+    """T588: 疑問形で終わる行に文末の「？」を補う（断定には付けない）。
+
+    t586/t587 の実走行で「普段はどんなものを作るんですか」「お休みの日は
+    カフェやお店巡りをしたりもするんですか」のように、質問文なのに文末の
+    「？」だけが抜けた候補が表示された。
+    """
+    _, backend = client
+    context = {"mode": "reply", "history": [], "other": {}, "my_profile": {"facts": {}}}
+
+    assert backend._repair_candidate_line_defects(
+        "食べ物の写真いいですよね！\n普段はどんなものを作るんですか", context
+    ) == "食べ物の写真いいですよね！\n普段はどんなものを作るんですか？"
+    assert backend._repair_candidate_line_defects(
+        "お休みの日はカフェやお店巡りをしたりもするんですか", context
+    ) == "お休みの日はカフェやお店巡りをしたりもするんですか？"
+    # 断定（〜です／〜ます）や、すでに「？」がある行はそのまま。
+    assert backend._repair_candidate_line_defects(
+        "料理を作るのが好きです", context
+    ) == "料理を作るのが好きです"
+    assert backend._repair_candidate_line_defects(
+        "甘いものは好きですか？", context
+    ) == "甘いものは好きですか？"
+
+
 def test_t585_partner_preference_assertion_requires_grounding(client):
     """T585: 相手が言っていない好みを「〜が好きなんですね！」と断定したら棄却する。
 

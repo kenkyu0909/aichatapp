@@ -8318,6 +8318,31 @@ def _meta_reference_question_remainder(line: str) -> str:
     return ""
 
 
+# T588: 質問文なのに文末の「？」が抜けた行に「？」を補うための文末形。
+_CANDIDATE_QUESTION_TAIL_PATTERN = re.compile(
+    r"(?:です|ます|ません|でした|でしょう)か(?:ね|な)?$"
+)
+
+
+def _ensure_candidate_question_mark(line: str) -> str:
+    """T588: 疑問文の文末に「？」が無ければ補う。
+
+    t586/t587 の実走行で「普段はどんなものを作るんですか」「お休みの日は
+    カフェやお店巡りをしたりもするんですか」のように、質問文なのに文末の
+    「？」だけが抜けた行が表示された。プロンプトで求めても実生成で抜けるため、
+    文末が疑問形（〜ですか／〜ますか等）で「？」「！」が無い行には決定的に
+    「？」を補う。断定（〜です／〜ます）や呼びかけには付けない。
+    """
+    stripped = line.strip()
+    if not stripped:
+        return line
+    if re.search(r"[?？!！]$", stripped):
+        return line
+    if _CANDIDATE_QUESTION_TAIL_PATTERN.search(stripped):
+        return line.rstrip() + "？"
+    return line
+
+
 def _repair_candidate_line_defects(text: str, context: dict | None = None) -> str:
     """T585: 候補本文の行単位の不備を決定的に直す。
 
@@ -8367,6 +8392,8 @@ def _repair_candidate_line_defects(text: str, context: dict | None = None) -> st
         repaired.append(current)
     if not repaired:
         return value
+    # T588: 疑問形で終わる行に文末の「？」を補う。
+    repaired = [_ensure_candidate_question_mark(line) for line in repaired]
     return "\n".join(repaired)
 
 
