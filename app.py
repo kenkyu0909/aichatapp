@@ -8201,6 +8201,21 @@ _CANDIDATE_DANGLING_COMPLETIONS = (
     (re.compile(r"(?:けど|けれども?)$"), "！"),
 )
 
+# T586: 自己開示と質問を接続助詞（「〜なんですけど」「〜ですが」）で1行に
+# つないだ run-on。「〜なんですけどアイさんは…ですか？」のように、行末が接続
+# 助詞ではないため (c) の完成・除去が効かず、1行に2文が並んで読みにくい。
+# 接続助詞の後ろが質問（末尾「？」）の行だけを share と question に割る。
+_CANDIDATE_CONNECTED_QUESTION_PATTERN = re.compile(
+    r"^(?P<share>.+?(?:なんですけども?|なんですけれども?|なんですが|なのですが|"
+    r"なのですけれども?|なのですけど|なのです|"
+    r"んですけれども?|んですけども?|みたいですが|みたいですけど|"
+    r"そうですが|そうでしたが|とのことですが|とのことですけど|"
+    r"ありましたが|ありましたけど|ありましたけれども?|"
+    r"いましたが|いましたけど|ましたが|ましたけど|"
+    r"だけれども|だけれど|だけど|ですが|ますが|けれども|けれど|けど))"
+    r"(?P<question>.+[？?])$"
+)
+
 
 def _complete_dangling_line(line: str) -> str:
     """行末の接続助詞を文末の「！」に直す (T585)."""
@@ -8209,6 +8224,40 @@ def _complete_dangling_line(line: str) -> str:
         if pattern.search(completed):
             return pattern.sub(replacement, completed)
     return completed
+
+
+def _split_connected_question_line(line: str) -> str:
+    """T586: 自己開示と質問を接続助詞でつないだ長い1行を2行に割る。
+
+    t586 で「甘いものだとチーズケーキも好きなんですけどアイさんはどんな
+    ケーキが好きですか？」のような run-on 行が現れた。行末が接続助詞では
+    ないため (c) の完成・除去が効かない。接続助詞の後ろが質問（末尾「？」）
+    の行だけを、自己開示（「！」で完成）と質問の2行に分ける。分割できな
+    いときは元の行をそのまま返す。
+    「、」「。」などを含む行は対象外（既存の句読点→改行修復に任せる）。
+    """
+    current = line.strip()
+    if not current or current[-1] not in "？?":
+        return line
+    if any(char in current for char in "、，。．"):
+        return line
+    # 質問は行末の1つだけに限定する（複数疑問や感嘆を混ぜた行は触らない）。
+    if sum(current.count(mark) for mark in "？?") != 1:
+        return line
+    match = _CANDIDATE_CONNECTED_QUESTION_PATTERN.match(current)
+    if not match:
+        return line
+    share = match.group("share").strip()
+    question = match.group("question").strip().lstrip("、,，").strip()
+    if not share or not question:
+        return line
+    # share 側に文末記号が混じる行（「そうですね！けど…」等）は分割しない。
+    if any(char in share for char in "！!？?"):
+        return line
+    share = _complete_dangling_line(share)
+    if _CANDIDATE_DANGLING_TAIL_PATTERN.search(share):
+        return line
+    return f"{share}\n{question}"
 
 # T585: 相手のプロフィールや過去の発言を「メタに」参照する言い回し。
 # 「プロフィールに料理も好きってありましたけど」「〜とのことですが」のように、
@@ -8278,6 +8327,9 @@ def _repair_candidate_line_defects(text: str, context: dict | None = None) -> st
     - (c) 接続助詞（「〜んですけど」「〜みたいですが」）で宙ぶらりんに終わる行は、
       文末を「！」に直して完成させる。それでも接続助詞のまま残る行は消す。
       t585 で自己開示行が質問とつながらず、文として途中で切れていた。
+    - (f) 自己開示と質問を接続助詞で1行にまとめた run-on
+      （「〜なんですけどアイさんは…ですか？」）は、自己開示（「！」で完成）と
+      質問の2行に割る。t586 で行末が接続助詞ではないため (c) が効かなかった。
     すべての行を消してしまう場合は元の本文を返し、候補を空にしない。
     """
     value = str(text)
@@ -8306,6 +8358,12 @@ def _repair_candidate_line_defects(text: str, context: dict | None = None) -> st
             current = _complete_dangling_line(current)
         if _CANDIDATE_DANGLING_TAIL_PATTERN.search(current):
             continue
+        # (f) 自己開示と質問をつないだ run-on 行を2行に割る。
+        if _CANDIDATE_CONNECTED_QUESTION_PATTERN.match(current):
+            split = _split_connected_question_line(current)
+            if split != current:
+                repaired.extend(part for part in split.splitlines() if part.strip())
+                continue
         repaired.append(current)
     if not repaired:
         return value

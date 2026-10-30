@@ -20201,6 +20201,42 @@ def test_t585_repair_candidate_line_defects_removes_marker_completes_and_drops_m
     ) == "プロフィールに料理も好きってありましたけど"
 
 
+def test_t586_repair_candidate_line_defects_splits_connected_question(client):
+    """T586: 自己開示と質問を接続助詞で1行につないだ run-on を2行に割る。
+
+    t586 で「甘いものだとチーズケーキも好きなんですけどアイさんはどんな
+    ケーキが好きですか？」のような行が現れた。行末が接続助詞ではないため
+    既存の宙ぶらりん修復が効かず、1行に2文が並んでいた。
+    """
+    _, backend = client
+    reply = {"mode": "reply"}
+    assert backend._repair_candidate_line_defects(
+        "僕も甘いものが好きなんですけどアイさんは他にどんなスイーツが好きですか？",
+        reply,
+    ) == "僕も甘いものが好きなんです！\nアイさんは他にどんなスイーツが好きですか？"
+    assert backend._repair_candidate_line_defects(
+        "最近はコーヒーの代わりにほうじ茶を飲むことが多いんですけど"
+        "アイさんは普段どんな飲み物が好きなんですか？",
+        reply,
+    ) == (
+        "最近はコーヒーの代わりにほうじ茶を飲むことが多いんです！\n"
+        "アイさんは普段どんな飲み物が好きなんですか？"
+    )
+    assert backend._repair_candidate_line_defects(
+        "普段は車で出かけることが多いんですけどアイさんは遠出したりしますか？",
+        reply,
+    ) == "普段は車で出かけることが多いんです！\nアイさんは遠出したりしますか？"
+    # 「、」を含む行は句読点→改行修復に任せて触らない。
+    assert backend._repair_candidate_line_defects(
+        "僕も歌うの好きなんですけど、最近よく歌うアーティストとかあるんですか？",
+        reply,
+    ) == "僕も歌うの好きなんですけど、最近よく歌うアーティストとかあるんですか？"
+    # 接続助詞の無い普通の質問行はそのまま。
+    assert backend._repair_candidate_line_defects(
+        "最近観た作品ってあるんですか？", reply
+    ) == "最近観た作品ってあるんですか？"
+
+
 def test_t585_partner_preference_assertion_requires_grounding(client):
     """T585: 相手が言っていない好みを「〜が好きなんですね！」と断定したら棄却する。
 
