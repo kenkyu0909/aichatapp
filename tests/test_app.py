@@ -20118,8 +20118,137 @@ def test_t495_topic_change_fallback_adds_a_connector(client):
     }
     candidate = backend._build_topic_change_fallback_candidate(context)
     assert candidate is not None
-    assert "ちなみに" in candidate.text
+    # T585: 「ちなみに」は全面禁止（T568）。受け皿候補は受け止め行だけでつなぐ。
+    assert "ちなみに" not in candidate.text
+    assert "そうなんですね！" in candidate.text
     assert "映画" in candidate.text
+
+
+def test_t585_topic_change_fallback_never_uses_banned_connector(client):
+    """T585: 決定的な話題転換の受け皿が禁止語「ちなみに」を混ぜない。"""
+    _, backend = client
+    for noun in ("映画", "仕事", "北海道", "体調"):
+        candidate = backend._build_topic_change_fallback_candidate(
+            _t514_topic_change_context(noun)
+        )
+        assert candidate is not None, noun
+        assert "ちなみに" not in candidate.text, candidate.text
+
+
+def test_t585_generic_person_word_is_not_extracted_as_topic(client):
+    """T585: 「相手の話に…」から「相手」を話題語として拾って質問しない。
+
+    実走行（t585 turn2/3）で direction「相手の話に短く受け止めを返して…」から
+    「相手」が話題語として抽出され、「アイさんは相手って好きですか？」という
+    意味の通らない候補が表示された。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "大通公園をよく散歩してます"}],
+        "other": {"name": "アイ", "description": "医療関係"},
+        "my_profile": {"facts": {"name": "S"}, "avoid": []},
+        "reply_preferences": {
+            "tone": "敬語",
+            "direction": "相手の話に短く受け止めを返してから自分から別の話題に切り替えてください",
+            "extra": "",
+        },
+    }
+    assert backend._topic_change_requested(context) == "別の話題"
+    assert backend._build_topic_change_fallback_candidate(context) is None
+
+
+def test_t585_repair_candidate_line_defects_removes_marker_completes_and_drops_meta(client):
+    """T585: 行単位の不備（転換マーカー・宙ぶらりん・メタ参照）を決定的に直す。
+
+    t585 で観測した 3 種の不備を 1 つの修復で扱う。
+      (b) 行頭の「ところで」「そういえば」を外す。
+      (c) 行末の「〜なんですけど」を「〜なんです！」に完成させる。
+      (d) 相手のプロフィールをメタに参照する行は、質問が続かなければ取り除く。
+    """
+    _, backend = client
+    reply = {"mode": "reply"}
+    # (b) 話題転換マーカーを外す。
+    assert backend._repair_candidate_line_defects(
+        "ところで映画はどうですか？", reply
+    ) == "映画はどうですか？"
+    assert backend._repair_candidate_line_defects(
+        "そういえば、最近どうですか？", reply
+    ) == "最近どうですか？"
+    # (c) 接続助詞は自己開示を消さずに文を完成させる。
+    assert backend._repair_candidate_line_defects(
+        "僕も甘いものが好きなんですけど", reply
+    ) == "僕も甘いものが好きなんです！"
+    assert backend._repair_candidate_line_defects(
+        "景色がいいところを歩くのが好きなんですが", reply
+    ) == "景色がいいところを歩くのが好きなんです！"
+    # (d) メタ参照の行は、質問が続かなければ取り除く。
+    assert backend._repair_candidate_line_defects(
+        "プロフィールに料理も好きってありましたけど\n最近作った料理はありますか？",
+        reply,
+    ) == "最近作った料理はありますか？"
+    # (d) メタ参照の行でも、後ろに質問があれば質問だけを残す。
+    assert backend._repair_candidate_line_defects(
+        "プロフィールに音楽が好きって書いてありましたけどどんな音楽を聴くんですか？",
+        reply,
+    ) == "どんな音楽を聴くんですか？"
+    # 初回メッセージの意図的なプロフィール参照は対象外。
+    first_line = "プロフィールの料理のところが気になっていました！"
+    assert backend._repair_candidate_line_defects(first_line, {"mode": "first"}) == first_line
+    # すべての行が消える場合は本文をそのまま返す（候補を空にしない）。
+    assert backend._repair_candidate_line_defects(
+        "プロフィールに料理も好きってありましたけど", reply
+    ) == "プロフィールに料理も好きってありましたけど"
+
+
+def test_t585_partner_preference_assertion_requires_grounding(client):
+    """T585: 相手が言っていない好みを「〜が好きなんですね！」と断定したら棄却する。
+
+    t585 で相手（アイ）が話題にしていない「甘いもの」「ドライブ」を
+    「〜が好きなんですね！」と断定した候補が表示された。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "最近は料理にハマってます"}],
+        "other": {"name": "アイ", "description": "医療関係の仕事をしています"},
+        "my_profile": {"facts": {}},
+    }
+    unverified = backend.Candidate(label="断定", text="甘いものが好きなんですね！")
+    assert "相手が言っていない好みを断定している" in backend._candidate_rejection_reasons(
+        unverified, context
+    )
+    drive = backend.Candidate(label="断定", text="ドライブが好きなんですね！")
+    assert "相手が言っていない好みを断定している" in backend._candidate_rejection_reasons(
+        drive, context
+    )
+    # 相手が実際に話した好みは受け止めてよい。
+    cooking = backend.Candidate(label="受け止め", text="料理が好きなんですね！")
+    assert "相手が言っていない好みを断定している" not in backend._candidate_rejection_reasons(
+        cooking, context
+    )
+    # 質問の形は断定ではない。
+    question = backend.Candidate(label="質問", text="甘いものって好きなんですか？")
+    assert "相手が言っていない好みを断定している" not in backend._candidate_rejection_reasons(
+        question, context
+    )
+
+
+def test_t585_partner_preference_grounding_ignores_first_person_prefix(client):
+    """T585: 「僕も〜が好きなんですね！」でも話題語が確認済みなら断定しない。"""
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [{"role": "them", "body": "甘いものを食べるのが好きです"}],
+        "other": {"name": "アイ", "description": ""},
+        "my_profile": {"facts": {}},
+    }
+    assert not backend._asserts_unverified_partner_preference(
+        "僕も甘いものが好きなんですね！", context
+    )
+    assert backend._asserts_unverified_partner_preference(
+        "僕もドライブが好きなんですね！", context
+    )
 
 
 def test_t496_answer_type_matches_the_question_shape(client):
@@ -22109,7 +22238,9 @@ def test_filter_safe_candidates_repairs_punctuation_instead_of_blocking(client, 
     assert body["generation_blocked"] is False
     text = body["recommended"]["text"]
     assert "、" not in text and "。" not in text
-    assert "僕も歌うの好きなんですけど" in text
+    # T585: 行末の接続助詞「〜なんですけど」は宙ぶらりんなので「〜なんです！」に
+    # 完成させてから改行する（自己開示は消さない）。
+    assert "僕も歌うの好きなんです！" in text
     assert "最近よく歌うアーティストとかあるんですか？" in text
     assert "改行に整えました" in body.get("candidate_notice", "")
 

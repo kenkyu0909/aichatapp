@@ -8175,6 +8175,143 @@ def _merge_vocative_line_breaks(parts: list[str]) -> list[str]:
     return merged
 
 
+# T585: 行末が接続助詞（「〜んですけど」「〜みたいですが」）で宙ぶらりんに終わり、
+# 次行の質問とつながらない自己開示行。t585 で「僕も甘いものが好きなんですけど」
+# のような行が質問の直前で切れ、文として完成していなかった。まず文末を「！」に
+# 直して完成させ、それでも接続助詞のまま残る行だけを除去する。
+_CANDIDATE_DANGLING_TAIL_PATTERN = re.compile(
+    r"(?:なんですけど|なんですけれども?|なんですが|なのですが|"
+    r"んですけど|んですけれども?|みたいですが|みたいですけど|"
+    r"そうですが|そうでしたが|とのことですが|とのことですけど|"
+    r"ありましたが|ありましたけど|ありましたけれども?|"
+    r"いましたが|いましたけど|ましたが|ましたけど|"
+    r"ですが|ますが|けれども|けれど|けど)[！!]?$"
+)
+
+# 行末の接続助詞を文末の「！」に直す（自己開示を消さずに文を完成させる）。
+_CANDIDATE_DANGLING_COMPLETIONS = (
+    (re.compile(r"なんです(?:けど|けれども?|が)$"), "なんです！"),
+    (re.compile(r"なのです(?:けど|けれども?|が)$"), "なのです！"),
+    (re.compile(r"んです(?:けど|けれども?|が)$"), "んです！"),
+    (re.compile(r"のです(?:けど|けれども?|が)$"), "のです！"),
+    (re.compile(r"ました(?:けど|けれども?|が)$"), "ました！"),
+    (re.compile(r"です(?:けど|けれども?|が)$"), "です！"),
+    (re.compile(r"ます(?:けど|けれども?|が)$"), "ます！"),
+    (re.compile(r"(?:だけど|だけれども)$"), "です！"),
+    (re.compile(r"(?:けど|けれども?)$"), "！"),
+)
+
+
+def _complete_dangling_line(line: str) -> str:
+    """行末の接続助詞を文末の「！」に直す (T585)."""
+    completed = line
+    for pattern, replacement in _CANDIDATE_DANGLING_COMPLETIONS:
+        if pattern.search(completed):
+            return pattern.sub(replacement, completed)
+    return completed
+
+# T585: 相手のプロフィールや過去の発言を「メタに」参照する言い回し。
+# 「プロフィールに料理も好きってありましたけど」「〜とのことですが」のように、
+# 相手がすでに話したことを確認するだけの前置きは会話として不自然。
+_CANDIDATE_META_REFERENCE_PATTERN = re.compile(
+    r"プロフィール|とのこと|って書いて|って聞いて|って言って|"
+    r"ってありました|とありました|書いてありました|みたいですが|みたいですけど"
+)
+
+# メタ参照の行のうち、接続助詞の後ろに質問が続くものは、その質問だけを残す。
+_CANDIDATE_META_TAIL_PATTERN = re.compile(
+    r"(?:なんですけど|なんですけれども?|なんですが|なのですが|"
+    r"んですけど|んですけれども?|みたいですが|みたいですけど|"
+    r"そうですが|そうでしたが|とのことですが|とのことですけど|"
+    r"ありましたが|ありましたけど|ありましたけれども?|"
+    r"いましたが|いましたけど|ましたが|ましたけど|ですが|ますが|けれども|けれど|けど)"
+)
+
+# メタ参照の後ろに接着助詞が無いときでも、質問の開始語から後ろだけを残す。
+_CANDIDATE_QUESTION_START_PATTERN = re.compile(
+    r"(?:どんな|どういう|何|なに|どこ|どっち|どちら|どの|いつ|誰|だれ|"
+    r"おすすめ|最近|普段)"
+)
+
+_CANDIDATE_QUESTION_HINT_PATTERN = re.compile(
+    r"[?？]|(?:どんな|何|なに|どこ|いつ|どれ|どちら|どの|誰|だれ|おすすめ|"
+    r"ありますか|あります？|いますか|ますか|ですか|でしょうか)"
+)
+
+# T585: 候補本文の行頭に付いた話題転換マーカー（決定的に除去する）。
+_CANDIDATE_TOPIC_MARKER_PATTERN = re.compile(
+    r"^(?:そういえば|ちなみに|ところで)[、,，]?\s*"
+)
+
+
+def _meta_reference_question_remainder(line: str) -> str:
+    """メタ参照の行から、後ろに続く質問部分だけを取り出す (T585)."""
+    remainder = ""
+    for match in _CANDIDATE_META_TAIL_PATTERN.finditer(line):
+        tail = line[match.end():].strip().lstrip("、,，").strip()
+        if (
+            tail
+            and _CANDIDATE_QUESTION_HINT_PATTERN.search(tail)
+            and not _CANDIDATE_META_REFERENCE_PATTERN.search(tail)
+        ):
+            remainder = tail
+    if remainder:
+        return remainder
+    # 接続助詞が無い「〜って書いてあってどんな…」のような行の保険。
+    for match in _CANDIDATE_QUESTION_START_PATTERN.finditer(line):
+        tail = line[match.start():].strip().lstrip("、,，").strip()
+        if (
+            tail
+            and _CANDIDATE_QUESTION_HINT_PATTERN.search(tail)
+            and not _CANDIDATE_META_REFERENCE_PATTERN.search(tail)
+        ):
+            return tail
+    return ""
+
+
+def _repair_candidate_line_defects(text: str, context: dict | None = None) -> str:
+    """T585: 候補本文の行単位の不備を決定的に直す。
+
+    - (b) 行頭の話題転換マーカー（「ところで」「そういえば」「ちなみに」）を外す。
+    - (d) 相手のプロフィールや発言をメタに参照する行（「プロフィールに〜と
+      ありましたけど」）は、後ろに続く質問だけを残す（質問が無ければ行を消す）。
+    - (c) 接続助詞（「〜んですけど」「〜みたいですが」）で宙ぶらりんに終わる行は、
+      文末を「！」に直して完成させる。それでも接続助詞のまま残る行は消す。
+      t585 で自己開示行が質問とつながらず、文として途中で切れていた。
+    すべての行を消してしまう場合は元の本文を返し、候補を空にしない。
+    """
+    value = str(text)
+    if not value.strip():
+        return value
+    mode = (context or {}).get("mode")
+    repaired: list[str] = []
+    for line in value.splitlines():
+        current = line.strip()
+        if not current:
+            continue
+        # (b) 行頭の話題転換マーカーを除去する。
+        current = _CANDIDATE_TOPIC_MARKER_PATTERN.sub("", current).strip()
+        if not current:
+            continue
+        # (d) メタなプロフィール／発言参照（返信モードのみ。初回は「プロフィールの
+        # 〜のところが気になっていました！」のように意図的に参照する）。
+        if mode == "reply" and _CANDIDATE_META_REFERENCE_PATTERN.search(current):
+            remainder = _meta_reference_question_remainder(current)
+            if not remainder:
+                continue
+            current = remainder
+        # (c) 接続助詞で宙ぶらりんに終わる行は、まず文末を「！」に直して完成
+        # させる。直しても宙ぶらりんのままの行だけを取り除く。
+        if _CANDIDATE_DANGLING_TAIL_PATTERN.search(current):
+            current = _complete_dangling_line(current)
+        if _CANDIDATE_DANGLING_TAIL_PATTERN.search(current):
+            continue
+        repaired.append(current)
+    if not repaired:
+        return value
+    return "\n".join(repaired)
+
+
 def _break_candidate_sentence_punctuation(text: str, context: dict | None = None) -> str:
     """T581: 候補本文の読点・句点を実改行へ直し、1文1行にする。
 
@@ -8822,24 +8959,26 @@ def _build_topic_change_fallback_candidate(context: dict) -> Candidate | None:
         # 動詞を使わない聞き方にする。
         # T528: 状態語（体調・気分・具合・調子…）に「〜って好きですか？」を付けると
         # 「体調って好きですか？」のように意味が通らなくなるため「〜はどうですか？」にする。
+        # T585: 「ちなみに」は全面禁止（T568）。決定的な受け皿だけが禁止語を
+        # 混ぜていたため、話題転換の話題をそのまま問いかける形に直す。
         if _STATE_OR_CONFIRMATION_QUESTION_PATTERN.search(requested):
             state_subject = f"{partner_label}の" if partner_label else ""
             line2 = (
-                f"ちなみに{state_subject}{requested}はどう？"
+                f"{state_subject}{requested}はどう？"
                 if casual
-                else f"ちなみに{state_subject}{requested}はどうですか？"
+                else f"{state_subject}{requested}はどうですか？"
             )
         else:
             line2 = (
-                f"ちなみに{subject}{requested}って好き？"
+                f"{subject}{requested}って好き？"
                 if casual
-                else f"ちなみに{subject}{requested}って好きですか？"
+                else f"{subject}{requested}って好きですか？"
             )
     else:
         line2 = (
-            f"ちなみに{subject}{requested}はよく{verb}？"
+            f"{subject}{requested}はよく{verb}？"
             if casual
-            else f"ちなみに{subject}{requested}はよく{verb}んですか？"
+            else f"{subject}{requested}はよく{verb}んですか？"
         )
     ack = "そうなんですね！" if not casual else "そうなんだ！"
     candidate = Candidate(label="話題の転換", text=f"{ack}\n{line2}", reply_move="expand")
@@ -11789,6 +11928,108 @@ def _candidate_has_question(text: str) -> bool:
     return any(_is_ask_sentence(line) for line in lines)
 
 
+# T585: 相手が宣言していない好みを「〜が好きなんですね！」と断定する候補を拾う。
+# t585 で「甘いものが好きなんですね！」「ドライブが好きなんですね！」が相手の
+# 発言・プロフィールに無いまま表示された（T532 の `_preference_attribution_clauses`
+# は「宣言済み」の免除だけを見ており、宣言の無い断定を止めていなかった）。
+_PARTNER_PREFERENCE_ASSERTION_PATTERN = re.compile(
+    r"(?P<topic>[^\s、。！？!?\n]{1,24}?)"
+    r"(?:が|は|も|って|の|に)?"
+    r"(?:お?好き|お?好み|大好き)"
+    r"(?:なんですね|んですね|なんだね|んだね|のですね|みたいですね)"
+)
+
+# 指示語や汎用語は話題語として扱わない。
+_PARTNER_PREFERENCE_TOPIC_STOPWORDS = {
+    "それ", "これ", "あれ", "そう", "そういう", "こういう", "ああいう",
+    "どんな", "なんか", "なんとなく", "みんな", "人", "相手", "自分",
+    "こと", "もの", "の", "ん",
+}
+
+
+def _known_partner_text(context: dict) -> str:
+    """相手について確認できるテキストを集める (T585).
+
+    プロフィール（description 等）、相手自身の発言、本人が補足した相手情報
+    （temporary_user_supplied_profile_facts）を対象にする。
+    """
+    other = context.get("other") or {}
+    parts: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, dict):
+            for nested in value.values():
+                collect(nested)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(item)
+
+    for key, value in other.items():
+        if key == "name":
+            continue
+        collect(value)
+    parts.extend(
+        str(message.get("body", ""))
+        for message in context.get("history", [])
+        if message.get("role") == "them"
+    )
+    parts.extend(
+        str(answer.get("answer", ""))
+        for answer in context.get("ephemeral_user_answers") or []
+    )
+    return re.sub(r"[\s、。！？!?]", "", "\n".join(parts))
+
+
+# 話題語の先頭に付く自称・指示語と助詞。断定の根拠判定の前に外す。
+_PARTNER_PREFERENCE_TOPIC_PREFIX_PATTERN = re.compile(
+    r"^(?:僕|私|わたし|俺|自分|彼女|彼|相手|それ|これ|あれ|そう|あー|えーと|"
+    r"えっと|なんか|やっぱり)[はもがのをにでとって]*"
+)
+# 話題語を分割する助詞・記号。名詞のまとまりごとに根拠を確認する。
+_PARTNER_PREFERENCE_TOPIC_SPLIT_PATTERN = re.compile(r"[はもがのをにでとってや、,]+")
+_TOPIC_TOKEN_PATTERN = re.compile(r"[一-龯ぁ-んァ-ヶー]{2,}")
+
+
+def _partner_preference_topic_tokens(topic: str) -> list[str]:
+    """断定された好みの話題語から、根拠確認に使う名詞のまとまりを作る (T585)."""
+    cleaned = _PARTNER_PREFERENCE_TOPIC_PREFIX_PATTERN.sub("", topic).strip()
+    tokens: list[str] = []
+    for part in _PARTNER_PREFERENCE_TOPIC_SPLIT_PATTERN.split(cleaned):
+        token = part.strip()
+        if len(token) >= 2 and _TOPIC_TOKEN_PATTERN.fullmatch(token):
+            tokens.append(token)
+            continue
+        # 助詞で割り切れない塊（「甘いもの」等）でも、連続する名詞runを拾う。
+        tokens.extend(_TOPIC_TOKEN_PATTERN.findall(token))
+    return tokens
+
+
+def _asserts_unverified_partner_preference(text: str, context: dict) -> bool:
+    """相手が言っていない好みを断定しているとき True (T585)."""
+    partner_text = _known_partner_text(context)
+    value = str(text)
+    for match in _PARTNER_PREFERENCE_ASSERTION_PATTERN.finditer(value):
+        if _candidate_claim_is_interrogative(value, match):
+            continue
+        topic = re.sub(r"[\s、。！？!?]", "", match.group("topic")).strip()
+        if len(topic) < 2 or topic in _PARTNER_PREFERENCE_TOPIC_STOPWORDS:
+            continue
+        tokens = _partner_preference_topic_tokens(topic)
+        if not tokens:
+            continue
+        # 話題語の名詞のまとまりがどれか一つでも相手の情報に実在すれば、断定の
+        # 根拠があるとみなす（「映画を観るのが好き」→「映画」が確認済み等）。
+        if any(token in partner_text for token in tokens):
+            continue
+        # 話題語そのものが相手情報の一部（「甘いもの」が「甘いもの好き」に含まれる）でも可。
+        if topic in partner_text:
+            continue
+        return True
+    return False
+
+
 def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[str]:
     reasons: list[str] = []
     text = candidate.text
@@ -11818,6 +12059,9 @@ def _candidate_rejection_reasons(candidate: Candidate, context: dict) -> list[st
     # T559: 確認済みでない甘いもの・しょっぱいものの自己好みは候補から落とす。
     if _claims_unverified_food_preference(text, context):
         reasons.append("未確認の食の好み")
+    # T585: 相手が言っていない好みを「〜が好きなんですね！」と断定する候補を落とす。
+    if _asserts_unverified_partner_preference(text, context):
+        reasons.append("相手が言っていない好みを断定している")
     if _repeats_partner_declared_activity(text, context):
         reasons.append("相手が答えた活動を聞き返している")
     if _asks_pet_walk_about_cat(text, context):
@@ -12468,6 +12712,10 @@ def _repeats_last_me_time_opening(text: str, context: dict) -> bool:
 _TOPIC_SUFFIX_ONLY = {
     "方", "頃", "際", "度", "分", "感", "目", "中", "気", "向け",
     "話", "事", "物", "所", "時", "前", "後",
+    # T585: 「相手の話に短く受け止めを返して…」のような指示文から「相手」を
+    # 話題語として拾うと「相手って好きですか？」という意味の通らない質問に
+    # なる。人を指す汎用語は話題にしない。
+    "相手", "自分", "みんな", "人",
 }
 
 
@@ -13685,7 +13933,12 @@ def filter_safe_candidates(
             candidate = candidate.model_copy(update={"text": split_text})
         softened_text = _ensure_like_greeting_comma(
             _normalize_first_person_to_boku(
-                _soften_stiff_keigo(_correct_known_candidate_typos(candidate.text))
+                _soften_stiff_keigo(
+                    _repair_candidate_line_defects(
+                        _correct_known_candidate_typos(candidate.text),
+                        candidate_context,
+                    )
+                )
             ),
             candidate_context,
         )
@@ -13697,8 +13950,11 @@ def filter_safe_candidates(
         if "禁止句読点" in reasons:
             # T581: 句読点だけが理由の候補は、記号を実改行へ直して再判定する。
             # 他の安全性を満たすなら採用し、再生成や停止で会話を止めない。
-            repaired_text = _break_candidate_sentence_punctuation(
-                candidate.text, candidate_context
+            # T585: 句読点を改行へ直したあとに残る行単位の不備（行頭の転換
+            # マーカー・メタなプロフィール参照・接続助詞の宙ぶらりん）も直す。
+            repaired_text = _repair_candidate_line_defects(
+                _break_candidate_sentence_punctuation(candidate.text, candidate_context),
+                candidate_context,
             )
             if repaired_text != candidate.text:
                 repaired_candidate = candidate.model_copy(update={"text": repaired_text})

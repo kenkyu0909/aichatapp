@@ -1,5 +1,30 @@
 # 検証進捗
 
+## 2026-10-30 T585 t585会話テストで観測した不備a〜eの修正（未宣言の好み断定・転換マーカー・宙ぶらりん・メタ参照・話題転換の徹底）
+
+- 経緯: t585（話題転換の重点検証、20/20完走）で観測した不備 a〜e を全部修正する方針。決定的修復／検査＋プロンプト強化。
+
+### 実装（app.py）
+
+- **(a) 相手が言っていない好みの断定**（「甘いものが好きなんですね！」「ドライブが好きなんですね！」）: `_PARTNER_PREFERENCE_ASSERTION_PATTERN` / `_PARTNER_PREFERENCE_TOPIC_STOPWORDS` / `_known_partner_text` / `_partner_preference_topic_tokens` / `_asserts_unverified_partner_preference` を新設し `_candidate_rejection_reasons` に「相手が言っていない好みを断定している」を追加。話題語（名詞のまとまり）が相手の発言・プロフィール・`ephemeral_user_answers` に実在しなければ棄却。質問形は対象外。
+- **(b) 行頭の転換マーカー**（「ところで」）: `_CANDIDATE_TOPIC_MARKER_PATTERN` で「そういえば／ちなみに／ところで」を決定的に除去。
+- **(c) 自己開示行の接続助詞の宙ぶらりん**（「〜好きなんですけど」の直後に別話題の質問）: `_CANDIDATE_DANGLING_COMPLETIONS` / `_complete_dangling_line` で行末の接続助詞を文末「！」に直して文を完成させる（自己開示を消さない）。直しても残る行だけ除去。
+- **(d) メタなプロフィール参照**（「プロフィールに〜と書いてありましたが」「〜とのことですが」「〜みたいですが」）: `_CANDIDATE_META_REFERENCE_PATTERN` / `_meta_reference_question_remainder` で reply モードに限り、後ろに質問があれば質問だけ残し、無ければ行を削除。初回メッセージの意図的な参照は対象外。
+- `_repair_candidate_line_defects` を `filter_safe_candidates` の軟化チェーンと句読点修復パスに組み込む（(b)(c)(d) を1関数で処理）。
+- `_build_topic_change_fallback_candidate` の「ちなみに」を除去（T568の全面禁止の残留）。`_TOPIC_SUFFIX_ONLY` に「相手／自分／みんな／人」を追加し、direction「相手の話に…」から「相手」を話題語にしない。
+
+### 実装（prompts/common.txt）
+
+- (b): 「ところで」「そういえば」も禁止。
+- (c): 行末を接続助詞（「〜なんですけど」「〜なんですが」「〜みたいですが」「〜とのことですが」）で終わらせない。
+- (d): プロフィールや過去の発言をメタに参照する前置きを作らない（初回の意図的な参照は除く）。
+- (e): direction/extra で話題転換を指定されたら実際に切り替え、同じ話題に戻らない。
+
+### テスト
+
+- 新規: `test_t585_repair_candidate_line_defects_removes_marker_completes_and_drops_meta` / `test_t585_partner_preference_assertion_requires_grounding` / `test_t585_partner_preference_grounding_ignores_first_person_prefix` / `test_t585_topic_change_fallback_never_uses_banned_connector` / `test_t585_generic_person_word_is_not_extracted_as_topic`。更新: `test_t495_topic_change_fallback_adds_a_connector`（ちなみに除去）、`test_filter_safe_candidates_repairs_punctuation_instead_of_blocking`（宙ぶらりんを「！」に完成）。
+- `tests/test_app.py` 全件: **2071 passed**。
+
 ## 2026-10-29 T584 t583会話テストで観測した不備の修正（初回改行・誤字・ラベル重複・質問の反復）
 
 - 経緯: T583 の会話テスト方法を修正（相手役は質問・話題変更をしない）。t583 を20/20完走し、観測した既知の不備を修正。
