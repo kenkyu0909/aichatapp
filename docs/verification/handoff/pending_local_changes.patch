@@ -1,0 +1,457 @@
+diff --git a/app.py b/app.py
+index 28e1b46..f319d9d 100644
+--- a/app.py
++++ b/app.py
+@@ -1928,6 +1928,18 @@ def missing_personal_fact_question(context: dict) -> UserQuestion | None:
+     topic = _topic_for_personal_question(partner_messages[-1])
+     if _negative_binary_question_has_ambiguous_answer(context, partner_messages[-1]):
+         return _negative_binary_question_clarification(partner_messages[-1])
++    if not topic and _is_unclassified_direct_question(partner_messages[-1]) and _is_unclassified_question_about_user(partner_messages[-1]):
++        question_text = partner_messages[-1]
++        quoted_question = question_text.strip().replace("\n", " ")[:180]
++        if INVITATION_PATTERN.search(question_text):
++            return UserQuestion(
++                question=f"相手の「{quoted_question}」にどう返したいか教えてください",
++                purpose="相手からの誘いへの本人の意思を確認します",
++            )
++        return UserQuestion(
++            question=f"相手の「{quoted_question}」にどう答えたいか教えてください",
++            purpose="直接質問への本人の回答が未確認のため確認します",
++        )
+     if not topic or _topic_is_verified(topic, context, partner_messages[-1]):
+         return None
+     if topic == "本人情報":
+@@ -5156,15 +5168,22 @@ def repeated_partner_question_topics(candidates: list[Candidate], context: dict)
+         re.search(rf"{specific_weekend_period}.{{0,28}}(?:行|出かけ|訪れ|行く予定|行くつもり)", clause)
+         for clause in partner_clauses
+     )
++    food_terms = (
++        r"(?:プリン|カレー|ラーメン|寿司|すし|パスタ|ケーキ|チョコ(?:レート)?|焼肉|"
++        r"うどん|そば|パン|ハンバーグ|オムライス|唐揚げ|からあげ|餃子|ぎょうざ|"
++        r"スイーツ|お菓子|甘いもの|ハンバーガー)"
++    )
+     knows_favorite_food = any(
+         re.search(
+-            r"(?:プリン|カレー|ラーメン|寿司|すし|パスタ|ケーキ|チョコ(?:レート)?|焼肉|"
+-            r"うどん|そば|パン|ハンバーグ|オムライス|唐揚げ|からあげ|餃子|ぎょうざ|"
+-            r"スイーツ|お菓子|甘いもの|ラーメン|ハンバーガー)"
+-            r"(?:が)?(?:一番|いちばん)?好き(?:なんです|なんだ|です|だ)?"
+-            r"(?!ではない|じゃない|ではありません|じゃありません|というわけではない|というわけじゃない)"
+-            r"(?=(?:で|だから|なので|[!！\s]|$))"
+-            r"|(?:好きな食べ物|好物)(?:は|が)(?!何|なん|ありますか)(?![^！？?]{0,16}(?:ではない|じゃない|ではありません|じゃありません))[^！？?]{1,24}(?:です|だ|で好き)",
++            food_terms
++            + r"(?:が)?(?:一番|いちばん)?好き(?:なんです|なんだ|です|だ)?"
++            + r"(?!ではない|でない|じゃない|ではありません|じゃありません|というわけではない|というわけじゃない)"
++            + r"(?=(?:で|だから|なので|[!！\s]|$))"
++            + r"|(?:好きな食べ物|好物)(?:は|が)"
++            + r"(?!特にない|特にありません|ない(?:です)?(?=[!！\s]|$)|ありません)"
++            + rf"[^\s、。！？!?]{{0,12}}{food_terms}"
++            + r"(?![^！？?]*(?:ではなく(?:て)?(?:特に)?(?:好きなものは)?ない|じゃなく(?:て)?(?:特に)?(?:好きなものは)?ない|ではない|じゃない|ではありません|じゃありません|でない|でありません|苦手|嫌い|好きではない|好きでない|好きじゃない|好みではない|好みじゃない))"
++            + r"[^！？?]{0,12}(?:です|だ|で好き)",
+             message,
+         )
+         for message in partner_messages
+@@ -5672,29 +5691,21 @@ def _answers_verified_single_partner_question(candidate: Candidate, context: dic
+         return False
+     topic = _topic_for_personal_question(question)
+     if not topic:
+-        if _is_unclassified_direct_question(question):
+-            # Invitations are requests for a yes/no response. Preserve a clear
+-            # acceptance before a follow-up question instead of applying the
+-            # fail-closed WH-answer rule.
+-            if INVITATION_PATTERN.search(question) and re.search(
+-                r"(?:ぜひ|行きたい|行こう|行けます|大丈夫|いいですね|いいですよ|お願いします|楽しみ)",
+-                candidate.text,
++        if _is_unclassified_direct_question(question) and _is_unclassified_question_about_user(question):
++            # Unknown WH questions need a matching, explicit user answer.
++            # No lexical answer class can establish relevance across unknown
++            # questions. The preflight asks the user and the exact answer must
++            # be reflected in the candidate.
++            normalize = lambda value: re.sub(r"[\s　、。！!？?]", "", str(value))
++            normalized_question = normalize(question)
++            answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
++            if any(
++                answer.get("answer", "").strip()
++                and normalized_question in normalize(answer.get("question", ""))
++                and normalize(answer.get("answer", "")) in normalize(answer_prefix)
++                for answer in context.get("ephemeral_user_answers", [])
+             ):
+                 return True
+-            if _candidate_has_bounded_polar_answer(candidate.text, question):
+-                return True
+-            # For outcome questions, accept only explicit outcome language.
+-            # A merely grammatical or unrelated statement is not evidence of
+-            # an answer. Unknown WH questions fail closed so the safe-candidate
+-            # filter can retain any other grounded option and report shortage.
+-            asks_outcome = bool(re.search(r"(?:どうなった|どうなりました|それでどう|その後どう)[^!?！？\n]*[?？]?$", question))
+-            if asks_outcome:
+-                answer_prefix = re.split(r"[?？]", candidate.text, maxsplit=1)[0]
+-                if re.search(
+-                    r"(?:解決|決まり|決着|終わり|終わりました|なりました|しました|できました|行けました|会えました|断られ|成功|失敗|嬉しかった|うまくいき|だめでした)",
+-                    answer_prefix,
+-                ):
+-                    return True
+             return False
+         return True
+     if not _topic_is_verified(topic, context, question):
+@@ -6236,6 +6247,31 @@ def _is_unclassified_direct_question(text: str) -> bool:
+     )
+ 
+ 
++def _is_unclassified_question_about_user(text: str) -> bool:
++    """Limit clarification to unclassified questions that ask about the user."""
++    question = re.sub(r"^(?:そういえば|ちなみに|ところで|あと|そうそう)(?:、|,)??\s*", "", text.strip())
++    third_party = (
++        r"友達|友人|彼氏|彼女|彼|元彼|元彼女|夫|妻|旦那|奥さん|ご主人|子ども|子供|家族|親|父|母|兄|姉|弟|妹|"
++        r"同僚|上司|先輩|後輩|先生|教師|知り合い|彼の友達"
++    )
++    if re.search(r"(?:ある|いる).{0,5}人(?:向け|って|は|が|にとって)", question):
++        return False
++    if re.match(rf"^(?:私の|僕の|俺の|自分の)?(?:{third_party})(?:さん|くん|ちゃん)?(?:は|が|の|と|って|とは)", question):
++        return False
++    if re.match(r"^(?:世界|日本|海外|いろんな国|多くの国|水泳|スポーツ|水の沸点|横浜駅|.+駅|水族館|美術館|博物館|公園|この店|このお店)", question) and re.search(
++        r"(?:何語|何度|どこ(?:にある|です)?|何時に|どう練習|ルール|何のスポーツ|開店|営業して|猫はいます)", question
++    ):
++        return False
++    return bool(INVITATION_PATTERN.search(question) or re.search(
++        r"(?:知って(?:います|ます|る)|行ったこと(?:が)?(?:あります|ある)|見たこと(?:が)?(?:あります|ある)|"
++        r"観たこと(?:が)?(?:あります|ある)|食べたこと(?:が)?(?:あります|ある)|使ったこと(?:が)?(?:あります|ある)|"
++        r"それでどうなった|どうなりました|どうなったんですか|何してた|何をした|どこに行った|どこ行った|"
++        r"誰と行った|誰と行きました|覚えて(?:います|ます)|経験(?:が)?あります|"
++        r"(?:それ|その映画|その作品|その話).{0,8}(?:どうでした|どう感じ|どう思いました))",
++        question,
++    ))
++
++
+ def _candidate_contains_substantive_answer_clause(text: str) -> bool:
+     """Require answer-like content before accepting a topic-switching question.
+ 
+diff --git a/docs/verification/FINAL_REPORT.md b/docs/verification/FINAL_REPORT.md
+index 6a5cfb4..6be2bf0 100644
+--- a/docs/verification/FINAL_REPORT.md
++++ b/docs/verification/FINAL_REPORT.md
+@@ -1626,3 +1626,13 @@ T395を追加。マトリクスは395項目で、PASS261 / FAIL14 / FIXED100 / B
+ ### 2026-10-16 — 直接質問回避・好物誤認の境界修正
+ 
+ 独立レビューにより、分類外WH質問への無関係な叙述と、否定表現を含む摂取頻度を好物と扱う誤りを検出した。修正前の再現テスト2件はFAIL。送信前ゲートを修正し、招待への明確な肯定、確認済み映画の否定回答、極性質問の短い回答、肯定済み好物の再質問抑制は回帰テストで維持した。T402/T403を追加。focused suite 34 passed。修正後Windows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。過去のT369/QUALITY009実生成品質FAILは未解決、ActionsはPush後確認、総合判定はNO-GO。|
++
++追加レビューにより、汎用結果語だけで関連性を証明できない点と「好きな食べ物は特にない/苦手」の誤認を確認した。分類外WH質問は、同じ質問に対する本人の一時回答が候補本文に一致する場合のみ許可する。確認回答がなければ候補不足として扱う。好物判定は食品名と明示的な肯定表現を必要とし、摂取頻度・否定・好物なしは根拠にしない。最新版focused suite 44 passed。最新全pytestを実行中。これ以前の全pytest結果は最新変更を検証した結果ではないため保留。Gemini通信0回。|
++
++### 2026-10-16 19:39 JST — 最新のローカル検証
++
++直接質問の確認範囲が事前質問と候補送信ゲートで一致しない問題を修正した。第三者や一般知識に本人確認を求めず、本人の経験・意見を尋ねる質問は一時回答を確認する。相手からの誘いへの承諾候補も本人の意思確認まで保留する。否定を含む好物の訂正を肯定扱いしない検査を加えた。
++
++修正後のWindows `python -m pytest -q` は **1743 passed in 303.58s**。指定したFirefox E2E 4件は **4 passed in 49.77s**。任意の本人質問、回答後の再生成、コピーと送信記録の分離、履歴再表示、first/reply/followup/likeを対象とした。関連focused suiteは **117 passed**。架空データとGemini SDKモックを使い、Gemini実通信は0回。
++
++**総合判定はNO-GOのまま。** 過去のT369/QUALITY009実Gemini生成FAILは解消していない。モック・Firefox・pytestの成功は実際のモデル出力品質を証明しない。今回変更のGitHub ActionsはPush後に確認する。PR #4はDraft・未マージを維持する。
+diff --git a/docs/verification/OVERNIGHT_GOAL.md b/docs/verification/OVERNIGHT_GOAL.md
+index fbe2907..23ba0a4 100644
+--- a/docs/verification/OVERNIGHT_GOAL.md
++++ b/docs/verification/OVERNIGHT_GOAL.md
+@@ -1369,4 +1369,18 @@ SHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Actions [38859815003](http
+ | 食事への誘い判断 | 部分回帰 | 直接の招待に対する肯定回答を拒否しない回帰を追加。 | 状況判断全体は未評価。 |
+ | アプリ全体の安定性 | ローカルPASS / Actions待ち | 修正後Windows全pytest 1720 passed in 300.37s（Firefox UI含む）、focused suite 34 passed、Python/JS構文とdiff check成功。 | 最新差分Push後のActions確認が必要。 |
+ 
+-総合判定は**NO-GO**。Gemini実通信0回。過去T369/QUALITY009の生成品質FAIL未解決。修正後のローカル回帰は通過したが、GitHub ActionsはPush後に確認する。|
++総合判定は**NO-GO**。Gemini実通信0回。過去T369/QUALITY009の生成品質FAIL未解決。最終レビューで無関係WH応答を許可する問題を本人一時回答がない場合fail-closedに変更し、「好きな食べ物は特にない/苦手」を除外。focused suite 44 passed。最新差分の全pytestとGitHub Actionsは未確認。|
++
++### 2026-10-16 19:39 JST — 追加の本人確認・Firefox回帰
++
++| ゴール | 判定 | 今回の根拠 | 残課題 |
++|---|---|---|---|
++| 本人情報の正確性 | 部分修正 / 全体FAIL | 未分類の本人経験・意見の質問と第三者/一般知識の質問を分け、本人への一時確認と送信ゲートを一致させた。誘いへの承諾も本人の意思確認を要求する。 | T369/QUALITY009の実Gemini生成FAILは未解決。日本語全般の意味理解は保証しない。 |
++| 句読点・改行 | 回帰PASS / 実生成未確認 | 今回の修正は候補本文を変えず、送信前ゲートを変更。全pytestとFirefox回帰が成功。 | 実Gemini本文は今回未検証。 |
++| ミラーリング | 未達 | 今回は生成本文の長さ評価を変更していない。 | 実生成品質FAILが残る。 |
++| 共感の反復防止 | 部分修正 | 直接質問を無関係な共感や話題転換で置き換える候補を拒否する。 | 会話全体の反復品質は未評価。 |
++| 返信候補の多様性 | 未達 | 安全候補だけを保持し、未確認質問には候補を通さない。 | 意味的多様性の実生成確認が必要。 |
++| 食事への誘い判断 | 部分回帰 | 相手の誘いを受ける候補を本人の意向確認後だけ通す。 | 会話の文脈から誘う判断を実Geminiで再確認していない。 |
++| アプリ全体の安定性 | ローカルPASS / Actions待ち | Windows全pytest 1743 passed、Firefox E2E 4 passed。 | Push後に最新SHAのActionsを確認する。 |
++
++総合判定は**NO-GO**。Gemini実通信0回であり、T369/QUALITY009の過去FAILを解消していない。PR #4はDraft・未マージを維持する。conversation_004と新規HTMLは作成していない。
+diff --git a/docs/verification/PROGRESS.md b/docs/verification/PROGRESS.md
+index 7661044..6097b39 100644
+--- a/docs/verification/PROGRESS.md
++++ b/docs/verification/PROGRESS.md
+@@ -1638,3 +1638,13 @@ Pythonレビューと独立セキュリティ確認を再実施した。今回
+ - 変更: `app.py`, `tests/test_app.py`。Push前に全pytest結果、`py_compile`、`node --check`、`git diff --check`、秘密情報diff検査、レビューを完了する。保護対象の未追跡指示ファイルはstageしない。
+ - 回帰確認: 最初の修正後全pytestで既存2ケースがFAIL（映画の否定質問への確認済み回答、カフェの招待への肯定応答）。確認済み映画回答は質問分類へ追加し、招待肯定はWH質問用fail-closedから分離。該当を含むfocused suite 34 passed、再実行したWindows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile`、`node --check app.js`、`git diff --check`成功。
+ - 変更HEADのActionsはPush後に確認する。Gemini通信0回。実生成品質FAIL T369/QUALITY009継続。次: 差分・秘密情報検査、commit/push、PR #4とActions確認。その後はdirective P0の質問→架空回答→根拠ある自己開示フローをFirefox/モックで監査する。
++- 追加レビューで、汎用動詞「しました」が無関係なWH回答として許可される問題と、「好きでない」の否定形が好物として検出される問題を特定。T402/T403へ失敗例を追加し、結果語の範囲を狭め、否定形を追加。最新focused suite **37 passed**。この追加差分の全pytestを再実行中で、前回の1720件を最新HEADの結果として扱わない。
++- 二巡目のレビューで、結果語だけでは質問との関連性を確かめられず、逆に自然な言い回しを除外すること、また「好きな食べ物は特にない/苦手」も既知好物と誤認するケースを確認。分類外WH質問は完全一致する一時本人回答を含む候補だけを許可し、回答がなければ安全な不足へ移行。好物は明示的な肯定・具体的食品名に限定し、否定/未設定を除外。回帰テスト44 passed。全pytestはこの最終変更後に実行中。
++
++### 2026-10-16 19:39 JST — 直接質問のスコープ整合と最終回帰
++
++- ユーザー指定の `docs/verification/simulations/指示.txt` を確認。今夜は本人の直接質問と4生成モードのFirefox導線を優先。Gemini実通信、conversation_004、新しい会話HTMLは引き続き行わない。
++- 独立レビューで確認質問の事前判定と送信直前ゲートの範囲がずれている点を修正。第三者・一般知識には本人確認を求めず、本人の体験/意見を問う分類外質問には対応する確認を提示する。相手の誘いに対する承諾候補も本人の意思確認後だけ許可。好物の訂正「カレーではなく特にない/ラーメン」を区別。
++- 関連pytest **117 passed**。最新全pytest **1743 passed in 303.58s**（Firefox UIを含む）。追加Firefox 4件（任意本人質問、FastAPI一時回答の再生成、first→replyのコピー/送信記録/履歴、first/followup/like経路）**4 passed in 49.77s**。
++- Gemini実通信0回。T369/QUALITY009の実生成品質FAILは未解決。総合NO-GOを維持。会話004/新規会話HTMLは作成していない。
++- 次: py_compile、node構文、diff/秘密情報確認を実施し、PROGRESS/TEST_MATRIX/FINAL_REPORT/OVERNIGHT_GOALを更新。保護対象の未追跡指示書3件を除いてコミット・Pushし、最新SHAのActionsとPR #4のOPEN/Draft状態を検証する。その後、指示書の残るコアP0を進める。
+diff --git a/docs/verification/TEST_MATRIX.md b/docs/verification/TEST_MATRIX.md
+index 4788186..ed08c2f 100644
+--- a/docs/verification/TEST_MATRIX.md
++++ b/docs/verification/TEST_MATRIX.md
+@@ -1043,9 +1043,10 @@ T392 CI追補: コードSHA `fd6922a5f82edaee81b1eebfe066726170f52c2d`のPush Ac
+ 
+ T399–T401追加後の暫定マトリクス件数: 401項目（PASS261 / FAIL14 / FIXED106 / BLOCKED5 / NOT_TESTED15）。Windows全pytestの最終再実行と最新Actionsは実行/Push後に追記する。過去のT369/QUALITY009実Gemini生成FAILは維持。|
+ 
+-| T402 | 分類外のWH直接質問へ無関係な叙述を返す候補を送信前に拒否 | pytest。架空質問「それでどうなったんですか？」と無関係な候補を使用 | FIXED | 独立レビューで「今日はいい天気ですね！」が回答済みと誤判定されることを再現。成果・進展を表す限定的な回答表現以外は拒否し、無関係候補だけの場合は送信可能な候補なしとして扱う。招待への明確な肯定と極性質問への短い回答は別経路で維持。focused suiteで再確認。Gemini実通信0回。|
+-| T403 | 食べる頻度や否定表現を好物の確定情報と誤認しない | pytest。否定・対比・頻度のみの架空プロフィール文3件 | FIXED | 「カレーが好きではないけどラーメンをよく食べます」「好きというわけではない」「ラーメンをよく食べるだけ」を好物既知と扱わない。肯定された好物の再質問抑制は回帰テストで維持。focused suiteで再確認。Gemini実通信0回。|
++| T402 | 分類外のWH直接質問へ根拠のない回答を送信前に拒否 | pytest。架空質問「それでどうなったんですか？」と根拠なし/確認済み候補を使用 | FIXED | 汎用の「しました」「できました」等で無関係な経験を回答扱いする問題、自然な結果表現を誤って許可する問題を再現。分類外WH質問は同じ質問に対する本人の一時回答が候補に含まれる場合だけ許可し、それ以外は安全な候補不足にする。カフェ招待への明確な肯定と確認済み映画回答は回帰維持。focused suiteで再確認。Gemini実通信0回。|
++| T403 | 摂取頻度・否定・好物なし・苦手を肯定的な好物と誤認しない | pytest。架空の否定・対比・頻度・未設定文7件 | FIXED | 「カレーが好きではないけどラーメンをよく食べます」「好きというわけではない」「好きでない」「ラーメンをよく食べるだけ」「好きな食べ物は特にない/ない」「カレーが苦手」を好物既知と扱わない。肯定された好物と「好きな食べ物はカレーではなくラーメン」の再質問抑制は回帰テストで維持。focused suiteで再確認。Gemini実通信0回。|
++| T404 | 未分類の本人質問・相手の誘いの確認範囲を事前質問と送信ゲートで一致させる | 架空の質問によるpytest。本人の体験・意見・招待、第三者・一般知識との対照を確認 | FIXED | 一般知識や第三者への質問まで本人確認を要求する誤検出と、「友達はどうなった」「その映画どうでした」などの事前質問/最終ゲートのずれを再現。本人の体験・意見・誘いへの意思確認だけに対象を限定し、第三者・公共情報は個人質問ゲートの対象外とした。誘いへの承諾候補は本人の一時回答があるまで通さない。食べ物の訂正「カレーではなく特にない/ラーメン」も区別。focused suite **117 passed**。|
+ 
+-最新項目数403。状態集計はPASS261 / FAIL14 / FIXED108 / BLOCKED5 / NOT_TESTED15。修正後Windows全pytest **1720 passed in 300.37s**（Firefox UIを含む）。`py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。実APIのT369/QUALITY009品質FAILは未解決として維持する。|
++最新項目数403。状態集計はPASS261 / FAIL14 / FIXED108 / BLOCKED5 / NOT_TESTED15。直近の全pytest **1723 passed in 298.56s** は、追加レビュー指摘の修正前HEAD。今回の追加修正focused suite **44 passed**。最新差分を含む全pytestは再実行中。実APIのT369/QUALITY009品質FAILは未解決として維持する。|
+ 
+-2026-10-16 18:45 JST — 最新コードによる再検証: Windows `python -m pytest -q` **1711 passed in 299.72s**（Firefox UIテストを含む）。関連境界focused suite **33 passed**。`py_compile app.py tests/test_app.py tests/test_ui_firefox.py`、`node --check app.js`、`git diff --check`成功。Gemini実通信0回。マトリクス: **401項目**（PASS261 / FAIL14 / FIXED106 / BLOCKED5 / NOT_TESTED15）。この差分のActionsはPush後に確認する。過去のT369/QUALITY009実生成FAILを維持。
++2026-10-16 19:39 JST 最新項目数404。状態集計はPASS261 / FAIL14 / FIXED109 / BLOCKED5 / NOT_TESTED15。Windows全pytest **1743 passed in 303.58s**（Firefox UI含む）。追加のFirefox E2E 4件（任意本人質問、FastAPI一時回答、first→reply/コピー/送信記録/履歴、first/followup/like経路）は個別実行中。Python/JS構文、diff検査、最新HEAD Actionsは実行後に記録する。Gemini実通信0回。T369/QUALITY009実生成品質FAILは維持。
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 985d214..94a4fce 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -9452,6 +9452,12 @@ def test_invitation_acceptance_is_not_misclassified_as_cafe_preference_question(
+     candidate = backend.Candidate(label="前向きに返答", text="ぜひ行きたいです！\n土曜日とかどうですか？")
+ 
+     assert backend._topic_for_personal_question(context["history"][-1]["body"]) is None
++    clarification = backend.missing_personal_fact_question(context)
++    assert clarification is not None
++    assert not backend._answers_verified_partner_question(candidate, context)
++    context["ephemeral_user_answers"] = [
++        {"question": clarification.question, "answer": "ぜひ行きたいです"}
++    ]
+     assert backend._answers_verified_partner_question(candidate, context)
+ 
+ 
+@@ -12219,10 +12225,13 @@ def test_unclassified_direct_question_cannot_be_replaced_by_reaction_or_new_ques
+     "candidate_text",
+     [
+         "友達と話して解決しました！",
+-        "嬉しかったです！その時はどんな感じだったんですか？",
++        "昨日は友達と会えました！",
++        "準備ができました！",
++        "友達と相談して行くことになりました！",
++        "話し合って来週に決めました！",
+     ],
+ )
+-def test_unclassified_direct_question_accepts_answer_before_followup(client, candidate_text):
++def test_unclassified_wh_question_requires_matching_confirmed_answer(client, candidate_text):
+     _, backend = client
+     context = {
+         "mode": "reply",
+@@ -12232,10 +12241,40 @@ def test_unclassified_direct_question_accepts_answer_before_followup(client, can
+     }
+     candidate = backend.Candidate(label="直接回答後に会話を続ける", text=candidate_text)
+ 
++    assert not backend._answers_verified_partner_question(candidate, context)
++
++
++def test_unclassified_wh_question_allows_the_matching_temporary_user_answer(client):
++    _, backend = client
++    question = "それでどうなったんですか？"
++    context = {
++        "mode": "reply",
++        "history": [{"role": "them", "body": question}],
++        "my_profile": {"facts": {}},
++        "ephemeral_user_answers": [],
++    }
++    clarification = backend.missing_personal_fact_question(context)
++    assert clarification is not None
++    context = {
++        "mode": "reply",
++        "history": [{"role": "them", "body": question}],
++        "my_profile": {"facts": {}},
++        "ephemeral_user_answers": [{"question": clarification.question, "answer": "友達と話して解決しました"}],
++    }
++    candidate = backend.Candidate(label="本人確認済みの結果", text="友達と話して解決しました！")
++
+     assert backend._answers_verified_partner_question(candidate, context)
+ 
+ 
+-def test_unclassified_wh_question_rejects_unrelated_statement(client):
++@pytest.mark.parametrize(
++    "candidate_text",
++    [
++        "今日はいい天気ですね！",
++        "今日は友達と買い物しました！",
++        "今日は気分転換に散歩しました！",
++    ],
++)
++def test_unclassified_wh_question_rejects_unrelated_statement(client, candidate_text):
+     _, backend = client
+     context = {
+         "mode": "reply",
+@@ -12243,7 +12282,7 @@ def test_unclassified_wh_question_rejects_unrelated_statement(client):
+         "my_profile": {"facts": {}},
+         "ephemeral_user_answers": [],
+     }
+-    candidate = backend.Candidate(label="無関係な話題", text="今日はいい天気ですね！")
++    candidate = backend.Candidate(label="無関係な話題", text=candidate_text)
+ 
+     assert not backend._answers_verified_partner_question(candidate, context)
+     assert "相手からの直接質問に未回答" in backend._candidate_rejection_reasons(candidate, context)
+@@ -12254,7 +12293,11 @@ def test_unclassified_wh_question_rejects_unrelated_statement(client):
+     [
+         "カレーが好きではないけどラーメンをよく食べます！",
+         "ラーメンは好きというわけではないけどよく食べます！",
++        "ラーメンが好きでないけどよく食べます！",
+         "ラーメンをよく食べます！",
++        "好きな食べ物は特にないです！",
++        "好きな食べ物はないです！",
++        "好きな食べ物はカレーが苦手です！",
+     ],
+ )
+ def test_frequent_or_negated_food_consumption_does_not_establish_favorite(client, partner_message):
+@@ -12270,7 +12313,48 @@ def test_frequent_or_negated_food_consumption_does_not_establish_favorite(client
+     assert "好きな食べ物" not in topics
+ 
+ 
+-def test_unclassified_polar_question_accepts_short_affirmative_answer(client):
++@pytest.mark.parametrize(
++    "partner_message",
++    [
++        "好きな食べ物はカレーではなく特にないです！",
++        "好きな食べ物はカレーじゃなくて特にないです！",
++        "好きな食べ物はカレーではなくラーメンです！",
++    ],
++)
++def test_corrected_food_preference_only_marks_replacement_as_known(client, partner_message):
++    _, backend = client
++    context = {"history": [{"role": "them", "body": partner_message}]}
++    candidate = backend.Candidate(label="好物の確認", text="好きな食べ物は何ですか？")
++
++    topics = backend.repeated_partner_question_topics([candidate], context)
++    if "特にない" in partner_message:
++        assert "好きな食べ物" not in topics
++    else:
++        assert "好きな食べ物" in topics
++
++
++def test_partner_invitation_requires_user_choice_before_acceptance_candidate(client):
++    _, backend = client
++    question = "今度一緒にカフェ行きませんか？"
++    context = {
++        "mode": "reply",
++        "history": [{"role": "them", "body": question}],
++        "my_profile": {"facts": {}},
++        "ephemeral_user_answers": [],
++    }
++    candidate = backend.Candidate(label="未確認の承諾", text="ぜひ行きたいです！")
++
++    assert backend.missing_personal_fact_question(context) is not None
++    assert not backend._answers_verified_partner_question(candidate, context)
++
++    clarification = backend.missing_personal_fact_question(context)
++    context["ephemeral_user_answers"] = [
++        {"question": clarification.question, "answer": "ぜひ行きたいです"}
++    ]
++    assert backend._answers_verified_partner_question(candidate, context)
++
++
++def test_unclassified_polar_question_requires_user_confirmation(client):
+     _, backend = client
+     context = {
+         "mode": "reply",
+@@ -12280,9 +12364,60 @@ def test_unclassified_polar_question_accepts_short_affirmative_answer(client):
+     }
+     candidate = backend.Candidate(label="短い肯定回答", text="はい！")
+ 
++    assert backend.missing_personal_fact_question(context) is not None
++    assert not backend._answers_verified_partner_question(candidate, context)
++
++
++def test_unclassified_polar_question_allows_matching_temporary_answer(client):
++    _, backend = client
++    question = "このお店知ってますか？"
++    context = {
++        "mode": "reply",
++        "history": [{"role": "them", "body": question}],
++        "my_profile": {"facts": {}},
++        "ephemeral_user_answers": [],
++    }
++    clarification = backend.missing_personal_fact_question(context)
++    assert clarification is not None
++    context["ephemeral_user_answers"] = [{"question": clarification.question, "answer": "知っています"}]
++    candidate = backend.Candidate(label="本人が確認した回答", text="はい！そのお店知っています！")
++
+     assert backend._answers_verified_partner_question(candidate, context)
+ 
+ 
++@pytest.mark.parametrize(
++    ("question", "candidate_text", "requires_confirmation"),
++    [
++        ("それはどう感じましたか？", "結構うれしかったです！", True),
++        ("その映画どうでしたか？", "結構面白かったです！", True),
++        ("友達はどうなったんですか？", "友達は無事に帰れました！", False),
++    ],
++)
++def test_unclassified_question_scope_matches_preflight_and_send_gate(
++    client, question, candidate_text, requires_confirmation
++):
++    _, backend = client
++    context = {
++        "mode": "reply",
++        "history": [{"role": "them", "body": question}],
++        "my_profile": {"facts": {}},
++        "ephemeral_user_answers": [],
++    }
++    candidate = backend.Candidate(label="質問の範囲に沿った回答", text=candidate_text)
++
++    clarification = backend.missing_personal_fact_question(context)
++    if requires_confirmation:
++        assert clarification is not None
++        assert not backend._answers_verified_partner_question(candidate, context)
++        context["ephemeral_user_answers"] = [
++            {"question": clarification.question, "answer": candidate_text.rstrip("！")}
++        ]
++        assert backend._answers_verified_partner_question(candidate, context)
++    else:
++        assert clarification is None
++        assert backend._answers_verified_partner_question(candidate, context)
++
++
+ @pytest.mark.parametrize("candidate_text", ["はい！", "知っています！"])
+ def test_short_polar_answer_does_not_answer_wh_question(client, candidate_text):
+     _, backend = client
+@@ -12297,10 +12432,21 @@ def test_short_polar_answer_does_not_answer_wh_question(client, candidate_text):
+     assert not backend._answers_verified_partner_question(candidate, context)
+ 
+ 
+-def test_negated_food_preference_is_not_treated_as_known_favorite(client):
++@pytest.mark.parametrize(
++    "partner_message",
++    [
++        "好きな食べ物はカレーではないです",
++        "好きな食べ物はカレーじゃないです",
++        "好物はカレーではないです！",
++        "好きな食べ物は特にないです！",
++        "好きな食べ物はないです！",
++        "好きな食べ物はカレーが苦手です！",
++    ],
++)
++def test_negated_or_absent_food_preference_is_not_treated_as_known_favorite(client, partner_message):
+     _, backend = client
+     context = {
+-        "history": [{"role": "them", "body": "好きな食べ物はカレーではないです"}],
++        "history": [{"role": "them", "body": partner_message}],
+     }
+     candidate = backend.Candidate(label="未回答の好きな食べ物", text="好きな食べ物は何ですか？")
+ 
+@@ -12353,7 +12499,7 @@ def test_agreement_seeking_tag_question_does_not_force_a_literal_answer(client):
+     assert backend._answers_verified_partner_question(candidate, context)
+ 
+ 
+-def test_filter_safe_candidates_keeps_direct_answer_and_drops_unknown_question_evasion(client):
++def test_filter_safe_candidates_drops_unknown_direct_answers_without_user_confirmation(client):
+     _, backend = client
+     context = {
+         "mode": "reply",
+@@ -12380,6 +12526,7 @@ def test_filter_safe_candidates_keeps_direct_answer_and_drops_unknown_question_e
+ 
+     filtered = backend.filter_safe_candidates(value, 3, context)
+ 
+-    assert filtered["recommended"]["text"] == "友達と話して解決しました！"
+-    assert filtered["available_candidate_count"] == 1
++    assert filtered["recommended"] is None
++    assert filtered["generation_blocked"] is True
++    assert filtered["available_candidate_count"] == 0
+     assert "相手からの直接質問に未回答" in str(filtered["candidate_rejections"])

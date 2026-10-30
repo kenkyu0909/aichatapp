@@ -2,8 +2,18 @@
 /* Windows localhost UI. No private conversation data is kept in browser storage. */
 (() => {
 const $ = id => document.getElementById(id);
-const state = { matches:[],selectedId:null,messages:[],profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
+const state = { matches:[],selectedId:null,messages:[],loadingConversation:false,conversationLoadFailed:false,profile:{content:"",avoid:""},status:null,tone:"自動",busy:false };
 let timer;
+let contactSelectionEpoch=0;
+let conversationRevision=0;
+const messageDrafts=new Map();
+const mutatingContacts=new Set();
+const contactMutationCounts=new Map();
+const pendingMessageSubmissions=new Set();
+const optionalUserQuestionHistory=new Map();
+let generationRequestSequence=0;
+const generationRequestTokens=new WeakMap();
+const generationAreaTokens=new WeakMap();
 function node(tag,cls,txt) {
   const e=document.createElement(tag);
   if(cls)e.className=cls;
@@ -11,10 +21,54 @@ function node(tag,cls,txt) {
   return e;
 }
 function notice(t){
-  $("toast").textContent=t;$("toast").hidden=false;
-  clearTimeout(timer);timer=setTimeout(()=>{$("toast").hidden=true;},4000);
+  // 画面下に黒い枠で出る通知はユーザー要望で廃止（2026-10-23）。
+  // 要素自体は残し、常に非表示にする。
+  const toast=$("toast");
+  if(toast){toast.hidden=true;toast.textContent="";}
+}
+function inlineError(target,message,before){
+  // 失敗の内容は黒い通知ではなく、操作している場所の近くに小さく表示する。
+  if(!target)return;
+  if(target.classList.contains("inline-error")){
+    target.hidden=false;target.textContent=message;return;
+  }
+  target.hidden=false;
+  let box=target.querySelector(":scope > .inline-error");
+  if(!box){
+    box=node("p","inline-error");
+    const anchor=before||target.querySelector(":scope > .modal-actions");
+    if(target.classList.contains("suggestion-list"))target.prepend(box);
+    else if(anchor)target.insertBefore(box,anchor);
+    else target.append(box);
+  }
+  box.textContent=message;
+}
+function clearInlineError(target){
+  if(!target)return;
+  if(target.classList.contains("inline-error")){target.textContent="";target.hidden=true;return;}
+  const box=target.querySelector(":scope > .inline-error");
+  if(box)box.remove();
+}
+function beginContactMutation(contactId){
+  const count=(contactMutationCounts.get(contactId)||0)+1;
+  contactMutationCounts.set(contactId,count);mutatingContacts.add(contactId);
+}
+function endContactMutation(contactId){
+  const count=(contactMutationCounts.get(contactId)||1)-1;
+  if(count>0)contactMutationCounts.set(contactId,count);
+  else{contactMutationCounts.delete(contactId);mutatingContacts.delete(contactId);}
 }
 function errorText(result){
+  const messages={
+    invalid_response:"生成した候補が返信ルールに合わなかったため表示できませんでした。もう一度お試しください。",
+    request_attempt_limit:"生成の安全試行上限に達したため停止しました。時間をおいて再度お試しください。",
+    all_models_rate_limited:"Geminiの利用制限に達しました。時間をおいて再度お試しください。",
+    api_permission_denied:"Geminiの認証または利用権限を確認してください。",
+    model_unavailable:"指定モデルを利用できません。モデル設定を確認してください。",
+    provider_unavailable:"Gemini側が一時的に混雑しています（503など）。少し時間をおいて再度お試しください。",
+    gemini_connection_error:"Geminiとの通信に失敗しました。接続状態を確認して再度お試しください。"
+  };
+  if(messages[result?.error_code])return messages[result.error_code];
   if(typeof result?.detail==="string")return result.detail;
   return "入力または通信に失敗しました";
 }
@@ -36,6 +90,8 @@ async function safe(fn) {
   catch(e){notice(e.message || "操作に失敗しました");}
 }
 function current(){return state.matches.find(c=>c.id===state.selectedId)||null;}
+// サーバーが古い（outgoing_count未対応）ときは合計から相手分を引いて自分の送信数を出す。
+function ownCount(c){return c?.outgoing_count??Math.max(0,(c?.message_count||0)-(c?.incoming_count||0));}
 function photoAvatar(c,large=false){
   const av=node("span","avatar"+(large?" big":""));
   if(c.photo){
@@ -49,31 +105,97 @@ function photoAvatar(c,large=false){
 }
 async function loadMatches(prefer){
   state.matches=await api("/matches");
-  if(prefer!==undefined)state.selectedId=prefer;
-  if(!current())state.selectedId=state.matches[0]?.id||null;
+  let target=prefer!==undefined?prefer:state.selectedId;
+  if(!state.matches.some(c=>c.id===target))target=state.matches[0]?.id||null;
+  await selectContact(target,false);
   renderContacts();
-  await selectContact(state.selectedId,false);
+}
+// トークの並び順: "last"=最後のメッセージが新しい順（無い相手は最後）、"name"=名前の五十音順。
+const CONTACT_SORT_KEY="mra_contact_sort_v1";
+function contactSortOrder(){
+  try{return localStorage.getItem(CONTACT_SORT_KEY)==="name"?"name":"last";}catch{return "last";}
+}
+function sortedContacts(){
+  const matches=[...state.matches];
+  if(contactSortOrder()==="name"){
+    return matches.sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ja")||(b.id-a.id));
+  }
+  return matches.sort((a,b)=>{
+    const av=a.last_message_at||"",bv=b.last_message_at||"";
+    if(av!==bv)return av<bv?1:-1;
+    return b.id-a.id;
+  });
+}
+function updateClearSearchButton(){
+  const button=$("clear-search"),input=$("search");
+  if(button&&input)button.hidden=!input.value;
 }
 function renderContacts(){
   const list=$("contacts");list.replaceChildren();
   const term=$("search").value.trim().toLocaleLowerCase();
-  const filtered=state.matches.filter(c=>c.name.toLocaleLowerCase().includes(term));
+  updateClearSearchButton();
+  const filtered=sortedContacts().filter(c=>c.name.toLocaleLowerCase().includes(term));
   if(!filtered.length)list.append(node("p","empty-chat",state.matches.length?"一致する相手がいません":"左上の＋から相手を登録してください"));
   filtered.forEach(c=>{
+    // 行は「本文ボタン」と「削除ボタン」を分けたラッパーにする（button の入れ子を避ける）。
+    const row=node("div","contact-row");
     const btn=node("button","contact-item"+(c.id===state.selectedId?" active":""));
     btn.type="button";btn.append(photoAvatar(c));
     const info=node("span","contact-item-details");
     const head=node("span","contact-item-head");
     head.append(node("strong","",c.name));
-    head.append(node("span","count-pill",(c.message_count||0)+"通"));
+    head.append(node("span","count-pill","自分 "+ownCount(c)+"通"));
     info.append(head,node("span","contact-preview",c.last_message||c.description||"会話はまだありません"));
     btn.append(info);
     btn.addEventListener("click",()=>safe(()=>selectContact(c.id)));
-    list.append(btn);
+    const del=node("button","contact-delete","×");
+    del.type="button";del.title=c.name+"を削除";del.setAttribute("aria-label",c.name+"を削除");
+    del.addEventListener("click",e=>{e.stopPropagation();safe(()=>deleteContact(c));});
+    row.append(btn,del);
+    list.append(row);
   });
 }
+async function deleteContact(contact){
+  if(!confirm("「"+contact.name+"」を削除しますか？\nこの相手との会話履歴もすべて削除され、元に戻せません。"))return;
+  invalidateGenerationResults();
+  beginContactMutation(contact.id);
+  try{
+    await api("/matches/"+contact.id,{method:"DELETE"});
+    messageDrafts.delete(contact.id);
+    const wasSelected=state.selectedId===contact.id;
+    state.matches=state.matches.filter(c=>c.id!==contact.id);
+    if(wasSelected){
+      const next=sortedContacts()[0]?.id??null;
+      await selectContact(next,false);
+    }
+    renderContacts();
+    notice("「"+contact.name+"」を削除しました");
+  }finally{endContactMutation(contact.id);}
+}
 async function selectContact(id,relist=true){
+  const previousId=state.selectedId;
+  if(previousId!==null&&previousId!==undefined){
+    const draft=$("message-input").value;
+    if(draft)messageDrafts.set(previousId,draft);
+    else messageDrafts.delete(previousId);
+  }
+  // T566: 別の相手へ移ったときは「追加の自由記述」を空にする（同じ相手の再表示では残す）。
+  if(previousId!==id){$("extra").value="";}
+  contactSelectionEpoch+=1;
+  conversationRevision+=1;
+  const selectionEpoch=contactSelectionEpoch;
   state.selectedId=id;
+  $("message-input").value=messageDrafts.get(id)||"";
+  const generationButtons=[
+    [$("first-message"),"🌱 初回メッセージを生成"],
+    [$("generate"),$("count").value+"案を生成"],
+    [$("follow-up"),"💬 追いメッセージ"],
+  ];
+  generationButtons.forEach(([button,label])=>{
+    generationRequestTokens.set(button,++generationRequestSequence);
+    button.disabled=true;
+    button.textContent=label;
+  });
   const c=current();
   const holder=$("current-avatar");
   const av=c?photoAvatar(c,true):node("span","avatar big","?");
@@ -81,20 +203,43 @@ async function selectContact(id,relist=true){
   $("current-name").textContent=c?.name||"相手を選択";
   $("current-bio").textContent=c?.description||"プロフィール未登録";
   $("edit-contact").disabled=!c;
-  $("messages-count").textContent="▤ "+(c?.message_count||0)+"件の会話";
+  $("messages-count").textContent="▤ 自分から："+ownCount(c)+"通";
   $("incoming-count").textContent="💬 相手から："+(c?.incoming_count||0)+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   if(relist)renderContacts();
-  if(!c){state.messages=[];renderMessages();return;}
+  state.messages=[];
+  state.loadingConversation=!!c;
+  state.conversationLoadFailed=false;
+  renderMessages();
+  if(!c)return;
   const fromId=id;
-  const data=await api("/matches/"+id+"/messages");
-  if(fromId!==state.selectedId)return;
-  state.messages=data;renderMessages();
+  let loaded=false;
+  try{
+    const data=await api("/matches/"+id+"/messages");
+    if(fromId!==state.selectedId||selectionEpoch!==contactSelectionEpoch)return;
+    state.messages=data;
+    loaded=true;
+  }finally{
+    if(fromId===state.selectedId&&selectionEpoch===contactSelectionEpoch){
+      state.loadingConversation=false;state.conversationLoadFailed=!loaded;
+      generationButtons.forEach(([button])=>{button.disabled=!loaded;});
+      renderMessages();
+    }
+  }
 }
 function renderMessages(){
   const holder=$("messages");holder.replaceChildren();
-  if(!state.messages.length){holder.append(node("p","empty-chat",current()?"まだ会話がありません。下の入力欄から追加してください。":"左側の＋から相手を登録してください。"));return;}
+  const hasConversation=state.messages.length>0;
+  $("first-message").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||hasConversation;
+  $("generate").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
+  $("follow-up").hidden=state.loadingConversation||state.conversationLoadFailed||!current()||!hasConversation;
+  const composerUnavailable=state.loadingConversation||state.conversationLoadFailed||!current()||pendingMessageSubmissions.has(state.selectedId);
+  ["message-input","send-them","send-me"].forEach(id=>{$(id).disabled=composerUnavailable;});
+  if(state.loadingConversation){holder.append(node("p","empty-chat","会話履歴を読み込み中です"));return;}
+  if(state.conversationLoadFailed){holder.append(node("p","empty-chat","会話履歴を読み込めませんでした。通信状態を確認して相手を選び直してください"));return;}
+  if(!hasConversation){holder.append(node("p","empty-chat",current()?"まだ会話がありません。初回メッセージを生成するか、下の入力欄から履歴を追加してください。":"左側の＋から相手を登録してください。"));return;}
   state.messages.forEach(m=>{
+    const messageContactId=state.selectedId;
     const wrap=node("article","chat-message "+m.role);
     const bubble=node("div","bubble",m.body);
     const stamp=node("span","message-time",(m.role==="me"?"自分":"相手")+" · "+(m.created_at||""));
@@ -104,8 +249,13 @@ function renderMessages(){
     const del=node("button","","削除");del.type="button";
     del.onclick=()=>safe(async()=>{
       if(!confirm("このメッセージを削除しますか？"))return;
-      await api("/matches/"+state.selectedId+"/messages/"+m.id,{method:"DELETE"});
-      await refreshConversation();notice("メッセージを削除しました");
+      invalidateGenerationResults();
+      beginContactMutation(messageContactId);
+      try{
+        await api("/matches/"+messageContactId+"/messages/"+m.id,{method:"DELETE"});
+        if(state.selectedId===messageContactId)await refreshConversation();
+        notice("メッセージを削除しました");
+      }finally{endContactMutation(messageContactId);}
     });
     actions.append(edit,del);wrap.append(bubble,stamp,actions);holder.append(wrap);
   });
@@ -114,23 +264,36 @@ function renderMessages(){
 async function refreshConversation(){
   const id=state.selectedId;
   if(id===null)return;
-  const records=await api("/matches/"+id+"/messages");
+  let records;
+  try{records=await api("/matches/"+id+"/messages");}
+  catch(error){
+    if(id===state.selectedId){state.loadingConversation=false;state.conversationLoadFailed=true;renderMessages();}
+    throw error;
+  }
   if(id!==state.selectedId)return;
+  state.loadingConversation=false;
+  state.conversationLoadFailed=false;
   state.messages=records;
   const c=current();
   if(c){
     c.message_count=records.length;
     c.incoming_count=records.filter(m=>m.role==="them").length;
-    c.last_message=records.at(-1)?.body||"";
+    c.outgoing_count=records.filter(m=>m.role==="me").length;
+    // プレビューと並び順は、日時が最も新しいメッセージに合わせる（同時刻は後から登録した方）。
+    let newest=null;
+    records.forEach(m=>{if(!newest||(m.created_at||"")>=(newest.created_at||""))newest=m;});
+    c.last_message=newest?.body||"";
+    c.last_message_at=newest?.created_at||"";
   }
   renderContacts();
-  $("messages-count").textContent="▤ "+records.length+"件の会話";
+  $("messages-count").textContent="▤ 自分から："+records.filter(m=>m.role==="me").length+"通";
   $("incoming-count").textContent="💬 相手から："+records.filter(m=>m.role==="them").length+"通";
   $("suggestion-list").hidden=true;$("suggestion-list").replaceChildren();
   renderMessages();
 }
 function showModal(title,build){
   $("modal-title").textContent=title;
+  $("modal").onpaste=null;
   const body=$("modal-body");body.replaceChildren();
   build(body);
   if(!$("modal").open)$("modal").showModal();
@@ -143,11 +306,21 @@ function field(body,label,value="",multi=false){
 }
 function modalFooter(body,label,onSave,includeCancel=true){
   const bar=node("div","modal-actions");
+  let cancel=null;
   if(includeCancel){
-    const cancel=node("button","","キャンセル");cancel.type="button";cancel.onclick=()=>$("modal").close();bar.append(cancel);
+    cancel=node("button","","キャンセル");cancel.type="button";cancel.onclick=()=>$("modal").close();bar.append(cancel);
   }
   const save=node("button","confirm",label);save.type="button";
-  save.onclick=()=>safe(onSave);bar.append(save);body.append(bar);
+  save.onclick=async()=>{
+    if(save.disabled)return;
+    save.disabled=true;
+    if(cancel)cancel.disabled=true;
+    clearInlineError(body);
+    try{await onSave();}
+    catch(error){inlineError(body,error.message||"操作に失敗しました",bar);}
+    finally{save.disabled=false;if(cancel)cancel.disabled=false;}
+  };
+  bar.append(save);body.append(bar);
 }
 function showMessageEditor(m){
   const contactId=state.selectedId;
@@ -157,102 +330,459 @@ function showMessageEditor(m){
     const text=field(body,"本文",m.body,true);
     modalFooter(body,"保存",async()=>{
       if(!["them","me"].includes(role.value))throw Error("発言者は me または them にしてください");
-      await api("/matches/"+contactId+"/messages/"+m.id,json("PUT",{role:role.value,body:text.value}));
-      $("modal").close();await refreshConversation();notice("履歴を更新しました");
+      invalidateGenerationResults();
+      beginContactMutation(contactId);
+      try{
+        await api("/matches/"+contactId+"/messages/"+m.id,json("PUT",{role:role.value,body:text.value}));
+        $("modal").close();
+        if(state.selectedId===contactId)await refreshConversation();
+        notice("履歴を更新しました");
+      }finally{endContactMutation(contactId);}
     });
   });
 }
 async function addMessage(role,override){
+  try{await submitMessage(role,override);}
+  catch(error){
+    inlineError($("composer-error"),error.message||"メッセージの送信に失敗しました");
+    throw error;
+  }
+}
+async function submitMessage(role,override){
+  clearInlineError($("composer-error"));
   const c=current();if(!c)throw Error("先に相手を登録してください");
-  const body=(override===undefined?$("message-input").value:override).trim();
+  const contactId=c.id;
+  if(pendingMessageSubmissions.has(contactId))throw Error("この相手の発言を保存しています。完了後にもう一度お試しください");
+  const draftValue=override===undefined?$("message-input").value:null;
+  const body=(override===undefined?draftValue:override).trim();
   if(!body)throw Error("メッセージを入力してください");
-  await api("/matches/"+c.id+"/messages",json("POST",{role,body}));
-  if(override===undefined)$("message-input").value="";
-  await refreshConversation();
-  notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
+  invalidateGenerationResults();
+  pendingMessageSubmissions.add(contactId);
+  beginContactMutation(contactId);
+  renderMessages();
+  try{
+    await api("/matches/"+contactId+"/messages",json("POST",{role,body}));
+    if(override===undefined){
+      if(messageDrafts.get(contactId)===draftValue)messageDrafts.delete(contactId);
+      if(state.selectedId===contactId&&$("message-input").value===draftValue)$("message-input").value="";
+    }
+    if(state.selectedId===contactId)await refreshConversation();
+    notice((role==="me"?"自分":"相手")+"の発言を履歴に登録しました");
+  }finally{
+    pendingMessageSubmissions.delete(contactId);
+    endContactMutation(contactId);
+    if(state.selectedId===contactId)renderMessages();
+  }
 }
 async function openContactForm(edit=false){
   const old=edit?current():null;
+  let createdId=old?old.id:null;
   showModal(edit?"相手のプロフィールを編集":"相手を追加",body=>{
     body.append(node("p","modal-description","名前・プロフィール・識別用の写真を登録します。写真はGeminiへ送信しません。"));
     const name=field(body,"名前（必須）",old?.name||"");
     const description=field(body,"相手のプロフィール・自由記述",old?.description||"",true);
     body.append(node("label","","識別用写真（任意・JPEG/PNG/WebP、5MB以下）"));
     const file=node("input");file.type="file";file.accept="image/jpeg,image/png,image/webp";body.append(file);
+    body.append(node("p","modal-description","画像ファイルを選ぶか、画像をコピーしてこの画面で Ctrl+V（貼り付け）でも登録できます。"));
+    const preview=node("div","photo-preview");preview.hidden=true;body.append(preview);
+    let pastedUpload=null;
+    const currentUpload=()=>file.files?.[0]||pastedUpload||null;
+    const renderPhotoPreview=()=>{
+      const chosen=currentUpload();
+      preview.replaceChildren();preview.hidden=!chosen;
+      if(!chosen)return;
+      const img=node("img","photo-preview-img");img.src=URL.createObjectURL(chosen);img.alt="登録する写真";
+      const meta=node("div","photo-preview-meta");
+      meta.append(node("strong","",chosen.name||"貼り付けた画像"));
+      meta.append(node("span","",Math.max(1,Math.round(chosen.size/1024))+"KB"));
+      const clear=node("button","modal-button","写真を外す");clear.type="button";
+      clear.onclick=()=>{pastedUpload=null;file.value="";renderPhotoPreview();};
+      meta.append(clear);
+      preview.append(img,meta);
+    };
+    file.onchange=renderPhotoPreview;
+    $("modal").onpaste=event=>{
+      const items=(event.clipboardData&&event.clipboardData.items)||[];
+      for(const item of items){
+        if(item.kind==="file"&&item.type.startsWith("image/")){
+          const blob=item.getAsFile();
+          if(blob){event.preventDefault();pastedUpload=blob;renderPhotoPreview();return;}
+        }
+      }
+    };
     if(old){
       const remove=node("button","modal-button","この相手と全会話を削除");
       remove.type="button";remove.style.color="#c24b68";remove.onclick=()=>safe(async()=>{
         if(!confirm("相手の情報・写真・会話を完全に削除しますか？"))return;
         await api("/matches/"+old.id,{method:"DELETE"});
+        messageDrafts.delete(old.id);
         $("modal").close();await loadMatches();notice("相手を削除しました");
       });body.append(remove);
     }
     modalFooter(body,"保存",async()=>{
       if(!name.value.trim())throw Error("名前を入力してください");
-      const data=await api(old?"/matches/"+old.id:"/matches",json(old?"PUT":"POST",{name:name.value.trim(),description:description.value}));
-      const upload=file.files?.[0];
-      if(upload){
-        if(upload.size>5*1024*1024)throw Error("写真は5MB以下にしてください。名前とプロフィールは保存済みです。");
-        const form=new FormData();form.append("file",upload);
-        await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});
+      const selected=currentUpload();
+      if(selected){
+        if(selected.size>5*1024*1024)throw Error("写真は5MB以下にしてください");
+        if(!["image/jpeg","image/png","image/webp"].includes(selected.type))throw Error("写真はJPEG/PNG/WebPにしてください");
+      }
+      const data=await api(createdId?"/matches/"+createdId:"/matches",json(createdId?"PUT":"POST",{name:name.value.trim(),description:description.value}));
+      createdId=data.id;
+      if(selected){
+        const form=new FormData();form.append("file",selected);
+        try{await api("/matches/"+data.id+"/photo",{method:"PUT",body:form});}
+        catch(err){await loadMatches(data.id);throw err;}
       }
       $("modal").close();await loadMatches(data.id);notice("相手の情報を保存しました");
     });
   });
 }
+async function copyToClipboard(text){
+  try{await navigator.clipboard.writeText(text);return true;}
+  catch{return false;}
+}
 async function copyText(text){
-  try{await navigator.clipboard.writeText(text);notice("文章をコピーしました。送信済み履歴には追加していません。");}
-  catch{
-    showModal("文章をコピー",body=>{
-      body.append(node("p","modal-description","以下を選択してコピーしてください。"));
-      const area=field(body,"本文",text,true);area.focus();area.select();
-    });
-  }
+  if(await copyToClipboard(text))return;
+  showModal("文章をコピー",body=>{
+    body.append(node("p","modal-description","以下を選択してコピーしてください。"));
+    const area=field(body,"本文",text,true);area.focus();area.select();
+  });
+}
+async function copyAndRecord(matchId,text){
+  if(matchId===null||matchId===undefined)throw Error("先に相手を登録してください");
+  if(state.selectedId!==matchId)throw Error("相手が変わっています。もう一度確認してください");
+  const copied=await copyToClipboard(text);
+  await addMessage("me",text);
+  notice(copied?"送信済みとして履歴に登録しました":"送信済みとして履歴に登録しました（コピーできませんでした。必要なら手動でコピーしてください）");
 }
 function renderCards(container,payload,allowSave,matchId){
-  container.replaceChildren();
   if(payload.demo)container.append(node("p","demo-warning","⚠ APIキー未設定：以下は会話を解析していない固定サンプルです。"));
+  if(payload.candidate_notice)container.append(node("p","user-info-terminal",payload.candidate_notice));
   const candidates=[payload.recommended,...(payload.alternatives||[])];
+  const saveable=allowSave&&!payload.demo&&matchId!==null&&matchId!==undefined;
   candidates.forEach((item,i)=>{
     const card=node("article","candidate");
     card.append(node("div","candidate-title",(i===0?"✦ おすすめ · ":"")+item.label));
     card.append(node("div","candidate-text",item.text));
     const actions=node("div","candidate-actions");
-    const copy=node("button","","コピー");copy.type="button";copy.onclick=()=>copyText(item.text);actions.append(copy);
-    if(allowSave&&!payload.demo){
+    const copy=node("button","","コピー");copy.type="button";
+    copy.onclick=()=>safe(()=>saveable?copyAndRecord(matchId,item.text):copyText(item.text));
+    actions.append(copy);
+    if(saveable){
       const record=node("button","","実際に送った文章を記録");record.type="button";
       record.onclick=()=>showModal("実際に送信した文章を記録",body=>{
-        body.append(node("p","modal-description","コピーだけでは送信済みになりません。送信した場合のみ、必要に応じて編集してから保存してください。"));
+        body.append(node("p","modal-description","文章を編集できます。「送信済みとして保存」を押すと、送信済みとして記録し、同時にコピーします。"));
         const input=field(body,"本文",item.text,true);
         modalFooter(body,"送信済みとして保存",async()=>{
           if(state.selectedId!==matchId)throw Error("相手が変わっています。もう一度確認してください");
+          const copied=await copyToClipboard(input.value);
           await addMessage("me",input.value);$("modal").close();
+          notice(copied?"送信済みとして保存しました":"送信済みとして保存しました（コピーできませんでした。必要なら手動でコピーしてください）");
         });
       });actions.append(record);
     }
     card.append(actions);container.append(card);
   });
+  renderRejectedCandidates(container,payload);
   if(payload.reason)container.append(node("div","result-reason","判断の理由："+payload.reason));
-  if($("policy").checked&&payload.strategy)container.append(node("div","policy-suggestion","会話方針："+payload.strategy));
+  if($("policy").checked)renderStrategy(container,payload);
+  appendProviderUsage(container,payload);
+}
+function appendProviderUsage(container,payload){
+  const alias=typeof payload?.api_alias==="string"?payload.api_alias:"";
+  const model=typeof payload?.model==="string"?payload.model:"";
+  const label=[alias,model].filter(Boolean).join(" / ");
+  if(label)container.append(node("p","provider-usage","使用したAPI/モデル："+label));
+}
+function renderRejectedCandidates(container,payload){
+  let items=Array.isArray(payload.rejected_candidates)?payload.rejected_candidates.filter(item=>item&&item.text):[];
+  if(!items.length&&Array.isArray(payload.candidate_rejection_details)){
+    items=payload.candidate_rejection_details.filter(item=>item&&item.text).map(item=>({label:item.label,text:item.text,reasons:[]}));
+  }
+  if(!items.length)return;
+  const summaryReasons=Array.isArray(payload.candidate_rejection_summary)?payload.candidate_rejection_summary:[];
+  const panel=node("details","rejected-candidates");panel.open=true;
+  panel.append(node("summary","rejected-candidates-heading","⚠ 安全確認できなかった案（"+items.length+"件・参考）"));
+  panel.append(node("p","rejected-candidates-note","自動の安全確認で除外された案です。未確認の情報が含まれている可能性があります。内容をよく確認し、必要な場合だけコピーして使ってください（送信済み履歴には自動では登録しません）。"));
+  items.forEach(item=>{
+    const card=node("article","rejected-candidate");
+    card.append(node("div","rejected-candidate-title","参考 · "+(item.label||"候補")));
+    card.append(node("div","rejected-candidate-text",item.text||""));
+    if(Array.isArray(item.reasons)&&item.reasons.length){
+      card.append(node("div","rejected-candidate-reasons","除外理由："+item.reasons.join("、")));
+    }
+    const actions=node("div","rejected-candidate-actions");
+    const copy=node("button","","コピーのみ");copy.type="button";
+    copy.onclick=()=>safe(()=>copyText(item.text||""));
+    actions.append(copy);
+    card.append(actions);
+    panel.append(card);
+  });
+  if(summaryReasons.length&&!items.some(item=>Array.isArray(item.reasons)&&item.reasons.length)){
+    panel.append(node("p","rejected-candidate-reasons","除外理由："+summaryReasons.join("、")));
+  }
+  container.append(panel);
+}
+function renderStrategy(container,payload){
+  if(!payload.strategy&&!payload.conversation_stage&&!payload.invite_decision&&!payload.decision_reason&&!payload.next_action)return;
+  const stageLabels={
+    "Stage 1":"マッチ直後・挨拶と会話開始",
+    "Stage 2":"趣味や休日の話題を広げる段階",
+    "Stage 3":"食事などへの誘いを検討する段階",
+    "Stage 4":"自然な誘いを提案する段階",
+    "Stage 5":"日時や場所を相談する段階",
+    "Stage 6":"合意・継続・待機・終了を判断する段階"
+  };
+  const inviteLabels={
+    do_not_invite:"まだ誘わない",
+    continue_conversation:"自然に会話を続ける",
+    consider_invite:"食事などへの誘いを検討",
+    invite_gently:"自然に誘ってみる",
+    wait:"相手の反応を待つ",
+    respect_no:"相手の断りを尊重する",
+    ask_user_info:"本人に情報を確認する",
+    do_not_repeat_invite:"同じ誘いを繰り返さない",
+    schedule_after_acceptance:"日時や場所を相談する",
+    continue_or_close:"会話の継続・終了を判断する"
+  };
+  const rawStage=String(payload.conversation_stage||"");
+  const stageMatch=rawStage.match(/^Stage\s*([1-6])(?:\b|$)/i);
+  const stage=stageMatch?`Stage ${stageMatch[1]} — ${stageLabels[`Stage ${stageMatch[1]}`]}`:rawStage;
+  const invite=inviteLabels[payload.invite_decision]||payload.invite_decision;
+  const panel=node("section","policy-suggestion");
+  panel.append(node("strong","strategy-heading","会話方針"));
+  if(stage)panel.append(node("div","strategy-row","現在の段階："+stage));
+  if(invite)panel.append(node("div","strategy-row","誘いの判断："+invite));
+  if(payload.decision_reason)panel.append(node("div","strategy-row","判断の根拠："+payload.decision_reason));
+  if(payload.next_action)panel.append(node("div","strategy-row","次の行動："+payload.next_action));
+  if(payload.strategy)panel.append(node("div","strategy-row",typeof payload.strategy==="string"?payload.strategy:JSON.stringify(payload.strategy)));
+  container.append(panel);
+}
+function mergeUserInfoAnswers(existing,incoming){
+  const merged=new Map();
+  [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(item=>{
+    if(!item||typeof item.question!=="string"||typeof item.answer!=="string")return;
+    const question=item.question.trim(),answer=item.answer.trim();
+    if(question&&answer){
+      const entry={question,answer};
+      if(item.confirmed===true)entry.confirmed=true;
+      merged.set(question.normalize("NFKC").toLocaleLowerCase(),entry);
+    }
+  });
+  return [...merged.values()];
+}
+function renderUserInfoQuestions(container,payload,options,matchId,generationTarget,clarificationSession){
+  const panel=node("section","user-info-panel");
+  panel.append(node("h3","","返信を作る前に確認したいこと"));
+  panel.append(node("p","user-info-reason",payload.user_info_reason||"本人情報を確認して、事実を作らずに返信するための質問です。"));
+  panel.append(node("p","user-info-privacy","以下の回答は「回答して再生成」ではこの生成リクエストに一時的に使います。保存したい回答だけ「回答をプロフィールに保存」を押してください。返信候補とも別に表示します。"));
+  const questions=(Array.isArray(payload.user_questions)?payload.user_questions:[]).slice(0,3);
+  const inputs=[];
+  questions.forEach((item,index)=>{
+    const row=node("div","user-info-question");
+    const label=node("label","","確認 "+(index+1)+": "+(item.question||"必要な情報"));
+    const input=node("textarea","user-info-answer");input.id="user-info-answer-"+index;input.rows=2;input.setAttribute("aria-label",item.question||"確認への回答");label.htmlFor=input.id;
+    if(item.purpose)row.append(node("small","user-info-purpose","確認する理由："+item.purpose));
+    row.append(label,input);panel.append(row);inputs.push({item,input});
+  });
+  const actions=node("div","user-info-actions");
+  const resume=node("button","action-green","回答して再生成");resume.type="button";resume.id="resume-generation";
+  resume.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    const answers=inputs.map(({item,input})=>({question:item.question||"",answer:input.value.trim()})).filter(x=>x.answer);
+    resume.disabled=true;skip.disabled=true;
+    try{await requestGeneration(options,matchId,answers,generationTarget,false,clarificationSession);}
+    finally{resume.disabled=false;skip.disabled=false;}
+  });
+  const skip=node("button","action-outline","回答をスキップして安全に作成");skip.type="button";skip.id="skip-user-info";
+  skip.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    resume.disabled=true;skip.disabled=true;
+    try{await requestGeneration(options,matchId,[],generationTarget,true,clarificationSession);}
+    finally{resume.disabled=false;skip.disabled=false;}
+  });
+  const save=node("button","action-outline","回答をプロフィールに保存");save.type="button";save.id="save-user-info";
+  save.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    const answers=inputs.map(({item,input})=>({question:item.question||"",answer:input.value.trim()})).filter(x=>x.answer);
+    if(!answers.length){notice("保存する回答を入力してください");return;}
+    save.disabled=true;resume.disabled=true;skip.disabled=true;
+    try{
+      const result=await api("/profile/confirmed-facts",json("POST",{match_id:matchId,clarification_session_id:clarificationSession&&clarificationSession.sessionId,answers}));
+      notice((result&&result.saved)>0?"回答をプロフィールに保存しました":"保存できる回答がありませんでした");
+    }finally{save.disabled=false;resume.disabled=false;skip.disabled=false;}
+  });
+  actions.append(resume,save,skip);panel.append(actions);container.append(panel);
+}
+function renderOptionalUserQuestion(container,payload,options,matchId,generationTarget){
+  const scope=matchId===null?"mode:"+(options.mode||"default"):"match:"+String(matchId);
+  const handled=optionalUserQuestionHistory.get(scope)||new Set();
+  const question=(Array.isArray(payload.optional_user_questions)?payload.optional_user_questions:[])
+    .find(item=>item&&typeof item.question==="string"&&item.question.trim()&&!handled.has(optionalUserQuestionKey(item)));
+  if(!question)return;
+  const questionKey=optionalUserQuestionKey(question);
+  const rememberQuestion=()=>{
+    let keys=optionalUserQuestionHistory.get(scope);
+    if(!keys){keys=new Set();optionalUserQuestionHistory.set(scope,keys);}
+    keys.add(questionKey);
+  };
+  const forgetQuestion=()=>{
+    const keys=optionalUserQuestionHistory.get(scope);
+    if(!keys)return;
+    keys.delete(questionKey);
+    if(!keys.size)optionalUserQuestionHistory.delete(scope);
+  };
+  const panel=node("section","optional-user-question");
+  panel.setAttribute("aria-labelledby","optional-user-question-title");
+  panel.append(node("h3","","任意の確認（本人向け）"));
+  panel.lastChild.id="optional-user-question-title";
+  panel.append(node("p","optional-user-safe","上の候補はこのまま使えます。この質問への回答は任意です。"));
+  const label=node("label","",question.question.trim());
+  label.htmlFor="optional-user-answer";
+  const answer=node("textarea","optional-user-answer");
+  answer.id="optional-user-answer";answer.rows=2;answer.setAttribute("aria-label",question.question.trim());
+  panel.append(label,answer);
+  if(typeof question.purpose==="string"&&question.purpose.trim())panel.append(node("small","optional-user-purpose","確認する理由："+question.purpose.trim()));
+  panel.append(node("p","optional-user-privacy","回答はこの生成リクエストの再生成にだけ使います。プロフィールには保存しません。メッセージも自動送信しません。"));
+  const actions=node("div","user-info-actions");
+  const regenerate=node("button","action-green","回答して再生成");
+  regenerate.type="button";regenerate.id="answer-and-regenerate-optional";
+  regenerate.onclick=()=>safe(async()=>{
+    if(matchId!==null&&matchId!==state.selectedId)throw Error("相手が変わっています。もう一度確認してください");
+    const value=answer.value.trim();
+    if(!value){notice("回答を入力するか「あとで回答する」を選んでください");answer.focus();return;}
+    rememberQuestion();
+    regenerate.disabled=true;skip.disabled=true;
+    try{
+      await requestGeneration(options,matchId,[{question:question.question.trim(),answer:value}],generationTarget);
+    }catch(error){
+      forgetQuestion();
+      throw error;
+    }
+    finally{regenerate.disabled=false;skip.disabled=false;}
+  });
+  const skip=node("button","action-outline","あとで回答する");
+  skip.type="button";skip.id="skip-optional-user-question";
+  skip.onclick=()=>{rememberQuestion();panel.remove();};
+  actions.append(regenerate,skip);panel.append(actions);container.append(panel);
+}
+function normalizeOptionalUserQuestion(question){
+  return String(question||"").normalize("NFKC").toLocaleLowerCase().replace(/\s+/g," ").trim();
+}
+function optionalUserQuestionKey(item){
+  const scopeKey=typeof item?.scope_key==="string"?item.scope_key.trim():"";
+  return scopeKey?normalizeOptionalUserQuestion(scopeKey):normalizeOptionalUserQuestion(item?.question);
+}
+function invalidateGenerationResults(){
+  conversationRevision+=1;
+  const area=$("suggestion-list");
+  if(area){area.hidden=true;area.replaceChildren();}
+}
+function fillSelect(id,values,autoLabel,labels){
+  const select=$(id);if(!select)return;
+  const previous=select.value;
+  const auto=node("option","",autoLabel);auto.value="";
+  select.replaceChildren(auto);
+  values.forEach(value=>{const option=node("option","",(labels&&labels[value])||value);option.value=value;select.append(option);});
+  if(previous&&values.includes(previous))select.value=previous;
+}
+function populateProviderOptions(status){
+  const aliases=Array.isArray(status?.api_aliases)?status.api_aliases:[];
+  const models=Array.isArray(status?.models)?status.models:[];
+  fillSelect("api-alias",aliases,"自動");
+  fillSelect("model-select",models,"自動",status?.model_labels||null);
+}
+function providerSelection(){
+  return {api_alias:$("api-alias")?.value||"",model:$("model-select")?.value||""};
+}
+async function requestGeneration(options,matchId,userAnswers=[],generationTarget={},skippedUserInfo=false,clarificationSession=null){
+  const button=generationTarget.button||$(options.mode==="followup"?"follow-up":options.mode==="first"?"first-message":"generate");
+  const area=generationTarget.container||$("suggestion-list");
+  const selectionEpoch=contactSelectionEpoch;
+  const revision=conversationRevision;
+  if(!clarificationSession){
+    const sessionId=(typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function")?crypto.randomUUID():("s"+Date.now()+"-"+Math.random().toString(36).slice(2));
+    clarificationSession={matchId,selectionEpoch,revision,answers:mergeUserInfoAnswers([],userAnswers),sessionId};
+  }else{
+    if(clarificationSession.matchId!==matchId||clarificationSession.selectionEpoch!==selectionEpoch||clarificationSession.revision!==revision){
+      throw Error("会話が更新されました。最新の内容からもう一度生成してください");
+    }
+    clarificationSession.answers=mergeUserInfoAnswers(clarificationSession.answers,userAnswers);
+  }
+  if(matchId!==null&&mutatingContacts.has(matchId)){
+    const busyMessage="会話履歴を保存しています。完了後にもう一度お試しください";
+    inlineError(area,busyMessage);
+    throw Error(busyMessage);
+  }
+  const requestToken=++generationRequestSequence;
+  generationRequestTokens.set(button,requestToken);
+  generationAreaTokens.set(area,requestToken);
+  const before=button.textContent;button.disabled=true;button.textContent="生成中…";
+  try{
+    const result=await api("/generate",json("POST",{...options,response_version:2,user_answers:clarificationSession.answers,clarification_session_id:clarificationSession.sessionId,skipped_user_info:skippedUserInfo}));
+    if(generationAreaTokens.get(area)!==requestToken||revision!==conversationRevision)return;
+    if(matchId!==null&&(matchId!==state.selectedId||selectionEpoch!==contactSelectionEpoch||state.loadingConversation||state.conversationLoadFailed||mutatingContacts.has(matchId)))return;
+    area.hidden=false;area.replaceChildren();
+    const blocked=result.generation_blocked||(!result.recommended&&(skippedUserInfo||result.skipped_user_info||!result.needs_user_info));
+    if(blocked){
+      const blockedTitle={
+        first:"✦ 初回メッセージは作成できませんでした",
+        like:"✦ メッセージ付きいいねは作成できませんでした",
+        followup:"✦ 追いメッセージは作成できませんでした"
+      }[options.mode]||"✦ 返信候補は作成できませんでした";
+      area.append(node("div","suggestion-heading",blockedTitle));
+      if(result.candidate_notice)area.append(node("p","user-info-terminal",result.candidate_notice));
+      area.append(node("p","user-info-terminal",result.user_info_reason||result.blocking_reason||result.detail||"未確認の本人情報を使わずに返信を作れないため、ここで停止しました。プロフィールを確認してから再度お試しください。"));
+      renderRejectedCandidates(area,result);
+      const retry=node("button","retry-button","↻ もう一度生成");
+      retry.type="button";
+      retry.title="1回ごとにGeminiへ問い合わせます（利用枠を消費します）";
+      retry.onclick=()=>safe(()=>requestGeneration(options,matchId,[],generationTarget));
+      area.append(retry);
+    }else if(result.needs_user_info){
+      area.append(node("div","suggestion-heading","✦ 本人情報の確認"));
+      renderUserInfoQuestions(area,result,options,matchId,generationTarget,clarificationSession);
+    }else{
+      const title=options.mode==="first"?"✦ 初回メッセージ候補":options.mode==="followup"?"✦ 追いメッセージの提案":options.mode==="like"?"✦ メッセージ付きいいね候補":"✦ 返信候補";
+      area.append(node("div","suggestion-heading",title));
+      area.append(node("p","suggestion-note","まだ送信していません。ここに出るのは返信の候補だけです。「コピー」を押すとコピーして送信済みとして記録し、「実際に送った文章を記録」では文章を編集してから保存できます。"));
+      renderCards(area,result,generationTarget.allowSave!==false,matchId);
+      renderOptionalUserQuestion(area,result,options,matchId,generationTarget);
+      clarificationSession.answers=[];
+    }
+    if(!generationTarget.container)$("chat-area").scrollTop=$("chat-area").scrollHeight;
+  }catch(error){
+    const stillCurrent=generationAreaTokens.get(area)===requestToken&&revision===conversationRevision
+      &&(matchId===null||(matchId===state.selectedId&&selectionEpoch===contactSelectionEpoch&&!state.loadingConversation&&!state.conversationLoadFailed&&!mutatingContacts.has(matchId)));
+    if(stillCurrent)inlineError(area,error.message||"入力または通信に失敗しました");
+    throw error;
+  }finally{
+    if(generationRequestTokens.get(button)===requestToken){button.disabled=false;button.textContent=before;}
+  }
 }
 async function generate(mode){
   const c=current();if(mode!=="like"&&!c)throw Error("相手を登録してください");
   const count=Number($("count").value);
   const opts={
-    mode,match_id:c?.id,count,tone:state.tone,
+    response_version:2,mode,match_id:c?.id,count,tone:state.tone,
     direction:$("direction").selectedOptions[0]?.textContent||"",
-    extra:$("extra").value,show_policy:$("policy").checked
+    extra:$("extra").value,show_policy:$("policy").checked,
+    require_question:$("require-question")?.checked||false,
+    ...providerSelection()
   };
-  const button=$(mode==="followup"?"follow-up":"generate");
-  const before=button.textContent;button.disabled=true;button.textContent="生成中…";
+  await learnProfileFromExtra(opts.extra);
+  await requestGeneration(opts,c.id,[]);
+}
+let lastLearnedExtra="";
+async function learnProfileFromExtra(text){
+  const value=(text||"").trim();
+  if(!value||value===lastLearnedExtra)return;
   try{
-    const result=await api("/generate",json("POST",opts));
-    if(c.id!==state.selectedId)return;
-    const area=$("suggestion-list");area.hidden=false;area.replaceChildren();
-    area.append(node("div","suggestion-heading",mode==="followup"?"✦ 追いメッセージの提案":"✦ 返信候補"));
-    renderCards(area,result,true,c.id);
-    $("chat-area").scrollTop=$("chat-area").scrollHeight;
-  }finally{button.disabled=false;button.textContent=before;}
+    // 追加の自由記述に書かれた本人の事実をプロフィールへ取り込む。
+    // 失敗しても生成は止めない。
+    await api("/profile/learn",json("POST",{text:value,...providerSelection()}));
+    lastLearnedExtra=value;
+  }catch{}
 }
 function likeModal(){
   showModal("👍 メッセージ付きいいね",body=>{
@@ -266,35 +796,70 @@ function likeModal(){
       if(!profile.value.trim())throw Error("相手のプロフィール文を入力してください");
       action.disabled=true;action.textContent="生成中…";
       try{
-        const result=await api("/generate",json("POST",{
-          mode:"like",name:name.value,description:profile.value,count:3,
-          tone:state.tone,show_policy:false
-        }));
-        feedback.replaceChildren();
-        renderCards(feedback,result,false,null);
+        const options={
+          response_version:2,mode:"like",name:name.value,description:profile.value,count:3,
+          tone:state.tone,show_policy:false,...providerSelection()
+        };
+        await requestGeneration(options,null,[],{button:action,container:feedback,allowSave:false});
       }finally{action.disabled=false;action.textContent="3案を生成";}
     });
     action.style.marginTop="12px";body.append(action,feedback);
   });
 }
-function profileModal(){
+async function profileModal(){
+  try{
+    state.profile=await api("/profile");
+  }catch(error){
+    // The startup copy keeps the form available during a temporary outage;
+    // failed saves leave the user's edits open for retry after recovery.
+    if(!state.profile||typeof state.profile.content!=="string")throw error;
+  }
   showModal("📋 自分の情報",body=>{
     body.append(node("p","modal-description","文章生成時に使用するご自身の情報です。後から編集できます。"));
     let fields={};
-    try{fields=JSON.parse(state.profile.content||"{}");}
-    catch{fields={memo:state.profile.content};}
+    try{
+      const parsed=JSON.parse(state.profile.content||"{}");
+      fields=parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:{memo:state.profile.content};
+    }catch{fields={memo:state.profile.content};}
+    const displayProfileValue=value=>{
+      if(Array.isArray(value))return value.every(item=>typeof item==="string")?value.join(", "):JSON.stringify(value,null,2);
+      if(value&&typeof value==="object")return JSON.stringify(value,null,2);
+      return value??"";
+    };
     const meta=[
       ["name","名前"],["age","年齢"],["area","居住地域"],["job","学校・仕事"],
       ["hobbies","趣味・好きなこと"],["personality","性格"],["style","話し方の好み"],
       ["goal","どのような関係を望むか"],["memo","その他の情報・自己紹介"]
     ];
     const inputs={};
-    meta.forEach(([key,label])=>inputs[key]=field(body,label,fields[key]||"",key==="memo"||key==="goal"));
+    meta.forEach(([key,label])=>inputs[key]=field(body,label,displayProfileValue(fields[key]),key==="memo"||key==="goal"||typeof fields[key]==="object"));
     const avoid=field(body,"言ってほしくないこと・避けたい表現",state.profile.avoid,true);
     modalFooter(body,"プロフィールを保存",async()=>{
-      const content={};meta.forEach(([key])=>content[key]=inputs[key].value.trim());
+      const content={...fields};
+      for(const [key] of meta){
+        const inputValue=inputs[key].value.trim();
+        const previous=fields[key];
+        const previousDisplay=String(displayProfileValue(previous)).trim();
+        if(!Object.prototype.hasOwnProperty.call(fields,key)&&!inputValue)continue;
+        if(inputValue===previousDisplay){content[key]=previous;continue;}
+        if(Array.isArray(previous)){
+          if(previous.every(item=>typeof item==="string"))content[key]=inputValue?inputValue.split(",").map(item=>item.trim()).filter(Boolean):[];
+          else{
+            let parsed;
+            try{parsed=JSON.parse(inputValue||"[]");}catch{throw Error("「"+key+"」はJSON形式で入力してください");}
+            if(!Array.isArray(parsed))throw Error("「"+key+"」には配列形式のJSONを入力してください");
+            content[key]=parsed;
+          }
+        }else if(previous&&typeof previous==="object"){
+          let parsed;
+          try{parsed=JSON.parse(inputValue||"{}");}catch{throw Error("「"+key+"」はJSON形式で入力してください");}
+          if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw Error("「"+key+"」にはオブジェクト形式のJSONを入力してください");
+          content[key]=parsed;
+        }else content[key]=inputValue;
+      }
       await api("/profile",json("PUT",{content:JSON.stringify(content),avoid:avoid.value}));
       state.profile={content:JSON.stringify(content),avoid:avoid.value};
+      invalidateGenerationResults();
       $("modal").close();notice("自分のプロフィールを保存しました");
     });
   });
@@ -327,8 +892,8 @@ function guideModal(){
       "「自分の情報」からプロフィールと話し方を登録します。",
       "左上の＋から相手の名前、プロフィール、識別用写真を登録します。",
       "相手と自分のメッセージを下部のボタンで会話履歴に追加します。",
-      "文体・候補数・方向性を設定して返信候補を生成します。",
-      "使いたい案をコピーし、実際に送った文章だけ「送信済み」に記録します。"
+      "「＋詳細設定」で会話方針・返信の方向・候補の数・質問必須を必要に応じて調整し、返信候補を生成します。",
+      "候補は自動では送信されません。「コピー」を押すとコピーして送信済みとして記録でき、「実際に送った文章を記録」では文章を編集してから保存できます。"
     ];
     steps.forEach((s,i)=>{const d=node("div","modal-result");d.append(node("strong","",String(i+1)+". "),node("span","",s));body.append(d);});
   });
@@ -362,7 +927,80 @@ function exportCurrent(){
   notice("会話をJSONとして書き出しました");
 }
 function attach(){
+  const settingsToggle=$("settings-toggle"),advancedSettings=$("advanced-settings");
+  // T572: 詳細設定は相手を切り替えても・再読み込み後も保持する。
+  const advancedKey="mra_advanced_settings_v1";
+  const readAdvancedSettings=()=>{try{return JSON.parse(localStorage.getItem(advancedKey))||{};}catch{return {};}};
+  const writeAdvancedSettings=()=>{
+    try{
+      localStorage.setItem(advancedKey,JSON.stringify({
+        v:2,
+        policy:$("policy").checked,
+        requireQuestion:$("require-question")?.checked||false,
+        direction:$("direction").value,
+        count:$("count").value,
+        open:!advancedSettings.hidden,
+      }));
+    }catch{}
+  };
+  const applyAdvancedSettings=()=>{
+    const saved=readAdvancedSettings();
+    if(typeof saved.policy==="boolean")$("policy").checked=saved.policy;
+    // T581: 質問必須を既定ONにした。v1 の保存値（false）で打ち消されないよう、
+    // v2 で保存された値だけを復元する。
+    if(typeof saved.requireQuestion==="boolean"&&saved.v===2)$("require-question").checked=saved.requireQuestion;
+    if(saved.direction){
+      const opt=[...$("direction").options].find(o=>o.value===saved.direction);
+      if(opt)$("direction").value=saved.direction;
+    }
+    if(saved.count){
+      const opt=[...$("count").options].find(o=>o.value===saved.count);
+      if(opt){$("count").value=saved.count;$("generate").textContent=saved.count+"案を生成";}
+    }
+    if(saved.open&&advancedSettings.hidden){
+      advancedSettings.hidden=false;
+      settingsToggle.setAttribute("aria-expanded","true");
+      settingsToggle.textContent="× 詳細設定を閉じる";
+    }
+  };
+  applyAdvancedSettings();
+  if(settingsToggle&&advancedSettings){
+    settingsToggle.onclick=()=>{
+      const expanded=advancedSettings.hidden;
+      advancedSettings.hidden=!expanded;
+      settingsToggle.setAttribute("aria-expanded",String(expanded));
+      settingsToggle.textContent=expanded?"× 詳細設定を閉じる":"＋ 詳細設定";
+      writeAdvancedSettings();
+    };
+  }
+  $("policy").onchange=writeAdvancedSettings;
+  $("require-question").onchange=writeAdvancedSettings;
+  $("direction").onchange=writeAdvancedSettings;
+  const headerToggle=$("header-settings-toggle"),headerAdvanced=$("header-advanced");
+  if(headerToggle&&headerAdvanced){
+    headerToggle.onclick=()=>{
+      const expanded=headerAdvanced.hidden;
+      headerAdvanced.hidden=!expanded;
+      headerToggle.setAttribute("aria-expanded",String(expanded));
+      headerToggle.classList.toggle("on",expanded);
+    };
+  }
   $("search").addEventListener("input",renderContacts);
+  $("clear-search").onclick=()=>{$("search").value="";renderContacts();$("search").focus();};
+  const sortSelect=$("sort-order");
+  if(sortSelect){
+    sortSelect.value=contactSortOrder();
+    sortSelect.onchange=()=>{
+      try{localStorage.setItem(CONTACT_SORT_KEY,sortSelect.value==="name"?"name":"last");}catch{}
+      renderContacts();
+    };
+  }
+  $("message-input").addEventListener("input",()=>{
+    if(state.selectedId===null)return;
+    const draft=$("message-input").value;
+    if(draft)messageDrafts.set(state.selectedId,draft);
+    else messageDrafts.delete(state.selectedId);
+  });
   $("new-contact").onclick=()=>safe(()=>openContactForm());
   $("edit-contact").onclick=()=>safe(()=>openContactForm(true));
   $("send-them").onclick=()=>safe(()=>addMessage("them"));
@@ -371,8 +1009,9 @@ function attach(){
     if(e.ctrlKey&&e.key==="Enter"){e.preventDefault();safe(()=>addMessage("them"));}
   });
   $("generate").onclick=()=>safe(()=>generate("reply"));
+  $("first-message").onclick=()=>safe(()=>generate("first"));
   $("follow-up").onclick=()=>safe(()=>generate("followup"));
-  $("count").onchange=()=>{$("generate").textContent=$("count").value+"案を生成";};
+  $("count").onchange=()=>{$("generate").textContent=$("count").value+"案を生成";writeAdvancedSettings();};
   $("history-button").onclick=historyModal;
   $("send-content").onclick=sentModal;
   $("export-button").onclick=exportCurrent;
@@ -382,15 +1021,15 @@ function attach(){
     state.tone=b.dataset.tone;
     document.querySelectorAll("[data-tone]").forEach(x=>x.classList.toggle("on",x===b));
   });
-  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=({
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>safe(()=>( {
     guide:guideModal,like:likeModal,profile:profileModal,settings:settingsModal
-  })[b.dataset.open]?.());
+  })[b.dataset.open]?.()));
 }
 async function start(){
   attach();
   await safe(async()=>{
     const [status,profile]=await Promise.all([api("/status"),api("/profile")]);
-    state.status=status;state.profile=profile;await loadMatches();
+    state.status=status;state.profile=profile;populateProviderOptions(status);await loadMatches();
     const pill=document.querySelector(".version");
     if(pill)pill.textContent=status.demo?"LOCAL · DEMO":"LOCAL · "+status.model;
     notice(status.demo?"ローカルアプリを起動しました。AI未接続のデモモードです。":"ローカルアプリを起動しました。Geminiが設定されています。");

@@ -1,34 +1,42 @@
 name: Gemini live smoke (fictional data only)
 
 on:
-  push:
-    branches: [feat/ui-local-backend-v1]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: live-gemini-smoke
+  cancel-in-progress: false
+
 jobs:
   gemini-live-smoke:
+    name: Manual Gemini API smoke (up to two requests)
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
+      # The app reads MRA_API_1_KEY; the smoke script guards on GEMINI_API_KEY.
+      # One secret feeds both so the live branch is actually exercised.
+      MRA_API_1_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_TEST }}
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL_TEST || 'gemini-3.5-flash-lite' }}
     steps:
-      - name: Explain when secret is missing
-        if: env.GEMINI_API_KEY == ''
-        run: echo "SKIPPED - Add GEMINI_API_KEY_TEST as a repository secret, then request another push."
+      - name: Record skipped run when secret is missing or ref is not trusted
+        if: env.GEMINI_API_KEY == '' || github.ref != 'refs/heads/codex/full-system-verification'
+        run: |
+          echo "SKIPPED: Select codex/full-system-verification and configure GEMINI_API_KEY_TEST to run the live smoke. No real API request was made." >> "$GITHUB_STEP_SUMMARY"
       - name: Check out local application
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && github.ref == 'refs/heads/codex/full-system-verification'
         uses: actions/checkout@v4
       - name: Set up Python
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && github.ref == 'refs/heads/codex/full-system-verification'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && github.ref == 'refs/heads/codex/full-system-verification'
         run: python -m pip install -r requirements.txt httpx
       - name: Run real Gemini reply and like tests
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && github.ref == 'refs/heads/codex/full-system-verification'
         run: python scripts/live_gemini_smoke.py

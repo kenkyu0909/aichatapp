@@ -1,0 +1,135 @@
+# 2026-10-15 13:00までの自律作業記録
+
+## 作業条件
+
+- 作業時間: 2026-10-15 10:42〜13:00 JST
+- ブランチ: `codex/full-system-verification`
+- 開始HEAD: `873bac7d747a8e8281a65412ac04cc8b86afe3d4`
+- PR #4: OPEN / Draftのまま。マージしない。
+- ブラウザー: Firefoxのみ。Chrome未使用。
+- テストデータ: 架空データと隔離SQLiteのみ。本番DB・実在人物情報なし。
+- Gemini上限: 12論理要求 / 24 provider attempts。実績10 / 12。キーや課金設定の変更なし。
+- instruction文書はユーザー管理の未追跡ファイルとして維持し、コミットしない。
+- 過去のconversation_001〜003、quality_checks_002〜008は変更しない。conversation_004は未作成。
+
+## 発見した問題と修正
+
+quality_checks_008の再監査では、カフェ巡り等の一般的な趣味から、本人の場所選びの好みや外出嗜好まで推測する候補を見逃していた。別々のプロフィール項目から最近の経験・頻度・対象を組み合わせる誤判定もあった。節単位の根拠照合と外出嗜好の候補検査を追加し、修正前後の実出力を`quality_checks_009.json`に残した。修正後の同系ケースでは未確認候補を外し、安全な2候補と不足数の通知を返した。
+
+また、相手が会うことへの不安を示した後に店の好みを尋ねる候補が通る問題を確認した。初期修正は質問文全体を止めてしまい、会うことと無関係な本の質問まで除外していた。コードレビュー指摘を受け、会場・食事・外出・日程に関係する質問だけを抑止する形に限定した。疑問符直前の「観た？」「行くの？」「かな？」などを本人の事実断定と取り違える境界も修正した。
+
+## Gemini実API品質009
+
+指定APIディレクトリと既存アプリの`/api/generate`を使い、架空プロフィール・一時SQLiteで10論理要求 / 12 provider attemptsを実行した。すべてAPI1 / `gemini-3.5-flash-lite`。429、認証エラー、モデル不在、通信エラーは発生しなかった。指定上限12 / 24以内であり、キー値は表示・記録していない。
+
+通信と一部の自動検査は成功したが、文章品質全体の判定は**FAIL**。実際の誤字「どんな雰囲い」、候補間の意味的重複、確認済み回答に沿わない代替質問、未確認の「私もお出かけが好き」という修正前の見逃しがあった。詳細は[`quality_checks_009_analysis.md`](simulations/quality_checks_009_analysis.md)。品質条件未達のためconversation_004は開始しない。
+
+## テスト状況
+
+| 項目 | 結果 | 根拠 |
+|---|---|---|
+| Focused回帰 | PASS | 8 passed。疑問形の本人断定誤判定と、会う不安後の外出質問/中立話題の区別を確認。 |
+| 全pytest | PASS | 430 passed in 88.50s。Firefox UIテストを含む。 |
+| Firefox単独UI | PASS | `python -m pytest tests/test_ui_firefox.py -q`: 6 passed in 79.98s。Chromeは使用していない。 |
+| Python/JavaScript構文、差分、秘密形式検索 | PASS | Python `py_compile`、`node --check app.js`、`git diff --check`成功。変更diffのGeminiキー形式検索0件。 |
+| GitHub Actions / Push | NOT_TESTED | 最終コミットをPush後、同じSHAの結果を記録する。 |
+| conversation_004 | NOT_TESTED | 品質ゲートFAILのため未実施。 |
+
+## 7ゴールの途中判定
+
+| ゴール | 判定 | 根拠 |
+|---|---|---|
+| 本人情報の正確性 | FAIL | 修正前の実Gemini出力に未確認の外出嗜好があった。レビュー後に肯定/否定の相手発言を分離し重点テストを追加。自由文全体を網羅する意味検出ではない。 |
+| 句読点・改行 | CONDITIONAL | 今回保存した実候補では句読点違反・空行・改行欠落0件。出力集合が小さく、完全保証ではない。 |
+| ミラーリング | NOT_MET | 小規模ケースのみ。20ケースの基準未評価。誤字と長さ以外のミラー品質も要改善。 |
+| 共感の反復防止 | NOT_MET | 候補の共感構造が似るケースを確認。連続会話の十分な評価なし。 |
+| 返信候補の多様性 | FAIL | 3候補が似るケース、品質フィルター後に2案へ不足するケースがある。 |
+| 食事への誘い判断 | CONDITIONAL | 自然な誘い候補を得た一方、明示的な保留を再誘い防止状態と認識しない漏れがあった。修正後、保留ケース3件と再誘い除外を重点テストで確認。広い5+5基準は未評価。 |
+| アプリ全体の安定性 | CONDITIONAL | 441 pytest成功、Firefox単独6件、構文/差分/秘密形式検査成功。最新SHAのGitHub Actionsは未確認。 |
+
+## 次の作業・終了
+
+Firefox単独UI、Python/JavaScript構文、差分・秘密情報スキャンを行う。`PROGRESS.md`、`TEST_MATRIX.md`、`FINAL_REPORT.md`、`prompt_spec.md`を更新し、明示的なファイルだけをコミット・Pushする。GitHub Actionsが最新SHAを検証したことを確認し、PR #4はDraftのままにする。13:00 JSTで変更を終了し、それ以降は実行環境が動き続けると仮定しない。
+
+最終更新: 2026-10-15 11:20 JST
+
+## 2026-10-15 11:22 JST レビュー追加指摘の対応
+
+- 追加のPythonレビューで、相手の旅行・映画館に関する否定や未経験（「行かなかった」「行けていない」「行ったことがない」「行くことがない」）から、肯定の受け止めを許可する漏れを確認。
+- 修正前の新規回帰4ケースは4件失敗し、さらに表現の異なる5ケースをレビューで追加。パターンを拡張した後、17ケースすべて成功。
+- 最新全pytest **455 passed in 92.87s**。Python/JavaScript構文と`git diff --check`成功。Firefox UIを含み、Chrome未使用。Gemini実API追加要求0。
+- 品質009の実生成文章レビューはFAILのまま。したがってconversation_004は開始しない。製品品質のGO判定も行わない。
+- 最新Test Matrix集計208項目: PASS 162 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 13。最新コミットのGitHub Actionsは未実施、Push後に確認する。
+- 現在時刻: 2026-10-15 11:22 JST。次は差分・秘密情報検査、選択的ステージ、コミット/Push、同一SHAのGitHub Actions確認、PR #4のDraft状態確認を行う。
+
+## 2026-10-15 11:25 JST Actions結果
+
+- commit `2c4e0805a5d3d79b8af91c4755428422f8802445`をPush済み。GitHub Actions Push run [38670690590](https://github.com/kenkyu0909/aichatapp/actions/runs/38670690590)は同一SHAで成功。455 passed / 1 warning、JavaScript構文検査とArtifact upload成功。警告はNode 20 runner actionの非推奨通知、Ubuntu runnerの将来移行通知。
+- Test Matrix 208項目: PASS 163 / FAIL 13 / FIXED 15 / BLOCKED 5 / NOT_TESTED 12。
+- PR #4はOPEN/Draft。ユーザー指示ファイル3点は未追跡のまま維持し、コミットしていない。
+- 品質009の実文章評価はFAILのためconversation_004未実施。ここで製品品質のGOを出さず、NO-GOを維持する。
+- 次: 最終進捗・報告と既存PR説明をPush/更新してCIを確認し、13:00 JSTまで未達基準のオフライン監査を続ける。
+
+## 2026-10-15 11:32 JST：時制・否定境界の追加監査
+
+- 独立監査で、「旅行には行きたい/行く予定/行くかもしれない」「映画館にはよく行きたい/行く予定」を完了した経験や習慣として誤認することを確認。加えて丁寧な「好きではありません」、機会や時間がなくて行けない、行けず、行けていなかった等も肯定帰属へ通る抜けがあった。
+- 相手履歴の帰属チェックと本人プロフィールの候補根拠チェックで、共通の最近旅行完了/映画館習慣条件を使うよう修正。旅行は時点＋過去の完了述語、映画館頻度は明示された習慣述語を要求。希望・予定・推測・否定・機会不足は事実根拠にしない。安全な候補を除外したときは残る安全候補と不足通知を維持する。
+- 修正前に該当する重点テストが20件失敗。最新の focused regression は66 passed。テスト収集は498件。全pytest、Firefox UIを含む全体検証、構文検査、最終レビューはこの直近差分について未実施。
+- Gemini追加要求は0。quality_checks_009の手動品質FAILを維持し、conversation_004は開始しない。製品品質GO判定は不可。
+- Test Matrixは216項目、PASS165 / FAIL13 / FIXED18 / BLOCKED5 / NOT_TESTED15（全pytest・Actions待ちを含む）。最新実API文書、全件テストとレビューを完了してPushし、Actions確認まで進める。
+
+### 2026-10-15 11:42 JST：口語質問と弱い否定の追加監査
+
+- 独立レビューで「趣味ってほどじゃない/趣味というほどではない」が場所探しの肯定根拠として通る漏れと、句読点なしの「最近旅行行ったことあるの」「最近海外とか行ったことあるの」「映画館によく行くの」「カフェを探すのが好きなの」を事実表明として誤認する漏れを発見。
+- 追加テストで修正前6件が失敗。共通否定パターンと保守的な口語疑問判定を実装し、profile grounding・partner attribution両方を含むfocused suite **79 passed**。
+- 修正後全pytest **517 passed in 92.24s**。`py_compile`、`node --check app.js`、`git diff --check`成功。最新コードcommit diffのAPIキー形式検索0件。全pytestにはFirefox UIが含まれる。Chrome未使用。
+- 実Gemini追加0要求。quality009の手動品質FAILを保持。会話004は品質ゲート未達のため未実施。
+- コードcommit `38abb1ce3855f5843a29da7d27821cb6ee2a16fd`。進捗文書のコミット/Pushと同じSHAを対象にするActions実行が残る。PR #4はDraftで、マージしない。
+- 集計219項目: PASS167 / FAIL13 / FIXED19 / BLOCKED5 / NOT_TESTED15。未達の自然文意味検証をPASS扱いしない。
+
+
+### 2026-10-15 12:30 JST：具体度照合の追加修正
+
+- 独立レビューが、確認済み年齢21歳に「20代後半」、28歳に「20代前半」を通す問題と、確認済み職歴15年に5年の主張を通す数字部分一致を発見。
+- 再現テストを先に追加し、4ケースが失敗することを確認。修正後は年代前半/後半と勤務年数の数値・単位一致を確認する8ケースが成功。追加の事実確認を含むfocused runは9 passed。
+- 最新作業ツリーの全pytestは**583 passed in 83.39s**。Python compile、`node --check app.js`、`git diff --check`、変更内容の秘密形式スキャン0件。Firefox UIテストは全pytestに含まれる。Firefox単独テストは実行中。
+- Gemini実API要求0回。QUALITY009の実文章品質FAILを維持し、会話004は開始しない。安全な候補を残し、不足案を通知する動作も維持。
+- ユーザー提供の指示ファイル3点は未追跡のままで、コミット対象にしない。
+- 次: Firefox単独テストと独立レビューを確認。報告を更新し、差分・秘密情報を再確認して追跡ファイルのみcommit/push。最新SHA Actionsを確認し、PR #4はDraft・未マージを維持する。
+- Test MatrixのID行を再集計すると、追記前の表は216行で、説明文の旧集計219件と一致しなかった。今回以降はID行を基準に記録し、旧集計は履歴として保持する。
+
+
+### 2026-10-15 12:37 JST：独立事実スコープ監査
+
+- 第二の読み取り専用監査で、①「20代後半」など年代情報と数値年齢の区別、②数値型プロフィールと職歴年数、③最近の映画/読書への感想、④カフェ巡り嗜好から月間頻度を推測する候補、⑤ジャンル情報を映画全般の好みに広げる候補、⑥「好きですし…は苦手」の肯定節まで否定で落とす問題を再現。
+- まず追加回帰14ケースが失敗することを確認。年齢を数値/年代/区分情報に分け、期間年数を正確な数値と「期間/年目」に分けて照合。最近の経験と月頻度の主張を検出し、部分的ジャンル情報を全般的嗜好に拡張しない。接続助詞「し」で明示された肯定節と別の否定節を分ける。静かなカフェへの苦手意識がカフェ巡り全般を否定しない反例も追加。
+- 修正後のfocused suiteは**20 passed**。最新全pytestは**599 passed in 82.63s**。単独Firefoxは**6 passed in 81.18s**。Python/JavaScript構文、差分検査、変更ファイルの秘密形式検索0件。
+- Gemini実API要求0。QUALITY009の実文章評価FAILを維持。会話004・新しい会話HTMLは作成しない。安全な候補は保持し、不足を通知する方針を維持。
+- GitHub Actionsは最新未コミット差分について未実施。次は差分レビュー、Test Matrix/報告更新、明示的追跡ファイルのみをcommit/pushし、同じSHAのActionsを確認する。PR #4はOPEN/Draft、未マージ。
+
+
+### 2026-10-15 12:53 JST：勤務年数の範囲・再生成候補の保持
+
+- 独立レビューで確認済み「5年」に「5年以上」「5年未満」を誤って支える抜けを確認。修正前の範囲違反3ケースを再現してFAILにし、数値・年/年間/年目・限定詞を完全一致で照合。範囲付きの質問文は自己事実と混同しないよう修正。関連の年齢/職歴/カフェ根拠focused suiteは**19 passed**。
+- 別レビューで、誘い候補の修復後に2回目の安全な中立候補を1回目の安全候補群で上書きするケースを発見。二段階モックの回帰テストで修正前FAILを確認。現在は最新応答の安全案を優先し、前の安全案を重複除去して併合、危険な誘いを除外する。**安全案を残し不足を通知**するユーザー優先を維持。拒否・誘い・候補併合のfocused suiteは**12 passed**。
+- 保存済みquality_checks_008の「カフェ巡りが好き」から「ゆっくり過ごせる場所を探すのが好き」への拡張は、当時のモデル生成と根拠照合偽陰性の両方が原因。現行コードの既存回帰テストが拒否し、中立的な話題反応は保持する。
+- 全pytest **612 passed in 96.69s** は候補併合前のコードであり、最新全体回帰とはしない。差分後のfocused suite 12 passed。Python compile、Node構文、`git diff --check`成功、差分の秘密形式一致0件。最新作業ツリーの全pytest、Actionsは未確認。
+- 今回の実Gemini要求は**0**。quality_checks_009の実生成FAILを保持。conversation_004・新しい会話HTMLは作成しない。ユーザー指示ファイル3点は未追跡のままコミット対象外。PR #4はDraft・未マージ。
+- 現在のTest Matrixは231 ID行: PASS176 / FAIL13 / FIXED23 / BLOCKED5 / NOT_TESTED14。総合品質はNO-GO。残り時間は追跡ファイルの差分レビュー、commit/push、PRとActions確認に使い、13:00 JSTで安全に区切る。
+
+
+### 2026-10-15 12:56 JST：勤続年数の追加限定詞
+
+- 独立レビューで確認済み「5年」に「5年ちょっと」「5年強」「5年弱」を通す抜けを確認。3つの回帰テストを追加し、修正前に3件すべての失敗を再現した。
+- 年数照合と候補検出の双方に限定詞を追加し、疑問形は本人の断定事実として扱わない。修正後の範囲・数値・質問形focused suiteは**21 passed**。
+- 今回も安全な候補は残し、本人情報を断定する根拠が足りない場合は候補数不足を通知する。
+- 既存全pytest **612 passed** は候補併合以前であり、今回の修正後全体結果ではない。Gemini API 0回。conversation_004未実施。Test MatrixはID行233件（PASS177 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。総合判定NO-GO。
+- 次: 最新のPython/JavaScript構文・diff・秘密形式チェック、今回の追跡差分レビュー後に記録ファイルと実装修正をcommit/push。PR #4をDraftのまま確認し、最新Actionsを照合する。13:00 JSTで停止条件を守り、未完了は正確に残す。
+
+
+### 2026-10-15 12:58 JST：最新HEADのGitHub Actions
+
+- 最新コミット `2161dd7d1379ff8e7a2acea874fb360dc8150c7b` がActionsで成功。pytest **619 passed, 1 warning**、JavaScript構文検査も成功。実行: https://github.com/kenkyu0909/aichatapp/actions/runs/38678873668
+- PR #4はOPEN/Draft、head SHA一致。Test MatrixはID行234件（PASS178 / FAIL13 / FIXED24 / BLOCKED5 / NOT_TESTED14）。
+- 勤続限定詞の修正後focused suite 21 passed。作業ツリーから追加したGemini API呼び出し0。QUALITY009の実生成品質FAILは残るためNO-GO、conversation_004未実施。
+- 引継ぎ: 実生成品質の修正には後続の許可済みAPI評価が必要。安全な候補を残して不足を通知する方針を維持する。
