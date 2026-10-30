@@ -13989,14 +13989,22 @@ def filter_safe_candidates(
         split_text = split_pivot_run_on_line(candidate.text).rstrip("\n")
         if split_text != candidate.text:
             candidate = candidate.model_copy(update={"text": split_text})
+        # T587: 構造修復（既知の誤字・宙ぶらりん・転換マーカー・メタ参照・run-on
+        # 分割）は見た目の不備を直す決定的な処理なので常に採用する。修復後の本文が
+        # 安全検査に落ちるなら内容そのものが不適切であり、元の未修復形は run-on の
+        # ような見た目で検査をすり抜けているだけ。ここで必ず修復形を候補にして
+        # 判定し、run-on のまま表示しない。
+        structural_text = _repair_candidate_line_defects(
+            _correct_known_candidate_typos(candidate.text),
+            candidate_context,
+        )
+        if structural_text != candidate.text:
+            candidate = candidate.model_copy(update={"text": structural_text})
+        # 固い敬語の緩和・一人称の統一・likeモードの読点補完は意味を変えない
+        # 言い換えだが、機械置換が別の不備を作る場合に備え、安全なときだけ採用する。
         softened_text = _ensure_like_greeting_comma(
             _normalize_first_person_to_boku(
-                _soften_stiff_keigo(
-                    _repair_candidate_line_defects(
-                        _correct_known_candidate_typos(candidate.text),
-                        candidate_context,
-                    )
-                )
+                _soften_stiff_keigo(candidate.text)
             ),
             candidate_context,
         )

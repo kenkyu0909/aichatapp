@@ -20237,6 +20237,86 @@ def test_t586_repair_candidate_line_defects_splits_connected_question(client):
     ) == "最近観た作品ってあるんですか？"
 
 
+def test_t587_run_on_candidate_is_evaluated_after_structural_repair(client):
+    """T587: run-on は分割した形で安全検査し、未修復形で検査をすり抜けさせない。
+
+    t587 turn 19 で、自己開示と質問を接続助詞でつないだ run-on 候補が、直前に
+    自分が送った自己開示（「水族館とかも好きなんです！」）と質問をそのまま
+    繰り返していた。run-on のままでは1行が質問行として丸ごとスキップされ重複
+    検査をすり抜けるが、構造修復で分割すると自分の以前の発言の繰り返しとして
+    棄却される。修復後の本文で判定し、run-on のまま表示しない。
+    """
+    _, backend = client
+    context = {
+        "mode": "reply",
+        "history": [
+            {
+                "role": "me",
+                "body": (
+                    "料理の写真素敵ですね！\n水族館とかも好きなんです！\n"
+                    "最近どこか行ったりしましたか？"
+                ),
+            },
+            {"role": "them", "body": "水族館は好きです。\nたまに行きます。"},
+            {
+                "role": "me",
+                "body": (
+                    "水族館いいですよねー！\n僕は美術館とかに行くのも好きなんです！\n"
+                    "アイさんは美術館とかも行ったりするんですか？"
+                ),
+            },
+            {"role": "them", "body": "美術館はたまに行きます。\n静かに見るのが好きです。"},
+            {
+                "role": "me",
+                "body": (
+                    "静かに見る美術館落ち着いていていいですよね！\n"
+                    "漫画やアニメを見るのも好きなんです！\n"
+                    "アイさんはどんな作品が好きですか？"
+                ),
+            },
+            {"role": "them", "body": "アニメはたまに見ます。\n日常系の作品が好きです。"},
+            {
+                "role": "me",
+                "body": "日常系の作品がいいですねー！\nお休みの日はカフェとかに行ったりもするんですか？",
+            },
+            {"role": "them", "body": "カフェはよく行きます。\n静かなお店が好きです。"},
+        ],
+        "other": {"name": "アイ", "description": "料理と散歩が好きです"},
+        "my_profile": {"facts": {}},
+    }
+    run_on = backend.Candidate(
+        label="run-on",
+        text=(
+            "静かなお店いいですよね！\n"
+            "僕は水族館とかに行くのも好きなんですけど最近どこか行ったりしましたか？"
+        ),
+    )
+    # run-on のままでは重複検査をすり抜ける（これが t587 の不備）。
+    assert "自分の以前の回答を繰り返している" not in backend._candidate_rejection_reasons(
+        run_on, context
+    )
+    value = backend.SuggestionsV2(
+        needs_user_info=False,
+        user_questions=[],
+        user_info_reason="",
+        recommended=run_on,
+        alternatives=[],
+        reason="別の話題へ",
+        strategy="話題を変える",
+        conversation_stage="Stage 2",
+        invite_decision="continue_conversation",
+        decision_reason="話題を変える",
+        next_action="質問する",
+    )
+    filtered = backend.filter_safe_candidates(value, 1, context)
+    assert any(
+        "自分の以前の回答を繰り返している" in item["reasons"]
+        for item in filtered["candidate_rejections"]
+    )
+    kept = [filtered.get("recommended"), *(filtered.get("alternatives") or [])]
+    assert all((item or {}).get("text") != run_on.text for item in kept)
+
+
 def test_t585_partner_preference_assertion_requires_grounding(client):
     """T585: 相手が言っていない好みを「〜が好きなんですね！」と断定したら棄却する。
 
