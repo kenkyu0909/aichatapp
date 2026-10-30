@@ -72,9 +72,7 @@ def context(*, facts=None, answers=None, history=None, other_description="旅行
 
 
 @pytest.mark.parametrize(("unsafe_text", "ctx"), [
-    ("そうなんですね。楽しそうです！", context()),
     ("〇〇さんはどんな映画が好きですか？", context()),
-    ("カフェ巡りいいですね！\n\n最近行ったお店ありますか？", context()),
     (
         "最近もカフェに行きましたか？",
         context(history=[{"role": "them", "body": "カフェ巡りが好きで最近もカフェに行きました！"}]),
@@ -96,12 +94,36 @@ def test_filter_drops_each_unsafe_candidate_but_keeps_safe_candidates(backend, u
     assert [item["text"] for item in candidates] == [safe_text]
 
 
+@pytest.mark.parametrize("text", [
+    "そうなんですね。楽しそうです！",
+    "カフェ巡りいいですね！\n\n最近行ったお店ありますか？",
+])
+def test_filter_repairs_punctuation_and_blank_lines_instead_of_dropping(backend, text):
+    """句読点・空行だけの不備は棄却せず決定的に実改行へ直して採用する (T581/T585).
+
+    quality_checks_008 の初期版は句読点や空行を「不安全」として棄却する前提
+    だったが、実走行で棄却と再生成を繰り返して会話が停止したため、現在は
+    記号・空行を実改行へ直して再判定し、内容が安全なら採用する方針（ユーザー
+    決定）に変わった。ここでは不備だけが直り、本文の意味は変わらないことを
+    確認する。
+    """
+    value = make_suggestions(backend, text)
+
+    result = backend.filter_safe_candidates(value, 1, context())
+
+    kept = unpack_candidates(result)
+    assert len(kept) == 1
+    assert "。" not in kept[0]["text"]
+    assert "、" not in kept[0]["text"]
+    assert "\n\n" not in kept[0]["text"]
+
+
 def test_filter_does_not_pad_safe_candidates_to_requested_count(backend):
     first = "そのお店の雰囲気気になります！"
     second = "ケーキのお話も楽しそうですね！"
     value = make_suggestions(
         backend,
-        "そうなんですね。楽しそうです！",
+        "〇〇さんはどうですか？",
         first,
         second,
     )
@@ -117,7 +139,7 @@ def test_filter_does_not_pad_safe_candidates_to_requested_count(backend):
 def test_filter_returns_explicit_empty_result_when_every_candidate_is_unsafe(backend):
     value = make_suggestions(
         backend,
-        "そうなんですね。楽しそうです！",
+        "お仕事お疲れ様です！",
         "〇〇さんはどうですか？",
     )
 
@@ -143,7 +165,7 @@ def test_filter_scans_past_unsafe_candidates_and_obeys_requested_count_one(backe
     safe_second = "最近行ったカフェのお話を聞いてみたいです！"
     value = make_suggestions(
         backend,
-        "そうなんですね。楽しそうです！",
+        "〇〇さんはどうですか？",
         safe_first,
         safe_second,
     )
@@ -276,10 +298,10 @@ def test_generate_exposes_requested_count_and_notice_when_all_candidates_are_blo
         "needs_user_info": False,
         "user_questions": [],
         "user_info_reason": "",
-        "recommended": {"label": "自然", "text": "そうなんですね。それは楽しそうです！"},
+        "recommended": {"label": "自然", "text": "〇〇さんはどうですか？"},
         "alternatives": [
-            {"label": "別案", "text": "〇〇さんはどうですか？"},
-            {"label": "質問", "text": "なるほど。最近はどうですか？"},
+            {"label": "別案", "text": "お仕事お疲れ様です！"},
+            {"label": "質問", "text": "〇〇さんはどんな映画が好きですか？"},
         ],
         "reason": "架空データのオフライン検証",
         "strategy": "相手の話題に沿って返信する",
