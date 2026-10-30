@@ -1,5 +1,40 @@
 # 検証進捗
 
+## 2026-10-30 T588 質問文なのに文末「？」が抜けた行に「？」を補う決定的修復
+
+- 経緯: t586/t587 の turn 7 で「普段はどんなものを作るんですか」「お休みの日はカフェやお店巡りをしたりもするんですか」のように、疑問形なのに文末の「？」だけが抜けた候補が表示された。プロンプトで求めても実生成で抜けるため決定的に補う。
+
+### 実装（app.py）
+
+- `_CANDIDATE_QUESTION_TAIL_PATTERN`（`(?:です|ます|でした|でしょう)か(?:ね|な)?$`）と `_ensure_candidate_question_mark` を新設。`_repair_candidate_line_defects` の返却前に各行へ適用し、疑問形で終わる行に「？」を補う。断定（〜です／〜ます）やすでに「？」「！」がある行には付けない。
+
+### テスト
+
+- 新規: `test_t588_question_line_without_terminal_mark_gets_question_mark`。
+
+## 2026-10-30 T587 t587会話テストの再検証（run-on解消の確認）とrun-onすり抜けの修正
+
+- 経緯: T586 修正後に t585/t586 と同一条件（seed 11 → アイ、tone=敬語、count=3、require_question=True、全ターン同一 `CONV_DIRECTION`）で t587 を 20/20 完走（`status LIMIT_REACHED app 20 partner 20 req 22 blocks 1 messages 40`）。T587 修正を読み込ませるため turn 19 を修正後に再生成して完走させた。
+
+### t587 の検証結果
+
+- **run-on 解消**: turn 19 の run-on は再生成後「静かなお店いいですね！／僕は写真を撮るのも好きなんです！／アイさんは普段どんな写真を撮るんですか？」の3行に分割された安全候補2案。turn 20 も3行×3案。a〜e 回帰なし。
+- 残った既知の不備: 3案そろわない（turn 1・7・10・19 が2案）、turn 7 の質問行「？」欠落（→ T588 で修正）、turn 12 が質問なし1行（require_question 緩和 notice 付き）。
+- block 1件（turn 19 付近、`after_message_index:36`）。rejection_summary `["相手が直前に答えた内容を聞き返す","禁止句読点","話題を振る前の受け止めがない"]`、棄却詳細は run-on 形候補3件。構造修復を採用した結果、重複検査で正しく棄却されたことを示す。
+
+### 実装（app.py）— run-on すり抜けの修正
+
+- run-on 行は末尾が「？」のため、行単位の重複検査（`_is_ask_sentence`）で丸ごとスキップされ、直前に自分が送った自己開示を繰り返していても検出されず表示されていた。
+- `filter_safe_candidates` を再構成。構造修復（既知の誤字・宙ぶらりん・転換マーカー・メタ参照・run-on 分割）は**常に採用**してから安全検査し、軟化・一人称統一・like読点補完は**安全なときだけ採用**する。
+
+### 実装（tests）— quality_checks_008 の古い期待を更新
+
+- T581/T585 の「句読点・空行だけの不備は棄却せず決定的に実改行へ直して採用」方針に合わせ、棄却前提だった既存テスト（T584 時点で5件、T585 で6件 FAIL、いずれも既存）を修復採用の検証へ置換。安全カバレッジはプレースホルダー・未確認の仕事断定などで維持。
+
+### テスト
+
+- 新規: `test_t587_run_on_candidate_is_evaluated_after_structural_repair`。全件: **2203 passed**。
+
 ## 2026-10-30 T586 t586会話テストの再検証（a〜e解消の確認）と新不備（自己開示＋質問のrun-on）の修正
 
 - 経緯: T585 修正後に t585 と同一条件（seed 11 → アイ、tone=敬語、count=3、require_question=True、全ターン同一 `CONV_DIRECTION`）で t586 を 20/20 完走（`status LIMIT_REACHED app 20 partner 20 req 20 blocks 0`）。T585 の不備 a〜e の解消を確認し、t586 で新たに観測した run-on を修正する。
