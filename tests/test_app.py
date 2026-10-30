@@ -20342,6 +20342,39 @@ def test_t588_question_line_without_terminal_mark_gets_question_mark(client):
     ) == "甘いものは好きですか？"
 
 
+def test_t589_repair_splits_connected_question_joined_by_linking_de(client):
+    """T589: 連用中止「〜好きで」「〜みたいで」でつないだ run-on を2行に割る。
+
+    t588 turn 9 で「美味しいお店を事前に調べるのも好きで最近気になる場所は
+    ありましたか？」のような、自己開示を「〜で」で質問につないだ run-on が現れた。
+    T586 の接続助詞（けど／ですが等）には含まれず未分割だった。
+    """
+    _, backend = client
+    reply = {"mode": "reply"}
+    assert backend._repair_candidate_line_defects(
+        "美味しいお店を事前に調べるのも好きで最近気になる場所はありましたか？",
+        reply,
+    ) == "美味しいお店を事前に調べるのも好きなんです！\n最近気になる場所はありましたか？"
+    assert backend._repair_candidate_line_defects(
+        "映画を観るのが好きでよく家で観ますか？", reply
+    ) == "映画を観るのが好きなんです！\nよく家で観ますか？"
+    # 「、」「。」を含む行は句読点→改行修復に任せて触らない。
+    assert backend._repair_candidate_line_defects(
+        "僕も歌うのが好きで、よくカラオケに行きますか？", reply
+    ) == "僕も歌うのが好きで、よくカラオケに行きますか？"
+    # 「好きで」は「好きですか」の一部になり得るため誤分割しない。
+    assert backend._repair_candidate_line_defects(
+        "甘いものは好きですか？", reply
+    ) == "甘いものは好きですか？"
+    assert backend._repair_candidate_line_defects(
+        "コーヒーが好きでしたか？", reply
+    ) == "コーヒーが好きでしたか？"
+    # 接続の無い普通の質問行はそのまま。
+    assert backend._repair_candidate_line_defects(
+        "最近観た作品ってあるんですか？", reply
+    ) == "最近観た作品ってあるんですか？"
+
+
 def test_t585_partner_preference_assertion_requires_grounding(client):
     """T585: 相手が言っていない好みを「〜が好きなんですね！」と断定したら棄却する。
 
