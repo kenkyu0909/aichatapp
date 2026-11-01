@@ -1,0 +1,15 @@
+{
+  "audited_commit": "7e82f2a73dacfabbb9958f3ecd1c40775ca8f875",
+  "patch_sha256": "973a3227586f80cd2c8c982cfe846dd0ce2f2d6af67e820e0d2282166bcb0174",
+  "patch_status": "Uncommitted prior work; unresolved findings; review before applying; do not apply if already present",
+  "files": {
+    "app.py": "f08d66f1f0e884aabcdfeb86bc0000e5e52bc2e08147dcfdc4c632ece1bfeee4",
+    "tests/test_app.py": "d8e5b2d442ecfeb20f33af324cc061e18187b4c83a6db8135e0582c279735fc4",
+    "docs/verification/PROGRESS.md": "56d2bb3b8f02e824af1905ffc3b23eec3c59a8537514b5d1db6136abe749ec4e",
+    "docs/verification/TEST_MATRIX.md": "e58b5959a2da9ce6590b0f7f9408d8ce8a7925514671a793c99c8ff9b829218c",
+    "docs/verification/FINAL_REPORT.md": "6a55b54264b4abbd2675d3530b05f0555c7018e8775db3e39cc5bfad83900db9",
+    "docs/verification/OVERNIGHT_GOAL.md": "3591a2d97f7b6056dfd2d59d8f67f80da35913685f26b277f542814c6ca0573a"
+  },
+  "gemini_requests_in_this_audit": 0,
+  "protected_experiments": "001-003 unchanged; 004 and new conversation HTML not created"
+}

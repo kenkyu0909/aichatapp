@@ -1,0 +1,1015 @@
+{
+  "schema_version": 1,
+  "experiment_id": "quality_checks_009",
+  "run_at": "2026-10-17T05:45:22+00:00",
+  "status": "PASS",
+  "profile": {
+    "name": "架空の水野けい",
+    "age": 29,
+    "region": "東京都練馬区",
+    "occupation": "建築会社の事務",
+    "hobbies": [
+      "読書",
+      "カフェ巡り"
+    ],
+    "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+    "avoid": "未確認の好みや経験、共通点、予定の創作"
+  },
+  "environment": {
+    "os": "Windows",
+    "python": "3.12.10",
+    "database": "isolated temporary SQLite"
+  },
+  "credential_source": "user-authorized API directory; values excluded",
+  "configured_priority": [
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.5-flash-lite"
+    },
+    {
+      "api_alias": "API1",
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "api_alias": "API2",
+      "model": "gemini-3.1-flash-lite"
+    }
+  ],
+  "logical_request_limit": 12,
+  "provider_attempt_limit": 24,
+  "logical_requests": 9,
+  "app_generate_requests": 10,
+  "provider_attempts": 19,
+  "tests": [
+    {
+      "id": "smoke_reply",
+      "input": {
+        "latest_partner_message": "休日は友達とカフェに行ってきました！",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "react案",
+            "reply_move": "react",
+            "text": "休日にお友達とカフェに行ってきたんですね✨\nどんな雰囲気のお店だったんですか？"
+          },
+          {
+            "label": "expand案",
+            "reply_move": "expand",
+            "text": "素敵ですね☕️\n最近はどんなお店を開拓するのが好きですか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手のカフェの話題に自然に反応しつつ、プロフィールにあるカフェ巡りの共通の話題に繋げました。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "まだ会話が始まったばかりのため、まずはカフェの話題を広げて親睦を深めます。",
+          "next_action": "相手の返信に合わせてカフェの好みやおすすめのエリアについて会話を続けます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 2,
+          "candidate_notice": "再生成で安全な候補を得られなかったため、先に確認済みの安全な候補を表示します。 安全確認後に表示できる候補は2案です（指定は3案）。不足分を不自然な候補で補っていません。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 2,
+        "candidate_distinct_count": 2,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "candidate_set_status": "partial_safe",
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          39,
+          29
+        ],
+        "sentence_estimates": [
+          2,
+          2
+        ],
+        "logical_request": 1,
+        "app_generate_request": 1,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "short_mirroring",
+      "input": {
+        "latest_partner_message": "カフェ好きです！",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直な反応",
+            "reply_move": "react",
+            "text": "カフェ好きなんですね✨\nどんなお店によく行くんですか？"
+          },
+          {
+            "label": "新しい話題へ展開",
+            "reply_move": "expand",
+            "text": "落ち着いた雰囲気のところがいいですよね☕\n最近気になるエリアはありますか？"
+          },
+          {
+            "label": "おすすめ",
+            "reply_move": "react",
+            "text": "カフェ巡りいいですね！\nどんな雰囲気のお店が好きですか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手のカフェ好きという発言を受け止め、自然な相槌から関連する質問で会話を広げました。句読点を含めず短文に仕上げています。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "do_not_invite",
+          "decision_reason": "まだ会話が始まったばかりであり、お互いの好みを共有する段階のため。",
+          "next_action": "相手の返答に合わせてカフェの好みやおすすめのエリアについて会話を続ける。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          27,
+          37,
+          28
+        ],
+        "sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "logical_request": 2,
+        "app_generate_request": 2,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "joke_mirroring",
+      "input": {
+        "latest_partner_message": "休日ほぼ寝て終わりました笑",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直な反応",
+            "reply_move": "react",
+            "text": "お疲れ様です！\nたまにはそういう日もすごく癒やされますよね😊"
+          },
+          {
+            "label": "話題の展開",
+            "reply_move": "expand",
+            "text": "そんな日もありますよね！\n次の休みは何か予定しているんですか？"
+          },
+          {
+            "label": "素早い反応案",
+            "reply_move": "react",
+            "text": "それはゆっくり休めましたね笑"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手が休日の過ごし方を短く話したため、共感しつつ自然に返信を作成しました。句読点を一切使わず、プロフィールの事実のみに基づいて安全な2案を提示します。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "会話が始まったばかりであり、まだ趣味や休日の話題を広げる段階のため誘いません。",
+          "next_action": "相手の休日やカフェの話題に合わせて会話を続けます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": true,
+        "semantic_diversity_result": "FAIL",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          30,
+          31,
+          14
+        ],
+        "sentence_estimates": [
+          2,
+          2,
+          1
+        ],
+        "logical_request": 3,
+        "app_generate_request": 3,
+        "evaluator_divergence": false,
+        "result": "FAIL",
+        "failure_notes": [
+          "The application's semantic-diversity checker found substantially similar candidate reactions or reply moves."
+        ],
+        "superseded_by": "joke_mirroring_retry",
+        "resolution": "同じ入力を修正後に再実行しPASS。元の結果は履歴として保持。"
+      }
+    },
+    {
+      "id": "direct_question_unconfirmed",
+      "input": {
+        "latest_partner_message": "映画好きですか？",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": true,
+        "user_questions": [
+          {
+            "question": "映画はお好きですか？",
+            "purpose": "本人が確認していない映画の好みや経験を相手に伝えないため"
+          }
+        ],
+        "candidates": [],
+        "response_fields": {
+          "reason": "",
+          "conversation_stage": "Stage 1",
+          "invite_decision": "do_not_invite",
+          "decision_reason": "会話開始前です",
+          "next_action": "プロフィールの話題を確認してください",
+          "api_alias": null,
+          "model": null,
+          "demo": false,
+          "generation_blocked": false
+        },
+        "provider_attempts": 0,
+        "attempted_models": [],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 0,
+        "candidate_distinct_count": 0,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [],
+        "sentence_estimates": [],
+        "logical_request": null,
+        "app_generate_request": 4,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "recent_movie_answered",
+      "input": {
+        "latest_partner_message": "最近どんな映画を観ましたか？",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": [
+          {
+            "question": "最近観た映画の作品名を教えてください",
+            "answer": "最近は『青い灯台』を観ました"
+          }
+        ]
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "映画の話題への反応",
+            "reply_move": "grounded_share",
+            "text": "最近は青い灯台を観ました😊"
+          },
+          {
+            "label": "展開",
+            "reply_move": "expand",
+            "text": "最近は青い灯台を観ました✨\nおすすめの作品はありますか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手の映画の質問に対して今回の確認回答にある事実だけを答えて自然に返信を作成しました。",
+          "conversation_stage": "Stage 2: 会話を広げる段階",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "映画の話題についてのやり取りを始めたばかりのため会話を続けます。",
+          "next_action": "映画の感想や好みの話題を自然に広げます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 2,
+          "candidate_notice": "安全確認後に表示できる候補は2案です（指定は3案）。不足分を不自然な候補で補っていません。 安全な候補だけを保持して不足を通知しています。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 2,
+        "candidate_distinct_count": 2,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          13,
+          28
+        ],
+        "sentence_estimates": [
+          1,
+          2
+        ],
+        "logical_request": 4,
+        "app_generate_request": 5,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "answered_purchase_fact",
+      "input": {
+        "latest_partner_message": "気になる新作を見つけたらすぐ買うタイプですか？",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": [
+          {
+            "question": "気になる新作を見つけたらすぐ買うタイプですか？",
+            "answer": "気になった新作は少し調べてから買うことが多いです"
+          }
+        ]
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "すぐには買わないと返す",
+            "reply_move": "react",
+            "text": "すぐには買わずに一度調べてから決めることが多いです✨"
+          },
+          {
+            "label": "買い方について答えて話題を広げる",
+            "reply_move": "expand",
+            "text": "少し調べて納得してから買うことが多いです！\nちなみにどんなものをよく買われるんですか？"
+          },
+          {
+            "label": "おすすめ",
+            "reply_move": "react",
+            "text": "気になった新作は少し調べてから買うことが多いですね！\n水野さんはどうですか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "確認された事実に基づき、相手の質問に自然に答えて会話を続けています。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "まだお互いの趣味や考え方について会話を広げている段階のため、質問への回答と会話の継続を優先します。",
+          "next_action": "相手からの返信を受け取り、趣味や買い物の話題を自然に広げます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          26,
+          43,
+          38
+        ],
+        "sentence_estimates": [
+          1,
+          2,
+          2
+        ],
+        "logical_request": 5,
+        "app_generate_request": 6,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "known_partner_fact_after_fix",
+      "input": {
+        "latest_partner_message": "最近は新しいカフェも探してます！",
+        "history": [
+          {
+            "role": "them",
+            "body": "休日は友達とカフェに行くことが多いです！"
+          },
+          {
+            "role": "me",
+            "body": "いいですね！"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "react案",
+            "reply_move": "react",
+            "text": "新しいお店を開拓するの楽しいですよね😊"
+          },
+          {
+            "label": "expand案",
+            "reply_move": "expand",
+            "text": "最近はどんなエリアで探すことが多いですか？"
+          },
+          {
+            "label": "推奨案",
+            "reply_move": "expand",
+            "text": "新しいお店を見つけるのってわくわくしますよね✨\nどんな雰囲気の場所が好きなんですか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手の新店舗開拓の話題に合わせて、未確認の本人事実を捏造せず自然に質問を広げる短文の候補を作成しました。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "まだお互いの趣味の話題を深掘りしている段階のため、誘わずに会話を続けます。",
+          "next_action": "相手のカフェ探しの話題に対して自然に返信し会話を継続する。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "候補の進め方が重なっている可能性があります。本文を確認して選んでください。 先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          19,
+          21,
+          42
+        ],
+        "sentence_estimates": [
+          1,
+          1,
+          2
+        ],
+        "logical_request": 6,
+        "app_generate_request": 7,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "invite_opportunity",
+      "input": {
+        "latest_partner_message": "中野で落ち着いたカフェを見つけました！ケーキもおいしそうで気になってます",
+        "history": [
+          {
+            "role": "them",
+            "body": "休日はカフェを探すのが好きです"
+          },
+          {
+            "role": "me",
+            "body": "落ち着いたお店が好きです！"
+          },
+          {
+            "role": "them",
+            "body": "私も静かなところが好きです！けいさんはどんなお店に行きますか？"
+          },
+          {
+            "role": "me",
+            "body": "季節のタルトがあるお店を選ぶことが多いです！"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "誘い案",
+            "reply_move": "invite",
+            "text": "中野のお店気になりますね😊\nもしよければ今度一緒にいかがですか？"
+          },
+          {
+            "label": "反応案",
+            "reply_move": "react",
+            "text": "中野の落ち着いたカフェ気になります✨\nケーキもおいしそうですね"
+          },
+          {
+            "label": "展開案",
+            "reply_move": "expand",
+            "text": "中野はよく行くエリアですか？\n素敵なお店が見つかると嬉しいですよね😊"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手が中野のカフェを見つけて気になっていると話題にしているため、確認済みのカフェ巡りの話題から自然に誘いと感想の候補を提示しました。",
+          "conversation_stage": "Stage 2",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "安全な誘い候補を作れず、会話が誘う段階にある根拠も確認できないため、今回は誘いを控えます",
+          "next_action": "相手の発言に自然に返し、会話が進んだときに誘いを再検討します",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "誘い候補を安全に作れず、会話段階も確認できないため誘いは控えます。安全な候補は表示しています。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 3,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          32,
+          31,
+          34
+        ],
+        "sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "logical_request": 7,
+        "app_generate_request": 8,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "respect_decline_after_fix",
+      "input": {
+        "latest_partner_message": "ごめんなさい！まだ会うのはちょっと不安です",
+        "history": [
+          {
+            "role": "them",
+            "body": "カフェ好きです"
+          },
+          {
+            "role": "me",
+            "body": "よかったら今度行きませんか？"
+          }
+        ],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "素直な受け止め",
+            "reply_move": "react",
+            "text": "そうですよね失礼しました！\nお話しするだけでも大丈夫ですよ"
+          },
+          {
+            "label": "話題の変更",
+            "reply_move": "expand",
+            "text": "かしこまりました！\n落ち着くお店の話題などゆっくりお話しましょう"
+          },
+          {
+            "label": "安心を尊重する",
+            "reply_move": "react",
+            "text": "そうですよね失礼しました！\nゆっくりお話しできたら嬉しいです"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手の不安や断りの意思を尊重し、プレッシャーを与えないように配慮した返信案です。",
+          "conversation_stage": "Stage 3",
+          "invite_decision": "respect_no",
+          "decision_reason": "相手が会うことへの不安を示したため、誘いを撤回して安心感を優先します。",
+          "next_action": "プレッシャーを与えない自然な会話を続けます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          29,
+          32,
+          30
+        ],
+        "sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "logical_request": 8,
+        "app_generate_request": 9,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "joke_mirroring_retry",
+      "input": {
+        "latest_partner_message": "休日ほぼ寝て終わりました笑",
+        "history": [],
+        "fictional_profile": {
+          "name": "架空の水野けい",
+          "age": 29,
+          "region": "東京都練馬区",
+          "occupation": "建築会社の事務",
+          "hobbies": [
+            "読書",
+            "カフェ巡り"
+          ],
+          "conversation_preference": "短く自然な会話。質問は一度に一つ程度",
+          "avoid": "未確認の好みや経験、共通点、予定の創作"
+        },
+        "fictional_user_answers": []
+      },
+      "evaluation": {
+        "http_status": 200,
+        "needs_user_info": false,
+        "user_questions": [],
+        "candidates": [
+          {
+            "label": "react案",
+            "reply_move": "react",
+            "text": "休日寝て過ごすとあっという間ですよね\nゆっくり休めましたか😊"
+          },
+          {
+            "label": "grounded_share案",
+            "reply_move": "grounded_share",
+            "text": "たまにしっかり休む休日もいいですよね\n普段はお出かけしたりもするんですか"
+          },
+          {
+            "label": "お出かけの話題",
+            "reply_move": "expand",
+            "text": "そういう日もリフレッシュになって良いですよね✨\n次の休みはどこか出かけたりするんですか？"
+          }
+        ],
+        "response_fields": {
+          "reason": "相手のメッセージが短いため短文で返しつつ、絵文字を交えて共感と自然な質問で会話を広げる構成にしました。",
+          "conversation_stage": "Stage 2: 会話を広げる段階",
+          "invite_decision": "continue_conversation",
+          "decision_reason": "まだ会話が始まったばかりのため、無理に誘わず休日の話題で親しみやすさを作ります。",
+          "next_action": "相手の休日の過ごし方について楽しく話を続けます。",
+          "api_alias": "API1",
+          "model": "gemini-3.5-flash-lite",
+          "demo": false,
+          "requested_candidate_count": 3,
+          "available_candidate_count": 3,
+          "candidate_notice": "先に確認した安全候補を保持し、不足分だけを再生成して補いました。",
+          "generation_blocked": false
+        },
+        "provider_attempts": 2,
+        "attempted_models": [
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          },
+          {
+            "api_alias": "API1",
+            "model": "gemini-3.5-flash-lite"
+          }
+        ],
+        "punctuation_violation": false,
+        "placeholder_violation": false,
+        "missing_sentence_break_violation": false,
+        "candidate_count": 3,
+        "candidate_distinct_count": 3,
+        "semantic_diversity_violation": false,
+        "semantic_diversity_result": "PASS",
+        "independent_result": "PASS",
+        "independent_reasons": [],
+        "independent_unsupported_topics": [],
+        "independent_duplicate_violation": false,
+        "independent_redundant_reaction_violation": false,
+        "independent_answer_violation": false,
+        "unsupported_personal_claim_topics": [],
+        "text_lengths": [
+          30,
+          36,
+          44
+        ],
+        "sentence_estimates": [
+          2,
+          2,
+          2
+        ],
+        "logical_request": 9,
+        "app_generate_request": 10,
+        "evaluator_divergence": false,
+        "result": "PASS"
+      }
+    }
+  ],
+  "temporary_database_isolated": true,
+  "smoke_scope": "Live provider response and baseline safety/content checks; excludes semantic diversity.",
+  "smoke": "PASS",
+  "finished_at": "2026-10-17T05:52:09+00:00",
+  "historical_nonpass_count": 1,
+  "unresolved_nonpass_count": 0
+}

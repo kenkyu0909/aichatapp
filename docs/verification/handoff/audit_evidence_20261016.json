@@ -1,0 +1,123 @@
+{
+  "timestamp": "2026-10-16T10:50:40.865308+00:00",
+  "scope": "dirty worktree over 7e82f2a; offline only",
+  "gemini_requests": 0,
+  "checks": [
+    {
+      "id": "unsupported_fact",
+      "candidate": "実はバイオリンを10年習ってます！",
+      "rejections": [],
+      "finding": "FAIL"
+    },
+    {
+      "id": "unsupported_fact",
+      "candidate": "毎朝5キロ走っています！",
+      "rejections": [],
+      "finding": "FAIL"
+    },
+    {
+      "id": "unsupported_fact",
+      "candidate": "犬アレルギーなんです",
+      "rejections": [],
+      "finding": "FAIL"
+    },
+    {
+      "id": "question_scope",
+      "partner": "それについてどう思いますか？",
+      "clarification": null,
+      "evasive_answer_accepted": true
+    },
+    {
+      "id": "question_scope",
+      "partner": "どうしてそう思ったんですか？",
+      "clarification": null,
+      "evasive_answer_accepted": true
+    },
+    {
+      "id": "question_scope",
+      "partner": "それはいつからですか？",
+      "clarification": null,
+      "evasive_answer_accepted": true
+    },
+    {
+      "id": "question_scope",
+      "partner": "近いうちに会いませんか？",
+      "clarification": null,
+      "evasive_answer_accepted": true
+    },
+    {
+      "id": "question_scope",
+      "partner": "最近の映画ランキングで何が人気ですか？",
+      "clarification": {
+        "question": "最近観た映画があれば作品名を教えてください",
+        "purpose": "本人が確認していない映画の好みや経験を相手に伝えないため"
+      },
+      "evasive_answer_accepted": false
+    },
+    {
+      "id": "question_scope",
+      "partner": "その友達はどうなったんですか？",
+      "clarification": {
+        "question": "相手の「その友達はどうなったんですか？」にどう答えたいか教えてください",
+        "purpose": "直接質問への本人の回答が未確認のため確認します"
+      },
+      "evasive_answer_accepted": false
+    },
+    {
+      "id": "host_validation",
+      "status": 200,
+      "interpretation": "No host allowlist; browser exploit not tested"
+    },
+    {
+      "id": "profile_edit_roundtrip_firefox",
+      "before": {
+        "name": "架空の本人",
+        "hobbies": [
+          "読書",
+          "カフェ巡り"
+        ],
+        "food": "カレー",
+        "availability": "日曜昼",
+        "confirmed_facts": [
+          {
+            "value": "ミステリーが好き"
+          }
+        ]
+      },
+      "after": {
+        "name": "架空の本人",
+        "age": "",
+        "area": "",
+        "job": "",
+        "hobbies": "読書,カフェ巡り",
+        "personality": "",
+        "style": "",
+        "goal": "",
+        "memo": ""
+      },
+      "lost_keys": [
+        "availability",
+        "confirmed_facts",
+        "food"
+      ],
+      "finding": "FAIL"
+    },
+    {
+      "id": "cross_contact_draft_firefox",
+      "draft_after_switch": "架空Aだけへの下書き",
+      "finding": "FAIL"
+    },
+    {
+      "id": "same_match_generation_race_firefox",
+      "finding": "FAIL",
+      "actual": "Older reply response overwrites newer followup response",
+      "method": "Delayed browser fetch mocks; no SDK/API call"
+    },
+    {
+      "id": "history_generation_race_firefox",
+      "finding": "FAIL",
+      "actual": "Generation based on old history appears after adding a newer message",
+      "method": "Delayed browser fetch mock; SQLite new message verified"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Matching Reply Assistant — チャット見本</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #253047;
+      --muted: #70798a;
+      --line: #e6e9ef;
+      --paper: #fff;
+      --canvas: #f2f4f8;
+      --blue: #5576d8;
+      --blue-soft: #eaf0ff;
+      --gray-soft: #f0f2f5;
+      --green: #e8f5ec;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    .page { width: min(980px, calc(100% - 32px)); margin: 36px auto; }
+    .notice {
+      padding: 13px 16px;
+      border: 1px solid #ead9a5;
+      border-radius: 12px;
+      background: #fff9e8;
+      color: #5d4a17;
+      font-size: .92rem;
+    }
+    h1 { margin: 24px 0 6px; font-size: clamp(1.35rem, 3vw, 1.8rem); }
+    .subtitle { margin: 0 0 22px; color: var(--muted); }
+    .profiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .profile, .chat-card, .result { border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
+    .profile { padding: 16px 18px; }
+    .profile h2 { margin: 0 0 8px; font-size: 1rem; }
+    .profile p { margin: 0; color: #4f596b; font-size: .92rem; }
+    .chat-card { overflow: hidden; box-shadow: 0 10px 30px #24324a0c; }
+    .chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .avatar { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #e8eafc; color: #4655a7; font-weight: 700; }
+    .head-name { font-weight: 700; }
+    .head-meta { color: var(--muted); font-size: .82rem; }
+    .chat { display: flex; flex-direction: column; gap: 14px; padding: 22px clamp(14px, 5vw, 46px); background: linear-gradient(#fbfcfe, #f8f9fc); }
+    .day { align-self: center; margin: 2px 0 4px; padding: 4px 11px; border-radius: 999px; background: #e9ecf2; color: #667084; font-size: .78rem; }
+    .message { display: flex; max-width: 82%; gap: 8px; align-items: flex-end; }
+    .message.partner { align-self: flex-start; }
+    .message.me { align-self: flex-end; flex-direction: row-reverse; }
+    .bubble { padding: 10px 14px; border-radius: 17px; white-space: pre-line; overflow-wrap: anywhere; }
+    .partner .bubble { background: var(--gray-soft); border-bottom-left-radius: 5px; }
+    .me .bubble { background: var(--blue-soft); border-bottom-right-radius: 5px; }
+    .message.invite .bubble { border: 1px solid #b8c8ff; }
+    .message.agreement .bubble { background: var(--green); border: 1px solid #c5e3ce; }
+    .who { margin: 0 0 4px; color: var(--muted); font-size: .72rem; }
+    .me .who { text-align: right; }
+    .time { color: #8991a0; font-size: .7rem; white-space: nowrap; }
+    .tag { display: inline-block; margin: 0 0 6px; padding: 2px 8px; border-radius: 999px; background: #dce5ff; color: #3c59b2; font-size: .72rem; }
+    .result { margin-top: 18px; padding: 18px 20px; }
+    .result h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    .result p { margin: 0; color: #4f596b; }
+    details { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+    summary { cursor: pointer; font-weight: 650; }
+    details p { margin-top: 8px; }
+    footer { padding: 18px 4px 0; color: var(--muted); font-size: .8rem; }
+    @media (max-width: 640px) {
+      .page { width: min(100% - 20px, 980px); margin: 18px auto; }
+      .profiles { grid-template-columns: 1fr; }
+      .message { max-width: 92%; }
+      .chat { padding: 16px 12px; }
+      .time { font-size: .65rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="notice"><strong>見本データ</strong> このプロフィールと会話はすべて架空です。会話の雰囲気を確認するためのオフライン作成例で、アプリやGeminiによる実生成結果ではありません。</div>
+    <h1>Matching Reply Assistant — チャット見本</h1>
+    <p class="subtitle">短いやり取りから話題を広げて、相手の反応を見ながら誘う例です。</p>
+
+    <section class="profiles" aria-label="架空プロフィール">
+      <article class="profile">
+        <h2>自分役：悠斗（27）</h2>
+        <p>横浜在住のWebデザイナー。読書とカフェが好き。休日は本屋に寄ったり、家でゆっくり過ごしたりする。自然な短めのメッセージが好み。</p>
+      </article>
+      <article class="profile">
+        <h2>相手役：あおい（26）</h2>
+        <p>川崎在住の会社員。美術館とカフェ巡りが好き。落ち着いた話し方で、話が自然に続けば会ってみたいと思うタイプ。</p>
+      </article>
+    </section>
+
+    <section class="chat-card" aria-label="架空のチャット">
+      <header class="chat-head">
+        <div class="avatar" aria-hidden="true">あ</div>
+        <div><div class="head-name">あおい</div><div class="head-meta">マッチ後の会話見本</div></div>
+      </header>
+      <div class="chat">
+        <div class="day">月曜日</div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">はじめまして！マッチありがとうございます
+カフェ巡り好きなんですね！最近行ってよかったお店ありますか？</div></div><time class="time">19:12</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">はじめまして！こちらこそありがとうございます
+この前行った川崎の小さなカフェがよかったです☺️</div></div><time class="time">19:20</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">小さなカフェいいですね！落ち着いて過ごせそう
+どんな雰囲気のお店でしたか？</div></div><time class="time">19:24</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">木の家具が多くて静かな感じでした
+本も置いてあってつい長居しちゃいました笑</div></div><time class="time">19:31</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">本があるカフェっていいですね
+読書しながらゆっくりできそうです！</div></div><time class="time">19:38</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">そうなんです！気づいたら夕方でした
+悠斗さんはカフェで本を読むことありますか？</div></div><time class="time">19:44</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">たまにあります！本屋を見てからカフェに寄る休日が好きです
+あおいさんは美術館にもよく行くんですか？</div></div><time class="time">19:50</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">月に一回くらい行きます
+展示を見たあとに近くのお店を探すのも楽しみです</div></div><time class="time">20:02</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">展示のあとにお店を探すの楽しそうですね！
+最近見て印象に残った展示はありますか？</div></div><time class="time">20:08</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">写真展がよかったです
+街の風景を撮った作品で、見慣れた場所も違って見えました</div></div><time class="time">20:17</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">見慣れた景色が違って見えるの面白いですね
+話を聞いてたら展示も見に行きたくなりました！</div></div><time class="time">20:23</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">写真展おすすめです！
+帰りに寄ったカフェもよかったのでまた行きたいです</div></div><time class="time">20:31</time></div>
+
+        <div class="message me invite"><div><div class="who">悠斗・見本返信</div><div class="tag">自然な誘いの例</div><div class="bubble">それいいですね！よかったら今度そのカフェ一緒に行きませんか？</div></div><time class="time">20:39</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">ぜひ！展示の話もできたら楽しそうです☺️</div></div><time class="time">20:47</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">うれしいです！来週あたりで都合のいい日ありますか？</div></div><time class="time">20:52</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">土曜なら午後が空いてます</div></div><time class="time">21:03</time></div>
+
+        <div class="message me"><div><div class="who">悠斗・見本返信</div><div class="bubble">土曜の午後ですね！さっき話してたカフェに行ってみたいです
+お店の名前を教えてもらえたら15時ごろはどうですか？</div></div><time class="time">21:10</time></div>
+
+        <div class="message partner"><div><div class="who">あおい・相手役</div><div class="bubble">Cafe Lentoです！15時なら大丈夫です
+私も楽しみにしてます☺️</div></div><time class="time">21:18</time></div>
+
+        <div class="message me agreement"><div><div class="who">悠斗・見本返信</div><div class="tag">日時と場所の合意例</div><div class="bubble">ありがとう！土曜の15時に川崎のCafe Lentoでお願いします</div></div><time class="time">21:22</time></div>
+      </div>
+    </section>
+
+    <section class="result">
+      <h2>この見本で見られること</h2>
+      <p>相手のプロフィールにあるカフェや美術館の話を拾い、会話を進めてから誘っています。相手役は最初から承諾する設定ではなく、会話の流れを受けて前向きに返答する架空の例です。</p>
+      <details>
+        <summary>見本の前提と注意点</summary>
+        <p>この会話は読みやすさを確認するために作成したサンプルです。実際のGemini API応答、アプリの保存履歴、実在する約束を示すものではありません。返信候補の品質や会話の成立を検証する結果として扱わないでください。</p>
+      </details>
+    </section>
+    <footer>オフラインで閲覧できる単体HTMLです。外部フォント、画像、スクリプト、通信機能は使用していません。</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,171 @@
+{
+  "experiment_id": "quality_checks_002",
+  "created_at": "2026-10-14T09:38:08Z",
+  "data_scope": "fictional-only temporary SQLite; no production data",
+  "live_gemini": true,
+  "logical_request_count": 5,
+  "checks": [
+    {
+      "label": "missing_personal_fact",
+      "http_status": 200,
+      "demo": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1,
+      "api_status": null,
+      "error_code": null,
+      "needs_user_info": false,
+      "user_questions": [],
+      "reason": "相手の映画の話題に対して質問に答えつつ、自然に映画についての話を広げているため。",
+      "strategy": "相手の質問に答えつつ、相手の好きな洋画の話題をさらに引き出す。",
+      "conversation_stage": "Stage 2",
+      "invite_decision": "continue_conversation",
+      "decision_reason": "まだ会話が始まったばかりのため、趣味の話題を続けて距離を縮める段階。",
+      "next_action": "映画の話題についてやり取りを続け、お互いの趣味を探る。",
+      "recommended": {
+        "label": "おすすめ",
+        "text": "映画はときどき観ますよ最近はどんな洋画を観たんですか？"
+      },
+      "alternatives": [
+        {
+          "label": "短め",
+          "text": "洋画いいですね最近は映画館で観ることが多いですか？"
+        },
+        {
+          "label": "丁寧",
+          "text": "映画館で観るのいいですよね最近観た洋画気になります！"
+        }
+      ],
+      "attempted_models": []
+    },
+    {
+      "label": "invite_timing",
+      "http_status": 200,
+      "demo": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1,
+      "api_status": null,
+      "error_code": null,
+      "needs_user_info": false,
+      "user_questions": [],
+      "reason": "相手のカフェや焼き菓子の話題に自然に反応しつつ、川崎の店舗について触れたり軽く誘う余地を持たせました。",
+      "strategy": "相手の趣味の話題を受け止め、自然に会話を広げつつ次段階の誘いを視野に入れる。",
+      "conversation_stage": "Stage 3",
+      "invite_decision": "consider_invite",
+      "decision_reason": "お互いにカフェや読書の共通の話題で盛り上がっており、相手から具体的な好みの店舗の言及があったため、軽い誘いを検討できる段階です。",
+      "next_action": "相手の焼き菓子の話題に共感し、カフェの好みやおすすめのエリアについて軽く話を広げてから誘うタイミングを見極めます。",
+      "recommended": {
+        "label": "焼き菓子の話を受ける",
+        "text": "焼き菓子が美味しいお店すてきですね！川崎だと色々いいお店がありそうです。"
+      },
+      "alternatives": [
+        {
+          "label": "少し誘いを意識する",
+          "text": "焼き菓子が美味しいお店気になります！川崎周辺はあまり詳しくないので開拓してみたいです。"
+        },
+        {
+          "label": "共感して質問する",
+          "text": "焼き菓子と読書なんて最高の組み合わせですね！ちなみにどんなお菓子が好きなんですか？"
+        }
+      ],
+      "attempted_models": []
+    },
+    {
+      "label": "declined_invitation",
+      "http_status": 200,
+      "demo": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1,
+      "api_status": null,
+      "error_code": null,
+      "needs_user_info": false,
+      "user_questions": [],
+      "reason": "相手が会うことに対して不安を示して断ってきたため、プレッシャーを与えないように配慮しつつ、メッセージでの会話を続けたいという意図を伝えるため。",
+      "strategy": "相手の断り（不安）を尊重して受け入れ、急かさずにメッセージのやり取りを続ける姿勢を示します。",
+      "conversation_stage": "Stage 2",
+      "invite_decision": "respect_no",
+      "decision_reason": "相手が会うのは不安だと明確に断っているため、その意向を尊重し、誘いを撤回して通常のメッセージへ戻る必要があるため。",
+      "next_action": "相手の不安を受け止め、メッセージでのやり取りを続ける。",
+      "recommended": {
+        "label": "丁寧な尊重",
+        "text": "そうですよね、失礼しました！まずはメッセージでいろいろお話しできたら嬉しいです。"
+      },
+      "alternatives": [
+        {
+          "label": "柔らかい謝罪",
+          "text": "急に誘ってしまってすみません！不安な気持ちにさせてしまいましたよね。メッセージで楽しくお話しできたらなと思います。"
+        },
+        {
+          "label": "話題の切り替え",
+          "text": "そうですよね、失礼しました！普段はどんなジャンルのカフェによく行くんですか？"
+        }
+      ],
+      "attempted_models": []
+    },
+    {
+      "label": "first_prompt_retest",
+      "http_status": 200,
+      "demo": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1,
+      "api_status": null,
+      "error_code": null,
+      "needs_user_info": false,
+      "user_questions": [],
+      "reason": "マッチ直後の初回メッセージとして、挨拶、好意、喜び、相手プロフィールの話題、答えやすい質問の5要素をすべて含めました。句読点を使わず自然な口語に仕上げています。",
+      "strategy": "マッチ直後のためStage 1として挨拶とプロフィール話題の共有を優先します。",
+      "conversation_stage": "Stage 1",
+      "invite_decision": "do_not_invite",
+      "decision_reason": "マッチ直後のため誘いは行わず、プロフィールについての会話を楽しむ段階です。",
+      "next_action": "相手からの返信を待ち、趣味の話題を広げる。",
+      "recommended": {
+        "label": "王道・丁寧",
+        "text": "はじめまして！マッチできてうれしいです カフェ巡りがお好きなんですね！最近行ってよかったおすすめのお店はありますか？"
+      },
+      "alternatives": [
+        {
+          "label": "親しみやすい雰囲気",
+          "text": "はじめまして！お話できるのを楽しみにしていました 旅行もお好きなんですね！最近どこか遠出されましたか？"
+        },
+        {
+          "label": "シンプル",
+          "text": "はじめまして！マッチありがとうございます！カフェや旅行が好きなんですね 最近気になっている場所はありますか？"
+        }
+      ],
+      "attempted_models": []
+    },
+    {
+      "label": "first_prompt_retest_after_stricter_requirements",
+      "http_status": 200,
+      "demo": false,
+      "api_alias": "API1",
+      "model": "gemini-3.5-flash-lite",
+      "api_attempt_count": 1,
+      "error_code": null,
+      "needs_user_info": false,
+      "recommended": {
+        "label": "丁寧で話しやすいトーン",
+        "text": "はじめまして！マッチできてうれしいです 雰囲気が気になっていました カフェ巡りがお好きなんですね 最近行ってお気に入りの場所はありましたか？"
+      },
+      "alternatives": [
+        {
+          "label": "少しカジュアルなトーン",
+          "text": "こんにちは！お話しできたらと思っていました マッチできてうれしいです！旅行も好きなんですね 最近出かけたなかで一番楽しかったところはどこですか？"
+        },
+        {
+          "label": "共通の趣味に触れるトーン",
+          "text": "はじめまして！マッチありがとうございます お話しできるのを楽しみにしていました 休日はお出かけすることが多いんですね どんなスポットによく行かれるんですか？"
+        }
+      ],
+      "reason": "マッチ直後の挨拶として、相手のプロフィールにあるカフェ巡りと旅行の話題を取り上げ、答えやすい質問を添えて自然なやり取りのきっかけを作りました。",
+      "conversation_stage": "Stage 1",
+      "invite_decision": "do_not_invite",
+      "decision_reason": "マッチ直後のため、まずは挨拶とプロフィールの話題で会話を始める段階です。",
+      "next_action": "相手からの返信を待ち、趣味や休日の過ごし方について会話を広げます。"
+    }
+  ],
+  "temporary_database_removed": true
+}
