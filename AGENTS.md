@@ -2,6 +2,8 @@
 
 This file is specific to the Codex working branch of kenkyu0909/aichatapp.
 
+For a repository-wide orientation aimed at AI agents (architecture, HTTP API, data model, invariants, cross-PC setup), read [`AI_README.md`](AI_README.md) first.
+
 ## Source of truth for active tasks
 
 Before starting work, after each completed repair/test cycle, and at least every 15–20 minutes while the session is running, fetch and read the latest instructions from the separate **control branch**. This avoids hourly Git conflicts with the development branch.

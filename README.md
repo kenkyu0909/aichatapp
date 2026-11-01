@@ -2,6 +2,8 @@
 
 PC向けのローカルWeb UIに、Python (FastAPI)・SQLite・Gemini APIを接続した個人専用の返信作成支援アプリです。プロフィール・相手情報・会話履歴・識別用写真はすべてPC内に保存されます。ログイン機能・外部サーバー送信（Gemini API呼び出しを除く）・自動送信機能はありません。
 
+> **AIエージェント／生成AI向けの要約**は [`AI_README.md`](AI_README.md) にまとめています（構成・API・不変条件・別PC手順）。
+
 ## 1. 取得とWindowsでの起動・終了手順
 
 ### 1.1 リポジトリの取得
@@ -30,6 +32,7 @@ cd aichatapp
    - 8765番ポートで既にこのアプリが起動している場合は既存アプリのURLを開きます。
    - 別のプログラムがポートを使用している場合は、既存プロセスを停止せずに案内を表示して終了します。
    - ポート番号を変更する場合は、起動前に環境変数 `MRA_PORT`（例：`$env:MRA_PORT="8000"`）を設定してください。
+   - 黒いコンソール画面を出さずにバックグラウンド起動したい場合は **`start_hidden.bat`** をダブルクリックします（サーバーログは `logs\server.log` に出力されます）。停止は後述の `stop.bat` を使います。
 4. 右上の「⚙ 設定」から「架空の相手を2人追加して試す」を押すと、実際の個人情報なしで全機能を操作確認できます。
 
 **コマンドラインから直接 `uvicorn` で起動する場合（開発・別ポート検証用）：**
@@ -46,7 +49,8 @@ cd aichatapp
 
 1. 起動用の黒い画面（ターミナル／コマンドプロンプト）をアクティブにし、**`Ctrl+C`** を押します。
 2. `start.bat`（`scripts/start_server.py`）経由で起動している場合、サーバー停止処理の後にポート解放が確認され、`Stopped. Port 8765 no longer accepts connections.`（別ポート指定時は該当ポート番号）と表示されて安全に終了します。
-3. バックアップや復元の前には、必ずこの表示が出てサーバーが完全停止したことを確認してください。
+3. `start_hidden.bat` のようにコンソール画面が無い場合は、**`stop.bat`** をダブルクリックすると `MRA_PORT`（既定8765）で待ち受けているプロセスを終了できます。
+4. バックアップや復元の前には、必ずこの表示が出てサーバーが完全停止したことを確認してください。
 
 ## 2. Gemini APIを使う
 
@@ -163,9 +167,11 @@ python -m pip install fastapi==0.128.8 uvicorn==0.46.0 pydantic==2.12.5 python-d
 - `app.py`：FastAPI・SQLite・Gemini接続・本人事実確認・候補検査
 - `prompts/common.txt` / `first.txt` / `reply.txt` / `followup.txt` / `like.txt`：共通規則と4モード別プロンプト
 - `start.bat` / `scripts/start_server.py`：Windows用の起動・準備確認・終了スクリプト
+- `start_hidden.bat` / `launch_hidden.vbs` / `stop.bat`：コンソール非表示での起動と、ポート指定での停止スクリプト
 - `scripts/quality_eval.py` / `scripts/run_quality_checks_009.py`：独立採点モジュールと品質確認ランナー
 - `.env.example`：環境変数の設定例
 - `tests/test_app.py` / `tests/test_ui_firefox.py`：架空データと一時SQLiteを使うオフラインAPIテスト・Firefox UIテスト
+- `AI_README.md`：AIエージェント／生成AI向けの構成・API・不変条件・別PC手順の要約
 
 架空データによるオフラインテスト実行（本番の `data/` は変更されません）：
 
