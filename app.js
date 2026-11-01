@@ -126,6 +126,34 @@ function sortedContacts(){
     return b.id-a.id;
   });
 }
+// 2日以上メッセージのやり取りがない相手は既定で一覧から隠す。ボタンで全員表示に切り替えられる。
+const CONTACT_STALE_DAYS=2;
+const CONTACT_SHOW_STALE_KEY="mra_show_stale_contacts_v1";
+function showStaleContacts(){
+  try{return localStorage.getItem(CONTACT_SHOW_STALE_KEY)==="1";}catch{return false;}
+}
+// last_message_at はサーバーが UTC の "YYYY-MM-DD HH:MM:SS" で返すため UTC として解釈する。
+// 一度もメッセージが無い相手(=null)は新規登録なので隠さない。
+function isStaleContact(c){
+  const at=c?.last_message_at;
+  if(!at)return false;
+  const t=Date.parse(String(at).replace(" ","T")+"Z");
+  if(Number.isNaN(t))return false;
+  return (Date.now()-t)>=CONTACT_STALE_DAYS*24*60*60*1000;
+}
+function updateStaleToggle(hiddenCount,isHiding){
+  const btn=$("toggle-stale");
+  if(!btn)return;
+  btn.setAttribute("aria-pressed",String(!isHiding));
+  btn.classList.toggle("on",!isHiding);
+  if(isHiding){
+    btn.textContent=hiddenCount?("👁 2日以上を表示（"+hiddenCount+"人）"):"👁 2日以上を表示";
+    btn.title="2日以上メッセージのやり取りがない相手を表示します";
+  }else{
+    btn.textContent="🙈 2日以上を非表示";
+    btn.title="2日以上メッセージのやり取りがない相手を再び隠します";
+  }
+}
 function updateClearSearchButton(){
   const button=$("clear-search"),input=$("search");
   if(button&&input)button.hidden=!input.value;
@@ -134,8 +162,18 @@ function renderContacts(){
   const list=$("contacts");list.replaceChildren();
   const term=$("search").value.trim().toLocaleLowerCase();
   updateClearSearchButton();
-  const filtered=sortedContacts().filter(c=>c.name.toLocaleLowerCase().includes(term));
-  if(!filtered.length)list.append(node("p","empty-chat",state.matches.length?"一致する相手がいません":"左上の＋から相手を登録してください"));
+  const all=sortedContacts();
+  const matched=all.filter(c=>c.name.toLocaleLowerCase().includes(term));
+  const hideStale=!showStaleContacts();
+  const hiddenCount=hideStale?matched.filter(c=>isStaleContact(c)&&c.id!==state.selectedId).length:0;
+  // 選択中の相手は、2日以上経っていても一覧に残して会話を続けられるようにする。
+  const filtered=hideStale?matched.filter(c=>!isStaleContact(c)||c.id===state.selectedId):matched;
+  if(!filtered.length){
+    let message="左上の＋から相手を登録してください";
+    if(state.matches.length)message=hiddenCount?"2日以上メッセージのない相手を非表示にしています":"一致する相手がいません";
+    list.append(node("p","empty-chat",message));
+  }
+  updateStaleToggle(hiddenCount,hideStale);
   filtered.forEach(c=>{
     // 行は「本文ボタン」と「削除ボタン」を分けたラッパーにする（button の入れ子を避ける）。
     const row=node("div","contact-row");
@@ -992,6 +1030,14 @@ function attach(){
     sortSelect.value=contactSortOrder();
     sortSelect.onchange=()=>{
       try{localStorage.setItem(CONTACT_SORT_KEY,sortSelect.value==="name"?"name":"last");}catch{}
+      renderContacts();
+    };
+  }
+  const staleToggle=$("toggle-stale");
+  if(staleToggle){
+    staleToggle.onclick=()=>{
+      const next=!showStaleContacts();
+      try{localStorage.setItem(CONTACT_SHOW_STALE_KEY,next?"1":"0");}catch{}
       renderContacts();
     };
   }

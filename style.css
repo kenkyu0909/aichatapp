@@ -31,6 +31,10 @@ button:disabled{opacity:.48;cursor:not-allowed}
 .sort-row{display:flex;align-items:center;gap:6px;padding:0 10px 8px;font-size:11px;color:#77808f}
 .sort-row label{white-space:nowrap}
 .sort-row select{flex:1;min-width:0;border:1px solid #dbe1e9;border-radius:14px;background:#f7f9fc;padding:4px 8px;font-size:11px;color:#35425a;outline:none}
+.filter-row{display:flex;align-items:center;padding:0 10px 8px}
+.stale-toggle{flex:1;min-width:0;border:1px solid #dbe1e9;border-radius:14px;background:#f7f9fc;padding:4px 8px;font-size:11px;color:#4a5670;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stale-toggle:hover{background:#eef3fa}
+.stale-toggle.on{background:#e8fcf5;border-color:#9de5cb;color:#0f9c72}
 .contact-scroller{overflow:auto;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:#b5b8c0 transparent}
 .contact-row{position:relative}
 .contact-item{background:#fff;border:0;border-bottom:1px solid #edf0f3;width:100%;min-height:57px;padding:7px 34px 7px 8px;display:flex;align-items:center;gap:9px;text-align:left;color:#2f3851}
